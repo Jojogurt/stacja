@@ -235,6 +235,22 @@
   .mp-art{width:84px;height:84px;border-radius:9px;object-fit:cover;margin:0 auto 10px;display:block}
   .mp-sb{display:grid;gap:7px;margin:10px 0}
   .mp-sb .row{display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-top:1px solid var(--line)}
+  #mpCountdown{font-family:var(--mono);font-weight:700;font-size:16px;letter-spacing:.1em;min-height:18px}
+  .mp-pewniak{display:flex;align-items:center;gap:10px;margin-top:12px;flex-wrap:wrap}
+  .mp-sure{font-family:var(--display);font-weight:700;letter-spacing:.06em;font-size:13px;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--amber-dim);border-radius:10px;padding:9px 14px;cursor:pointer;text-transform:uppercase}
+  .mp-sure.on{color:var(--bg);background:var(--amber);border-color:var(--amber)}
+  .mp-reacts{display:flex;gap:6px;justify-content:center;margin-top:12px;flex-wrap:wrap}
+  .mp-reacts button{font-size:20px;line-height:1;background:var(--panel);border:1px solid var(--line);
+    border-radius:10px;padding:7px 11px;cursor:pointer;transition:.1s}
+  .mp-reacts button:active{transform:scale(1.25)}
+  .mp-beer{margin:10px 0;font-family:var(--body);font-size:14px;color:var(--amber);text-align:center;
+    background:rgba(232,163,61,.1);border:1px solid var(--amber-dim);border-radius:11px;padding:11px}
+  #mpFx{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
+  .mp-float{position:absolute;bottom:80px;font-size:34px;animation:floatUp 2.2s ease-out forwards}
+  @keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6)}
+    15%{opacity:1;transform:translateY(-30px) scale(1.1)}
+    100%{opacity:0;transform:translateY(-340px) scale(1)}}
 </style>
 </head>
 <body>
@@ -755,7 +771,10 @@ let mpLastNonce=null;       // ostatnio odtworzony nonce
 let mpAudio=null;
 let mpTally={};             // id -> {name, correct}  (do MVP)
 let mpScribeTouched=false;
+let mpAutoLocked=false;     // czy timer/host już zatwierdził rundę
+let mpTimerInt=null;        // interwał odliczania
 const $m=id=>document.getElementById(id);
+const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
@@ -809,11 +828,13 @@ async function mpEnterRoom(code, asHost){
   mpCh=sb.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
+  mpCh.on('broadcast',{event:'react'},({payload})=>{ mpFloatEmoji(payload.emoji, payload.byName); });
   mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost) mpBroadcast(); });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
     else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
   });
+  if(!mpTimerInt) mpTimerInt=setInterval(mpTickTimer, 500);
 }
 
 function mpMembers(){
@@ -855,6 +876,9 @@ function mpHandleAct(a){
   } else if(a.type==='vote' && mpGame.phase==='play'){
     mpGame.proposals.forEach(p=>{ p.votes=p.votes.filter(v=>v!==a.by); });
     const t=mpGame.proposals.find(p=>p.id===a.pid); if(t && !t.votes.includes(a.by)) t.votes.push(a.by);
+  } else if(a.type==='sure' && mpGame.phase==='play'){
+    const i=mpGame.sure.findIndex(s=>s.id===a.by);
+    if(i>=0) mpGame.sure.splice(i,1); else mpGame.sure.push({id:a.by, name:a.byName});
   } else return;
   mpBroadcast(); mpRender();
 }
@@ -862,9 +886,11 @@ function mpHandleAct(a){
 /* ---- host: start gry / runda ---- */
 function mpStart(){
   const cat=$m('mpCat').value; const mode=$m('mpModeSel').value; const len=+$m('mpLenSel').value;
+  const timer=+($m('mpTimerSel')?$m('mpTimerSel').value:0);
   mpGame={hostId:mpMe.id, phase:'play', round:1, len, score:0, catKey:cat,
     catLabel:(ALL_CATS[cat]?(ALL_CATS[cat].range||ALL_CATS[cat].label):cat), mode,
-    proposals:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0};
+    proposals:[], sure:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0,
+    timer, endsAt:null};
   mpTally={};
   mpHostSeen.clear();
   mpHostNewRound();
@@ -874,7 +900,7 @@ function mpHostPickMusic(catKey){
   return shuffle(pool);
 }
 async function mpHostNewRound(){
-  mpGame.phase='loading'; mpGame.proposals=[]; mpGame.reveal=null; mpGame.locked=null; mpScribeTouched=false;
+  mpGame.phase='loading'; mpGame.proposals=[]; mpGame.sure=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
   if(mpGame.mode==='lektor'){
@@ -896,6 +922,7 @@ async function mpHostNewRound(){
     mpGame.preview=found.previewUrl; mpGame.lyric='';
   }
   mpGame.phase='play'; mpGame.playNonce++;
+  if(mpGame.timer>0) mpGame.endsAt = Date.now() + mpGame.timer*1000;
   mpBroadcast(); mpAfterSync();
 }
 function pickTrackMP(results, artist){
@@ -912,23 +939,28 @@ function pickTrackMP(results, artist){
 
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
-  const title=$m('mpScTitle').value.trim(), artist=$m('mpScArtist').value.trim();
+  if(!mpHost || !mpGame || mpGame.phase!=='play') return;
+  mpAutoLocked=true;
+  const title=($m('mpScTitle')?$m('mpScTitle').value:'').trim(), artist=($m('mpScArtist')?$m('mpScArtist').value:'').trim();
   const c=mpHostCurrent;
   const okTitle=textMatch(title,c.track), okArtist=textMatch(artist,c.artist);
   const teamOk=okTitle&&okArtist;
-  if(teamOk) mpGame.score++;
+  const pewniacy=(mpGame.sure||[]).map(s=>s.name);
+  const anySure=pewniacy.length>0;
+  const gained = teamOk ? (anySure?2:1) : 0;
+  mpGame.score += gained;
   // bonus + MVP: kto pierwszy zaproponował trafny tytuł+wykonawcę
   let firstBy=null;
   for(const p of mpGame.proposals){
-    if(textMatch(p.title,c.track)&&textMatch(p.artist,c.artist)){ firstBy=p.byName; mpTally[p.by]=mpTally[p.by]||{name:p.byName,correct:0}; mpTally[p.by].correct++; firstByFound(p); break; }
+    if(textMatch(p.title,c.track)&&textMatch(p.artist,c.artist)){ firstBy=p.byName; mpTally[p.by]=mpTally[p.by]||{name:p.byName,correct:0}; mpTally[p.by].correct++; break; }
   }
   mpGame.results.push({round:mpGame.round, track:c.track, artist:c.artist, ok:teamOk});
   mpGame.reveal={track:c.track, artist:c.artist, year:c.year, album:c.album, art:c.art,
-    okTitle, okArtist, teamOk, locked:{title,artist}, firstBy};
-  mpGame.phase='reveal';
+    okTitle, okArtist, teamOk, locked:{title,artist}, firstBy,
+    pewniacy, gained, pewniakWin:teamOk&&anySure, pewniakLose:!teamOk&&anySure};
+  mpGame.phase='reveal'; mpGame.endsAt=null;
   mpBroadcast(); mpRender();
 }
-function firstByFound(){ /* placeholder na ewentualne efekty */ }
 function mpNext(){
   if(mpGame.round>=mpGame.len){ mpFinish(); return; }
   mpGame.round++; mpHostNewRound();
@@ -960,6 +992,9 @@ function mpRender(){
           <label class="mp-state" style="margin:6px 0 0">rundy</label>
           <select id="mpLenSel" style="padding:11px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-family:var(--body);font-size:15px">
             <option>5</option><option selected>10</option><option>15</option></select>
+          <label class="mp-state" style="margin:6px 0 0">timer rundy</label>
+          <select id="mpTimerSel" style="padding:11px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-family:var(--body);font-size:15px">
+            <option value="0">bez timera</option><option value="30">30 s</option><option value="60" selected>60 s</option><option value="90">90 s</option></select>
         </div>
         <button class="mp-btn" style="margin-top:14px;width:100%" onclick="mpStart()">Start gry →</button></div>`;
     } else {
@@ -993,7 +1028,14 @@ function mpRender(){
         </div>
         <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>`;
     }
+    const iAmSure=(g.sure||[]).some(s=>s.id===mpMe.id);
+    const sureNames=(g.sure||[]).map(s=>escapeHtml(s.name)).join(', ');
+    const pewniak=`<div class="mp-pewniak">
+      <button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})">🍺 pewniak${iAmSure?' ✓':''}</button>
+      <span class="mp-state" style="margin:0">${sureNames?('pewni: '+sureNames):'pewny swojego? postaw pewniaka'}</span></div>`;
+    const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
     st.innerHTML=`<div class="mp-deck">${head}
+      <div class="mp-state" id="mpCountdown"></div>
       <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
         <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
       <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
@@ -1001,7 +1043,9 @@ function mpRender(){
         <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
         <button onclick="mpPropose()">Wrzuć</button>
       </div>
-      <div class="mp-board">${board}</div>${scribe}`;
+      <div class="mp-board">${board}</div>
+      ${pewniak}${reacts}${scribe}`;
+    mpTickTimer();
     if(mpHost){
       const top=mpTopProp();
       if(top && !mpScribeTouched){ if($m('mpScTitle'))$m('mpScTitle').value=top.title; if($m('mpScArtist'))$m('mpScArtist').value=top.artist; }
@@ -1017,7 +1061,9 @@ function mpRender(){
           ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}
           <div class="rline"><span class="mk ${r.okTitle?'ok':'no'}">${r.okTitle?'✓':'✗'}</span><span class="v"><span class="k">Tytuł</span>${escapeHtml(r.track)}</span></div>
           <div class="rline"><span class="mk ${r.okArtist?'ok':'no'}">${r.okArtist?'✓':'✗'}</span><span class="v"><span class="k">Wykonawca</span>${escapeHtml(r.artist)}</span></div>
-          <div class="mp-state" style="margin-top:10px">${r.teamOk?'<span class="ok">drużyna zgarnia punkt!</span>':'<span class="no">tym razem nie</span>'}${r.firstBy?` · pierwszy trafny typ: <b style="color:var(--amber)">${escapeHtml(r.firstBy)}</b>`:''}</div>
+          <div class="mp-state" style="margin-top:10px">${r.teamOk?`<span class="ok">drużyna zgarnia +${r.gained} pkt${r.pewniakWin?' (pewniak ×2!)':''}</span>`:'<span class="no">tym razem nie (0 pkt)</span>'}${r.firstBy?` · pierwszy trafny typ: <b style="color:var(--amber)">${escapeHtml(r.firstBy)}</b>`:''}</div>
+          ${r.pewniakLose?`<div class="mp-beer">🍺 pewniak nietrafiony — stawia: <b>${(r.pewniacy||[]).map(escapeHtml).join(', ')}</b><br><span style="font-weight:400;opacity:.8">(odbiór na żywo 😏)</span></div>`:''}
+          ${r.pewniakWin?`<div class="mp-state" style="color:var(--green)">pewni i trafili: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} 🎯</div>`:''}
           <div class="mp-state" style="opacity:.7">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
         </div>
         ${mpHost?`<button class="next" onclick="mpNext()">${g.round>=g.len?'Wynik końcowy →':'Następna runda →'}</button>`:'<div class="next" style="opacity:.6">czekaj na hosta…</div>'}
@@ -1040,6 +1086,23 @@ function mpPropose(){
   if(!t&&!a) return;
   mpSend({type:'propose', title:t, artist:a});
   $m('mpPropT').value=''; $m('mpPropA').value='';
+}
+
+function mpTickTimer(){
+  const el=$m('mpCountdown');
+  if(!mpGame || mpGame.phase!=='play' || !mpGame.endsAt){ if(el) el.textContent=''; return; }
+  const rem=Math.max(0, mpGame.endsAt - Date.now());
+  const s=Math.ceil(rem/1000);
+  if(el){ el.textContent='⏱ '+s+' s'; el.style.color = s<=10 ? 'var(--red)' : 'var(--amber)'; }
+  if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase==='play'){ mpLock(); }
+}
+function mpReact(e){ if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name}}); }
+function mpFloatEmoji(emoji){
+  let fx=$m('mpFx');
+  if(!fx){ fx=document.createElement('div'); fx.id='mpFx'; document.body.appendChild(fx); }
+  const s=document.createElement('div'); s.className='mp-float'; s.textContent=emoji;
+  s.style.left=(8+Math.random()*84)+'%';
+  fx.appendChild(s); setTimeout(()=>s.remove(), 2200);
 }
 
 /* autostart lobby gdy w URL jest ?room= */
