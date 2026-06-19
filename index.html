@@ -927,7 +927,7 @@ function textMatch(guess,actual){
   if(g===a) return true;
   if(g.length>3 && a.length>3 && (a.includes(g)||g.includes(a))) return true;
   const d=lev(g,a);
-  if(d<=1) return true;                              // jedna literówka dozwolona (jak na quizie)
+  if(d<=1 && Math.min(g.length,a.length)>=4) return true;  // jedna literówka — ale nie w krótkich (≤3 znaki)
   const ratio=1-d/Math.max(g.length,a.length);
   return ratio>=0.84;
 }
