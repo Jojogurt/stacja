@@ -10,6 +10,7 @@
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <script src="categories.js"></script>
 <script src="playlists.js"></script>
+<script src="lyrics.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -101,6 +102,11 @@
   .deck-state{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.03em;color:var(--muted);
     text-transform:uppercase;margin-top:18px;min-height:14px}
   .deck-state.err{color:var(--red);text-transform:none;letter-spacing:0;line-height:1.5;font-weight:700}
+  .lyric-box{margin-top:14px;background:var(--panel2);border:2px solid var(--line);border-radius:var(--r-md);
+    padding:14px 16px;font-family:var(--body);font-weight:700;font-size:16px;line-height:1.55;color:var(--ink);
+    white-space:pre-line;text-align:left}
+  .lyric-box .lyric-cap{display:block;font-family:var(--display);font-weight:800;font-size:10px;letter-spacing:.03em;
+    text-transform:uppercase;color:var(--blue-d);margin-bottom:7px}
   .mini{display:flex;gap:10px;justify-content:center;margin-top:16px}
   .mini button{font-family:var(--display);font-weight:800;font-size:11px;letter-spacing:.02em;color:var(--muted);
     background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;border-radius:12px;padding:9px 14px;cursor:pointer;
@@ -356,6 +362,8 @@
     <div class="ticks" id="styleTicks"></div>
     <div class="band-label">gotowe playlisty</div>
     <div class="ticks" id="readyTicks"></div>
+    <div class="band-label">teksty — tłumaczenia 🌐 <small style="font-weight:700;color:var(--muted)">(tryb lektor)</small></div>
+    <div class="ticks" id="lyricsTicks"></div>
     <div class="band-label">twoje playlisty <button class="pl-add" id="plImport">+ ze Spotify</button></div>
     <div class="ticks" id="plTicks"></div>
     <div class="pl-panel" id="plPanel">
@@ -398,6 +406,7 @@
       </div>
     </div>
     <div class="deck-state" id="state">naciśnij, żeby wylosować</div>
+    <div class="lyric-box" id="lyricBox" hidden></div>
     <div class="mini">
       <button id="replay" disabled>↻ od nowa</button>
       <button id="skip" disabled>↷ pomiń</button>
@@ -443,13 +452,15 @@ const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
 const ERAS = CATS.decades || {};
 const STYLES = CATS.styles || {};
 const READY = CATS.playlists || {};           // gotowe playlisty (playlists.js)
+const LYRICS = CATS.lyrics || {};              // przetłumaczone teksty (lyrics.js) — tryb lektor
 const ERA_KEYS = Object.keys(ERAS);
 const STYLE_KEYS = Object.keys(STYLES);
 const READY_KEYS = Object.keys(READY);
+const LYRICS_KEYS = Object.keys(LYRICS);
 
 /* wszystkie kategorie w jednej mapie — logika rundy nie rozróżnia dekady/stylu */
-const ALL_CATS = {...ERAS, ...STYLES, ...READY};
-const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS];
+const ALL_CATS = {...ERAS, ...STYLES, ...READY, ...LYRICS};
+const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS, ...LYRICS_KEYS];
 const CATS_OK = (ERA_KEYS.length + STYLE_KEYS.length) > 0;
 
 /* ============ stan ============ */
@@ -561,6 +572,15 @@ READY_KEYS.forEach(k=>{
   readyTicksEl.appendChild(b);
 });
 
+const lyricsTicksEl = document.getElementById('lyricsTicks');
+LYRICS_KEYS.forEach(k=>{
+  const b=document.createElement('button');
+  b.className='tick gen'; b.dataset.era=k;
+  b.innerHTML = escapeHtml(LYRICS[k].label) + '<small>'+escapeHtml(LYRICS[k].desc||(LYRICS[k].songs.length+' tekstów'))+'</small>';
+  b.onclick=()=>pickEra(k);
+  lyricsTicksEl.appendChild(b);
+});
+
 if(!CATS_OK){ setTimeout(()=>flash('Brak pliku categories.js obok index.html — kategorie się nie wczytały. Trzymaj oba pliki razem.'),0); }
 
 /* ===== playlisty ze Spotify (localStorage) ===== */
@@ -617,6 +637,10 @@ function pickEra(k){
   const note = k==='rnd' ? 'dowolna kategoria'
     : (ALL_CATS[k].range || ALL_CATS[k].label);
   document.getElementById('dialNote').textContent = note;
+  // kategorie tekstowe (tłumaczenia) grają tylko w trybie lektor — przełącz automatycznie
+  if(k!=='rnd' && ALL_CATS[k] && ALL_CATS[k].kind==='lyrics' && mode!=='lektor'){
+    const lb=document.querySelector('#modePick button[data-mode="lektor"]'); if(lb) lb.click();
+  }
 }
 
 /* ============ iTunes przez fetch (CORS) z fallbackiem na JSONP ============ */
@@ -682,7 +706,7 @@ async function newRound(){
   if(busy) return;
   if(!selectedEra){ flash('najpierw wybierz kategorię na skali'); return; }
   if(mode==='lektor'){ return newLektorRound(); }
-  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
   document.getElementById('check').disabled=true;
@@ -869,7 +893,7 @@ modePick.querySelectorAll('button').forEach(btn=>{
     if(mode===btn.dataset.mode) return;
     mode=btn.dataset.mode;
     modePick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
-    stopAudio(); hideReveal(); resetForm(); current=null; setIcon('play');
+    stopAudio(); hideReveal(); resetForm(); hideLyric(); current=null; setIcon('play');
     const hint={lektor:'lektor', reverse:'od tyłu', snippet:'fragment'}[mode];
     setState((hint?hint+' · ':'')+'naciśnij, żeby wylosować');
     document.getElementById('check').disabled=true;
@@ -913,6 +937,7 @@ async function newLektorRound(){
   document.getElementById('replay').disabled=false;
   document.getElementById('skip').disabled=false;
   document.getElementById('knob').classList.add('live');
+  showLyric(s.lyric);
   lektorPlay(s.lyric, s.tts, setState);
   document.getElementById('fTitle').focus({preventScroll:true});
 }
@@ -1080,6 +1105,10 @@ function updateScore(){ document.getElementById('sScore').textContent=score+' / 
 function val(id){ return document.getElementById(id).value.trim(); }
 function resetForm(){ ['fTitle','fArtist','fYear','fAlbum'].forEach(id=>document.getElementById(id).value=''); }
 function hideReveal(){ document.getElementById('reveal').classList.remove('show'); }
+// #14: tekst piosenki na ekranie (tryb lektor) — czytany ORAZ widoczny
+function showLyric(text){ const b=document.getElementById('lyricBox'); if(!b) return;
+  b.innerHTML='<span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>'+escapeHtml(text||''); b.hidden=false; }
+function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; } }
 function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
 function escapeHtml(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
 
@@ -1462,6 +1491,7 @@ function mpRender(){
         <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
           <svg viewBox="0 0 24 24"><path id="mpKnobIcon" d="M8 5v14l11-7z"/></svg></button>
         <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+        ${g.mode==='lektor'&&g.lyric?`<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>`:''}
         <div class="mp-form">
           <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
           <button onclick="mpPropose()">Wrzuć</button>
