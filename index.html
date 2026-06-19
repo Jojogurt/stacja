@@ -154,9 +154,9 @@
     margin-top:24px;line-height:1.7}
 
   /* ---- tryb muzyka/lektor ---- */
-  .modepick{display:flex;gap:8px;justify-content:center;margin-bottom:14px}
-  .modepick button{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.02em;color:var(--muted);
-    background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;border-radius:12px;padding:9px 18px;cursor:pointer;
+  .modepick{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
+  .modepick button{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.01em;color:var(--muted);
+    background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;border-radius:12px;padding:9px 14px;cursor:pointer;
     text-transform:uppercase;transition:.12s}
   .modepick button:active{transform:translateY(2px);border-bottom-width:2px}
   .modepick button.on{color:#fff;background:var(--green);border-color:var(--green-d)}
@@ -364,6 +364,8 @@
     <div class="modepick" id="modePick">
       <button data-mode="music" class="on">♪ muzyka</button>
       <button data-mode="lektor">🗣 lektor</button>
+      <button data-mode="reverse">🔄 od tyłu</button>
+      <button data-mode="snippet">✂️ fragment</button>
     </div>
     <button class="voice-toggle" id="piperToggle">🎙 lepszy głos: wył.</button>
     <div class="knob-wrap">
@@ -719,27 +721,85 @@ async function newSongRound(eraKey){
 }
 
 /* ============ audio ============ */
+let revCtx=null, revSrc=null, revTimer=null;   // tryb „od tyłu" (Web Audio)
+const SNIP=2;                                   // długość fragmentu (s)
+// iOS: AudioContext trzeba odblokować w geście (synchronicznie), zanim użyjemy go po await
+function unlockCtx(){ try{ if(!revCtx) revCtx=new (window.AudioContext||window.webkitAudioContext)(); if(revCtx.state==='suspended') revCtx.resume(); }catch(e){} }
+
+function armControls(){
+  document.getElementById('knob').classList.add('live');
+  document.getElementById('check').disabled=false;
+  document.getElementById('replay').disabled=false;
+  document.getElementById('skip').disabled=false;
+  document.getElementById('fTitle').focus({preventScroll:true});
+}
+
+// dyspozytor — wybiera sposób odtwarzania wg trybu
 function startAudio(){
+  if(mode==='reverse'){ return startReverse(); }
+  if(mode==='snippet'){ return startSnippet(); }
   audio=new Audio(current.preview);
   audio.addEventListener('timeupdate',()=>{
     const p=audio.duration?audio.currentTime/audio.duration:0;
     setRing(p);
   });
   audio.addEventListener('ended',()=>{setIcon('play');setRing(1);setState('koniec zajawki · ↻ od nowa');});
-  audio.play().then(()=>{
-    setIcon('pause'); setState('słuchaj uważnie…');
-    document.getElementById('knob').classList.add('live');
-    document.getElementById('check').disabled=false;
-    document.getElementById('replay').disabled=false;
-    document.getElementById('skip').disabled=false;
-    document.getElementById('fTitle').focus({preventScroll:true});
-  }).catch(()=>{ setIcon('play'); setState('naciśnij ▶, by odtworzyć'); document.getElementById('check').disabled=false;
-    document.getElementById('replay').disabled=false; document.getElementById('skip').disabled=false; });
+  audio.play().then(()=>{ setIcon('pause'); setState('słuchaj uważnie…'); armControls(); })
+    .catch(()=>{ setIcon('play'); setState('naciśnij ▶, by odtworzyć'); document.getElementById('check').disabled=false;
+      document.getElementById('replay').disabled=false; document.getElementById('skip').disabled=false; });
 }
-function stopAudio(){ if(audio){audio.pause();audio=null;} lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live'); }
+
+// ✂️ fragment — krótkie okno z losowego miejsca zajawki
+function startSnippet(){
+  audio=new Audio(current.preview);
+  audio.addEventListener('loadedmetadata',()=>{
+    const dur=audio.duration||25;
+    if(current.snipStart==null) current.snipStart=Math.max(0.3, Math.random()*(Math.min(dur,28)-SNIP-1));
+    audio.currentTime=current.snipStart;
+    audio.play().then(()=>{ setIcon('pause'); setState('słuchaj — krótki fragment!'); armControls(); }).catch(()=>{ setIcon('play'); setState('naciśnij ▶'); armControls(); });
+  });
+  audio.addEventListener('timeupdate',()=>{
+    if(current.snipStart==null) return;
+    const el=audio.currentTime-current.snipStart;
+    setRing(Math.min(1, el/SNIP));
+    if(el>=SNIP){ audio.pause(); setIcon('play'); setRing(1); setState('fragment '+SNIP+'s · ↻ jeszcze raz'); }
+  });
+}
+
+// 🔄 od tyłu — dekoduje zajawkę i odtwarza odwróconą (Web Audio)
+async function startReverse(){
+  setIcon('wait'); setState('odwracam…');
+  try{
+    const resp=await fetch(current.preview);
+    const buf=await resp.arrayBuffer();
+    revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
+    if(revCtx.state==='suspended') await revCtx.resume();
+    const decoded=await revCtx.decodeAudioData(buf);
+    for(let c=0;c<decoded.numberOfChannels;c++){ decoded.getChannelData(c).reverse(); }
+    const src=revCtx.createBufferSource(); src.buffer=decoded; src.connect(revCtx.destination);
+    const t0=revCtx.currentTime, dur=decoded.duration;
+    src.onended=()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); if(revTimer){clearInterval(revTimer);revTimer=null;} };
+    src.start(); revSrc=src;
+    revTimer=setInterval(()=>{ if(revSrc) setRing(Math.min(1,(revCtx.currentTime-t0)/dur)); }, 100);
+    setIcon('pause'); setState('słuchaj — od tyłu!'); armControls();
+  }catch(e){
+    // CORS/dekodowanie padło → zagraj normalnie, żeby runda działała
+    audio=new Audio(current.preview);
+    audio.play().then(()=>{ setIcon('pause'); setState('„od tyłu" niedostępne tutaj — gram normalnie'); armControls(); }).catch(()=>{ setState('nie udało się odtworzyć'); armControls(); });
+  }
+}
+
+function stopAudio(){
+  if(audio){audio.pause();audio=null;}
+  if(revSrc){ try{revSrc.onended=null; revSrc.stop();}catch(e){} revSrc=null; }
+  if(revTimer){ clearInterval(revTimer); revTimer=null; }
+  lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live');
+}
 function toggleAudio(){
+  unlockCtx();
   if(!current){ newRound(); return; }
   if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; }
+  if(mode==='reverse'||mode==='snippet'){ stopAudio(); startAudio(); return; }
   if(!audio){ startAudio(); return; }
   if(audio.paused){ audio.play(); setIcon('pause'); }
   else { audio.pause(); setIcon('play'); }
@@ -753,11 +813,13 @@ document.getElementById('replay').onclick=replay;
 const modePick=document.getElementById('modePick');
 modePick.querySelectorAll('button').forEach(btn=>{
   btn.onclick=()=>{
+    unlockCtx();
     if(mode===btn.dataset.mode) return;
     mode=btn.dataset.mode;
     modePick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
     stopAudio(); hideReveal(); resetForm(); current=null; setIcon('play');
-    setState(mode==='lektor' ? 'lektor · naciśnij, żeby wylosować' : 'naciśnij, żeby wylosować');
+    const hint={lektor:'lektor', reverse:'od tyłu', snippet:'fragment'}[mode];
+    setState((hint?hint+' · ':'')+'naciśnij, żeby wylosować');
     document.getElementById('check').disabled=true;
     document.getElementById('replay').disabled=true;
     document.getElementById('skip').disabled=true;
