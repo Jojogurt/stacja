@@ -493,12 +493,21 @@ function pickEra(k){
   document.getElementById('dialNote').textContent = note;
 }
 
-/* ============ iTunes przez JSONP (omija CORS) ============ */
-function itunes(term){
+/* ============ iTunes przez fetch (CORS) z fallbackiem na JSONP ============ */
+function itunesFetch(term){
+  const q=new URLSearchParams({term,media:'music',entity:'song',attribute:'artistTerm',limit:'60',country:'PL'});
+  const ctrl=new AbortController();
+  const to=setTimeout(()=>ctrl.abort(),10000);
+  return fetch('https://itunes.apple.com/search?'+q.toString(),{signal:ctrl.signal,referrerPolicy:'no-referrer'})
+    .then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+    .then(d=>(d.results||[]))
+    .finally(()=>clearTimeout(to));
+}
+function itunesJsonp(term){
   return new Promise((resolve,reject)=>{
     const cb='it_'+Math.random().toString(36).slice(2);
     const s=document.createElement('script');
-    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},8000);
+    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},10000);
     function cleanup(){delete window[cb];s.remove();clearTimeout(to);}
     window[cb]=d=>{cleanup();resolve(d.results||[]);};
     s.onerror=()=>{cleanup();reject(new Error('network'));};
@@ -507,6 +516,10 @@ function itunes(term){
     s.src='https://itunes.apple.com/search?'+q.toString();
     document.body.appendChild(s);
   });
+}
+// fetch (pewniejszy, omija blokery skryptów); gdy padnie — próba JSONP
+function itunes(term){
+  return itunesFetch(term).catch(()=>itunesJsonp(term));
 }
 
 const BAD=/karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
