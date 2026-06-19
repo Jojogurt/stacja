@@ -517,9 +517,23 @@ function itunesJsonp(term){
     document.body.appendChild(s);
   });
 }
-// fetch (pewniejszy, omija blokery skryptów); gdy padnie — próba JSONP
+// proxy przez Supabase Edge Function (iTunes -> fallback Deezer); klient gada tylko
+// z supabase.co, co omija blokady itunes.apple.com. Gdy padnie — bezpośredni fetch/JSONP.
+function itunesProxy(term){
+  const cfg=window.STACJA_CONFIG||{};
+  if(!cfg.supabaseUrl) return Promise.reject(new Error('no-proxy'));
+  const ctrl=new AbortController();
+  const to=setTimeout(()=>ctrl.abort(),12000);
+  const u=cfg.supabaseUrl+'/functions/v1/tracks?artist='+encodeURIComponent(term);
+  return fetch(u,{signal:ctrl.signal, headers: cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}})
+    .then(r=>{ if(!r.ok) throw new Error('fn '+r.status); return r.json(); })
+    .then(d=>(d.results||[]))
+    .finally(()=>clearTimeout(to));
+}
 function itunes(term){
-  return itunesFetch(term).catch(()=>itunesJsonp(term));
+  return itunesProxy(term)
+    .then(res=>res.length?res:itunesFetch(term))   // proxy puste? spróbuj bezpośrednio
+    .catch(()=>itunesFetch(term).catch(()=>itunesJsonp(term)));
 }
 
 const BAD=/karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
