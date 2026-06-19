@@ -266,6 +266,12 @@
   .mp-vote{font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;
     border-radius:10px;padding:7px 11px;cursor:pointer;white-space:nowrap}
   .mp-vote.voted{color:#fff;background:var(--green);border-color:var(--green-d)}
+  .mp-del{font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);background:var(--panel);
+    border:2px solid var(--line);border-bottom-width:3px;border-radius:10px;padding:7px 10px;cursor:pointer}
+  .mp-del:active{color:var(--red);border-color:var(--red)}
+  .mp-team{margin-top:12px;background:#EAF6FF;border:2px solid var(--blue);border-radius:12px;padding:10px 12px}
+  .mp-team .lab{font-family:var(--display);font-weight:800;font-size:10px;letter-spacing:.03em;color:var(--blue-d);text-transform:uppercase}
+  .mp-team .ans{font-size:16px;font-weight:800;color:var(--ink);margin-top:3px}
   .mp-scribe{margin-top:12px;border-top:2px solid var(--line);padding-top:12px;display:grid;gap:8px}
   .mp-scribe .lab{font-family:var(--display);font-weight:800;font-size:10px;letter-spacing:.03em;color:var(--green);text-transform:uppercase}
   .mp-reveal .rline{display:flex;gap:8px;padding:4px 0;font-size:15px}
@@ -1224,6 +1230,9 @@ function mpHandleAct(a){
   if(a.type==='propose' && mpGame.phase==='play'){
     if(!a.title && !a.artist) return;
     mpGame.proposals.push({id:Math.random().toString(36).slice(2,8), by:a.by, byName:a.byName, title:a.title||'', artist:a.artist||'', votes:[]});
+  } else if(a.type==='unpropose' && mpGame.phase==='play'){
+    // zmiana zdania (#7): usuń WŁASNĄ propozycję (tylko autor)
+    mpGame.proposals=mpGame.proposals.filter(p=>!(p.id===a.pid && p.by===a.by));
   } else if(a.type==='vote' && mpGame.phase==='play'){
     mpGame.proposals.forEach(p=>{ p.votes=p.votes.filter(v=>v!==a.by); });
     const t=mpGame.proposals.find(p=>p.id===a.pid); if(t && !t.votes.includes(a.by)) t.votes.push(a.by);
@@ -1400,14 +1409,19 @@ function mpRender(){
     const top=mpTopProp(), mine=mpMyVote();
     const board=g.proposals.length? g.proposals.map(p=>{
       const isTop = top && p.id===top.id && p.votes.length>0;
+      const delBtn = p.by===mpMe.id ? `<button class="mp-del" onclick="mpSend({type:'unpropose',pid:'${p.id}'})" title="usuń moją propozycję">✕</button>` : '';
       return `<div class="mp-prop${isTop?' top':''}">
         <div class="guess"><span class="who">${escapeHtml(p.byName)}</span><b>${escapeHtml(p.title||'—')}</b> <span>· ${escapeHtml(p.artist||'—')}</span></div>
-        <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>
+        <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>${delBtn}
       </div>`; }).join('') : `<div class="mp-state">brak propozycji — wrzuć pierwszą</div>`;
+    // karta „odpowiedź drużyny" = najczęściej głosowana propozycja (#8), widoczna dla wszystkich
+    const team=`<div class="lab">odpowiedź drużyny${top&&top.votes.length?(' · '+top.votes.length+' 👍'):''}</div>
+      <div class="ans">${top?(escapeHtml(top.title||'—')+' · '+escapeHtml(top.artist||'—')):'— wrzuć i przegłosuj propozycję —'}</div>`;
     const iAmSure=(g.sure||[]).some(s=>s.id===mpMe.id);
     const sureNames=(g.sure||[]).map(s=>escapeHtml(s.name)).join(', ');
-    const pewniak=`<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})">🍺 pewniak${iAmSure?' ✓':''}</button>
-      <span class="mp-state" style="margin:0">${sureNames?('pewni: '+sureNames):'pewny swojego? postaw pewniaka'}</span>`;
+    // pewniak dotyczy ODPOWIEDZI DRUŻYNY (top), nie pojedynczej propozycji (#11)
+    const pewniak=`<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})" title="pewniak dotyczy odpowiedzi drużyny">🍺 pewniak${iAmSure?' ✓':''}</button>
+      <span class="mp-state" style="margin:0">${sureNames?('pewni odpowiedzi: '+sureNames):'pewny odpowiedzi drużyny? postaw 🍺'}</span>`;
 
     // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
     // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
@@ -1415,7 +1429,7 @@ function mpRender(){
       mpPlayRound=g.round;
       let scribe='';
       if(mpHost){
-        scribe=`<div class="mp-scribe"><div class="lab">pisarz — zatwierdź odpowiedź drużyny</div>
+        scribe=`<div class="mp-scribe"><div class="lab">host — zatwierdź odpowiedź drużyny (podstawiona top-głosowana)</div>
           <div class="mp-form" style="grid-template-columns:1fr 1fr">
             <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
             <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
@@ -1433,10 +1447,12 @@ function mpRender(){
           <button onclick="mpPropose()">Wrzuć</button>
         </div>
         <div class="mp-board" id="mpBoard">${board}</div>
+        <div class="mp-team" id="mpTeam">${team}</div>
         <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>${reacts}${scribe}`;
     } else {
-      // tylko odśwież tablicę i pewniaka — pola zostają nietknięte
+      // tylko odśwież tablicę, kartę drużyny i pewniaka — pola zostają nietknięte
       $m('mpBoard').innerHTML=board;
+      if($m('mpTeam')) $m('mpTeam').innerHTML=team;
       $m('mpPewniak').innerHTML=pewniak;
     }
     // podpowiedź pisarza (top głosów) — dopóki host sam nie zacznie pisać
