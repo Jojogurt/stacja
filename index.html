@@ -1069,6 +1069,10 @@ let mpGame=null;            // stan współdzielony (host = źródło prawdy)
 let mpHostCurrent=null;     // pełny utwór znany tylko hostowi
 let mpHostSeen=new Set();   // antypowtórki po stronie hosta
 let mpLastNonce=null;       // ostatnio odtworzony nonce
+let mpLastArmNonce=null;    // ostatnio zbuforowana runda (faza gotowości)
+let mpReady=new Set();      // host: id graczy, którzy zbuforowali audio
+let mpArmTimer=null;        // host: bezpiecznik startu mimo braku gotowości
+let mpArmAudio=null;        // lokalnie zbuforowana zajawka (do natychmiastowego startu)
 let mpAudio=null;
 let mpTally={};             // id -> {name, correct}  (do MVP)
 let mpScribeTouched=false;
@@ -1102,6 +1106,9 @@ $m('mpLeave').onclick=()=>{ mpLeave(); };
 async function mpLeave(){
   if(mpCh){ try{ await mpCh.unsubscribe(); }catch(e){} mpCh=null; }
   if(mpAudio){ mpAudio.pause(); mpAudio=null; } stopSpeech();
+  if(mpArmAudio){ try{mpArmAudio.pause();}catch(e){} mpArmAudio=null; }
+  if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
+  mpReady=new Set(); mpLastArmNonce=null;
   mpCode=null; mpHost=false; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
@@ -1157,7 +1164,11 @@ function mpRenderMembers(){
 function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',event:'sync',payload:mpGame}); } }
 function mpSend(act){ if(mpCh){ act.by=mpMe.id; act.byName=mpMe.name; mpCh.send({type:'broadcast',event:'act',payload:act}); } }
 function mpAfterSync(){
-  // odtwórz lokalnie gdy zmienił się nonce (wszyscy słuchają u siebie)
+  // faza gotowości: zbuforuj utwór i zgłoś „ready" (raz na rundę)
+  if(mpGame && mpGame.phase==='arming' && mpGame.armNonce!==mpLastArmNonce){
+    mpLastArmNonce=mpGame.armNonce; mpArm();
+  }
+  // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start)
   if(mpGame && mpGame.phase==='play' && mpGame.playNonce!==mpLastNonce){
     mpLastNonce=mpGame.playNonce; mpPlayLocal();
   }
@@ -1167,16 +1178,44 @@ function mpSetKnob(playing){
   const i=$m('mpKnobIcon'); if(!i) return;
   i.innerHTML = playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
 }
+// faza gotowości — preload zajawki, potem zgłoś hostowi „ready" (#4)
+function mpArm(){
+  if(mpArmAudio){ try{mpArmAudio.pause();}catch(e){} mpArmAudio=null; }
+  mpSetKnob(false);
+  const armNonce=mpGame.armNonce;
+  // lektor / brak zajawki — nic do buforowania, gotów od razu
+  if(mpGame.mode==='lektor' || !mpGame.preview){ mpSend({type:'ready', armNonce}); return; }
+  const a=new Audio(mpGame.preview); a.preload='auto'; mpArmAudio=a;
+  let done=false;
+  const ready=()=>{ if(done) return; done=true; mpSend({type:'ready', armNonce}); };
+  a.addEventListener('canplaythrough', ready, {once:true});
+  a.addEventListener('canplay',        ready, {once:true});
+  a.addEventListener('error',          ready, {once:true}); // i tak zgłoś — host nie utknie
+  setTimeout(ready, 6000);                                  // bezpiecznik
+  a.load();
+}
 function mpPlayLocal(){
-  if(mpAudio){ mpAudio.pause(); mpAudio=null; } lektorStop();
-  if(mpGame.mode==='lektor'){ if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, t=>{ const el=$m('mpCountdown'); }); }
-  else if(mpGame.preview){
-    mpAudio=new Audio(mpGame.preview); mpAudio.preload='auto';
-    mpAudio.addEventListener('playing',()=>mpSetKnob(true));
-    mpAudio.addEventListener('pause',  ()=>mpSetKnob(false));
-    mpAudio.addEventListener('ended',  ()=>mpSetKnob(false));
-    mpAudio.play().catch(()=>{});
-  }
+  lektorStop();
+  if(mpGame.mode==='lektor'){ if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, t=>{ const el=$m('mpCountdown'); }); return; }
+  if(!mpGame.preview) return;
+  // użyj zbuforowanego elementu z fazy gotowości (natychmiastowy start), inaczej utwórz nowy
+  let a=mpArmAudio;
+  if(!a || a.src!==mpGame.preview){ a=new Audio(mpGame.preview); a.preload='auto'; }
+  mpArmAudio=null;
+  if(mpAudio && mpAudio!==a){ try{mpAudio.pause();}catch(e){} }
+  mpAudio=a; try{ mpAudio.currentTime=0; }catch(e){}
+  mpAudio.addEventListener('playing',()=>mpSetKnob(true));
+  mpAudio.addEventListener('pause',  ()=>mpSetKnob(false));
+  mpAudio.addEventListener('ended',  ()=>mpSetKnob(false));
+  mpAudio.play().catch(()=>{});
+}
+// host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
+function mpGo(){
+  if(!mpHost || !mpGame || mpGame.phase!=='arming') return;
+  if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
+  mpGame.phase='play'; mpGame.playNonce=(mpGame.playNonce||0)+1;
+  if(mpGame.timer>0) mpGame.endsAt=Date.now()+mpGame.timer*1000;
+  mpBroadcast(); mpAfterSync();   // host gra lokalnie
 }
 
 /* ---- host: akcje od graczy ---- */
@@ -1191,6 +1230,15 @@ function mpHandleAct(a){
   } else if(a.type==='sure' && mpGame.phase==='play'){
     const i=mpGame.sure.findIndex(s=>s.id===a.by);
     if(i>=0) mpGame.sure.splice(i,1); else mpGame.sure.push({id:a.by, name:a.byName});
+  } else if(a.type==='ready' && mpGame.phase==='arming'){
+    if(a.armNonce!==mpGame.armNonce) return;       // ready ze starej rundy — ignoruj
+    mpReady.add(a.by);
+    const expect=mpMembers().map(m=>m.id);
+    mpGame.readyCount=expect.filter(id=>mpReady.has(id)).length;
+    mpGame.readyTotal=expect.length;
+    if(expect.every(id=>mpReady.has(id))){ mpGo(); return; }  // wszyscy gotowi → start
+    mpBroadcast(); mpRender();
+    return;
   } else return;
   mpBroadcast(); mpRender();
 }
@@ -1252,9 +1300,14 @@ async function mpHostNewRound(){
     mpHostSeen.add(norm(found.trackName));
     mpGame.preview=found.previewUrl; mpGame.lyric=''; mpGame.ttsUrl='';
   }
-  mpGame.phase='play'; mpGame.playNonce++;
-  if(mpGame.timer>0) mpGame.endsAt = Date.now() + mpGame.timer*1000;
-  mpBroadcast(); mpAfterSync();
+  // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
+  mpGame.phase='arming'; mpGame.armNonce=(mpGame.armNonce||0)+1;
+  mpGame.endsAt=null; mpGame.readyCount=0; mpGame.readyTotal=mpMembers().length;
+  mpReady=new Set();
+  mpBroadcast(); mpRender();
+  mpArm();                                   // host też buforuje i zgłosi swoją gotowość
+  if(mpArmTimer) clearTimeout(mpArmTimer);
+  mpArmTimer=setTimeout(()=>mpGo(), 7000);   // bezpiecznik: start mimo braku potwierdzeń
 }
 function pickTrackMP(results, artist){
   const na=norm(artist);
@@ -1338,6 +1391,8 @@ function mpRender(){
     <div class="mp-state">drużyna: ${g.score} pkt</div>`;
 
   if(g.phase==='loading'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`; return; }
+  if(g.phase==='arming'){ const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
+    st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">muzyka ruszy równo u wszystkich</div></div>`; return; }
   if(g.phase==='neterr'){ const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.'; st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`; return; }
   if(g.phase==='nolyric'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`; return; }
 
