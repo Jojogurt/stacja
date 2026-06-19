@@ -1,0 +1,1049 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#13201E">
+<title>STACJA — trener pubquizu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script src="categories.js"></script>
+<script src="config.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+  :root{
+    --bg:#13201E; --panel:#1B2B28; --panel2:#22332F;
+    --ink:#ECE3CF; --muted:#8AA09A;
+    --amber:#E8A33D; --amber-dim:#7d5a23;
+    --green:#7FC9A0; --red:#E0644A;
+    --line:rgba(236,227,207,.12);
+    --display:'Oswald',Impact,'Arial Narrow Bold',sans-serif;
+    --body:'Inter',system-ui,-apple-system,sans-serif;
+    --mono:'Space Mono','SFMono-Regular',ui-monospace,Menlo,monospace;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0}
+  body{
+    background:
+      radial-gradient(120% 60% at 50% -10%, #1c302c 0%, var(--bg) 55%),
+      var(--bg);
+    color:var(--ink); font-family:var(--body);
+    min-height:100dvh; padding:env(safe-area-inset-top) 18px calc(env(safe-area-inset-bottom) + 18px);
+    max-width:520px; margin:0 auto; line-height:1.4;
+  }
+  /* ---- header / brand ---- */
+  .top{display:flex;align-items:baseline;justify-content:space-between;padding:20px 2px 14px}
+  .brand{font-family:var(--display);font-weight:700;letter-spacing:.22em;font-size:15px}
+  .brand b{color:var(--amber)}
+  .eyebrow{font-family:var(--mono);font-size:10px;letter-spacing:.2em;color:var(--muted);text-transform:uppercase}
+
+  /* ---- tuner dial ---- */
+  .dial{position:relative;border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    padding:12px 12px 14px;overflow:hidden}
+  .dial-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  .dial-head span{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+  .ticks{display:flex;gap:6px;overflow-x:auto;scrollbar-width:none;padding-bottom:2px}
+  .ticks::-webkit-scrollbar{display:none}
+  .tick{flex:0 0 auto;font-family:var(--display);font-weight:600;font-size:16px;letter-spacing:.04em;
+    color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:10px;
+    padding:9px 13px;cursor:pointer;transition:.18s;white-space:nowrap;position:relative}
+  .tick small{display:block;font-family:var(--mono);font-weight:400;font-size:8px;letter-spacing:.12em;color:var(--muted);margin-top:2px}
+  .tick.on{color:var(--bg);background:var(--amber);border-color:var(--amber)}
+  .tick.on small{color:rgba(19,32,30,.7)}
+  .tick.rnd.on{background:var(--ink);border-color:var(--ink)}
+  .band-label{font-family:var(--mono);font-size:9px;letter-spacing:.2em;color:var(--muted);
+    text-transform:uppercase;margin:12px 2px 7px}
+  .band-label:first-of-type{margin-top:2px}
+  .tick.gen.on{background:var(--green);border-color:var(--green)}
+
+  /* ---- deck / knob ---- */
+  .deck{margin-top:16px;background:
+      linear-gradient(180deg,var(--panel2),var(--panel));
+    border:1px solid var(--line);border-radius:18px;padding:26px 20px 22px;text-align:center}
+  .knob-wrap{width:148px;height:148px;margin:0 auto;position:relative}
+  .ring{width:100%;height:100%;border-radius:50%;
+    background:conic-gradient(var(--amber) 0deg, var(--line) 0deg);
+    transition:background .12s linear;padding:7px;display:grid;place-items:center}
+  .knob{width:100%;height:100%;border-radius:50%;border:none;cursor:pointer;
+    background:radial-gradient(circle at 38% 32%, #2c413c, #15211f 72%);
+    color:var(--amber);display:grid;place-items:center;
+    box-shadow:inset 0 2px 6px rgba(255,255,255,.06), inset 0 -8px 18px rgba(0,0,0,.5), 0 6px 18px rgba(0,0,0,.35);
+    transition:transform .08s}
+  .knob:active{transform:scale(.97)}
+  .knob svg{width:44px;height:44px;fill:currentColor}
+  .knob.live{color:var(--ink)}
+  .deck-state{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted);
+    text-transform:uppercase;margin-top:16px;min-height:14px}
+  .deck-state.err{color:var(--red);text-transform:none;letter-spacing:.02em;line-height:1.5}
+  .mini{display:flex;gap:10px;justify-content:center;margin-top:14px}
+  .mini button{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:9px;padding:8px 14px;cursor:pointer;
+    text-transform:uppercase;transition:.15s}
+  .mini button:hover{color:var(--ink);border-color:var(--muted)}
+  .mini button:disabled{opacity:.35;cursor:default}
+
+  /* ---- answer form ---- */
+  .form{margin-top:16px;display:grid;gap:9px}
+  .field{display:grid;grid-template-columns:84px 1fr;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:4px 14px}
+  .field label{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase}
+  .field input{width:100%;background:transparent;border:none;color:var(--ink);
+    font-family:var(--body);font-size:16px;font-weight:500;padding:12px 0;outline:none}
+  .field input::placeholder{color:rgba(138,160,154,.5)}
+  .row2{display:grid;grid-template-columns:1fr 1fr;gap:9px}
+  .row2 .field{grid-template-columns:64px 1fr}
+  .row2 .field.opt::after{content:'opc.';font-family:var(--mono);font-size:8px;color:var(--amber-dim);position:absolute}
+
+  .check{width:100%;margin-top:4px;font-family:var(--display);font-weight:700;letter-spacing:.14em;
+    font-size:18px;color:var(--bg);background:var(--amber);border:none;border-radius:12px;padding:16px;
+    cursor:pointer;text-transform:uppercase;transition:.15s}
+  .check:active{transform:translateY(1px)}
+  .check:disabled{background:var(--panel2);color:var(--muted);cursor:default}
+
+  /* ---- reveal card ---- */
+  .reveal{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    overflow:hidden;display:none}
+  .reveal.show{display:block;animation:rise .35s cubic-bezier(.2,.8,.2,1)}
+  @keyframes rise{from{opacity:0;transform:translateY(14px)}to{opacity:1;transform:none}}
+  .reveal-top{display:flex;gap:14px;padding:16px}
+  .art{width:74px;height:74px;border-radius:9px;flex:0 0 auto;background:var(--panel2);object-fit:cover}
+  .rmeta{flex:1;min-width:0}
+  .rline{display:flex;align-items:flex-start;gap:8px;padding:3px 0;font-size:15px}
+  .rline .mk{font-family:var(--mono);font-size:13px;flex:0 0 auto;width:16px;text-align:center}
+  .ok{color:var(--green)} .no{color:var(--red)}
+  .rline .v{font-weight:600;word-break:break-word}
+  .rline .k{font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase;display:block}
+  .next{width:100%;font-family:var(--display);font-weight:600;letter-spacing:.16em;font-size:16px;
+    color:var(--ink);background:var(--panel2);border:none;border-top:1px solid var(--line);
+    padding:15px;cursor:pointer;text-transform:uppercase}
+  .next:active{background:#273934}
+
+  /* ---- scoreboard ---- */
+  .score{display:flex;justify-content:center;gap:26px;margin:20px 0 6px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .score b{display:block;font-family:var(--display);font-size:24px;letter-spacing:.02em;color:var(--ink);margin-top:2px}
+  .score .hot b{color:var(--amber)}
+  .foot{text-align:center;font-family:var(--mono);font-size:9px;letter-spacing:.1em;color:rgba(138,160,154,.5);
+    margin-top:22px;line-height:1.7}
+
+  /* ---- mode toggle ---- */
+  .modepick{display:flex;gap:6px;justify-content:center;margin-bottom:18px}
+  .modepick button{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:9px;padding:8px 16px;cursor:pointer;
+    text-transform:uppercase;transition:.15s}
+  .modepick button.on{color:var(--bg);background:var(--ink);border-color:var(--ink)}
+
+  /* ---- session ---- */
+  .session{margin-top:12px}
+  .sess-setup,.sess-live{display:flex;align-items:center;gap:10px;
+    background:var(--panel);border:1px solid var(--line);border-radius:11px;padding:9px 12px}
+  .sess-live{display:none}
+  .session.live .sess-setup{display:none}
+  .session.live .sess-live{display:flex}
+  .sess-lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
+  .lenpick{display:flex;gap:6px;margin-left:auto}
+  .lenpick button{font-family:var(--display);font-weight:600;font-size:14px;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;transition:.15s}
+  .lenpick button.on{color:var(--bg);background:var(--amber);border-color:var(--amber)}
+  .sess-start{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 12px;cursor:pointer;text-transform:uppercase}
+  .sess-prog{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.04em;color:var(--amber)}
+  .sess-mini{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--muted);text-transform:uppercase}
+  .sess-end{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--muted);margin-left:auto;
+    background:transparent;border:1px solid var(--line);border-radius:8px;padding:7px 11px;cursor:pointer;text-transform:uppercase}
+
+  /* ---- summary ---- */
+  .summary{margin-top:14px;border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    overflow:hidden;display:none}
+  .summary.show{display:block;animation:rise .35s cubic-bezier(.2,.8,.2,1)}
+  .sum-head{text-align:center;padding:22px 16px 8px}
+  .sum-big{font-family:var(--display);font-weight:700;font-size:46px;letter-spacing:.02em;color:var(--amber);line-height:1}
+  .sum-sub{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin-top:8px}
+  .sum-list{padding:6px 14px 12px;display:grid;gap:7px}
+  .sum-row{display:flex;align-items:center;gap:10px;font-size:13px;padding:7px 0;border-top:1px solid var(--line)}
+  .sum-row .n{font-family:var(--mono);font-size:11px;color:var(--muted);flex:0 0 22px}
+  .sum-row .badge{font-family:var(--mono);font-size:11px;flex:0 0 auto}
+  .sum-row .song{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sum-row .song b{font-weight:600}
+  .sum-row .song span{color:var(--muted)}
+  .sum-again{width:100%;font-family:var(--display);font-weight:700;letter-spacing:.14em;font-size:16px;
+    color:var(--bg);background:var(--amber);border:none;padding:15px;cursor:pointer;text-transform:uppercase}
+
+  /* ---- multiplayer ---- */
+  .mp-enter{font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:9px;padding:7px 11px;cursor:pointer;text-transform:uppercase}
+  .mp-enter:hover{color:var(--ink);border-color:var(--muted)}
+  #mp{display:none;margin-top:6px}
+  body.mp .dial,body.mp .session,body.mp .deck,body.mp .form,body.mp .reveal,
+  body.mp .summary,body.mp .score,body.mp .foot{display:none}
+  body.mp #mp{display:block}
+  body.mp .mp-enter{display:none}
+  .mp-head{display:flex;justify-content:space-between;align-items:center;padding:6px 2px 14px;
+    font-family:var(--mono);font-size:11px;letter-spacing:.16em;color:var(--muted);text-transform:uppercase}
+  .mp-head b{color:var(--amber);font-size:15px;letter-spacing:.22em}
+  .mp-back{font-family:var(--mono);font-size:10px;letter-spacing:.08em;color:var(--muted);
+    background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 10px;cursor:pointer;text-transform:uppercase}
+  .mp-copy{font-family:var(--mono);font-size:9px;color:var(--bg);background:var(--amber);border:none;
+    border-radius:6px;padding:3px 7px;cursor:pointer;margin-left:8px;letter-spacing:.06em;vertical-align:middle}
+  .mp-card{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:16px;display:grid;gap:11px}
+  .mp-or{text-align:center;font-family:var(--mono);font-size:10px;letter-spacing:.12em;color:var(--muted);text-transform:uppercase;margin:2px 0}
+  .mp-join{display:grid;grid-template-columns:1fr auto;gap:9px}
+  .mp-join input{background:var(--panel2);border:1px solid var(--line);border-radius:11px;color:var(--ink);
+    font-family:var(--mono);font-size:20px;font-weight:700;letter-spacing:.3em;text-align:center;padding:12px;outline:none;width:100%}
+  .mp-join button{font-family:var(--display);font-weight:700;letter-spacing:.1em;color:var(--ink);
+    background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:0 20px;cursor:pointer;text-transform:uppercase}
+  .mp-err{font-family:var(--body);font-size:13px;color:var(--red);min-height:16px;text-align:center}
+  .mp-members{display:flex;flex-wrap:wrap;gap:7px;margin-bottom:14px}
+  .mp-chip{font-family:var(--mono);font-size:11px;letter-spacing:.04em;color:var(--ink);background:var(--panel2);
+    border:1px solid var(--line);border-radius:20px;padding:6px 12px}
+  .mp-chip.host::after{content:' ★';color:var(--amber)}
+  .mp-chip.you{border-color:var(--amber)}
+
+  /* stage shared blocks */
+  .mp-deck{background:linear-gradient(180deg,var(--panel2),var(--panel));border:1px solid var(--line);
+    border-radius:16px;padding:20px;text-align:center;margin-bottom:14px}
+  .mp-state{font-family:var(--mono);font-size:11px;letter-spacing:.14em;color:var(--muted);text-transform:uppercase;margin:8px 0}
+  .mp-round{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:.04em;color:var(--amber)}
+  .mp-btn{font-family:var(--display);font-weight:700;letter-spacing:.12em;font-size:16px;color:var(--bg);
+    background:var(--amber);border:none;border-radius:12px;padding:14px 22px;cursor:pointer;text-transform:uppercase}
+  .mp-btn.ghost{color:var(--ink);background:var(--panel2);border:1px solid var(--line)}
+  .mp-btn:disabled{opacity:.4;cursor:default}
+  .mp-knob{width:96px;height:96px;border-radius:50%;border:none;cursor:pointer;margin:6px auto;display:grid;place-items:center;
+    background:radial-gradient(circle at 38% 32%,#2c413c,#15211f 72%);color:var(--amber);
+    box-shadow:inset 0 2px 6px rgba(255,255,255,.06),inset 0 -8px 18px rgba(0,0,0,.5)}
+  .mp-knob svg{width:34px;height:34px;fill:currentColor}
+  .mp-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px}
+  .mp-form input{background:var(--panel);border:1px solid var(--line);border-radius:10px;color:var(--ink);
+    font-family:var(--body);font-size:15px;padding:11px;outline:none;min-width:0}
+  .mp-form button{font-family:var(--display);font-weight:700;color:var(--bg);background:var(--amber);
+    border:none;border-radius:10px;padding:0 16px;cursor:pointer}
+  .mp-board{display:grid;gap:8px}
+  .mp-prop{display:flex;align-items:center;gap:10px;background:var(--panel);border:1px solid var(--line);
+    border-radius:11px;padding:10px 12px}
+  .mp-prop.top{border-color:var(--amber)}
+  .mp-prop .who{font-family:var(--mono);font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase}
+  .mp-prop .guess{flex:1;min-width:0;font-size:14px}
+  .mp-prop .guess b{font-weight:600}
+  .mp-prop .guess span{color:var(--muted)}
+  .mp-vote{font-family:var(--mono);font-size:13px;color:var(--muted);background:var(--panel2);border:1px solid var(--line);
+    border-radius:9px;padding:7px 11px;cursor:pointer;white-space:nowrap}
+  .mp-vote.voted{color:var(--bg);background:var(--green);border-color:var(--green)}
+  .mp-scribe{margin-top:12px;border-top:1px solid var(--line);padding-top:12px;display:grid;gap:8px}
+  .mp-scribe .lab{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--amber);text-transform:uppercase}
+  .mp-reveal .rline{display:flex;gap:8px;padding:3px 0;font-size:15px}
+  .mp-art{width:84px;height:84px;border-radius:9px;object-fit:cover;margin:0 auto 10px;display:block}
+  .mp-sb{display:grid;gap:7px;margin:10px 0}
+  .mp-sb .row{display:flex;justify-content:space-between;font-size:14px;padding:6px 0;border-top:1px solid var(--line)}
+</style>
+</head>
+<body>
+  <div class="top">
+    <div class="brand">STA<b>·</b>CJA</div>
+    <button class="mp-enter" id="mpEnter">👥 ze znajomymi</button>
+  </div>
+
+  <section id="mp">
+    <!-- LOBBY -->
+    <div id="mpLobby">
+      <div class="mp-head">
+        <span>graj ze znajomymi</span>
+        <button class="mp-back" id="mpExit">← solo</button>
+      </div>
+      <div class="mp-card">
+        <div class="field"><label for="mpName">Ksywa</label><input id="mpName" autocomplete="off" maxlength="16" placeholder="np. Karol"></div>
+        <button class="check" id="mpCreate">Stwórz pokój</button>
+        <div class="mp-or">albo dołącz</div>
+        <div class="mp-join">
+          <input id="mpCode" autocomplete="off" maxlength="4" placeholder="KOD" style="text-transform:uppercase">
+          <button id="mpJoin">Dołącz</button>
+        </div>
+        <div class="mp-err" id="mpErr"></div>
+      </div>
+    </div>
+
+    <!-- ROOM -->
+    <div id="mpRoom" style="display:none">
+      <div class="mp-head">
+        <span>pokój <b id="mpRoomCode">····</b> <button class="mp-copy" id="mpCopy">kopiuj link</button></span>
+        <button class="mp-back" id="mpLeave">← wyjdź</button>
+      </div>
+      <div class="mp-members" id="mpMembers"></div>
+      <div id="mpStage"></div>
+    </div>
+  </section>
+
+  <section class="dial">
+    <div class="dial-head"><span>strojenie</span><span id="dialNote">wybierz kategorię</span></div>
+    <div class="band-label">dekady</div>
+    <div class="ticks" id="ticks"></div>
+    <div class="band-label">style i gatunki</div>
+    <div class="ticks" id="styleTicks"></div>
+  </section>
+
+  <section class="session" id="session">
+    <div class="sess-setup" id="sessSetup">
+      <span class="sess-lbl">sesja</span>
+      <div class="lenpick" id="lenPick">
+        <button data-len="5">5</button>
+        <button data-len="10" class="on">10</button>
+        <button data-len="15">15</button>
+      </div>
+      <button class="sess-start" id="sessStart">Start sesji →</button>
+    </div>
+    <div class="sess-live" id="sessLive">
+      <span class="sess-prog" id="sessProg">Runda 1 / 10</span>
+      <span class="sess-mini" id="sessMini">0 trafionych</span>
+      <button class="sess-end" id="sessEnd">Zakończ</button>
+    </div>
+  </section>
+
+  <section class="deck">
+    <div class="modepick" id="modePick">
+      <button data-mode="music" class="on">♪ muzyka</button>
+      <button data-mode="lektor">🗣 lektor</button>
+    </div>
+    <div class="knob-wrap">
+      <div class="ring" id="ring">
+        <button class="knob" id="knob" aria-label="Odtwórz">
+          <svg id="knobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="deck-state" id="state">naciśnij, żeby wylosować</div>
+    <div class="mini">
+      <button id="replay" disabled>↻ od nowa</button>
+      <button id="skip" disabled>↷ pomiń</button>
+    </div>
+  </section>
+
+  <section class="form" id="form">
+    <div class="field"><label for="fTitle">Tytuł</label><input id="fTitle" autocomplete="off" autocapitalize="off" placeholder="np. Kombinacja"></div>
+    <div class="field"><label for="fArtist">Wykonawca</label><input id="fArtist" autocomplete="off" autocapitalize="off" placeholder="np. Maanam"></div>
+    <div class="row2">
+      <div class="field"><label for="fYear">Rok</label><input id="fYear" inputmode="numeric" autocomplete="off" placeholder="bonus"></div>
+      <div class="field"><label for="fAlbum">Album</label><input id="fAlbum" autocomplete="off" placeholder="bonus"></div>
+    </div>
+    <button class="check" id="check" disabled>Sprawdź</button>
+  </section>
+
+  <section class="reveal" id="reveal">
+    <div class="reveal-top">
+      <img class="art" id="art" alt="" referrerpolicy="no-referrer">
+      <div class="rmeta" id="rmeta"></div>
+    </div>
+    <button class="next" id="next">Następny →</button>
+  </section>
+
+  <section class="summary" id="summary">
+    <div class="sum-head">
+      <div class="sum-big" id="sumBig">0 / 10</div>
+      <div class="sum-sub" id="sumSub">koniec sesji</div>
+    </div>
+    <div class="sum-list" id="sumList"></div>
+    <button class="sum-again" id="sumAgain">Nowa sesja</button>
+  </section>
+
+  <div class="score">
+    <div class="hot"><span>seria</span><b id="sStreak">0</b></div>
+    <div><span>trafione</span><b id="sScore">0 / 0</b></div>
+  </div>
+  <div class="foot">źródło: iTunes Search API · 30 s zajawki<br>year/album = bonus · ocenia tytuł + wykonawcę</div>
+
+<script>
+/* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
+const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
+const ERAS = CATS.decades || {};
+const STYLES = CATS.styles || {};
+const ERA_KEYS = Object.keys(ERAS);
+const STYLE_KEYS = Object.keys(STYLES);
+
+/* wszystkie kategorie w jednej mapie — logika rundy nie rozróżnia dekady/stylu */
+const ALL_CATS = {...ERAS, ...STYLES};
+const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS];
+const CATS_OK = ALL_KEYS.length > 0;
+
+/* ============ stan ============ */
+let selectedEra = null;     // klucz lub 'rnd'
+let current = null;         // bieżący utwór
+let audio = null;
+let recentArtists = [];     // ostatnio użyci, by nie powtarzać
+let seenTracks = new Set(); // już zagrane tytuły
+let score = 0, total = 0, streak = 0;
+let busy = false;
+let session = null;         // {len, idx, results:[]} podczas sesji
+let sessLen = 10;           // wybrana długość sesji
+let mode = 'music';         // 'music' | 'lektor'
+let plVoice = null;         // głos pl-PL do lektora
+
+/* ============ lektor: synteza mowy ============ */
+function loadVoice(){
+  if(!('speechSynthesis' in window)) return;
+  const vs=speechSynthesis.getVoices();
+  plVoice = vs.find(v=>/pl(-|_)?/i.test(v.lang)) || vs.find(v=>/pol/i.test(v.name)) || null;
+}
+if('speechSynthesis' in window){ loadVoice(); speechSynthesis.onvoiceschanged=loadVoice; }
+
+function speak(text){
+  if(!('speechSynthesis' in window)){ flash('Ta przeglądarka nie ma syntezatora mowy (lektor niedostępny).'); return; }
+  speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  if(plVoice){ u.voice=plVoice; u.lang=plVoice.lang; } else { u.lang='pl-PL'; }
+  u.rate=0.96; u.pitch=0.9;
+  u.onend=()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); };
+  setIcon('pause'); setRing(0); setState('lektor czyta…');
+  document.getElementById('knob').classList.add('live');
+  speechSynthesis.speak(u);
+}
+function stopSpeech(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+
+/* ============ tuner: render epok ============ */
+const ticksEl = document.getElementById('ticks');
+ERA_KEYS.forEach(k=>{
+  const b=document.createElement('button');
+  b.className='tick'; b.dataset.era=k;
+  b.innerHTML = ERAS[k].label.replace('lata ','') + '<small>'+ERAS[k].range+'</small>';
+  b.onclick=()=>pickEra(k);
+  ticksEl.appendChild(b);
+});
+const rndBtn=document.createElement('button');
+rndBtn.className='tick rnd'; rndBtn.dataset.era='rnd';
+rndBtn.innerHTML='LOS<small>dowolna</small>';
+rndBtn.onclick=()=>pickEra('rnd');
+ticksEl.appendChild(rndBtn);
+
+const styleTicksEl = document.getElementById('styleTicks');
+STYLE_KEYS.forEach(k=>{
+  const b=document.createElement('button');
+  b.className='tick gen'; b.dataset.era=k;
+  b.innerHTML = STYLES[k].label + '<small>'+STYLES[k].desc+'</small>';
+  b.onclick=()=>pickEra(k);
+  styleTicksEl.appendChild(b);
+});
+
+if(!CATS_OK){ setTimeout(()=>flash('Brak pliku categories.js obok index.html — kategorie się nie wczytały. Trzymaj oba pliki razem.'),0); }
+
+function pickEra(k){
+  selectedEra=k;
+  document.querySelectorAll('.tick').forEach(t=>t.classList.toggle('on', t.dataset.era===k));
+  const note = k==='rnd' ? 'dowolna kategoria'
+    : (ALL_CATS[k].range || ALL_CATS[k].label);
+  document.getElementById('dialNote').textContent = note;
+}
+
+/* ============ iTunes przez JSONP (omija CORS) ============ */
+function itunes(term){
+  return new Promise((resolve,reject)=>{
+    const cb='it_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},8000);
+    function cleanup(){delete window[cb];s.remove();clearTimeout(to);}
+    window[cb]=d=>{cleanup();resolve(d.results||[]);};
+    s.onerror=()=>{cleanup();reject(new Error('network'));};
+    const q=new URLSearchParams({term,media:'music',entity:'song',attribute:'artistTerm',
+      limit:'60',country:'PL',callback:cb});
+    s.src='https://itunes.apple.com/search?'+q.toString();
+    document.body.appendChild(s);
+  });
+}
+
+const BAD=/karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
+function pickTrack(results, artist){
+  const na=norm(artist);
+  const good=results.filter(r=>{
+    if(!r.previewUrl) return false;
+    if(BAD.test(r.artistName||'')||BAD.test(r.collectionName||'')||BAD.test(r.trackName||'')) return false;
+    const ra=norm(r.artistName||'');
+    if(!(ra.includes(na)||na.includes(ra))) return false;       // ten sam artysta
+    if(seenTracks.has(norm(r.trackName))) return false;          // nie powtarzaj
+    return true;
+  });
+  if(!good.length) return null;
+  return good[Math.floor(Math.random()*good.length)];
+}
+
+/* ============ losowanie rundy ============ */
+async function newRound(){
+  if(busy) return;
+  if(!selectedEra){ flash('najpierw wybierz kategorię na skali'); return; }
+  if(mode==='lektor'){ return newLektorRound(); }
+  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  if(session) updateSessUI();
+  setIcon('wait'); setState('strojenie…');
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=true;
+  document.getElementById('skip').disabled=true;
+
+  const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
+  const pool = ALL_CATS[eraKey].artists.filter(a=>!recentArtists.includes(a));
+  const tryOrder = shuffle(pool.length?pool:ALL_CATS[eraKey].artists);
+
+  for(const artist of tryOrder){
+    try{
+      const res=await itunes(artist);
+      const t=pickTrack(res,artist);
+      if(t){
+        current={track:t.trackName, artist:t.artistName, era:eraKey,
+          year:(t.releaseDate||'').slice(0,4),
+          album:t.collectionName||'', preview:t.previewUrl,
+          art:(t.artworkUrl100||'').replace('100x100','300x300')};
+        seenTracks.add(norm(t.trackName));
+        recentArtists.push(artist); if(recentArtists.length>6) recentArtists.shift();
+        busy=false; startAudio();
+        return;
+      }
+    }catch(e){
+      busy=false;
+      flash('Nie udało się pobrać utworu. W podglądzie Claude zapytania bywają blokowane — zapisz ten plik i otwórz na telefonie albo zhostuj, wtedy zadziała.');
+      return;
+    }
+  }
+  busy=false;
+  flash('Brak zajawek dla tej epoki — spróbuj ponownie albo zmień epokę.');
+}
+
+/* ============ audio ============ */
+function startAudio(){
+  audio=new Audio(current.preview);
+  audio.addEventListener('timeupdate',()=>{
+    const p=audio.duration?audio.currentTime/audio.duration:0;
+    setRing(p);
+  });
+  audio.addEventListener('ended',()=>{setIcon('play');setRing(1);setState('koniec zajawki · ↻ od nowa');});
+  audio.play().then(()=>{
+    setIcon('pause'); setState('słuchaj uważnie…');
+    document.getElementById('knob').classList.add('live');
+    document.getElementById('check').disabled=false;
+    document.getElementById('replay').disabled=false;
+    document.getElementById('skip').disabled=false;
+    document.getElementById('fTitle').focus({preventScroll:true});
+  }).catch(()=>{ setIcon('play'); setState('naciśnij ▶, by odtworzyć'); document.getElementById('check').disabled=false;
+    document.getElementById('replay').disabled=false; document.getElementById('skip').disabled=false; });
+}
+function stopAudio(){ if(audio){audio.pause();audio=null;} stopSpeech(); setRing(0); document.getElementById('knob').classList.remove('live'); }
+function toggleAudio(){
+  if(!current){ newRound(); return; }
+  if(mode==='lektor'){ speak(current.lyric); return; }
+  if(!audio){ startAudio(); return; }
+  if(audio.paused){ audio.play(); setIcon('pause'); }
+  else { audio.pause(); setIcon('play'); }
+}
+function replay(){ if(!current) return; if(mode==='lektor'){ speak(current.lyric); return; } stopAudio(); startAudio(); }
+
+document.getElementById('knob').onclick=toggleAudio;
+document.getElementById('replay').onclick=replay;
+
+/* ============ przełącznik trybu muzyka/lektor ============ */
+const modePick=document.getElementById('modePick');
+modePick.querySelectorAll('button').forEach(btn=>{
+  btn.onclick=()=>{
+    if(mode===btn.dataset.mode) return;
+    mode=btn.dataset.mode;
+    modePick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
+    stopAudio(); hideReveal(); resetForm(); current=null; setIcon('play');
+    setState(mode==='lektor' ? 'lektor · naciśnij, żeby wylosować' : 'naciśnij, żeby wylosować');
+    document.getElementById('check').disabled=true;
+    document.getElementById('replay').disabled=true;
+    document.getElementById('skip').disabled=true;
+  };
+});
+
+/* zbierz piosenki z tekstem (lyric) z wybranej kategorii lub ze wszystkich (LOS) */
+function lektorPool(){
+  const keys = selectedEra==='rnd' ? ALL_KEYS : [selectedEra];
+  const out=[];
+  keys.forEach(k=>{
+    const songs=(ALL_CATS[k]&&ALL_CATS[k].songs)||[];
+    songs.forEach(s=>{ if(s.lyric) out.push(s); });
+  });
+  return out.filter(s=>!seenTracks.has(norm(s.title)));
+}
+
+async function newLektorRound(){
+  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  if(session) updateSessUI();
+  setIcon('wait'); setState('strojenie…');
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=true;
+  document.getElementById('skip').disabled=true;
+
+  let pool=lektorPool();
+  if(!pool.length){ seenTracks.clear(); pool=lektorPool(); } // wyczerpane — zacznij od nowa
+  if(!pool.length){
+    busy=false;
+    flash('Ta kategoria nie ma tekstów dla lektora. Dodaj songs[] z polem lyric w categories.js (np. „hity dziś").');
+    return;
+  }
+  const s=pool[Math.floor(Math.random()*pool.length)];
+  current={track:s.title, artist:s.artist, era:selectedEra,
+    year:s.year||'', album:s.album||'', preview:'', art:'', lyric:s.lyric};
+  seenTracks.add(norm(s.title));
+  busy=false;
+  document.getElementById('check').disabled=false;
+  document.getElementById('replay').disabled=false;
+  document.getElementById('skip').disabled=false;
+  speak(s.lyric);
+  document.getElementById('fTitle').focus({preventScroll:true});
+}
+document.getElementById('skip').onclick=()=>{
+  if(session && current){ session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true}); }
+  streak=0; updateScore();
+  advance();
+};
+
+/* ============ sesja: rundy + wynik końcowy ============ */
+const lenPick=document.getElementById('lenPick');
+lenPick.querySelectorAll('button').forEach(btn=>{
+  btn.onclick=()=>{
+    sessLen=+btn.dataset.len;
+    lenPick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
+  };
+});
+document.getElementById('sessStart').onclick=startSession;
+document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishSession(); else endSession(); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); startSession(); };
+
+function startSession(){
+  if(!selectedEra){ flash('najpierw wybierz kategorię na skali'); return; }
+  session={len:sessLen, results:[]};
+  hideSummary();
+  document.getElementById('session').classList.add('live');
+  updateSessUI();
+  newRound();
+}
+function endSession(){
+  session=null;
+  document.getElementById('session').classList.remove('live');
+}
+function updateSessUI(){
+  if(!session) return;
+  const n=Math.min(session.results.length+1, session.len);
+  document.getElementById('sessProg').textContent='Runda '+n+' / '+session.len;
+  const hits=session.results.filter(r=>r.okTitle&&r.okArtist).length;
+  document.getElementById('sessMini').textContent=hits+' trafionych';
+}
+function advance(){
+  if(session && session.results.length>=session.len){ finishSession(); return; }
+  newRound();
+}
+function finishSession(){
+  const res=session.results, len=session.len;
+  const hits=res.filter(r=>r.okTitle&&r.okArtist).length;
+  stopAudio(); setIcon('play'); hideReveal();
+  document.getElementById('sumBig').textContent=hits+' / '+len;
+  let best=0,cur=0; res.forEach(r=>{ if(r.okTitle&&r.okArtist){cur++;best=Math.max(best,cur);}else cur=0; });
+  document.getElementById('sumSub').textContent='koniec sesji · najlepsza seria '+best;
+  const list=document.getElementById('sumList'); list.innerHTML='';
+  res.forEach((r,i)=>{
+    const ok=r.okTitle&&r.okArtist;
+    const d=document.createElement('div'); d.className='sum-row';
+    const badge=r.skipped?'<span class="no">↷</span>':(ok?'<span class="ok">✓</span>':(r.okTitle||r.okArtist?'<span style="color:var(--amber)">±</span>':'<span class="no">✗</span>'));
+    d.innerHTML='<span class="n">'+(i+1)+'</span><span class="badge">'+badge+'</span>'+
+      '<span class="song"><b>'+escapeHtml(r.track)+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>';
+    list.appendChild(d);
+  });
+  endSession();
+  document.getElementById('summary').classList.add('show');
+  document.getElementById('summary').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+function hideSummary(){ document.getElementById('summary').classList.remove('show'); }
+
+/* ============ sprawdzanie ============ */
+function check(){
+  if(!current) return;
+  stopAudio(); setIcon('play');
+  const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
+  const okTitle=textMatch(g.title,current.track);
+  const okArtist=textMatch(g.artist,current.artist);
+  const okYear = g.year && current.year ? Math.abs(+g.year - +current.year)<=2 : false;
+  const okAlbum= g.album ? textMatch(g.album,current.album) : false;
+
+  const roundOk = okTitle && okArtist;
+  total++; if(roundOk){score++;streak++;} else streak=0;
+  updateScore();
+  if(session){ session.results.push({track:current.track, artist:current.artist, okTitle, okArtist}); updateSessUI(); }
+
+  const r=document.getElementById('rmeta');
+  r.innerHTML='';
+  r.appendChild(line(okTitle,'Tytuł',current.track));
+  r.appendChild(line(okArtist,'Wykonawca',current.artist));
+  if(current.year) r.appendChild(line(okYear,'Rok (bonus)',current.year + (g.year?'':'  —  nie zgadywano')));
+  if(current.album) r.appendChild(line(okAlbum,'Album (bonus)',current.album));
+  if(mode==='lektor' && current.lyric){
+    const d=document.createElement('div'); d.className='rline';
+    d.innerHTML='<span class="mk" style="color:var(--muted)">„</span>'+
+      '<span class="v" style="font-weight:400;font-style:italic;color:var(--muted)">'+
+      '<span class="k">czytany fragment</span>'+escapeHtml(current.lyric)+'</span>';
+    r.appendChild(d);
+  }
+  const img=document.getElementById('art');
+  if(current.art){img.src=current.art;img.style.display='';}else{img.style.display='none';}
+  document.getElementById('reveal').classList.add('show');
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=false; // można dosłuchać
+  document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+document.getElementById('check').onclick=check;
+document.getElementById('next').onclick=advance;
+document.getElementById('form').addEventListener('keydown',e=>{
+  if(e.key==='Enter' && !document.getElementById('check').disabled) check();
+});
+
+function line(ok,k,v){
+  const d=document.createElement('div'); d.className='rline';
+  d.innerHTML=`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>
+    <span class="v"><span class="k">${k}</span>${escapeHtml(v)}</span>`;
+  return d;
+}
+
+/* ============ matching ============ */
+function norm(s){
+  if(!s) return '';
+  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+    .replace(/\(.*?\)|\[.*?\]/g,' ')
+    .replace(/\s*-\s*(remaster.*|radio edit.*|single version.*|mono|stereo|live.*|.*\bversion\b.*)$/i,' ')
+    .replace(/\bfeat\.?\b.*$/i,' ').replace(/\bft\.?\b.*$/i,' ')
+    .replace(/&/g,' and ')
+    .replace(/[^a-z0-9 ]/g,' ')
+    .replace(/\b(the|a|an|de|le|la)\b/g,' ')
+    .replace(/\s+/g,' ').trim();
+}
+function lev(a,b){
+  const m=a.length,n=b.length; if(!m)return n; if(!n)return m;
+  let prev=[...Array(n+1).keys()],cur=new Array(n+1);
+  for(let i=1;i<=m;i++){cur[0]=i;
+    for(let j=1;j<=n;j++){cur[j]=Math.min(prev[j]+1,cur[j-1]+1,prev[j-1]+(a[i-1]===b[j-1]?0:1));}
+    [prev,cur]=[cur,prev];}
+  return prev[n];
+}
+function textMatch(guess,actual){
+  const g=norm(guess),a=norm(actual);
+  if(!g||!a) return false;
+  if(g===a) return true;
+  if(g.length>3 && a.length>3 && (a.includes(g)||g.includes(a))) return true;
+  const d=lev(g,a), ratio=1-d/Math.max(g.length,a.length);
+  return ratio>=0.84;
+}
+
+/* ============ pomocnicze UI ============ */
+function setIcon(mode){
+  const i=document.getElementById('knobIcon');
+  if(mode==='pause') i.innerHTML='<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
+  else if(mode==='wait') i.innerHTML='<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>';
+  else i.innerHTML='<path d="M8 5v14l11-7z"/>';
+}
+function setRing(p){ document.getElementById('ring').style.background=
+  `conic-gradient(var(--amber) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`; }
+function setState(t){ const e=document.getElementById('state'); e.classList.remove('err'); e.textContent=t; }
+function flash(t){ const e=document.getElementById('state'); e.classList.add('err'); e.textContent=t; setIcon('play'); }
+function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
+  document.getElementById('sStreak').textContent=streak; }
+function val(id){ return document.getElementById(id).value.trim(); }
+function resetForm(){ ['fTitle','fArtist','fYear','fAlbum'].forEach(id=>document.getElementById(id).value=''); }
+function hideReveal(){ document.getElementById('reveal').classList.remove('show'); }
+function shuffle(a){ a=[...a]; for(let i=a.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[a[i],a[j]]=[a[j],a[i]];} return a; }
+function escapeHtml(s){ return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+
+/* ================= MULTIPLAYER (Supabase Realtime) ================= */
+let mpSb=null, mpCh=null;
+let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
+let mpCode=null, mpHost=false;
+let mpGame=null;            // stan współdzielony (host = źródło prawdy)
+let mpHostCurrent=null;     // pełny utwór znany tylko hostowi
+let mpHostSeen=new Set();   // antypowtórki po stronie hosta
+let mpLastNonce=null;       // ostatnio odtworzony nonce
+let mpAudio=null;
+let mpTally={};             // id -> {name, correct}  (do MVP)
+let mpScribeTouched=false;
+const $m=id=>document.getElementById(id);
+
+function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
+function mpErr(t){ $m('mpErr').textContent=t||''; }
+
+function mpConnect(){
+  if(mpSb) return mpSb;
+  const cfg=window.STACJA_CONFIG;
+  if(!cfg||!window.supabase){ return null; }
+  mpSb=window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
+  return mpSb;
+}
+
+/* ---- wejście / wyjście z trybu ---- */
+$m('mpEnter').onclick=()=>{
+  stopAudio(); stopSpeech();
+  document.body.classList.add('mp');
+  const pre=new URLSearchParams(location.search).get('room');
+  if(pre){ $m('mpCode').value=pre.toUpperCase(); }
+};
+$m('mpExit').onclick=()=>{ document.body.classList.remove('mp'); };
+$m('mpLeave').onclick=()=>{ mpLeave(); };
+
+async function mpLeave(){
+  if(mpCh){ try{ await mpCh.unsubscribe(); }catch(e){} mpCh=null; }
+  if(mpAudio){ mpAudio.pause(); mpAudio=null; } stopSpeech();
+  mpCode=null; mpHost=false; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
+  $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
+}
+
+/* ---- tworzenie / dołączanie ---- */
+$m('mpCreate').onclick=()=>{ const n=$m('mpName').value.trim(); if(!n){ mpErr('Podaj ksywę.'); return; } mpMe.name=n; mpEnterRoom(mpRandCode(), true); };
+$m('mpJoin').onclick=()=>{
+  const n=$m('mpName').value.trim(); const c=$m('mpCode').value.trim().toUpperCase();
+  if(!n){ mpErr('Podaj ksywę.'); return; }
+  if(c.length<4){ mpErr('Wpisz 4-znakowy kod.'); return; }
+  mpMe.name=n; mpEnterRoom(c, false);
+};
+$m('mpCopy').onclick=()=>{
+  const url=location.origin+location.pathname+'?room='+mpCode;
+  navigator.clipboard?.writeText(url); $m('mpCopy').textContent='skopiowano!';
+  setTimeout(()=>$m('mpCopy').textContent='kopiuj link',1500);
+};
+
+async function mpEnterRoom(code, asHost){
+  mpErr('');
+  const sb=mpConnect();
+  if(!sb){ mpErr('Brak połączenia z serwerem (config.js / supabase-js).'); return; }
+  mpCode=code; mpHost=asHost;
+  $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
+  $m('mpRoomCode').textContent=code;
+  mpCh=sb.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
+  mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
+  mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
+  mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost) mpBroadcast(); });
+  mpCh.subscribe(async(status)=>{
+    if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
+    else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
+  });
+}
+
+function mpMembers(){
+  if(!mpCh) return [];
+  const st=mpCh.presenceState(); const out=[];
+  Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||'?'}); });
+  return out;
+}
+function mpRenderMembers(){
+  const ms=mpMembers();
+  $m('mpMembers').innerHTML=ms.map(m=>{
+    const host = mpGame? (m.id===mpGame.hostId) : (m.id===mpMe.id && mpHost);
+    return `<span class="mp-chip${host?' host':''}${m.id===mpMe.id?' you':''}">${escapeHtml(m.name)}</span>`;
+  }).join('');
+}
+
+/* ---- broadcast / sync ---- */
+function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',event:'sync',payload:mpGame}); } }
+function mpSend(act){ if(mpCh){ act.by=mpMe.id; act.byName=mpMe.name; mpCh.send({type:'broadcast',event:'act',payload:act}); } }
+function mpAfterSync(){
+  // odtwórz lokalnie gdy zmienił się nonce (wszyscy słuchają u siebie)
+  if(mpGame && mpGame.phase==='play' && mpGame.playNonce!==mpLastNonce){
+    mpLastNonce=mpGame.playNonce; mpPlayLocal();
+  }
+  mpRender();
+}
+function mpPlayLocal(){
+  if(mpAudio){ mpAudio.pause(); mpAudio=null; } stopSpeech();
+  if(mpGame.mode==='lektor'){ if(mpGame.lyric) speak(mpGame.lyric); }
+  else if(mpGame.preview){ mpAudio=new Audio(mpGame.preview); mpAudio.play().catch(()=>{}); }
+}
+
+/* ---- host: akcje od graczy ---- */
+function mpHandleAct(a){
+  if(!mpGame) return;
+  if(a.type==='propose' && mpGame.phase==='play'){
+    if(!a.title && !a.artist) return;
+    mpGame.proposals.push({id:Math.random().toString(36).slice(2,8), by:a.by, byName:a.byName, title:a.title||'', artist:a.artist||'', votes:[]});
+  } else if(a.type==='vote' && mpGame.phase==='play'){
+    mpGame.proposals.forEach(p=>{ p.votes=p.votes.filter(v=>v!==a.by); });
+    const t=mpGame.proposals.find(p=>p.id===a.pid); if(t && !t.votes.includes(a.by)) t.votes.push(a.by);
+  } else return;
+  mpBroadcast(); mpRender();
+}
+
+/* ---- host: start gry / runda ---- */
+function mpStart(){
+  const cat=$m('mpCat').value; const mode=$m('mpModeSel').value; const len=+$m('mpLenSel').value;
+  mpGame={hostId:mpMe.id, phase:'play', round:1, len, score:0, catKey:cat,
+    catLabel:(ALL_CATS[cat]?(ALL_CATS[cat].range||ALL_CATS[cat].label):cat), mode,
+    proposals:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0};
+  mpTally={};
+  mpHostSeen.clear();
+  mpHostNewRound();
+}
+function mpHostPickMusic(catKey){
+  const pool=(ALL_CATS[catKey]&&ALL_CATS[catKey].artists)||[];
+  return shuffle(pool);
+}
+async function mpHostNewRound(){
+  mpGame.phase='loading'; mpGame.proposals=[]; mpGame.reveal=null; mpGame.locked=null; mpScribeTouched=false;
+  mpBroadcast(); mpRender();
+  const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
+  if(mpGame.mode==='lektor'){
+    const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!mpHostSeen.has(norm(s.title)));
+    if(!songs.length){ mpGame.phase='nolyric'; mpBroadcast(); mpRender(); return; }
+    const s=songs[Math.floor(Math.random()*songs.length)];
+    mpHostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
+    mpHostSeen.add(norm(s.title));
+    mpGame.lyric=s.lyric; mpGame.preview='';
+  } else {
+    let found=null;
+    for(const artist of mpHostPickMusic(catKey)){
+      try{ const res=await itunes(artist); const t=pickTrackMP(res,artist); if(t){ found=t; break; } }catch(e){ mpGame.phase='neterr'; mpBroadcast(); mpRender(); return; }
+    }
+    if(!found){ mpGame.phase='neterr'; mpBroadcast(); mpRender(); return; }
+    mpHostCurrent={track:found.trackName, artist:found.artistName, year:(found.releaseDate||'').slice(0,4),
+      album:found.collectionName||'', art:(found.artworkUrl100||'').replace('100x100','300x300'), preview:found.previewUrl, lyric:''};
+    mpHostSeen.add(norm(found.trackName));
+    mpGame.preview=found.previewUrl; mpGame.lyric='';
+  }
+  mpGame.phase='play'; mpGame.playNonce++;
+  mpBroadcast(); mpAfterSync();
+}
+function pickTrackMP(results, artist){
+  const na=norm(artist);
+  const good=results.filter(r=>{
+    if(!r.previewUrl) return false;
+    if(BAD.test(r.artistName||'')||BAD.test(r.collectionName||'')||BAD.test(r.trackName||'')) return false;
+    const ra=norm(r.artistName||''); if(!(ra.includes(na)||na.includes(ra))) return false;
+    if(mpHostSeen.has(norm(r.trackName))) return false;
+    return true;
+  });
+  return good.length? good[Math.floor(Math.random()*good.length)] : null;
+}
+
+/* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
+function mpLock(){
+  const title=$m('mpScTitle').value.trim(), artist=$m('mpScArtist').value.trim();
+  const c=mpHostCurrent;
+  const okTitle=textMatch(title,c.track), okArtist=textMatch(artist,c.artist);
+  const teamOk=okTitle&&okArtist;
+  if(teamOk) mpGame.score++;
+  // bonus + MVP: kto pierwszy zaproponował trafny tytuł+wykonawcę
+  let firstBy=null;
+  for(const p of mpGame.proposals){
+    if(textMatch(p.title,c.track)&&textMatch(p.artist,c.artist)){ firstBy=p.byName; mpTally[p.by]=mpTally[p.by]||{name:p.byName,correct:0}; mpTally[p.by].correct++; firstByFound(p); break; }
+  }
+  mpGame.results.push({round:mpGame.round, track:c.track, artist:c.artist, ok:teamOk});
+  mpGame.reveal={track:c.track, artist:c.artist, year:c.year, album:c.album, art:c.art,
+    okTitle, okArtist, teamOk, locked:{title,artist}, firstBy};
+  mpGame.phase='reveal';
+  mpBroadcast(); mpRender();
+}
+function firstByFound(){ /* placeholder na ewentualne efekty */ }
+function mpNext(){
+  if(mpGame.round>=mpGame.len){ mpFinish(); return; }
+  mpGame.round++; mpHostNewRound();
+}
+function mpFinish(){
+  const arr=Object.values(mpTally).sort((a,b)=>b.correct-a.correct);
+  mpGame.mvp = arr.length&&arr[0].correct>0 ? arr[0] : null;
+  mpGame.tallyList = arr;
+  mpGame.phase='done'; mpBroadcast(); mpRender();
+}
+function mpNewGame(){ mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
+
+/* ---- render sceny ---- */
+function mpMyVote(){ if(!mpGame) return null; const p=mpGame.proposals.find(p=>p.votes.includes(mpMe.id)); return p?p.id:null; }
+function mpTopProp(){ if(!mpGame||!mpGame.proposals.length) return null; return [...mpGame.proposals].sort((a,b)=>b.votes.length-a.votes.length)[0]; }
+
+function mpRender(){
+  const st=$m('mpStage'); if(!st) return;
+  if(!mpGame || mpGame.phase==null){
+    if(mpHost){
+      const opts=ALL_KEYS.map(k=>`<option value="${k}">${escapeHtml(ALL_CATS[k].label)}</option>`).join('')+'<option value="rnd">LOS — dowolna</option>';
+      st.innerHTML=`<div class="mp-deck"><div class="mp-state">ustaw grę</div>
+        <div style="display:grid;gap:9px;text-align:left">
+          <label class="mp-state" style="margin:0">kategoria</label>
+          <select id="mpCat" class="mp-form" style="display:block;padding:11px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-family:var(--body);font-size:15px">${opts}</select>
+          <label class="mp-state" style="margin:6px 0 0">tryb</label>
+          <select id="mpModeSel" style="padding:11px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-family:var(--body);font-size:15px">
+            <option value="music">♪ muzyka</option><option value="lektor">🗣 lektor</option></select>
+          <label class="mp-state" style="margin:6px 0 0">rundy</label>
+          <select id="mpLenSel" style="padding:11px;background:var(--panel);color:var(--ink);border:1px solid var(--line);border-radius:10px;font-family:var(--body);font-size:15px">
+            <option>5</option><option selected>10</option><option>15</option></select>
+        </div>
+        <button class="mp-btn" style="margin-top:14px;width:100%" onclick="mpStart()">Start gry →</button></div>`;
+    } else {
+      st.innerHTML=`<div class="mp-deck"><div class="mp-state">czekaj, aż host wystartuje grę…</div></div>`;
+    }
+    return;
+  }
+  const g=mpGame;
+  const head=`<div class="mp-round">Runda ${g.round} / ${g.len} · ${escapeHtml(g.catLabel)} · ${g.mode==='lektor'?'lektor':'muzyka'}</div>
+    <div class="mp-state">drużyna: ${g.score} pkt</div>`;
+
+  if(g.phase==='loading'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`; return; }
+  if(g.phase==='neterr'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Nie udało się pobrać utworu (sieć/iTunes). ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`; return; }
+  if(g.phase==='nolyric'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`; return; }
+
+  if(g.phase==='play'){
+    const mine=mpMyVote();
+    const board=g.proposals.length? g.proposals.map(p=>{
+      const top = mpTopProp() && p.id===mpTopProp().id && p.votes.length>0;
+      return `<div class="mp-prop${top?' top':''}">
+        <div class="guess"><span class="who">${escapeHtml(p.byName)}</span><b>${escapeHtml(p.title||'—')}</b> <span>· ${escapeHtml(p.artist||'—')}</span></div>
+        <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>
+      </div>`; }).join('') : `<div class="mp-state">brak propozycji — wrzuć pierwszą</div>`;
+    let scribe='';
+    if(mpHost){
+      const top=mpTopProp();
+      scribe=`<div class="mp-scribe"><div class="lab">pisarz — zatwierdź odpowiedź drużyny</div>
+        <div class="mp-form" style="grid-template-columns:1fr 1fr">
+          <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
+          <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
+        </div>
+        <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>`;
+    }
+    st.innerHTML=`<div class="mp-deck">${head}
+      <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
+        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+      <div class="mp-form">
+        <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
+        <button onclick="mpPropose()">Wrzuć</button>
+      </div>
+      <div class="mp-board">${board}</div>${scribe}`;
+    if(mpHost){
+      const top=mpTopProp();
+      if(top && !mpScribeTouched){ if($m('mpScTitle'))$m('mpScTitle').value=top.title; if($m('mpScArtist'))$m('mpScArtist').value=top.artist; }
+    }
+    return;
+  }
+
+  if(g.phase==='reveal'){
+    const r=g.reveal;
+    st.innerHTML=`<div class="mp-deck">${head}</div>
+      <div class="reveal show mp-reveal" style="display:block">
+        <div style="padding:16px">
+          ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}
+          <div class="rline"><span class="mk ${r.okTitle?'ok':'no'}">${r.okTitle?'✓':'✗'}</span><span class="v"><span class="k">Tytuł</span>${escapeHtml(r.track)}</span></div>
+          <div class="rline"><span class="mk ${r.okArtist?'ok':'no'}">${r.okArtist?'✓':'✗'}</span><span class="v"><span class="k">Wykonawca</span>${escapeHtml(r.artist)}</span></div>
+          <div class="mp-state" style="margin-top:10px">${r.teamOk?'<span class="ok">drużyna zgarnia punkt!</span>':'<span class="no">tym razem nie</span>'}${r.firstBy?` · pierwszy trafny typ: <b style="color:var(--amber)">${escapeHtml(r.firstBy)}</b>`:''}</div>
+          <div class="mp-state" style="opacity:.7">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
+        </div>
+        ${mpHost?`<button class="next" onclick="mpNext()">${g.round>=g.len?'Wynik końcowy →':'Następna runda →'}</button>`:'<div class="next" style="opacity:.6">czekaj na hosta…</div>'}
+      </div>`;
+    return;
+  }
+
+  if(g.phase==='done'){
+    const rows=(g.tallyList||[]).map(t=>`<div class="row"><span>${escapeHtml(t.name)}</span><b>${t.correct} trafnych typów</b></div>`).join('')||'<div class="mp-state">brak trafnych propozycji</div>';
+    st.innerHTML=`<div class="summary show" style="display:block">
+      <div class="sum-head"><div class="sum-big">${g.score} / ${g.len}</div>
+        <div class="sum-sub">wynik drużyny${g.mvp?` · MVP stołu: ${escapeHtml(g.mvp.name)}`:''}</div></div>
+      <div class="mp-sb" style="padding:0 16px">${rows}</div>
+      ${mpHost?'<button class="sum-again" onclick="mpNewGame()">Nowa gra</button>':'<div class="next" style="opacity:.6">host może zacząć nową grę</div>'}</div>`;
+    return;
+  }
+}
+function mpPropose(){
+  const t=$m('mpPropT').value.trim(), a=$m('mpPropA').value.trim();
+  if(!t&&!a) return;
+  mpSend({type:'propose', title:t, artist:a});
+  $m('mpPropT').value=''; $m('mpPropA').value='';
+}
+
+/* autostart lobby gdy w URL jest ?room= */
+if(new URLSearchParams(location.search).get('room')){ document.body.classList.add('mp'); $m('mpCode').value=new URLSearchParams(location.search).get('room').toUpperCase(); }
+</script>
+</body>
+</html>
