@@ -896,9 +896,15 @@ function line(ok,k,v){
 }
 
 /* ============ matching ============ */
+// litery, kt\u00f3rych NFD nie rozk\u0142ada (np. polskie \u0142) \u2014 mapujemy r\u0119cznie, by \u201eMi\u0142o\u015b\u0107"=="milosc"
+function deLatin(s){
+  return s.replace(/\u0142/g,'l').replace(/\u0141/g,'L')
+    .replace(/\u0111/g,'d').replace(/\u00f8/g,'o').replace(/\u00df/g,'ss')
+    .replace(/\u00e6/g,'ae').replace(/\u0153/g,'oe').replace(/\u00fe/g,'th');
+}
 function norm(s){
   if(!s) return '';
-  return s.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  return deLatin(s.toLowerCase()).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/\(.*?\)|\[.*?\]/g,' ')
     .replace(/\s*-\s*(remaster.*|radio edit.*|single version.*|mono|stereo|live.*|.*\bversion\b.*)$/i,' ')
     .replace(/\bfeat\.?\b.*$/i,' ').replace(/\bft\.?\b.*$/i,' ')
