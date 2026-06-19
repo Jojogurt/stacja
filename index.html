@@ -290,10 +290,26 @@
   .mp-beer{margin:10px 0;font-family:var(--body);font-weight:700;font-size:14px;color:var(--gold-d);text-align:center;
     background:#FFF7DB;border:2px solid var(--gold);border-radius:12px;padding:11px}
   #mpFx{position:fixed;inset:0;pointer-events:none;z-index:50;overflow:hidden}
-  .mp-float{position:absolute;bottom:80px;font-size:36px;animation:floatUp 2.2s ease-out forwards}
+  .mp-float{position:absolute;bottom:80px;display:flex;flex-direction:column;align-items:center;animation:floatUp 2.4s ease-out forwards}
+  .mp-float .e{font-size:36px;line-height:1}
+  .mp-float .nm{font-family:var(--display);font-weight:800;font-size:10px;color:var(--ink);background:#fff;
+    border:1px solid var(--line);border-radius:8px;padding:1px 6px;margin-top:3px;white-space:nowrap}
   @keyframes floatUp{0%{opacity:0;transform:translateY(0) scale(.6)}
     15%{opacity:1;transform:translateY(-30px) scale(1.1)}
     100%{opacity:0;transform:translateY(-340px) scale(1)}}
+  .mp-saybar{display:flex;gap:8px;margin-top:10px}
+  .mp-saybar input{flex:1;min-width:0;font-family:var(--body);font-size:14px;padding:9px 12px;
+    background:var(--panel);border:2px solid var(--line);border-radius:12px;color:var(--ink)}
+  .mp-saybar button{font-family:var(--display);font-weight:800;font-size:13px;color:#fff;background:var(--blue);
+    border:none;border-bottom:3px solid var(--blue-d);border-radius:12px;padding:9px 14px;cursor:pointer}
+  .mp-say{position:absolute;bottom:120px;max-width:72%;background:#fff;border:2px solid var(--line);border-radius:14px;
+    padding:8px 13px;font-family:var(--body);font-size:14px;font-weight:700;color:var(--ink);
+    box-shadow:0 6px 18px rgba(0,0,0,.14);animation:floatSay 4.4s ease-out forwards}
+  .mp-say b{color:var(--blue-d);margin-right:5px}
+  @keyframes floatSay{0%{opacity:0;transform:translateY(12px) scale(.92)}
+    9%{opacity:1;transform:translateY(0) scale(1)}
+    82%{opacity:1;transform:translateY(-120px)}
+    100%{opacity:0;transform:translateY(-150px)}}
 </style>
 </head>
 <body>
@@ -1144,6 +1160,7 @@ async function mpEnterRoom(code, asHost){
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
   mpCh.on('broadcast',{event:'react'},({payload})=>{ mpFloatEmoji(payload.emoji, payload.byName); });
+  mpCh.on('broadcast',{event:'say'},({payload})=>{ mpFloatSay(payload.text, payload.byName); });
   mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost) mpBroadcast(); });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
@@ -1259,7 +1276,7 @@ function mpStart(){
   mpGame={hostId:mpMe.id, phase:'play', round:1, len, score:0, catKey:cat,
     catLabel:(ALL_CATS[cat]?(ALL_CATS[cat].range||ALL_CATS[cat].label):cat), mode,
     proposals:[], sure:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0,
-    timer, endsAt:null};
+    timer, endsAt:null, beerTally:{}};
   mpTally={};
   mpHostSeen.clear();
   mpHostNewRound();
@@ -1348,6 +1365,8 @@ function mpLock(){
     if(textMatch(p.title,c.track)&&textMatch(p.artist,c.artist)){ firstBy=p.byName; mpTally[p.by]=mpTally[p.by]||{name:p.byName,correct:0}; mpTally[p.by].correct++; break; }
   }
   mpGame.results.push({round:mpGame.round, track:c.track, artist:c.artist, ok:teamOk});
+  // #12: zlicz przegrane pewniaki per osoba (kto stawia i ile)
+  if(!teamOk && anySure){ mpGame.beerTally=mpGame.beerTally||{}; pewniacy.forEach(n=>{ mpGame.beerTally[n]=(mpGame.beerTally[n]||0)+1; }); }
   mpGame.reveal={track:c.track, artist:c.artist, year:c.year, album:c.album, art:c.art,
     okTitle, okArtist, teamOk, locked:{title,artist}, firstBy,
     pewniacy, gained, pewniakWin:teamOk&&anySure, pewniakLose:!teamOk&&anySure};
@@ -1436,7 +1455,8 @@ function mpRender(){
           </div>
           <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>`;
       }
-      const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
+      const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
+        <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
       st.innerHTML=`<div class="mp-deck">${head}
         <div class="mp-state" id="mpCountdown"></div>
         <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
@@ -1481,10 +1501,16 @@ function mpRender(){
 
   if(g.phase==='done'){
     const rows=(g.tallyList||[]).map(t=>`<div class="row"><span>${escapeHtml(t.name)}</span><b>${t.correct} trafnych typów</b></div>`).join('')||'<div class="mp-state">brak trafnych propozycji</div>';
+    // #12: kto stawia (przegrane pewniaki) i ile
+    const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
+    const beerBlock = beer.length
+      ? `<div class="mp-beer">🍺 stawiają: ${beer.map(([n,c])=>`<b>${escapeHtml(n)}</b>${c>1?` (${c}×)`:''}`).join(', ')}<br><span style="font-weight:400;opacity:.8">odbiór na żywo 😏</span></div>`
+      : `<div class="mp-state" style="opacity:.7">nikt nie przepalił pewniaka — brawo 🍻</div>`;
     st.innerHTML=`<div class="summary show" style="display:block">
       <div class="sum-head"><div class="sum-big">${g.score} / ${g.len}</div>
         <div class="sum-sub">wynik drużyny${g.mvp?` · MVP stołu: ${escapeHtml(g.mvp.name)}`:''}</div></div>
       <div class="mp-sb" style="padding:0 16px">${rows}</div>
+      <div style="padding:0 16px">${beerBlock}</div>
       ${mpHost?'<button class="sum-again" onclick="mpNewGame()">Nowa gra</button>':'<div class="next" style="opacity:.6">host może zacząć nową grę</div>'}</div>`;
     return;
   }
@@ -1505,12 +1531,28 @@ function mpTickTimer(){
   if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase==='play'){ mpLock(); }
 }
 function mpReact(e){ if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name}}); }
-function mpFloatEmoji(emoji){
+function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
   let fx=$m('mpFx');
   if(!fx){ fx=document.createElement('div'); fx.id='mpFx'; document.body.appendChild(fx); }
-  const s=document.createElement('div'); s.className='mp-float'; s.textContent=emoji;
-  s.style.left=(8+Math.random()*84)+'%';
-  fx.appendChild(s); setTimeout(()=>s.remove(), 2200);
+  const s=document.createElement('div'); s.className='mp-float';
+  s.innerHTML=`<span class="e">${emoji}</span>${byName?`<span class="nm">${escapeHtml(byName)}</span>`:''}`;
+  s.style.left=(8+Math.random()*78)+'%';
+  fx.appendChild(s); setTimeout(()=>s.remove(), 2400);
+}
+// #10: krótka wiadomość (kilka słów) — biały dymek lecący przez ekran
+function mpSay(){
+  const el=$m('mpSayIn'); if(!el) return;
+  const t=el.value.trim().slice(0,32); if(!t) return;
+  if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name}});
+  el.value='';
+}
+function mpFloatSay(text, byName){
+  let fx=$m('mpFx');
+  if(!fx){ fx=document.createElement('div'); fx.id='mpFx'; document.body.appendChild(fx); }
+  const s=document.createElement('div'); s.className='mp-say';
+  s.innerHTML=`${byName?`<b>${escapeHtml(byName)}</b>`:''}${escapeHtml(text)}`;
+  s.style.left=(6+Math.random()*36)+'%';
+  fx.appendChild(s); setTimeout(()=>s.remove(), 4400);
 }
 
 /* autostart lobby gdy w URL jest ?room= */
