@@ -9,6 +9,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
 <script src="categories.js"></script>
+<script src="playlists.js"></script>
 <script src="config.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
@@ -313,6 +314,8 @@
     <div class="ticks" id="ticks"></div>
     <div class="band-label">style i gatunki</div>
     <div class="ticks" id="styleTicks"></div>
+    <div class="band-label">gotowe playlisty</div>
+    <div class="ticks" id="readyTicks"></div>
     <div class="band-label">twoje playlisty <button class="pl-add" id="plImport">+ ze Spotify</button></div>
     <div class="ticks" id="plTicks"></div>
     <div class="pl-panel" id="plPanel">
@@ -397,13 +400,15 @@
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
 const ERAS = CATS.decades || {};
 const STYLES = CATS.styles || {};
+const READY = CATS.playlists || {};           // gotowe playlisty (playlists.js)
 const ERA_KEYS = Object.keys(ERAS);
 const STYLE_KEYS = Object.keys(STYLES);
+const READY_KEYS = Object.keys(READY);
 
 /* wszystkie kategorie w jednej mapie — logika rundy nie rozróżnia dekady/stylu */
-const ALL_CATS = {...ERAS, ...STYLES};
-const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS];
-const CATS_OK = ALL_KEYS.length > 0;
+const ALL_CATS = {...ERAS, ...STYLES, ...READY};
+const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS];
+const CATS_OK = (ERA_KEYS.length + STYLE_KEYS.length) > 0;
 
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
@@ -503,6 +508,15 @@ STYLE_KEYS.forEach(k=>{
   b.innerHTML = STYLES[k].label + '<small>'+STYLES[k].desc+'</small>';
   b.onclick=()=>pickEra(k);
   styleTicksEl.appendChild(b);
+});
+
+const readyTicksEl = document.getElementById('readyTicks');
+READY_KEYS.forEach(k=>{
+  const b=document.createElement('button');
+  b.className='tick pl'; b.dataset.era=k;
+  b.innerHTML = escapeHtml(READY[k].label) + '<small>'+escapeHtml(READY[k].desc||(READY[k].songs.length+' utw.'))+'</small>';
+  b.onclick=()=>pickEra(k);
+  readyTicksEl.appendChild(b);
 });
 
 if(!CATS_OK){ setTimeout(()=>flash('Brak pliku categories.js obok index.html — kategorie się nie wczytały. Trzymaj oba pliki razem.'),0); }
