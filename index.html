@@ -955,6 +955,7 @@ let mpAudio=null;
 let mpTally={};             // id -> {name, correct}  (do MVP)
 let mpScribeTouched=false;
 let mpAutoLocked=false;     // czy timer/host już zatwierdził rundę
+let mpPlayRound=null;       // dla której rundy jest już zbudowany formularz (by nie czyścić pól)
 let mpTimerInt=null;        // interwał odliczania
 const $m=id=>document.getElementById(id);
 const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
@@ -1213,45 +1214,51 @@ function mpRender(){
   if(g.phase==='nolyric'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`; return; }
 
   if(g.phase==='play'){
-    const mine=mpMyVote();
+    const top=mpTopProp(), mine=mpMyVote();
     const board=g.proposals.length? g.proposals.map(p=>{
-      const top = mpTopProp() && p.id===mpTopProp().id && p.votes.length>0;
-      return `<div class="mp-prop${top?' top':''}">
+      const isTop = top && p.id===top.id && p.votes.length>0;
+      return `<div class="mp-prop${isTop?' top':''}">
         <div class="guess"><span class="who">${escapeHtml(p.byName)}</span><b>${escapeHtml(p.title||'—')}</b> <span>· ${escapeHtml(p.artist||'—')}</span></div>
         <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>
       </div>`; }).join('') : `<div class="mp-state">brak propozycji — wrzuć pierwszą</div>`;
-    let scribe='';
-    if(mpHost){
-      const top=mpTopProp();
-      scribe=`<div class="mp-scribe"><div class="lab">pisarz — zatwierdź odpowiedź drużyny</div>
-        <div class="mp-form" style="grid-template-columns:1fr 1fr">
-          <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
-          <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
-        </div>
-        <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>`;
-    }
     const iAmSure=(g.sure||[]).some(s=>s.id===mpMe.id);
     const sureNames=(g.sure||[]).map(s=>escapeHtml(s.name)).join(', ');
-    const pewniak=`<div class="mp-pewniak">
-      <button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})">🍺 pewniak${iAmSure?' ✓':''}</button>
-      <span class="mp-state" style="margin:0">${sureNames?('pewni: '+sureNames):'pewny swojego? postaw pewniaka'}</span></div>`;
-    const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
-    st.innerHTML=`<div class="mp-deck">${head}
-      <div class="mp-state" id="mpCountdown"></div>
-      <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
-        <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
-      <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
-      <div class="mp-form">
-        <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
-        <button onclick="mpPropose()">Wrzuć</button>
-      </div>
-      <div class="mp-board">${board}</div>
-      ${pewniak}${reacts}${scribe}`;
-    mpTickTimer();
-    if(mpHost){
-      const top=mpTopProp();
-      if(top && !mpScribeTouched){ if($m('mpScTitle'))$m('mpScTitle').value=top.title; if($m('mpScArtist'))$m('mpScArtist').value=top.artist; }
+    const pewniak=`<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})">🍺 pewniak${iAmSure?' ✓':''}</button>
+      <span class="mp-state" style="margin:0">${sureNames?('pewni: '+sureNames):'pewny swojego? postaw pewniaka'}</span>`;
+
+    // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
+    // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
+    if(mpPlayRound!==g.round || !$m('mpBoard')){
+      mpPlayRound=g.round;
+      let scribe='';
+      if(mpHost){
+        scribe=`<div class="mp-scribe"><div class="lab">pisarz — zatwierdź odpowiedź drużyny</div>
+          <div class="mp-form" style="grid-template-columns:1fr 1fr">
+            <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
+            <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
+          </div>
+          <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>`;
+      }
+      const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
+      st.innerHTML=`<div class="mp-deck">${head}
+        <div class="mp-state" id="mpCountdown"></div>
+        <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+        <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+        <div class="mp-form">
+          <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
+          <button onclick="mpPropose()">Wrzuć</button>
+        </div>
+        <div class="mp-board" id="mpBoard">${board}</div>
+        <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>${reacts}${scribe}`;
+    } else {
+      // tylko odśwież tablicę i pewniaka — pola zostają nietknięte
+      $m('mpBoard').innerHTML=board;
+      $m('mpPewniak').innerHTML=pewniak;
     }
+    // podpowiedź pisarza (top głosów) — dopóki host sam nie zacznie pisać
+    if(mpHost && !mpScribeTouched && top && $m('mpScTitle')){ $m('mpScTitle').value=top.title; $m('mpScArtist').value=top.artist; }
+    mpTickTimer();
     return;
   }
 
