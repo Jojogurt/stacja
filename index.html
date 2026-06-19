@@ -926,7 +926,9 @@ function textMatch(guess,actual){
   if(!g||!a) return false;
   if(g===a) return true;
   if(g.length>3 && a.length>3 && (a.includes(g)||g.includes(a))) return true;
-  const d=lev(g,a), ratio=1-d/Math.max(g.length,a.length);
+  const d=lev(g,a);
+  if(d<=1) return true;                              // jedna literówka dozwolona (jak na quizie)
+  const ratio=1-d/Math.max(g.length,a.length);
   return ratio>=0.84;
 }
 
