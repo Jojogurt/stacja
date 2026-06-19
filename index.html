@@ -540,28 +540,29 @@ async function newRound(){
   const pool = ALL_CATS[eraKey].artists.filter(a=>!recentArtists.includes(a));
   const tryOrder = shuffle(pool.length?pool:ALL_CATS[eraKey].artists);
 
+  let anyResponse=false;
   for(const artist of tryOrder){
-    try{
-      const res=await itunes(artist);
-      const t=pickTrack(res,artist);
-      if(t){
-        current={track:t.trackName, artist:t.artistName, era:eraKey,
-          year:(t.releaseDate||'').slice(0,4),
-          album:t.collectionName||'', preview:t.previewUrl,
-          art:(t.artworkUrl100||'').replace('100x100','300x300')};
-        seenTracks.add(norm(t.trackName));
-        recentArtists.push(artist); if(recentArtists.length>6) recentArtists.shift();
-        busy=false; startAudio();
-        return;
-      }
-    }catch(e){
-      busy=false;
-      flash('Nie udało się pobrać utworu. W podglądzie Claude zapytania bywają blokowane — zapisz ten plik i otwórz na telefonie albo zhostuj, wtedy zadziała.');
+    let res=null;
+    for(let attempt=0; attempt<2 && !res; attempt++){
+      try{ res=await itunes(artist); anyResponse=true; }
+      catch(e){ /* próbujemy dalej */ }
+    }
+    if(!res) continue;                 // to zapytanie padło — następny wykonawca
+    const t=pickTrack(res,artist);
+    if(t){
+      current={track:t.trackName, artist:t.artistName, era:eraKey,
+        year:(t.releaseDate||'').slice(0,4),
+        album:t.collectionName||'', preview:t.previewUrl,
+        art:(t.artworkUrl100||'').replace('100x100','300x300')};
+      seenTracks.add(norm(t.trackName));
+      recentArtists.push(artist); if(recentArtists.length>6) recentArtists.shift();
+      busy=false; startAudio();
       return;
     }
   }
   busy=false;
-  flash('Brak zajawek dla tej epoki — spróbuj ponownie albo zmień epokę.');
+  if(!anyResponse) flash('Brak połączenia z iTunes. Jeśli to podgląd — otwórz jojogurt.github.io/stacja na telefonie. Na żywo: iTunes ogranicza liczbę zapytań, odczekaj minutę i spróbuj ponownie.');
+  else flash('Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.');
 }
 
 /* ============ audio ============ */
@@ -958,11 +959,16 @@ async function mpHostNewRound(){
     mpHostSeen.add(norm(s.title));
     mpGame.lyric=s.lyric; mpGame.preview=''; mpGame.ttsUrl=s.tts||'';
   } else {
-    let found=null;
+    let found=null, anyResponse=false;
     for(const artist of mpHostPickMusic(catKey)){
-      try{ const res=await itunes(artist); const t=pickTrackMP(res,artist); if(t){ found=t; break; } }catch(e){ mpGame.phase='neterr'; mpBroadcast(); mpRender(); return; }
+      let res=null;
+      for(let attempt=0; attempt<2 && !res; attempt++){
+        try{ res=await itunes(artist); anyResponse=true; }catch(e){ /* próbujemy dalej */ }
+      }
+      if(!res) continue;
+      const t=pickTrackMP(res,artist); if(t){ found=t; break; }
     }
-    if(!found){ mpGame.phase='neterr'; mpBroadcast(); mpRender(); return; }
+    if(!found){ mpGame.phase='neterr'; mpGame.netReason = anyResponse?'empty':'offline'; mpBroadcast(); mpRender(); return; }
     mpHostCurrent={track:found.trackName, artist:found.artistName, year:(found.releaseDate||'').slice(0,4),
       album:found.collectionName||'', art:(found.artworkUrl100||'').replace('100x100','300x300'), preview:found.previewUrl, lyric:''};
     mpHostSeen.add(norm(found.trackName));
@@ -1054,7 +1060,7 @@ function mpRender(){
     <div class="mp-state">drużyna: ${g.score} pkt</div>`;
 
   if(g.phase==='loading'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`; return; }
-  if(g.phase==='neterr'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Nie udało się pobrać utworu (sieć/iTunes). ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`; return; }
+  if(g.phase==='neterr'){ const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.'; st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`; return; }
   if(g.phase==='nolyric'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`; return; }
 
   if(g.phase==='play'){
