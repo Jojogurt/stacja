@@ -133,6 +133,9 @@
     background:transparent;border:1px solid var(--line);border-radius:9px;padding:8px 16px;cursor:pointer;
     text-transform:uppercase;transition:.15s}
   .modepick button.on{color:var(--bg);background:var(--ink);border-color:var(--ink)}
+  .voice-toggle{display:block;margin:-8px auto 16px;font-family:var(--mono);font-size:10px;letter-spacing:.08em;
+    color:var(--muted);background:transparent;border:1px solid var(--line);border-radius:8px;padding:6px 12px;cursor:pointer;text-transform:uppercase}
+  .voice-toggle.on{color:var(--amber);border-color:var(--amber-dim)}
 
   /* ---- session ---- */
   .session{margin-top:12px}
@@ -319,6 +322,7 @@
       <button data-mode="music" class="on">♪ muzyka</button>
       <button data-mode="lektor">🗣 lektor</button>
     </div>
+    <button class="voice-toggle" id="piperToggle">🎙 lepszy głos: wył.</button>
     <div class="knob-wrap">
       <div class="ring" id="ring">
         <button class="knob" id="knob" aria-label="Odtwórz">
@@ -412,6 +416,48 @@ function speak(text){
   speechSynthesis.speak(u);
 }
 function stopSpeech(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
+
+/* ===== Lektor: kolejność jakości — pre-gen audio > Piper (opcjonalny) > głos systemowy ===== */
+let piperOn = localStorage.getItem('stacjaPiper')==='1';
+const PIPER_VOICE = 'pl_PL-gosia-medium';
+let piperMod=null, piperReady=false, lektorAudio=null;
+
+function lektorStop(){ if(lektorAudio){ lektorAudio.pause(); lektorAudio=null; } stopSpeech(); }
+
+async function piperEnsure(onPct){
+  if(!piperMod) piperMod = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
+  if(!piperReady){ await piperMod.download(PIPER_VOICE, p=>{ if(onPct&&p.total) onPct(Math.round(p.loaded/p.total*100)); }); piperReady=true; }
+  return piperMod;
+}
+
+// odtwarza lektora; callback onStatus(tekst) do pokazania postępu w UI
+async function lektorPlay(text, ttsUrl, onStatus){
+  lektorStop();
+  if(ttsUrl){ lektorAudio=new Audio(ttsUrl); lektorAudio.play().catch(()=>{}); return; }
+  if(piperOn){
+    try{
+      onStatus && onStatus('przygotowuję głos…');
+      const mod = await Promise.race([ piperEnsure(p=>onStatus&&onStatus('pobieram głos… '+p+'%')),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('load')),120000)) ]);
+      onStatus && onStatus('lektor czyta…');
+      const wav = await Promise.race([ mod.predict({text, voiceId:PIPER_VOICE}),
+        new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),25000)) ]);
+      const url=URL.createObjectURL(wav);
+      lektorAudio=new Audio(url); lektorAudio.onended=()=>URL.revokeObjectURL(url);
+      await lektorAudio.play(); return;
+    }catch(e){ /* fallback do głosu systemowego */ }
+  }
+  onStatus && onStatus('lektor czyta…');
+  speak(text);
+}
+const piperToggleBtn=document.getElementById('piperToggle');
+function piperLabel(){ piperToggleBtn.textContent='🎙 lepszy głos: '+(piperOn?'wł. (Piper)':'wył.'); piperToggleBtn.classList.toggle('on',piperOn); }
+piperLabel();
+piperToggleBtn.onclick=()=>{
+  piperOn=!piperOn; localStorage.setItem('stacjaPiper', piperOn?'1':'0'); piperLabel();
+  if(piperOn){ setState('lepszy głos wł. — pierwsze użycie pobierze ~60 MB (raz)'); piperEnsure(p=>setState('pobieram głos… '+p+'%')).then(()=>setState('lepszy głos gotowy ✓')).catch(()=>{}); }
+  else setState('głos systemowy');
+};
 
 /* ============ tuner: render epok ============ */
 const ticksEl = document.getElementById('ticks');
@@ -536,15 +582,15 @@ function startAudio(){
   }).catch(()=>{ setIcon('play'); setState('naciśnij ▶, by odtworzyć'); document.getElementById('check').disabled=false;
     document.getElementById('replay').disabled=false; document.getElementById('skip').disabled=false; });
 }
-function stopAudio(){ if(audio){audio.pause();audio=null;} stopSpeech(); setRing(0); document.getElementById('knob').classList.remove('live'); }
+function stopAudio(){ if(audio){audio.pause();audio=null;} lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live'); }
 function toggleAudio(){
   if(!current){ newRound(); return; }
-  if(mode==='lektor'){ speak(current.lyric); return; }
+  if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; }
   if(!audio){ startAudio(); return; }
   if(audio.paused){ audio.play(); setIcon('pause'); }
   else { audio.pause(); setIcon('play'); }
 }
-function replay(){ if(!current) return; if(mode==='lektor'){ speak(current.lyric); return; } stopAudio(); startAudio(); }
+function replay(){ if(!current) return; if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; } stopAudio(); startAudio(); }
 
 document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
@@ -592,13 +638,14 @@ async function newLektorRound(){
   }
   const s=pool[Math.floor(Math.random()*pool.length)];
   current={track:s.title, artist:s.artist, era:selectedEra,
-    year:s.year||'', album:s.album||'', preview:'', art:'', lyric:s.lyric};
+    year:s.year||'', album:s.album||'', preview:'', art:'', lyric:s.lyric, tts:s.tts||''};
   seenTracks.add(norm(s.title));
   busy=false;
   document.getElementById('check').disabled=false;
   document.getElementById('replay').disabled=false;
   document.getElementById('skip').disabled=false;
-  speak(s.lyric);
+  document.getElementById('knob').classList.add('live');
+  lektorPlay(s.lyric, s.tts, setState);
   document.getElementById('fTitle').focus({preventScroll:true});
 }
 document.getElementById('skip').onclick=()=>{
@@ -862,8 +909,8 @@ function mpAfterSync(){
   mpRender();
 }
 function mpPlayLocal(){
-  if(mpAudio){ mpAudio.pause(); mpAudio=null; } stopSpeech();
-  if(mpGame.mode==='lektor'){ if(mpGame.lyric) speak(mpGame.lyric); }
+  if(mpAudio){ mpAudio.pause(); mpAudio=null; } lektorStop();
+  if(mpGame.mode==='lektor'){ if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, t=>{ const el=$m('mpCountdown'); }); }
   else if(mpGame.preview){ mpAudio=new Audio(mpGame.preview); mpAudio.play().catch(()=>{}); }
 }
 
@@ -909,7 +956,7 @@ async function mpHostNewRound(){
     const s=songs[Math.floor(Math.random()*songs.length)];
     mpHostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
     mpHostSeen.add(norm(s.title));
-    mpGame.lyric=s.lyric; mpGame.preview='';
+    mpGame.lyric=s.lyric; mpGame.preview=''; mpGame.ttsUrl=s.tts||'';
   } else {
     let found=null;
     for(const artist of mpHostPickMusic(catKey)){
@@ -919,7 +966,7 @@ async function mpHostNewRound(){
     mpHostCurrent={track:found.trackName, artist:found.artistName, year:(found.releaseDate||'').slice(0,4),
       album:found.collectionName||'', art:(found.artworkUrl100||'').replace('100x100','300x300'), preview:found.previewUrl, lyric:''};
     mpHostSeen.add(norm(found.trackName));
-    mpGame.preview=found.previewUrl; mpGame.lyric='';
+    mpGame.preview=found.previewUrl; mpGame.lyric=''; mpGame.ttsUrl='';
   }
   mpGame.phase='play'; mpGame.playNonce++;
   if(mpGame.timer>0) mpGame.endsAt = Date.now() + mpGame.timer*1000;
