@@ -484,6 +484,47 @@ const ALL_CATS = {...ERAS, ...STYLES, ...READY, ...LYRICS};
 const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS, ...LYRICS_KEYS];
 const CATS_OK = (ERA_KEYS.length + STYLE_KEYS.length) > 0;
 
+/* ============ model meczu (wspólny: solo + MP) ============ */
+const QPC=5, CPR=3;   // pytań na kategorię, kategorii na rundę (jak prawdziwy quiz)
+const ALL_MODES=['music','lektor','reverse','snippet'];
+const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment'};
+const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment'};
+// jakie tryby obsługuje kategoria (kompatybilność)
+function modesFor(catKey){
+  const c=ALL_CATS[catKey]; if(!c) return [];
+  if(c.kind==='lyrics') return ['lektor'];          // brak audio
+  const m=['music','reverse','snippet'];
+  if((c.songs||[]).some(s=>s.lyric)) m.push('lektor'); // tekst do lektora (np. hits-now)
+  return m;
+}
+function catLabel(catKey){ const c=ALL_CATS[catKey]; return c?(c.range||c.label):catKey; }
+// ułóż mecz: rounds × CPR slotów {round,cat,mode} — kompatybilne, bez powtórki kategorii w rundzie
+function buildMatch(catPool, modePool, rounds){
+  const cats=[...catPool], modes=[...modePool];
+  const pairs=[];
+  cats.forEach(cat=> modesFor(cat).forEach(m=>{ if(modes.includes(m)) pairs.push({cat,mode:m}); }));
+  if(!pairs.length) return {error:'Wybrane tryby nie pasują do kategorii — dodaj kategorię audio (muzyka/od tyłu/fragment) albo z tekstem (lektor).'};
+  const slots=[];
+  for(let r=1;r<=rounds;r++){
+    const used=new Set(); let added=0;
+    for(const p of shuffle(pairs)){
+      if(added>=CPR) break;
+      if(used.has(p.cat)) continue;              // różne kategorie w rundzie
+      slots.push({round:r, cat:p.cat, mode:p.mode}); used.add(p.cat); added++;
+    }
+    while(added<CPR){                            // mała pula — dopuść powtórkę kategorii
+      const p=shuffle(pairs)[0];
+      slots.push({round:r, cat:p.cat, mode:p.mode}); added++;
+    }
+  }
+  return {slots, rounds};
+}
+// nawigacja po meczu (m = {slots, si, qi, rounds})
+function matchSlot(m){ return m && m.slots ? m.slots[m.si] : null; }
+function matchAdvance(m){ m.qi++; if(m.qi>=QPC){ m.qi=0; m.si++; } return m.si < m.slots.length; }
+function matchHeader(m){ const s=matchSlot(m); if(!s) return '';
+  return `Runda ${s.round}/${m.rounds} · ${escapeHtml(catLabel(s.cat))} · ${MODE_SHORT[s.mode]||s.mode} · pyt. ${m.qi+1}/${QPC}`; }
+
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
 let current = null;         // bieżący utwór
