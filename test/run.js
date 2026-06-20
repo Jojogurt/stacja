@@ -4,6 +4,7 @@ import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from '../core
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
 import { reduceAction, countReady, evaluateAnswer, myVote, topProposal } from '../core/mpReducer.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
+import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 
 let pass=0, fail=0;
 function ok(cond, msg){ if(cond){ pass++; } else { fail++; console.error('  ✗ '+msg); } }
@@ -152,6 +153,24 @@ group('phases.transitions', ()=>{
   ok(canTransitionMp(null,MP.LOADING),'pierwszy stan dozwolony');
   ok(canTransitionSolo(SOLO.PLAYING,SOLO.REVEAL),'solo playing→reveal');
   ok(!canTransitionSolo(SOLO.IDLE,SOLO.REVEAL),'solo idle→reveal zabronione');
+});
+
+/* --- itunesRepository.pickTrack (czysty filtr, bez DOM) --- */
+group('repo.pickTrack', ()=>{
+  const seen=new Set();
+  const res=[
+    {trackName:'Song A', artistName:'Queen', previewUrl:'u1', collectionName:'X'},
+    {trackName:'Karaoke B', artistName:'Queen', previewUrl:'u2', collectionName:'Karaoke Hits'},
+    {trackName:'Song C', artistName:'Inny', previewUrl:'u3', collectionName:'Y'},
+    {trackName:'Song D', artistName:'Queen', previewUrl:'', collectionName:'Z'},
+  ];
+  const t=pickTrack(res,'Queen',seen);
+  ok(t && t.trackName==='Song A','wybiera utwór tego wykonawcy z zajawką, bez karaoke');
+  ok(BAD.test('Karaoke Hits'),'BAD łapie karaoke');
+  ok(!pickTrack([{trackName:'X',artistName:'Queen',previewUrl:''}],'Queen',seen),'brak previewUrl → null');
+  seen.add(norm('Song A'));
+  ok(!pickTrack([res[0]],'Queen',seen),'już zagrany (seen) → odrzucony');
+  ok(!pickTrack([{trackName:'Z',artistName:'Ktoś',previewUrl:'u'}],'Queen',seen),'inny wykonawca → odrzucony');
 });
 
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);

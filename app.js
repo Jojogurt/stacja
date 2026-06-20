@@ -1,6 +1,6 @@
 /* ============ czysty rdzeń (core/*) — bez DOM/Web API, dane wstrzykiwane ============ */
 import { shuffle, escapeHtml } from './core/util.js';
-import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from './core/scoring.js';
+import { norm, evaluateGuess } from './core/scoring.js';
 import {
   QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, MODE_SUB,
   matchSlot, matchAdvance,
@@ -9,7 +9,8 @@ import {
 } from './core/match.js';
 import { SOLO, MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
-import { fetchAudioBytes, playReverse } from './adapters-web/webAudio.js';
+import { playReverse } from './adapters-web/webAudio.js';
+import { resolveTrack } from './adapters-web/itunesRepository.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
@@ -244,65 +245,7 @@ function updateMatchInfo(){
   el.textContent=`${soloRounds} ${soloRounds===1?'runda':(soloRounds<5?'rundy':'rund')} × ${CPR} kategorie × ${QPC} pytań = ${soloRounds*CPR*QPC} pytań`;
 }
 
-/* ============ iTunes przez fetch (CORS) z fallbackiem na JSONP ============ */
-function itunesFetch(term){
-  const q=new URLSearchParams({term,media:'music',entity:'song',attribute:'artistTerm',limit:'60',country:'PL'});
-  const ctrl=new AbortController();
-  const to=setTimeout(()=>ctrl.abort(),10000);
-  return fetch('https://itunes.apple.com/search?'+q.toString(),{signal:ctrl.signal,referrerPolicy:'no-referrer'})
-    .then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
-    .then(d=>(d.results||[]))
-    .finally(()=>clearTimeout(to));
-}
-function itunesJsonp(term){
-  return new Promise((resolve,reject)=>{
-    const cb='it_'+Math.random().toString(36).slice(2);
-    const s=document.createElement('script');
-    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},10000);
-    function cleanup(){delete window[cb];s.remove();clearTimeout(to);}
-    window[cb]=d=>{cleanup();resolve(d.results||[]);};
-    s.onerror=()=>{cleanup();reject(new Error('network'));};
-    const q=new URLSearchParams({term,media:'music',entity:'song',attribute:'artistTerm',
-      limit:'60',country:'PL',callback:cb});
-    s.src='https://itunes.apple.com/search?'+q.toString();
-    document.body.appendChild(s);
-  });
-}
-// proxy przez Supabase Edge Function (iTunes -> fallback Deezer); klient gada tylko
-// z supabase.co, co omija blokady itunes.apple.com. Gdy padnie — bezpośredni fetch/JSONP.
-function itunesProxy(term){
-  const cfg=window.STACJA_CONFIG||{};
-  if(!cfg.supabaseUrl) return Promise.reject(new Error('no-proxy'));
-  const ctrl=new AbortController();
-  const to=setTimeout(()=>ctrl.abort(),12000);
-  const u=cfg.supabaseUrl+'/functions/v1/tracks?artist='+encodeURIComponent(term);
-  return fetch(u,{signal:ctrl.signal, headers: cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}})
-    .then(r=>{ if(!r.ok) throw new Error('fn '+r.status); return r.json(); })
-    .then(d=>(d.results||[]))
-    .finally(()=>clearTimeout(to));
-}
-function itunes(term){
-  return itunesProxy(term)
-    .then(res=>res.length?res:itunesFetch(term))   // proxy puste? spróbuj bezpośrednio
-    .catch(()=>itunesFetch(term).catch(()=>itunesJsonp(term)));
-}
-
-const BAD=/karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
-function pickTrack(results, artist){
-  const na=norm(artist);
-  const good=results.filter(r=>{
-    if(!r.previewUrl) return false;
-    if(BAD.test(r.artistName||'')||BAD.test(r.collectionName||'')||BAD.test(r.trackName||'')) return false;
-    const ra=norm(r.artistName||'');
-    if(!(ra.includes(na)||na.includes(ra))) return false;       // ten sam artysta
-    if(seenTracks.has(norm(r.trackName))) return false;          // nie powtarzaj
-    return true;
-  });
-  if(!good.length) return null;
-  return good[Math.floor(Math.random()*good.length)];
-}
-
-/* ============ losowanie rundy ============ */
+/* ============ losowanie rundy (źródło utworów → TrackRepository) ============ */
 async function newRound(){
   if(busy) return;
   if(!selectedEra){ flash('najpierw wybierz kategorię na skali'); return; }
@@ -316,55 +259,16 @@ async function newRound(){
 
   const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
   const cat = ALL_CATS[eraKey];
-  // playlista (lista konkretnych piosenek, bez wykonawców) → graj te utwory
-  if((!cat.artists || !cat.artists.length) && cat.songs && cat.songs.length){
-    return newSongRound(eraKey);
-  }
-  const pool = cat.artists.filter(a=>!recentArtists.includes(a));
-  const tryOrder = shuffle(pool.length?pool:cat.artists);
-
-  let anyResponse=false;
-  for(const artist of tryOrder){
-    let res=null;
-    for(let attempt=0; attempt<2 && !res; attempt++){
-      try{ res=await itunes(artist); anyResponse=true; }
-      catch(e){ /* próbujemy dalej */ }
-    }
-    if(!res) continue;                 // to zapytanie padło — następny wykonawca
-    const t=pickTrack(res,artist);
-    if(t){
-      current={track:t.trackName, artist:t.artistName, era:eraKey,
-        year:(t.releaseDate||'').slice(0,4),
-        album:t.collectionName||'', preview:t.previewUrl,
-        art:(t.artworkUrl100||'').replace('100x100','300x300')};
-      seenTracks.add(norm(t.trackName));
-      recentArtists.push(artist); if(recentArtists.length>6) recentArtists.shift();
-      busy=false; startAudio();
-      return;
-    }
-  }
+  const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG});
   busy=false;
-  if(!anyResponse) flash('Brak połączenia z iTunes. Jeśli to podgląd — otwórz jojogurt.github.io/stacja na telefonie. Na żywo: iTunes ogranicza liczbę zapytań, odczekaj minutę i spróbuj ponownie.');
-  else flash('Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.');
-}
-
-/* runda z konkretnych piosenek (zaimportowana playlista Spotify) */
-async function newSongRound(eraKey){
-  let pool=(ALL_CATS[eraKey].songs||[]).filter(s=>!seenTracks.has(norm(s.title)));
-  if(!pool.length){ (ALL_CATS[eraKey].songs||[]).forEach(s=>seenTracks.delete(norm(s.title))); pool=(ALL_CATS[eraKey].songs||[]).slice(); }
-  for(const s of shuffle(pool)){
-    let preview=s.preview||'', art='';
-    if(!preview){
-      try{ const res=await itunes(s.artist); const t=res.find(r=>textMatch(r.trackName,s.title))||res[0]; if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); } }catch(e){}
-    }
-    if(preview){
-      current={track:s.title, artist:s.artist, era:eraKey, year:s.year||'', album:s.album||'', preview, art, lyric:''};
-      seenTracks.add(norm(s.title));
-      busy=false; startAudio(); return;
-    }
-    seenTracks.add(norm(s.title));
+  if(t.error){
+    if(t.reason==='offline') flash('Brak połączenia z iTunes. Jeśli to podgląd — otwórz jojogurt.github.io/stacja na telefonie. Na żywo: iTunes ogranicza liczbę zapytań, odczekaj minutę i spróbuj ponownie.');
+    else if(cat.songs && cat.songs.length && (!cat.artists||!cat.artists.length)) flash('Brak grających zajawek w tej playliście — wybierz inną kategorię.');
+    else flash('Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.');
+    return;
   }
-  busy=false; flash('Brak grających zajawek w tej playliście — wybierz inną kategorię.');
+  current={...t, era:eraKey, lyric:''};
+  startAudio();
 }
 
 /* ============ audio ============ */
@@ -918,10 +822,6 @@ function mpHostNextQuestion(){
   mpGame.catKey=s.cat; mpGame.mode=s.mode; mpGame.round=s.round; mpGame.catLabel=catLabel(s.cat);
   mpHostNewRound();
 }
-function mpHostPickMusic(catKey){
-  const pool=(ALL_CATS[catKey]&&ALL_CATS[catKey].artists)||[];
-  return shuffle(pool);
-}
 async function mpHostNewRound(){
   mpGame.phase='loading'; mpGame.proposals=[]; mpGame.sure=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
   mpBroadcast(); mpRender();
@@ -933,35 +833,12 @@ async function mpHostNewRound(){
     mpHostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
     mpHostSeen.add(norm(s.title));
     mpGame.lyric=s.lyric; mpGame.preview=''; mpGame.ttsUrl=s.tts||'';
-  } else if((!ALL_CATS[catKey]||!ALL_CATS[catKey].artists||!ALL_CATS[catKey].artists.length) && ALL_CATS[catKey] && ALL_CATS[catKey].songs && ALL_CATS[catKey].songs.length){
-    // playlista — losuj konkretny utwór i graj jego zajawkę
-    let pool=ALL_CATS[catKey].songs.filter(s=>!mpHostSeen.has(norm(s.title)));
-    if(!pool.length){ ALL_CATS[catKey].songs.forEach(s=>mpHostSeen.delete(norm(s.title))); pool=ALL_CATS[catKey].songs.slice(); }
-    let chosen=null;
-    for(const s of shuffle(pool)){
-      let preview=s.preview||'', art='';
-      if(!preview){ try{ const res=await itunes(s.artist); const t=res.find(r=>textMatch(r.trackName,s.title))||res[0]; if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); } }catch(e){} }
-      if(preview){ chosen={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art, preview}; mpHostSeen.add(norm(s.title)); break; }
-      mpHostSeen.add(norm(s.title));
-    }
-    if(!chosen){ mpGame.phase='neterr'; mpGame.netReason='empty'; mpBroadcast(); mpRender(); return; }
-    mpHostCurrent={...chosen, lyric:''};
-    mpGame.preview=chosen.preview; mpGame.lyric=''; mpGame.ttsUrl='';
   } else {
-    let found=null, anyResponse=false;
-    for(const artist of mpHostPickMusic(catKey)){
-      let res=null;
-      for(let attempt=0; attempt<2 && !res; attempt++){
-        try{ res=await itunes(artist); anyResponse=true; }catch(e){ /* próbujemy dalej */ }
-      }
-      if(!res) continue;
-      const t=pickTrackMP(res,artist); if(t){ found=t; break; }
-    }
-    if(!found){ mpGame.phase='neterr'; mpGame.netReason = anyResponse?'empty':'offline'; mpBroadcast(); mpRender(); return; }
-    mpHostCurrent={track:found.trackName, artist:found.artistName, year:(found.releaseDate||'').slice(0,4),
-      album:found.collectionName||'', art:(found.artworkUrl100||'').replace('100x100','300x300'), preview:found.previewUrl, lyric:''};
-    mpHostSeen.add(norm(found.trackName));
-    mpGame.preview=found.previewUrl; mpGame.lyric=''; mpGame.ttsUrl='';
+    // audio (muzyka/od tyłu/fragment) — playlistę i pulę wykonawców rozwiązuje repozytorium
+    const t=await resolveTrack({cat:ALL_CATS[catKey], seen:mpHostSeen, cfg:window.STACJA_CONFIG});
+    if(t.error){ mpGame.phase=MP.NETERR; mpGame.netReason=t.reason; mpBroadcast(); mpRender(); return; }
+    mpHostCurrent={...t, lyric:''};
+    mpGame.preview=t.preview; mpGame.lyric=''; mpGame.ttsUrl='';
   }
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
   mpGame.snipStart = mpGame.mode==='snippet' ? Math.max(0.5, Math.random()*16) : 0;
@@ -974,18 +851,6 @@ async function mpHostNewRound(){
   if(mpArmTimer) clearTimeout(mpArmTimer);
   mpArmTimer=setTimeout(()=>mpGo(), 7000);   // bezpiecznik: start mimo braku potwierdzeń
 }
-function pickTrackMP(results, artist){
-  const na=norm(artist);
-  const good=results.filter(r=>{
-    if(!r.previewUrl) return false;
-    if(BAD.test(r.artistName||'')||BAD.test(r.collectionName||'')||BAD.test(r.trackName||'')) return false;
-    const ra=norm(r.artistName||''); if(!(ra.includes(na)||na.includes(ra))) return false;
-    if(mpHostSeen.has(norm(r.trackName))) return false;
-    return true;
-  });
-  return good.length? good[Math.floor(Math.random()*good.length)] : null;
-}
-
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
   if(!mpHost || !mpGame || mpGame.phase!==MP.PLAY) return;
