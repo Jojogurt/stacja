@@ -42,3 +42,17 @@ export function textMatch(guess,actual){
   const ratio=1-d/Math.max(g.length,a.length);
   return ratio>=0.84;
 }
+
+// rok trafiony, gdy odgadnięto i mieści się w ±2 latach
+export function yearMatch(guessYear, actualYear){
+  return !!(guessYear && actualYear && Math.abs(+guessYear - +actualYear) <= 2);
+}
+
+// jedna ocena odpowiedzi (wspólna solo + MP) — czysta, zwraca komplet flag
+export function evaluateGuess(guess, track){
+  const okTitle = textMatch(guess.title, track.track);
+  const okArtist = textMatch(guess.artist, track.artist);
+  const okYear = yearMatch(guess.year, track.year);
+  const okAlbum = guess.album ? textMatch(guess.album, track.album) : false;
+  return { okTitle, okArtist, okYear, okAlbum, roundOk: okTitle && okArtist };
+}

@@ -1,7 +1,9 @@
 /* test/run.js — lekki runner dla czystego rdzenia (zero zależności).
  * Uruchom: node test/run.js */
-import { norm, lev, textMatch, deLatin } from '../core/scoring.js';
+import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
+import { reduceAction, countReady, evaluateAnswer, myVote, topProposal } from '../core/mpReducer.js';
+import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 
 let pass=0, fail=0;
 function ok(cond, msg){ if(cond){ pass++; } else { fail++; console.error('  ✗ '+msg); } }
@@ -70,6 +72,86 @@ group('match.randomPools', ()=>{
     ok(cats.length>0 && modes.length>0,'zawsze ≥1 kategoria i ≥1 tryb');
     ok(cats.every(c=>modesFor(c,CATS).some(m=>modes.includes(m))),'co najmniej kompatybilność puli');
   }
+});
+
+/* --- scoring: rok + evaluateGuess --- */
+group('scoring.yearMatch', ()=>{
+  ok(yearMatch('1991','1992'),'±1 trafia');
+  ok(yearMatch(1990,1992),'±2 trafia (liczby)');
+  ok(!yearMatch('1990','1993'),'±3 nie trafia');
+  ok(!yearMatch('','1990'),'brak odgadnięcia → false');
+  ok(!yearMatch('1990',''),'brak prawdy → false');
+});
+group('scoring.evaluateGuess', ()=>{
+  const track={track:'Bohemian Rhapsody', artist:'Queen', year:'1975', album:'A Night at the Opera'};
+  let r=evaluateGuess({title:'Bohemian Rhapsody',artist:'Queen',year:'1976',album:''}, track);
+  ok(r.okTitle&&r.okArtist&&r.roundOk,'tytuł+wykonawca → roundOk');
+  ok(r.okYear,'rok ±1 bonus');
+  ok(!r.okAlbum,'album nie zgadywany → false');
+  r=evaluateGuess({title:'Zła',artist:'Queen',year:'',album:''}, track);
+  ok(!r.roundOk && r.okArtist,'zły tytuł → brak roundOk, ale wykonawca ok');
+});
+
+/* --- mpReducer --- */
+function mkGame(){ return {phase:MP.PLAY, round:1, proposals:[], sure:[]}; }
+group('mpReducer.reduceAction', ()=>{
+  const g=mkGame();
+  ok(reduceAction(g,{type:'propose',by:'u1',byName:'Ala',title:'Hey Jude',artist:'Beatles'}),'propose zmienia stan');
+  eq(g.proposals.length,1,'1 propozycja');
+  ok(!reduceAction(g,{type:'propose',by:'u2',byName:'B',title:'',artist:''}),'pusta propozycja odrzucona');
+  const pid=g.proposals[0].id;
+  ok(reduceAction(g,{type:'vote',by:'u2',pid}),'głos dodany');
+  eq(g.proposals[0].votes,['u2'],'głos zapisany');
+  reduceAction(g,{type:'vote',by:'u2',pid});  // ponowny głos na to samo
+  eq(g.proposals[0].votes,['u2'],'głos nie dubluje');
+  ok(reduceAction(g,{type:'sure',by:'u2',byName:'B'}),'pewniak włączony');
+  eq(g.sure.length,1,'1 pewniak');
+  reduceAction(g,{type:'sure',by:'u2',byName:'B'});
+  eq(g.sure.length,0,'pewniak wyłączony (toggle)');
+  ok(reduceAction(g,{type:'unpropose',by:'u1',pid}),'autor usuwa propozycję');
+  eq(g.proposals.length,0,'propozycja usunięta');
+  ok(!reduceAction(g,{type:'nieznana'}),'nieznana akcja → brak zmian');
+  const armed={phase:MP.ARMING, proposals:[], sure:[]};
+  ok(!reduceAction(armed,{type:'propose',by:'x',title:'a'}),'propose poza fazą play → ignorowane');
+});
+group('mpReducer.countReady', ()=>{
+  const s=new Set(['a','b']);
+  eq(countReady(['a','b'],s).all,true,'wszyscy gotowi');
+  eq(countReady(['a','b','c'],s).count,2,'liczy obecnych');
+  eq(countReady(['a','b','c'],s).all,false,'brakuje jednego');
+  eq(countReady([],s).all,false,'pusta lista → nie all');
+});
+group('mpReducer.evaluateAnswer', ()=>{
+  const g={phase:MP.PLAY, round:2, sure:[{id:'u1',name:'Ala'}],
+    proposals:[{by:'u9',byName:'Zoe',title:'Hey Jude',artist:'The Beatles'}]};
+  const cur={track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:''};
+  const ev=evaluateAnswer(g, cur, {title:'hey jude', artist:'beatles'});
+  ok(ev.teamOk,'drużyna trafiła');
+  eq(ev.gained,2,'pewniak + trafienie = 2 pkt');
+  eq(ev.firstBy,'Zoe','pierwszy trafny = Zoe');
+  eq(ev.firstById,'u9','id pierwszego trafnego');
+  ok(ev.reveal.pewniakWin,'pewniak wygrany');
+  eq(ev.result.round,2,'wynik z numerem rundy');
+  const bad=evaluateAnswer({phase:MP.PLAY,round:1,sure:[{id:'u1',name:'A'}],proposals:[]}, cur, {title:'zle',artist:'zle'});
+  eq(bad.gained,0,'brak trafienia = 0 pkt');
+  ok(bad.reveal.pewniakLose,'pewniak przegrany');
+});
+group('mpReducer.selektory', ()=>{
+  const g={proposals:[{id:'p1',votes:['me']},{id:'p2',votes:['a','b']}]};
+  eq(myVote(g,'me'),'p1','mój głos znaleziony');
+  eq(myVote(g,'x'),null,'brak głosu → null');
+  eq(topProposal(g).id,'p2','najwięcej głosów na górze');
+  eq(myVote(null,'me'),null,'brak gry → null');
+});
+
+/* --- phases (FSM) --- */
+group('phases.transitions', ()=>{
+  ok(canTransitionMp(MP.ARMING,MP.PLAY),'arming→play dozwolone');
+  ok(!canTransitionMp(MP.PLAY,MP.ARMING),'play→arming zabronione');
+  ok(canTransitionMp(MP.PLAY,MP.REVEAL),'play→reveal dozwolone');
+  ok(canTransitionMp(null,MP.LOADING),'pierwszy stan dozwolony');
+  ok(canTransitionSolo(SOLO.PLAYING,SOLO.REVEAL),'solo playing→reveal');
+  ok(!canTransitionSolo(SOLO.IDLE,SOLO.REVEAL),'solo idle→reveal zabronione');
 });
 
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);

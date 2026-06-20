@@ -1,12 +1,14 @@
 /* ============ czysty rdzeń (core/*) — bez DOM/Web API, dane wstrzykiwane ============ */
 import { shuffle, escapeHtml } from './core/util.js';
-import { norm, lev, textMatch, deLatin } from './core/scoring.js';
+import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from './core/scoring.js';
 import {
   QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, MODE_SUB,
   matchSlot, matchAdvance,
   modesFor as _modesFor, catLabel as _catLabel, buildMatch as _buildMatch,
   randomPools as _randomPools, matchHeader as _matchHeader,
 } from './core/match.js';
+import { SOLO, MP, assertMp } from './core/phases.js';
+import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
@@ -623,12 +625,7 @@ function check(){
   if(!current) return;
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
-  const okTitle=textMatch(g.title,current.track);
-  const okArtist=textMatch(g.artist,current.artist);
-  const okYear = g.year && current.year ? Math.abs(+g.year - +current.year)<=2 : false;
-  const okAlbum= g.album ? textMatch(g.album,current.album) : false;
-
-  const roundOk = okTitle && okArtist;
+  const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
   total++; if(roundOk){score++;streak++;} else streak=0;
   updateScore();
   if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle, okArtist, round:s?s.round:0, mode:s?s.mode:mode}); updateSessUI(); }
@@ -878,9 +875,9 @@ function mpPlayReverse(){
 }
 // host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
 function mpGo(){
-  if(!mpHost || !mpGame || mpGame.phase!=='arming') return;
+  if(!mpHost || !mpGame || mpGame.phase!==MP.ARMING) return;
   if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
-  mpGame.phase='play'; mpGame.playNonce=(mpGame.playNonce||0)+1;
+  mpGame.phase=assertMp(mpGame.phase, MP.PLAY, console.warn); mpGame.playNonce=(mpGame.playNonce||0)+1;
   if(mpGame.timer>0) mpGame.endsAt=Date.now()+mpGame.timer*1000;
   mpBroadcast(); mpAfterSync();   // host gra lokalnie
 }
@@ -888,29 +885,18 @@ function mpGo(){
 /* ---- host: akcje od graczy ---- */
 function mpHandleAct(a){
   if(!mpGame) return;
-  if(a.type==='propose' && mpGame.phase==='play'){
-    if(!a.title && !a.artist) return;
-    mpGame.proposals.push({id:Math.random().toString(36).slice(2,8), by:a.by, byName:a.byName, title:a.title||'', artist:a.artist||'', votes:[]});
-  } else if(a.type==='unpropose' && mpGame.phase==='play'){
-    // zmiana zdania (#7): usuń WŁASNĄ propozycję (tylko autor)
-    mpGame.proposals=mpGame.proposals.filter(p=>!(p.id===a.pid && p.by===a.by));
-  } else if(a.type==='vote' && mpGame.phase==='play'){
-    mpGame.proposals.forEach(p=>{ p.votes=p.votes.filter(v=>v!==a.by); });
-    const t=mpGame.proposals.find(p=>p.id===a.pid); if(t && !t.votes.includes(a.by)) t.votes.push(a.by);
-  } else if(a.type==='sure' && mpGame.phase==='play'){
-    const i=mpGame.sure.findIndex(s=>s.id===a.by);
-    if(i>=0) mpGame.sure.splice(i,1); else mpGame.sure.push({id:a.by, name:a.byName});
-  } else if(a.type==='ready' && mpGame.phase==='arming'){
+  // faza gotowości — host orkiestruje (presence + bezpiecznik), zliczanie w core
+  if(a.type==='ready' && mpGame.phase===MP.ARMING){
     if(a.armNonce!==mpGame.armNonce) return;       // ready ze starej rundy — ignoruj
     mpReady.add(a.by);
-    const expect=mpMembers().map(m=>m.id);
-    mpGame.readyCount=expect.filter(id=>mpReady.has(id)).length;
-    mpGame.readyTotal=expect.length;
-    if(expect.every(id=>mpReady.has(id))){ mpGo(); return; }  // wszyscy gotowi → start
+    const r=countReady(mpMembers().map(m=>m.id), mpReady);
+    mpGame.readyCount=r.count; mpGame.readyTotal=r.total;
+    if(r.all){ mpGo(); return; }                   // wszyscy gotowi → start
     mpBroadcast(); mpRender();
     return;
-  } else return;
-  mpBroadcast(); mpRender();
+  }
+  // pozostałe akcje gry: czysty reducer (propose/unpropose/vote/sure)
+  if(reduceAction(mpGame, a)){ mpBroadcast(); mpRender(); }
 }
 
 /* ---- host: start gry / runda ---- */
@@ -1026,28 +1012,19 @@ function pickTrackMP(results, artist){
 
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
-  if(!mpHost || !mpGame || mpGame.phase!=='play') return;
+  if(!mpHost || !mpGame || mpGame.phase!==MP.PLAY) return;
   mpAutoLocked=true;
   const title=($m('mpScTitle')?$m('mpScTitle').value:'').trim(), artist=($m('mpScArtist')?$m('mpScArtist').value:'').trim();
   const c=mpHostCurrent;
-  const okTitle=textMatch(title,c.track), okArtist=textMatch(artist,c.artist);
-  const teamOk=okTitle&&okArtist;
-  const pewniacy=(mpGame.sure||[]).map(s=>s.name);
-  const anySure=pewniacy.length>0;
-  const gained = teamOk ? (anySure?2:1) : 0;
-  mpGame.score += gained;
-  // bonus + MVP: kto pierwszy zaproponował trafny tytuł+wykonawcę
-  let firstBy=null;
-  for(const p of mpGame.proposals){
-    if(textMatch(p.title,c.track)&&textMatch(p.artist,c.artist)){ firstBy=p.byName; mpTally[p.by]=mpTally[p.by]||{name:p.byName,correct:0}; mpTally[p.by].correct++; break; }
-  }
-  mpGame.results.push({round:mpGame.round, track:c.track, artist:c.artist, ok:teamOk});
+  const ev=evaluateAnswer(mpGame, c, {title, artist});   // czysta ocena (core)
+  // nałóż wyliczenia na stan/tally (efekty zostają w app.js)
+  mpGame.score += ev.gained;
+  if(ev.firstById){ mpTally[ev.firstById]=mpTally[ev.firstById]||{name:ev.firstBy,correct:0}; mpTally[ev.firstById].correct++; }
+  mpGame.results.push(ev.result);
   // #12: zlicz przegrane pewniaki per osoba (kto stawia i ile)
-  if(!teamOk && anySure){ mpGame.beerTally=mpGame.beerTally||{}; pewniacy.forEach(n=>{ mpGame.beerTally[n]=(mpGame.beerTally[n]||0)+1; }); }
-  mpGame.reveal={track:c.track, artist:c.artist, year:c.year, album:c.album, art:c.art,
-    okTitle, okArtist, teamOk, locked:{title,artist}, firstBy,
-    pewniacy, gained, pewniakWin:teamOk&&anySure, pewniakLose:!teamOk&&anySure};
-  mpGame.phase='reveal'; mpGame.endsAt=null;
+  if(!ev.teamOk && ev.anySure){ mpGame.beerTally=mpGame.beerTally||{}; ev.pewniacy.forEach(n=>{ mpGame.beerTally[n]=(mpGame.beerTally[n]||0)+1; }); }
+  mpGame.reveal=ev.reveal;
+  mpGame.phase=assertMp(mpGame.phase, MP.REVEAL, console.warn); mpGame.endsAt=null;
   mpBroadcast(); mpRender();
 }
 function mpNext(){
@@ -1064,8 +1041,8 @@ function mpFinish(){
 function mpNewGame(){ mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
 
 /* ---- render sceny ---- */
-function mpMyVote(){ if(!mpGame) return null; const p=mpGame.proposals.find(p=>p.votes.includes(mpMe.id)); return p?p.id:null; }
-function mpTopProp(){ if(!mpGame||!mpGame.proposals.length) return null; return [...mpGame.proposals].sort((a,b)=>b.votes.length-a.votes.length)[0]; }
+function mpMyVote(){ return _myVote(mpGame, mpMe.id); }
+function mpTopProp(){ return _topProposal(mpGame); }
 
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
