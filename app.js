@@ -7,7 +7,7 @@ import {
   modesFor as _modesFor, catLabel as _catLabel, buildMatch as _buildMatch,
   randomPools as _randomPools, matchHeader as _matchHeader,
 } from './core/match.js';
-import { SOLO, MP, assertMp } from './core/phases.js';
+import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
 import { playReverse } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
@@ -588,6 +588,12 @@ let mpPlayRound=null;       // dla której rundy jest już zbudowany formularz (
 let mpTimerInt=null;        // interwał odliczania
 const $m=id=>document.getElementById(id);
 const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
+/* nazwane stałe (zamiast magic numbers rozsianych po kodzie) */
+const MP_ARM_TIMEOUT_MS=7000;   // host: bezpiecznik — start mimo braku potwierdzeń gotowości
+const MP_BUFFER_TIMEOUT_MS=6000;// klient: bezpiecznik — zgłoś „ready" mimo zawieszonego buforowania
+const MP_SNIP_WINDOW_S=16;      // okno losowania startu fragmentu (s)
+const EMOJI_TTL_MS=2400;        // jak długo leci emotka po ekranie
+const SAY_TTL_MS=4400;          // jak długo wisi dymek wiadomości
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
@@ -680,11 +686,11 @@ function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',ev
 function mpSend(act){ if(mpCh){ act.by=mpMe.id; act.byName=mpMe.name; mpCh.send({type:'broadcast',event:'act',payload:act}); } }
 function mpAfterSync(){
   // faza gotowości: zbuforuj utwór i zgłoś „ready" (raz na rundę)
-  if(mpGame && mpGame.phase==='arming' && mpGame.armNonce!==mpLastArmNonce){
+  if(mpGame && mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce){
     mpLastArmNonce=mpGame.armNonce; mpArm();
   }
   // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start)
-  if(mpGame && mpGame.phase==='play' && mpGame.playNonce!==mpLastNonce){
+  if(mpGame && mpGame.phase===MP.PLAY && mpGame.playNonce!==mpLastNonce){
     mpLastNonce=mpGame.playNonce; mpPlayLocal();
   }
   mpRender();
@@ -706,7 +712,7 @@ function mpArm(){
   a.addEventListener('canplaythrough', ready, {once:true});
   a.addEventListener('canplay',        ready, {once:true});
   a.addEventListener('error',          ready, {once:true}); // i tak zgłoś — host nie utknie
-  setTimeout(ready, 6000);                                  // bezpiecznik
+  setTimeout(ready, MP_BUFFER_TIMEOUT_MS);                  // bezpiecznik
   a.load();
 }
 function mpStopRev(){ if(mpRevSrc){ mpRevSrc.stop(); mpRevSrc=null; } }   // uchwyt z playReverse
@@ -823,12 +829,12 @@ function mpHostNextQuestion(){
   mpHostNewRound();
 }
 async function mpHostNewRound(){
-  mpGame.phase='loading'; mpGame.proposals=[]; mpGame.sure=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
+  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.sure=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
   if(mpGame.mode==='lektor'){
     const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!mpHostSeen.has(norm(s.title)));
-    if(!songs.length){ mpGame.phase='nolyric'; mpBroadcast(); mpRender(); return; }
+    if(!songs.length){ mpGame.phase=MP.NOLYRIC; mpBroadcast(); mpRender(); return; }
     const s=songs[Math.floor(Math.random()*songs.length)];
     mpHostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
     mpHostSeen.add(norm(s.title));
@@ -841,15 +847,15 @@ async function mpHostNewRound(){
     mpGame.preview=t.preview; mpGame.lyric=''; mpGame.ttsUrl='';
   }
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
-  mpGame.snipStart = mpGame.mode==='snippet' ? Math.max(0.5, Math.random()*16) : 0;
+  mpGame.snipStart = mpGame.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
-  mpGame.phase='arming'; mpGame.armNonce=(mpGame.armNonce||0)+1;
+  mpGame.phase=MP.ARMING; mpGame.armNonce=(mpGame.armNonce||0)+1;
   mpGame.endsAt=null; mpGame.readyCount=0; mpGame.readyTotal=mpMembers().length;
   mpReady=new Set();
   mpBroadcast(); mpRender();
   mpArm();                                   // host też buforuje i zgłosi swoją gotowość
   if(mpArmTimer) clearTimeout(mpArmTimer);
-  mpArmTimer=setTimeout(()=>mpGo(), 7000);   // bezpiecznik: start mimo braku potwierdzeń
+  mpArmTimer=setTimeout(()=>mpGo(), MP_ARM_TIMEOUT_MS);   // bezpiecznik: start mimo braku potwierdzeń
 }
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
@@ -877,7 +883,7 @@ function mpFinish(){
   const arr=Object.values(mpTally).sort((a,b)=>b.correct-a.correct);
   mpGame.mvp = arr.length&&arr[0].correct>0 ? arr[0] : null;
   mpGame.tallyList = arr;
-  mpGame.phase='done'; mpBroadcast(); mpRender();
+  mpGame.phase=MP.DONE; mpBroadcast(); mpRender();
 }
 function mpNewGame(){ mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
 
@@ -885,114 +891,131 @@ function mpNewGame(){ mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRend
 function mpMyVote(){ return _myVote(mpGame, mpMe.id); }
 function mpTopProp(){ return _topProposal(mpGame); }
 
+/* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
   if(!mpGame || mpGame.phase==null){
-    if(mpHost){ st.innerHTML=mpPickerHTML(); }
-    else { st.innerHTML=`<div class="mp-deck"><div class="mp-state">host układa mecz…</div></div>`; }
+    st.innerHTML = mpHost ? mpPickerHTML() : `<div class="mp-deck"><div class="mp-state">host układa mecz…</div></div>`;
     return;
   }
   const g=mpGame;
   const head=`<div class="mp-round">${escapeHtml(matchHeader(g))}</div>
     <div class="mp-state">drużyna: ${g.score} pkt</div>`;
+  switch(g.phase){
+    case MP.LOADING: st.innerHTML=mpRenderLoading(head); return;
+    case MP.ARMING:  st.innerHTML=mpRenderArming(g, head); return;
+    case MP.NETERR:  st.innerHTML=mpRenderNetErr(g, head); return;
+    case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
+    case MP.PLAY:    mpRenderPlay(g, head, st); return;
+    case MP.REVEAL:  st.innerHTML=mpRenderReveal(g, head); return;
+    case MP.DONE:    st.innerHTML=mpRenderDone(g, head); return;
+  }
+}
 
-  if(g.phase==='loading'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`; return; }
-  if(g.phase==='arming'){ const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
-    st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">muzyka ruszy równo u wszystkich</div></div>`; return; }
-  if(g.phase==='neterr'){ const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.'; st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`; return; }
-  if(g.phase==='nolyric'){ st.innerHTML=`<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`; return; }
+const mpRenderLoading = (head)=> `<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`;
+const mpRenderArming = (g, head)=>{
+  const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
+  return `<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">muzyka ruszy równo u wszystkich</div></div>`;
+};
+const mpRenderNetErr = (g, head)=>{
+  const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
+  return `<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
+};
+const mpRenderNoLyric = (head)=> `<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
 
-  if(g.phase==='play'){
-    const top=mpTopProp(), mine=mpMyVote();
-    const board=g.proposals.length? g.proposals.map(p=>{
-      const isTop = top && p.id===top.id && p.votes.length>0;
-      const delBtn = p.by===mpMe.id ? `<button class="mp-del" onclick="mpSend({type:'unpropose',pid:'${p.id}'})" title="usuń moją propozycję">✕</button>` : '';
-      return `<div class="mp-prop${isTop?' top':''}">
-        <div class="guess"><span class="who">${escapeHtml(p.byName)}</span><b>${escapeHtml(p.title||'—')}</b> <span>· ${escapeHtml(p.artist||'—')}</span></div>
-        <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>${delBtn}
-      </div>`; }).join('') : `<div class="mp-state">brak propozycji — wrzuć pierwszą</div>`;
-    // karta „odpowiedź drużyny" = najczęściej głosowana propozycja (#8), widoczna dla wszystkich
-    const team=`<div class="lab">odpowiedź drużyny${top&&top.votes.length?(' · '+top.votes.length+' 👍'):''}</div>
-      <div class="ans">${top?(escapeHtml(top.title||'—')+' · '+escapeHtml(top.artist||'—')):'— wrzuć i przegłosuj propozycję —'}</div>`;
-    const iAmSure=(g.sure||[]).some(s=>s.id===mpMe.id);
-    const sureNames=(g.sure||[]).map(s=>escapeHtml(s.name)).join(', ');
-    // pewniak dotyczy ODPOWIEDZI DRUŻYNY (top), nie pojedynczej propozycji (#11)
-    const pewniak=`<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})" title="pewniak dotyczy odpowiedzi drużyny">🍺 pewniak${iAmSure?' ✓':''}</button>
-      <span class="mp-state" style="margin:0">${sureNames?('pewni odpowiedzi: '+sureNames):'pewny odpowiedzi drużyny? postaw 🍺'}</span>`;
-
-    // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
-    // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
-    if(mpPlayRound!==g.playNonce || !$m('mpBoard')){
-      mpPlayRound=g.playNonce;
-      let scribe='';
-      if(mpHost){
-        scribe=`<div class="mp-scribe"><div class="lab">host — zatwierdź odpowiedź drużyny (podstawiona top-głosowana)</div>
-          <div class="mp-form" style="grid-template-columns:1fr 1fr">
-            <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
-            <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
-          </div>
-          <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>`;
-      }
-      const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
-        <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
-      st.innerHTML=`<div class="mp-deck">${head}
-        <div class="mp-state" id="mpCountdown"></div>
-        <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
-          <svg viewBox="0 0 24 24"><path id="mpKnobIcon" d="M8 5v14l11-7z"/></svg></button>
-        <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
-        ${g.mode==='lektor'&&g.lyric?`<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>`:''}
-        <div class="mp-form">
-          <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
-          <button onclick="mpPropose()">Wrzuć</button>
+/* --- faza gry: małe budowniki HTML + częściowa aktualizacja (nie czyść pól) --- */
+function mpBoardHTML(g, top, mine){
+  if(!g.proposals.length) return `<div class="mp-state">brak propozycji — wrzuć pierwszą</div>`;
+  return g.proposals.map(p=>{
+    const isTop = top && p.id===top.id && p.votes.length>0;
+    const delBtn = p.by===mpMe.id ? `<button class="mp-del" onclick="mpSend({type:'unpropose',pid:'${p.id}'})" title="usuń moją propozycję">✕</button>` : '';
+    return `<div class="mp-prop${isTop?' top':''}">
+      <div class="guess"><span class="who">${escapeHtml(p.byName)}</span><b>${escapeHtml(p.title||'—')}</b> <span>· ${escapeHtml(p.artist||'—')}</span></div>
+      <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>${delBtn}
+    </div>`; }).join('');
+}
+// karta „odpowiedź drużyny" = najczęściej głosowana propozycja (#8), widoczna dla wszystkich
+function mpTeamHTML(top){
+  return `<div class="lab">odpowiedź drużyny${top&&top.votes.length?(' · '+top.votes.length+' 👍'):''}</div>
+    <div class="ans">${top?(escapeHtml(top.title||'—')+' · '+escapeHtml(top.artist||'—')):'— wrzuć i przegłosuj propozycję —'}</div>`;
+}
+// pewniak dotyczy ODPOWIEDZI DRUŻYNY (top), nie pojedynczej propozycji (#11)
+function mpPewniakHTML(g){
+  const iAmSure=(g.sure||[]).some(s=>s.id===mpMe.id);
+  const sureNames=(g.sure||[]).map(s=>escapeHtml(s.name)).join(', ');
+  return `<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})" title="pewniak dotyczy odpowiedzi drużyny">🍺 pewniak${iAmSure?' ✓':''}</button>
+    <span class="mp-state" style="margin:0">${sureNames?('pewni odpowiedzi: '+sureNames):'pewny odpowiedzi drużyny? postaw 🍺'}</span>`;
+}
+function mpRenderPlay(g, head, st){
+  const top=mpTopProp(), mine=mpMyVote();
+  const board=mpBoardHTML(g, top, mine), team=mpTeamHTML(top), pewniak=mpPewniakHTML(g);
+  // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
+  // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
+  if(mpPlayRound!==g.playNonce || !$m('mpBoard')){
+    mpPlayRound=g.playNonce;
+    const scribe = mpHost ? `<div class="mp-scribe"><div class="lab">host — zatwierdź odpowiedź drużyny (podstawiona top-głosowana)</div>
+        <div class="mp-form" style="grid-template-columns:1fr 1fr">
+          <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
+          <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
         </div>
-        <div class="mp-board" id="mpBoard">${board}</div>
-        <div class="mp-team" id="mpTeam">${team}</div>
-        <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>${reacts}${scribe}`;
-    } else {
-      // tylko odśwież tablicę, kartę drużyny i pewniaka — pola zostają nietknięte
-      $m('mpBoard').innerHTML=board;
-      if($m('mpTeam')) $m('mpTeam').innerHTML=team;
-      $m('mpPewniak').innerHTML=pewniak;
-    }
-    // podpowiedź pisarza (top głosów) — dopóki host sam nie zacznie pisać
-    if(mpHost && !mpScribeTouched && top && $m('mpScTitle')){ $m('mpScTitle').value=top.title; $m('mpScArtist').value=top.artist; }
-    mpTickTimer();
-    return;
+        <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>` : '';
+    const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
+      <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
+    st.innerHTML=`<div class="mp-deck">${head}
+      <div class="mp-state" id="mpCountdown"></div>
+      <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
+        <svg viewBox="0 0 24 24"><path id="mpKnobIcon" d="M8 5v14l11-7z"/></svg></button>
+      <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+      ${g.mode==='lektor'&&g.lyric?`<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>`:''}
+      <div class="mp-form">
+        <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
+        <button onclick="mpPropose()">Wrzuć</button>
+      </div>
+      <div class="mp-board" id="mpBoard">${board}</div>
+      <div class="mp-team" id="mpTeam">${team}</div>
+      <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>${reacts}${scribe}`;
+  } else {
+    // tylko odśwież tablicę, kartę drużyny i pewniaka — pola zostają nietknięte
+    $m('mpBoard').innerHTML=board;
+    if($m('mpTeam')) $m('mpTeam').innerHTML=team;
+    $m('mpPewniak').innerHTML=pewniak;
   }
+  // podpowiedź pisarza (top głosów) — dopóki host sam nie zacznie pisać
+  if(mpHost && !mpScribeTouched && top && $m('mpScTitle')){ $m('mpScTitle').value=top.title; $m('mpScArtist').value=top.artist; }
+  mpTickTimer();
+}
 
-  if(g.phase==='reveal'){
-    const r=g.reveal;
-    st.innerHTML=`<div class="mp-deck">${head}</div>
-      <div class="reveal show mp-reveal" style="display:block">
-        <div style="padding:16px">
-          ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}
-          <div class="rline"><span class="mk ${r.okTitle?'ok':'no'}">${r.okTitle?'✓':'✗'}</span><span class="v"><span class="k">Tytuł</span>${escapeHtml(r.track)}</span></div>
-          <div class="rline"><span class="mk ${r.okArtist?'ok':'no'}">${r.okArtist?'✓':'✗'}</span><span class="v"><span class="k">Wykonawca</span>${escapeHtml(r.artist)}</span></div>
-          <div class="mp-state" style="margin-top:10px">${r.teamOk?`<span class="ok">drużyna zgarnia +${r.gained} pkt${r.pewniakWin?' (pewniak ×2!)':''}</span>`:'<span class="no">tym razem nie (0 pkt)</span>'}${r.firstBy?` · pierwszy trafny typ: <b style="color:var(--amber)">${escapeHtml(r.firstBy)}</b>`:''}</div>
-          ${r.pewniakLose?`<div class="mp-beer">🍺 pewniak nietrafiony — stawia: <b>${(r.pewniacy||[]).map(escapeHtml).join(', ')}</b><br><span style="font-weight:400;opacity:.8">(odbiór na żywo 😏)</span></div>`:''}
-          ${r.pewniakWin?`<div class="mp-state" style="color:var(--green)">pewni i trafili: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} 🎯</div>`:''}
-          <div class="mp-state" style="opacity:.7">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
-        </div>
-        ${mpHost?`<button class="next" onclick="mpNext()">${(g.si>=g.slots.length-1 && g.qi>=QPC-1)?'Wynik końcowy →':'Następne pytanie →'}</button>`:'<div class="next" style="opacity:.6">czekaj na hosta…</div>'}
-      </div>`;
-    return;
-  }
+function mpRenderReveal(g, head){
+  const r=g.reveal;
+  const isLast = g.si>=g.slots.length-1 && g.qi>=QPC-1;
+  return `<div class="mp-deck">${head}</div>
+    <div class="reveal show mp-reveal" style="display:block">
+      <div style="padding:16px">
+        ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}
+        <div class="rline"><span class="mk ${r.okTitle?'ok':'no'}">${r.okTitle?'✓':'✗'}</span><span class="v"><span class="k">Tytuł</span>${escapeHtml(r.track)}</span></div>
+        <div class="rline"><span class="mk ${r.okArtist?'ok':'no'}">${r.okArtist?'✓':'✗'}</span><span class="v"><span class="k">Wykonawca</span>${escapeHtml(r.artist)}</span></div>
+        <div class="mp-state" style="margin-top:10px">${r.teamOk?`<span class="ok">drużyna zgarnia +${r.gained} pkt${r.pewniakWin?' (pewniak ×2!)':''}</span>`:'<span class="no">tym razem nie (0 pkt)</span>'}${r.firstBy?` · pierwszy trafny typ: <b style="color:var(--amber)">${escapeHtml(r.firstBy)}</b>`:''}</div>
+        ${r.pewniakLose?`<div class="mp-beer">🍺 pewniak nietrafiony — stawia: <b>${(r.pewniacy||[]).map(escapeHtml).join(', ')}</b><br><span style="font-weight:400;opacity:.8">(odbiór na żywo 😏)</span></div>`:''}
+        ${r.pewniakWin?`<div class="mp-state" style="color:var(--green)">pewni i trafili: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} 🎯</div>`:''}
+        <div class="mp-state" style="opacity:.7">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
+      </div>
+      ${mpHost?`<button class="next" onclick="mpNext()">${isLast?'Wynik końcowy →':'Następne pytanie →'}</button>`:'<div class="next" style="opacity:.6">czekaj na hosta…</div>'}
+    </div>`;
+}
 
-  if(g.phase==='done'){
-    const rows=(g.tallyList||[]).map(t=>`<div class="row"><span>${escapeHtml(t.name)}</span><b>${t.correct} trafnych typów</b></div>`).join('')||'<div class="mp-state">brak trafnych propozycji</div>';
-    // #12: kto stawia (przegrane pewniaki) i ile
-    const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
-    const beerBlock = beer.length
-      ? `<div class="mp-beer">🍺 stawiają: ${beer.map(([n,c])=>`<b>${escapeHtml(n)}</b>${c>1?` (${c}×)`:''}`).join(', ')}<br><span style="font-weight:400;opacity:.8">odbiór na żywo 😏</span></div>`
-      : `<div class="mp-state" style="opacity:.7">nikt nie przepalił pewniaka — brawo 🍻</div>`;
-    st.innerHTML=`<div class="summary show" style="display:block">
-      <div class="sum-head"><div class="sum-big">${g.score} pkt</div>
-        <div class="sum-sub">${g.slots?g.slots.length*QPC:0} pytań · wynik drużyny${g.mvp?` · MVP: ${escapeHtml(g.mvp.name)}`:''}</div></div>
-      <div class="mp-sb" style="padding:0 16px">${rows}</div>
-      <div style="padding:0 16px">${beerBlock}</div>
-      ${mpHost?'<button class="sum-again" onclick="mpNewGame()">Nowa gra</button>':'<div class="next" style="opacity:.6">host może zacząć nową grę</div>'}</div>`;
-    return;
-  }
+function mpRenderDone(g, head){
+  const rows=(g.tallyList||[]).map(t=>`<div class="row"><span>${escapeHtml(t.name)}</span><b>${t.correct} trafnych typów</b></div>`).join('')||'<div class="mp-state">brak trafnych propozycji</div>';
+  // #12: kto stawia (przegrane pewniaki) i ile
+  const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
+  const beerBlock = beer.length
+    ? `<div class="mp-beer">🍺 stawiają: ${beer.map(([n,c])=>`<b>${escapeHtml(n)}</b>${c>1?` (${c}×)`:''}`).join(', ')}<br><span style="font-weight:400;opacity:.8">odbiór na żywo 😏</span></div>`
+    : `<div class="mp-state" style="opacity:.7">nikt nie przepalił pewniaka — brawo 🍻</div>`;
+  return `<div class="summary show" style="display:block">
+    <div class="sum-head"><div class="sum-big">${g.score} pkt</div>
+      <div class="sum-sub">${g.slots?g.slots.length*QPC:0} pytań · wynik drużyny${g.mvp?` · MVP: ${escapeHtml(g.mvp.name)}`:''}</div></div>
+    <div class="mp-sb" style="padding:0 16px">${rows}</div>
+    <div style="padding:0 16px">${beerBlock}</div>
+    ${mpHost?'<button class="sum-again" onclick="mpNewGame()">Nowa gra</button>':'<div class="next" style="opacity:.6">host może zacząć nową grę</div>'}</div>`;
 }
 function mpPropose(){
   const t=$m('mpPropT').value.trim(), a=$m('mpPropA').value.trim();
@@ -1003,11 +1026,11 @@ function mpPropose(){
 
 function mpTickTimer(){
   const el=$m('mpCountdown');
-  if(!mpGame || mpGame.phase!=='play' || !mpGame.endsAt){ if(el) el.textContent=''; return; }
+  if(!mpGame || mpGame.phase!==MP.PLAY || !mpGame.endsAt){ if(el) el.textContent=''; return; }
   const rem=Math.max(0, mpGame.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
   if(el){ el.textContent='⏱ '+s+' s'; el.style.color = s<=10 ? 'var(--red)' : 'var(--amber)'; }
-  if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase==='play'){ mpLock(); }
+  if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase===MP.PLAY){ mpLock(); }
 }
 function mpReact(e){ if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name}}); }
 function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
@@ -1016,7 +1039,7 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
   const s=document.createElement('div'); s.className='mp-float';
   s.innerHTML=`<span class="e">${emoji}</span>${byName?`<span class="nm">${escapeHtml(byName)}</span>`:''}`;
   s.style.left=(8+Math.random()*78)+'%';
-  fx.appendChild(s); setTimeout(()=>s.remove(), 2400);
+  fx.appendChild(s); setTimeout(()=>s.remove(), EMOJI_TTL_MS);
 }
 // #10: krótka wiadomość (kilka słów) — biały dymek lecący przez ekran
 function mpSay(){
@@ -1031,7 +1054,7 @@ function mpFloatSay(text, byName){
   const s=document.createElement('div'); s.className='mp-say';
   s.innerHTML=`${byName?`<b>${escapeHtml(byName)}</b>`:''}${escapeHtml(text)}`;
   s.style.left=(6+Math.random()*36)+'%';
-  fx.appendChild(s); setTimeout(()=>s.remove(), 4400);
+  fx.appendChild(s); setTimeout(()=>s.remove(), SAY_TTL_MS);
 }
 
 /* autostart lobby gdy w URL jest ?room= */
