@@ -12,7 +12,7 @@
 <style>
   :root{
     --green:#58CC02; --green-d:#58A700; --blue:#1CB0F6; --blue-d:#1899D6;
-    --red:#FF4B4B; --gold:#FFC800; --gold-d:#E6A500; --purple:#CE82FF;
+    --red:#FF4B4B; --gold:#FFC800; --gold-d:#E6A500; --purple:#CE82FF; --purple-d:#9B4DDB;
     --ink:#3C3C3C; --muted:#AFAFAF; --line:#E5E5E5; --panel2:#F7F7F7;
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
@@ -110,6 +110,17 @@
   .scene .pl{background:#1f2a38;border-color:#2c3a4d;color:#cfe0ee}
   .scene .pl .av{background:#2c3a4d;color:#8fb0cc}
   .scene .pl.ans .av{background:var(--green)} .scene .pl.sure{background:#3a3413;border-color:var(--gold)} .scene .pl.sure .av{background:var(--gold)} .scene .pl.type .av{background:var(--blue)}
+  .pl.unsure{border-color:var(--purple)} .pl.unsure .av{background:var(--purple);color:#fff} .pl.unsure .s{color:var(--purple-d)}
+  .scene .pl.unsure{background:#2a1f3a;border-color:var(--purple)} .scene .pl.unsure .av{background:var(--purple)}
+  .tag{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;border-radius:7px;padding:3px 6px;white-space:nowrap}
+  .tag.sure{background:#FFF7DB;color:var(--gold-d);border:1px solid var(--gold)}
+  .tag.unsure{background:#F3E8FF;color:var(--purple-d);border:1px solid var(--purple)}
+  .conf{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-top:9px}
+  .conf .c-lab{font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+  .cf{font-family:inherit;font-weight:800;font-size:11px;color:var(--muted);background:#fff;border:2px solid var(--line);border-bottom-width:3px;border-radius:10px;padding:6px 10px;cursor:pointer}
+  .cf.on{color:#fff;background:var(--green);border-color:var(--green-d)}
+  .cf.u{color:var(--purple-d);border-color:var(--purple)} .cf.u.on{color:#fff;background:var(--purple);border-color:var(--purple-d)}
+  .cf.s{color:var(--gold-d);border-color:var(--gold)} .cf.s.on{color:#fff;background:var(--gold);border-color:var(--gold-d)}
   .hide{display:none!important}
   .foot{text-align:center;font-weight:700;font-size:11px;color:var(--muted);margin-top:26px;line-height:1.6}
 </style>
@@ -134,13 +145,15 @@
       <div class="roster">
         <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
         <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
+        <div class="pl unsure"><span class="av">H</span>Hania<span class="s">?</span></div>
         <div class="pl type"><span class="av">M</span>Michał<span class="s">···</span></div>
         <div class="pl pass"><span class="av">Z</span>Zofia<span class="s">🤚</span></div>
         <div class="pl you"><span class="av">T</span>Ty<span class="s">·</span></div>
       </div>
-      <div class="legend"><span>🍺 pewniak</span><span>✓ wrzucił</span><span>··· pisze</span><span>🤚 pas</span><span>· myśli</span></div>
+      <div class="legend"><span>🍺 pewniak</span><span>✓ zwykła</span><span style="color:var(--purple-d)">? niepewny</span><span>··· pisze</span><span>🤚 pas</span><span>· myśli</span></div>
       <div class="bub sys">▶ utwór leci — stuknij, by powtórzyć</div>
-      <div class="bub prop top"><div class="gx"><span class="who">Karol · top odpowiedź</span><b>Kombinacja</b> <span>· Maanam</span></div><span class="vote on">👍 3</span></div>
+      <div class="bub prop top"><div class="gx"><span class="who">Karol · top odpowiedź</span><b>Kombinacja</b> <span>· Maanam</span></div><span class="tag sure">🍺</span><span class="vote on">👍 3</span></div>
+      <div class="bub prop"><div class="gx"><span class="who">Hania</span><b>Cykady</b> <span>· Maanam</span></div><span class="tag unsure">niepewny</span><span class="vote">👍 0</span></div>
       <div class="bub prop"><div class="gx"><span class="who">Ola</span><b>Lucciola</b> <span>· Maanam</span></div><span class="vote">👍 1</span></div>
       <div class="bub chat"><span class="who">Michał</span><span class="em">😱</span> „na bank lata 80, dawajcie rok!"</div>
       <div class="inputs"><div class="fld">tytuł</div><div class="fld">wykonawca</div><button class="go">wrzuć</button></div>
@@ -156,15 +169,14 @@
       <div class="rail">
         <div class="node done" onclick="phase(0)"><div class="dot">🎧</div><div class="lab">słuchaj</div></div>
         <div class="seg"></div>
-        <div class="node done" onclick="phase(1)"><div class="dot">✍️</div><div class="lab">typuj</div></div>
+        <div class="node on" onclick="phase(1)"><div class="dot">🧠</div><div class="lab">kombinujcie</div></div>
         <div class="seg"></div>
-        <div class="node on" onclick="phase(2)"><div class="dot">👍</div><div class="lab">głosuj</div></div>
-        <div class="seg"></div>
-        <div class="node" onclick="phase(3)"><div class="dot">👁</div><div class="lab">odsłona</div></div>
+        <div class="node" onclick="phase(2)"><div class="dot">👁</div><div class="lab">odsłona</div></div>
       </div>
       <div class="roster">
         <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
         <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
+        <div class="pl unsure"><span class="av">H</span>Hania<span class="s">?</span></div>
         <div class="pl type"><span class="av">M</span>Michał<span class="s">···</span></div>
         <div class="pl pass"><span class="av">Z</span>Zofia<span class="s">🤚</span></div>
         <div class="pl you"><span class="av">T</span>Ty<span class="s">·</span></div>
@@ -173,22 +185,20 @@
       <div id="p0" class="hide">
         <button class="knob"><svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
         <p class="mut">posłuchaj uważnie · stuknij, by powtórzyć</p>
-        <button class="big">gotowe, typuję →</button>
+        <button class="big">gotowe, kombinujemy →</button>
       </div>
-      <div id="p1" class="hide">
-        <p class="mut" style="margin-bottom:11px">co to za kawałek? cudze typy zakryte</p>
-        <div class="inputs two"><div class="fld">tytuł</div><div class="fld">wykonawca</div></div>
-        <button class="big">wrzuć typ</button>
-        <p class="mut" style="margin-top:11px;opacity:.7">3 osoby już wrzuciły</p>
+      <div id="p1">
+        <button class="knob" style="width:60px;height:60px;box-shadow:0 4px 0 var(--green-d)"><svg viewBox="0 0 24 24" style="width:22px;height:22px"><path d="M8 5v14l11-7z"/></svg></button>
+        <p class="mut" style="margin:8px 0 0">gra u każdego · wrzucajcie i podpowiadajcie sobie</p>
+        <div class="inputs"><div class="fld">tytuł</div><div class="fld">wykonawca</div><button class="go">wrzuć</button></div>
+        <div class="conf"><span class="c-lab">pewność:</span><button class="cf on">zwykła</button><button class="cf u">niepewny</button><button class="cf s">🍺 pewniak</button></div>
+        <div style="margin-top:11px">
+          <div class="bub prop top"><div class="gx"><span class="who">Karol</span><b>Kombinacja</b> <span>· Maanam</span></div><span class="tag sure">🍺 pewniak</span><span class="vote on">👍 3</span></div>
+          <div class="bub prop"><div class="gx"><span class="who">Ola</span><b>Lucciola</b> <span>· Maanam</span></div><span class="vote">👍 1</span></div>
+          <div class="bub prop"><div class="gx"><span class="who">Hania</span><b>Cykady</b> <span>· Maanam</span></div><span class="tag unsure">niepewny</span><span class="vote">👍 0</span></div>
+        </div>
       </div>
-      <div id="p2">
-        <p class="mut" style="margin-bottom:11px">stuknij odpowiedź drużyny</p>
-        <div class="tile sel"><div class="gx"><b>Kombinacja</b> <span>· Maanam</span></div><div class="rb"></div></div>
-        <div class="tile"><div class="gx"><b>Lucciola</b> <span>· Maanam</span></div><div class="rb"></div></div>
-        <div class="tile"><div class="gx"><b>Cykady</b> <span>· Maanam</span></div><div class="rb"></div></div>
-        <div class="beer">🍺 pewny? postaw pewniaka — ×2 albo stawiasz</div>
-      </div>
-      <div id="p3" class="hide">
+      <div id="p2" class="hide">
         <div class="reveal">
           <div class="cov">💿</div>
           <div><div class="rl"><span class="ok">✓</span><span><span class="k">tytuł</span>Kombinacja</span></div>
@@ -199,7 +209,7 @@
 
       <div class="react"><span>🍺</span><span>😂</span><span>🔥</span><span>🎉</span><span>😱</span></div>
     </div>
-    <p class="cap">Jedna decyzja na ekran — pasek faz u góry mówi „gdzie jesteś". <b>Stuknij fazy na makiecie</b> (słuchaj → typuj → głosuj → odsłona). Emotki żyją cały czas na dole.</p>
+    <p class="cap">Trzy fazy: <b>słuchaj → kombinujcie → odsłona</b>. Środek to wspólna tablica — typy <b>widoczne na żywo</b>, podpowiadacie sobie (to co-op!). Każdy typ ma pewność: zwykła · <span style="color:var(--purple-d)">niepewny</span> · <span style="color:var(--gold-d)">🍺 pewniak</span>.</p>
   </section>
 
   <!-- WARIANT 3 -->
@@ -219,6 +229,7 @@
       <div class="roster">
         <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
         <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
+        <div class="pl unsure"><span class="av">H</span>Hania<span class="s">?</span></div>
         <div class="pl type"><span class="av">M</span>Michał<span class="s">···</span></div>
         <div class="pl pass"><span class="av">Z</span>Zofia<span class="s">🤚</span></div>
       </div>
@@ -241,7 +252,7 @@
     window.scrollTo({top:0,behavior:'smooth'});
   }
   function phase(n){
-    [0,1,2,3].forEach(function(i){ document.getElementById('p'+i).classList.toggle('hide', i!==n); });
+    [0,1,2].forEach(function(i){ var el=document.getElementById('p'+i); if(el) el.classList.toggle('hide', i!==n); });
     var nodes=document.querySelectorAll('#sc1 .rail .node');
     nodes.forEach(function(nd,i){ nd.classList.toggle('on', i===n); nd.classList.toggle('done', i<n); });
   }
