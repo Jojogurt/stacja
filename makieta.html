@@ -105,7 +105,9 @@
   .pl.you{box-shadow:0 0 0 3px #EAF6FF}
   .pl.type .s{animation:blink 1s steps(1) infinite}
   @keyframes blink{50%{opacity:.35}}
-  .legend{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);margin:-3px 0 12px}
+  .legend{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);margin:0 0 12px;padding-bottom:11px;border-bottom:2px solid var(--line)}
+  .roster.nb{border-bottom:none;padding-bottom:0;margin-bottom:7px}
+  .hr{height:2px;background:var(--line);margin:13px 0 0}
   .scene .roster{border-bottom-color:#2c3a4d;justify-content:center}
   .scene .pl{background:#1f2a38;border-color:#2c3a4d;color:#cfe0ee}
   .scene .pl .av{background:#2c3a4d;color:#8fb0cc}
@@ -162,7 +164,7 @@
   <section id="sc0">
     <div class="ph">
       <div class="bar"><span>runda <span class="g">2/4</span></span><span>drużyna 14 pkt</span><span class="t">⏱ 18s</span></div>
-      <div class="roster">
+      <div class="roster nb">
         <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
         <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
         <div class="pl unsure"><span class="av">H</span>Hania<span class="s">?</span></div>
@@ -192,6 +194,7 @@
       </div>
       <div class="conf"><span class="c-lab">pewność:</span><button class="cf on">zwykła</button><button class="cf u">niepewny</button><button class="cf s">🍺 pewniak</button></div>
       <div class="chint">bez <b>@</b> piszesz na czat · z <b>@</b> wrzucasz typ — klikasz pole, które znasz</div>
+      <div class="hr"></div>
       <div class="react"><span>🍺</span><span>😂</span><span>🔥</span><span>🎉</span><span>😱</span></div>
     </div>
     <p class="cap">Jeden strumień jak na czacie. Na dole <b>jedno pole</b>: piszesz zwykły tekst → idzie na czat; wpiszesz <b>@</b> → zamienia się w typ (sloty tytuł/wykonawca). Głos osobno na każdy slot — drużyna bierze górę każdej kolumny.</p>
