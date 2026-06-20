@@ -11,6 +11,7 @@ import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
+import { sb, ensureSession, setHandle } from './adapters-web/supabase.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
@@ -606,13 +607,11 @@ const SAY_TTL_MS=4400;          // jak długo wisi dymek wiadomości
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
 
-function mpConnect(){
-  if(mpSb) return mpSb;
-  const cfg=window.STACJA_CONFIG;
-  if(!cfg||!window.supabase){ return null; }
-  mpSb=window.supabase.createClient(cfg.supabaseUrl, cfg.supabaseKey);
-  return mpSb;
-}
+function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klient (Realtime + Auth)
+
+// anonimowe logowanie na starcie (best-effort) — gdy wejdzie, tożsamość = auth.uid.
+// Jak niedostępne (wyłączone w projekcie / brak backendu) — zostaje losowy mpMe.id, gra działa.
+ensureSession().then(id=>{ if(id && !mpCode) mpMe.id=id; });
 
 /* ---- wejście / wyjście z trybu ---- */
 function showScreen(s){ document.body.classList.remove('menu','solo','mp'); document.body.classList.add(s); }
@@ -642,12 +641,12 @@ async function mpLeave(){
 }
 
 /* ---- tworzenie / dołączanie ---- */
-$m('mpCreate').onclick=()=>{ const n=$m('mpName').value.trim(); if(!n){ mpErr('Podaj ksywę.'); return; } mpUnlockAudio(); mpMe.name=n; mpEnterRoom(mpRandCode(), true); };
+$m('mpCreate').onclick=()=>{ const n=$m('mpName').value.trim(); if(!n){ mpErr('Podaj ksywę.'); return; } mpUnlockAudio(); mpMe.name=n; setHandle(n); mpEnterRoom(mpRandCode(), true); };
 $m('mpJoin').onclick=()=>{
   const n=$m('mpName').value.trim(); const c=$m('mpCode').value.trim().toUpperCase();
   if(!n){ mpErr('Podaj ksywę.'); return; }
   if(c.length<4){ mpErr('Wpisz 4-znakowy kod.'); return; }
-  mpUnlockAudio(); mpMe.name=n; mpEnterRoom(c, false);
+  mpUnlockAudio(); mpMe.name=n; setHandle(n); mpEnterRoom(c, false);
 };
 $m('mpCopy').onclick=()=>{
   const url=location.origin+location.pathname+'?room='+mpCode;
@@ -657,12 +656,13 @@ $m('mpCopy').onclick=()=>{
 
 async function mpEnterRoom(code, asHost){
   mpErr('');
-  const sb=mpConnect();
-  if(!sb){ mpErr('Brak połączenia z serwerem (config.js / supabase-js).'); return; }
+  const client=mpConnect();
+  if(!client){ mpErr('Brak połączenia z serwerem (config.js / supabase-js).'); return; }
+  const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = auth.uid PRZED presence
   mpCode=code; mpHost=asHost;
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
   $m('mpRoomCode').textContent=code;
-  mpCh=sb.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
+  mpCh=client.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
