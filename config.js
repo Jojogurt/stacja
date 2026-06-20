@@ -10,4 +10,7 @@
 window.STACJA_CONFIG = {
   supabaseUrl: 'https://agkarxtjcgklepefurza.supabase.co',
   supabaseKey: 'sb_publishable_PhmUtO0IGY3kFwuWDuGrsQ_972DSP4B',
+  // hCaptcha SITE KEY (publiczny, format UUID, z dashboardu hCaptcha) — do anonimowego logowania.
+  // UWAGA: tu trafia TYLKO site key. SECRET zostaje WYŁĄCZNIE w Supabase (nigdy w kliencie!).
+  hcaptchaSiteKey: '',
 };

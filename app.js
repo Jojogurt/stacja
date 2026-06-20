@@ -616,9 +616,9 @@ function mpErr(t){ $m('mpErr').textContent=t||''; }
 
 function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klient (Realtime + Auth)
 
-// anonimowe logowanie na starcie (best-effort) — gdy wejdzie, tożsamość = auth.uid.
-// Jak niedostępne (wyłączone w projekcie / brak backendu) — zostaje losowy mpMe.id, gra działa.
-ensureSession().then(id=>{ if(id && !mpCode) mpMe.id=id; });
+// Logowanie anonimowe LENIWE — dopiero przy geście, który tego potrzebuje
+// (wejście do pokoju MP, koniec meczu). Dzięki temu CAPTCHA nie odpala się
+// na każdym wejściu na stronę, tylko gdy realnie zapisujemy postęp.
 
 /* ---- wejście / wyjście z trybu ---- */
 function showScreen(s){ document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s); }
@@ -644,6 +644,7 @@ async function renderLiga(){
 
 async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
+  await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
   const p=await fetchProfile();
   if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Włącz logowanie anonimowe w projekcie Supabase, żeby zapisywać postępy.</div>'; return; }
   $m('profilHandle').value=p.handle;

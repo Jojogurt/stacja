@@ -2,6 +2,7 @@
  * Wspólny klient = jedna sesja (JWT nosi się do RPC/RLS) i brak ostrzeżenia
  * „Multiple GoTrueClient instances". Anonimowo-first: gracz dostaje trwały
  * `auth.uid` bez logowania; konto może „przejąć" historię później. */
+import { captchaToken } from './captcha.js';
 let _sb=null;
 
 export function sb(){
@@ -19,8 +20,10 @@ export async function ensureSession(){
   try{
     const { data:{ session } } = await c.auth.getSession();
     if(session?.user?.id) return session.user.id;
-    const { data, error } = await c.auth.signInAnonymously();
-    if(error){ console.warn('[stacja] anonimowe logowanie niedostępne:', error.message); return null; }
+    // CAPTCHA włączona w projekcie → dołóż token hCaptcha (invisible)
+    const token = await captchaToken(window.STACJA_CONFIG?.hcaptchaSiteKey);
+    const { data, error } = await c.auth.signInAnonymously(token ? { options:{ captchaToken: token } } : undefined);
+    if(error){ console.warn('[stacja] anonimowe logowanie:', error.message); return null; }
     return data?.user?.id || null;
   }catch(e){ console.warn('[stacja] auth:', e?.message||e); return null; }
 }
