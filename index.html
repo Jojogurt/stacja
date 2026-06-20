@@ -226,6 +226,10 @@
   body.solo:not(.playing) .foot{display:none}
   body.solo.playing .dial{display:none}
   body.solo.playing #modePick{display:none}   /* tryb ustala slot meczu, nie ręcznie */
+  .match-rand{width:100%;margin-top:14px;font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.02em;
+    color:var(--purple);background:var(--panel);border:2px solid var(--purple);border-bottom-width:4px;border-radius:14px;
+    padding:12px;cursor:pointer;text-transform:uppercase}
+  .match-rand:active{transform:translateY(2px);border-bottom-width:2px}
   .match-info{font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);text-align:center;margin-top:14px;min-height:16px}
   .match-info.err{color:var(--red)}
   body.menu .to-menu{display:none}
@@ -409,6 +413,7 @@
       <button data-r="3">3</button>
       <button data-r="4" class="on">4</button>
     </div>
+    <button class="match-rand" id="matchRandom">🎲 Losuj kategorie i tryby</button>
     <div class="match-info" id="matchInfo"></div>
     <button class="sess-start" id="matchStart" style="width:100%;margin-top:14px">Start meczu →</button>
   </section>
@@ -529,6 +534,13 @@ function buildMatch(catPool, modePool, rounds){
     }
   }
   return {slots, rounds};
+}
+// losowa pula kategorii + trybów (do przycisku 🎲) — gwarantuje ≥1 kompatybilną parę
+function randomPools(){
+  let modes=shuffle(ALL_MODES).slice(0, 1+Math.floor(Math.random()*ALL_MODES.length));
+  let cats=shuffle(ALL_KEYS).filter(k=>modesFor(k).some(m=>modes.includes(m))).slice(0, 3+Math.floor(Math.random()*4));
+  if(!cats.length){ modes=['music']; cats=shuffle(ALL_KEYS).filter(k=>modesFor(k).includes('music')).slice(0,4); }
+  return {cats, modes};
 }
 // nawigacja po meczu (m = {slots, si, qi, rounds})
 function matchSlot(m){ return m && m.slots ? m.slots[m.si] : null; }
@@ -713,6 +725,7 @@ renderModeChips();
   }; });
 })();
 document.getElementById('matchStart').onclick=startMatch;
+document.getElementById('matchRandom').onclick=randomPick;
 updateMatchInfo();
 
 /* ====== wybór puli kategorii/trybów do meczu (multi-select) ====== */
@@ -727,6 +740,7 @@ function syncCatTicks(){
   const rb=document.querySelector('.tick.rnd'); if(rb) rb.classList.toggle('on', ALL_KEYS.length>0 && ALL_KEYS.every(k=>soloCats.has(k)));
 }
 function toggleMode(m){ if(soloModes.has(m)) soloModes.delete(m); else soloModes.add(m); renderModeChips(); updateMatchInfo(); }
+function randomPick(){ const {cats,modes}=randomPools(); soloCats=new Set(cats); soloModes=new Set(modes); syncCatTicks(); renderModeChips(); updateMatchInfo(); }
 function renderModeChips(){
   const el=document.getElementById('modeTicks'); if(!el) return; el.innerHTML='';
   ALL_MODES.forEach(m=>{
@@ -1474,9 +1488,11 @@ function mpPickerHTML(){
   const bad=(!mpPickCats.size||!mpPickModes.size||r.error);
   const info=(!mpPickCats.size||!mpPickModes.size)?'zaznacz kategorie i tryby':(r.error||`${mpPickRounds} × 3 × 5 = ${mpPickRounds*15} pytań`);
   return `<div class="mp-deck"><div class="mp-state">ułóż mecz</div>${cats}${modes}${rounds}${timer}
+    <button class="match-rand" onclick="mpRandomPick()">🎲 Losuj kategorie i tryby</button>
     <div class="match-info ${bad?'err':''}">${escapeHtml(info)}</div>
-    <button class="mp-btn" style="width:100%;margin-top:12px" ${bad?'disabled style="opacity:.5;width:100%;margin-top:12px"':''} onclick="mpStart()">Start meczu →</button></div>`;
+    <button class="mp-btn" style="width:100%;margin-top:12px${bad?';opacity:.5':''}" ${bad?'disabled':''} onclick="mpStart()">Start meczu →</button></div>`;
 }
+function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
 function mpStart(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   if(r.error||!r.slots){ mpRender(); return; }
