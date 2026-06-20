@@ -697,6 +697,9 @@ function mpSend(act){
   // host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host,
   // więc gdy hostem jestem ja, nie ma po co wysyłać — sync i tak roześle stan
   if(mpHost){ mpHandleAct(act); return; }
+  // KLIENT: zastosuj lokalnie OD RAZU (optymistycznie) — natychmiastowe podświetlenie
+  // (głos/propozycja/pewniak), a właściwy sync od hosta zaraz skoryguje stan.
+  if(mpGame && reduceAction(mpGame, act)) mpRender();
   if(mpCh){ mpCh.send({type:'broadcast',event:'act',payload:act}); }
 }
 function mpAfterSync(){
