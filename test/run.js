@@ -5,6 +5,7 @@ import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, A
 import { reduceAction, countReady, evaluateAnswer, myVote, topProposal } from '../core/mpReducer.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
+import { buildSoloRecord, buildMpRecord } from '../core/matchRecord.js';
 
 let pass=0, fail=0;
 function ok(cond, msg){ if(cond){ pass++; } else { fail++; console.error('  ✗ '+msg); } }
@@ -171,6 +172,41 @@ group('repo.pickTrack', ()=>{
   seen.add(norm('Song A'));
   ok(!pickTrack([res[0]],'Queen',seen),'już zagrany (seen) → odrzucony');
   ok(!pickTrack([{trackName:'Z',artistName:'Ktoś',previewUrl:'u'}],'Queen',seen),'inny wykonawca → odrzucony');
+});
+
+/* --- matchRecord (czysty builder payloadu) --- */
+group('matchRecord.buildSoloRecord', ()=>{
+  const slots=[{},{},{}];  // 3 sloty × QPC pytań
+  const results=[
+    {track:'A',artist:'X',okTitle:true,okArtist:true,cat:'d80',mode:'music'},
+    {track:'B',artist:'Y',okTitle:true,okArtist:false,cat:'d80',mode:'reverse'},
+    {track:'C',artist:'Z',okTitle:false,okArtist:false,skipped:true,cat:'rock',mode:'music'},
+  ];
+  const rec=buildSoloRecord({results, slots, profileId:'u1', displayName:'Ala', config:{rounds:1}});
+  eq(rec.mode,'solo','tryb solo');
+  eq(rec.score,1,'1 pełne trafienie');
+  eq(rec.total_questions,3*QPC,'sloty × QPC');
+  eq(rec.participants.length,1,'jeden uczestnik');
+  eq(rec.participants[0].profile_id,'u1','uczestnik = profil gracza');
+  eq(rec.answers.length,3,'po jednej odpowiedzi na pytanie');
+  eq(rec.answers[0].ok,true,'pierwsza trafiona');
+  eq(rec.answers[1].ok,false,'druga (tylko tytuł) → nie ok');
+  eq(rec.answers[0].cat_key,'d80','cat_key przepisany');
+});
+group('matchRecord.buildMpRecord', ()=>{
+  const game={ slots:[{},{}], rounds:1, score:5,
+    results:[{round:1,cat:'d80',mode:'music',track:'A',artist:'X',ok:true}] };
+  const tally={ host:{name:'Host',correct:2}, p2:{name:'Bob',correct:1} };
+  const members=[{id:'host',name:'Host'},{id:'p2',name:'Bob'}];
+  const rec=buildMpRecord({game, tally, members, hostId:'host', roomCode:'ABCD'});
+  eq(rec.mode,'mp','tryb mp');
+  eq(rec.score,5,'wynik drużyny');
+  eq(rec.room_code,'ABCD','kod pokoju');
+  eq(rec.participants.length,2,'dwóch uczestników');
+  eq(rec.participants.find(p=>p.profile_id==='host').role,'host','host oznaczony');
+  eq(rec.participants.find(p=>p.profile_id==='p2').score,1,'wkład gracza = jego trafne typy');
+  eq(rec.answers[0].profile_id,null,'odpowiedź drużynowa (profile_id null)');
+  eq(rec.answers[0].cat_key,'d80','cat_key z rundy');
 });
 
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);

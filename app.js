@@ -11,7 +11,8 @@ import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
-import { sb, ensureSession, setHandle } from './adapters-web/supabase.js';
+import { sb, ensureSession, setHandle, recordMatch } from './adapters-web/supabase.js';
+import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
@@ -433,7 +434,7 @@ async function newLektorRound(){
   document.getElementById('fTitle').focus({preventScroll:true});
 }
 document.getElementById('skip').onclick=()=>{
-  if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, round:s?s.round:0, mode:s?s.mode:mode}); }
+  if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
   streak=0; updateScore();
   advance();
 };
@@ -483,6 +484,12 @@ function finishMatch(){
   const res=session.results;
   const tot=session.match.slots.length*QPC;
   const hits=res.filter(r=>r.okTitle&&r.okArtist).length;
+  // zapis wyniku (best-effort, nieblokujące) — tylko gdy mamy tożsamość (auth.uid)
+  const slots=session.match.slots;
+  (async()=>{ const uid=await ensureSession(); if(uid) recordMatch(buildSoloRecord({
+    results:res, slots, profileId:uid, displayName:mpMe.name||'ja',
+    config:{ categories:[...soloCats], modes:[...soloModes], rounds:soloRounds },
+  })); })();
   stopAudio(); setIcon('play'); hideReveal();
   document.getElementById('sumBig').textContent=hits+' / '+tot;
   document.getElementById('sumSub').textContent='koniec meczu';
@@ -519,7 +526,7 @@ function check(){
   const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
   total++; if(roundOk){score++;streak++;} else streak=0;
   updateScore();
-  if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle, okArtist, round:s?s.round:0, mode:s?s.mode:mode}); updateSessUI(); }
+  if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle, okArtist, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
 
   const r=document.getElementById('rmeta');
   r.innerHTML='';
@@ -914,6 +921,9 @@ function mpFinish(){
   const arr=Object.values(mpTally).sort((a,b)=>b.correct-a.correct);
   mpGame.mvp = arr.length&&arr[0].correct>0 ? arr[0] : null;
   mpGame.tallyList = arr;
+  // host zapisuje cały mecz (drużyna + tally per gracz) — best-effort, gated na auth.uid
+  const snap={ game:mpGame, tally:{...mpTally}, members:mpMembers(), hostId:mpMe.id, roomCode:mpCode };
+  (async()=>{ const uid=await ensureSession(); if(uid) recordMatch(buildMpRecord(snap)); })();
   mpGame.phase=MP.DONE; mpBroadcast(); mpRender();
 }
 function mpNewGame(){ mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }

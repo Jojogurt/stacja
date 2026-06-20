@@ -62,7 +62,7 @@ export function evaluateAnswer(game, current, locked, match=textMatch){
   };
   return {
     reveal, gained, teamOk, anySure, pewniacy, firstBy, firstById,
-    result: { round:game.round, track:current.track, artist:current.artist, ok:teamOk },
+    result: { round:game.round, cat:game.catKey, mode:game.mode, track:current.track, artist:current.artist, ok:teamOk },
   };
 }
 

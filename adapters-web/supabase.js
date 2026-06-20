@@ -34,3 +34,23 @@ export async function setHandle(handle){
     await c.from('profiles').update({ handle }).eq('id', id);
   }catch(e){ /* nieblokujące */ }
 }
+
+// zapis wyniku przez jedyny seam record_match (Etap 1: klient; Etap 2: ten sam RPC z DO).
+// Zwraca id meczu albo null (brak backendu / błąd). Nieblokujące dla UI.
+export async function recordMatch(payload){
+  const c=sb(); if(!c) return null;
+  try{
+    const { data, error } = await c.rpc('record_match', { p: payload });
+    if(error){ console.warn('[stacja] record_match:', error.message); return null; }
+    return data;
+  }catch(e){ console.warn('[stacja] record_match:', e?.message||e); return null; }
+}
+
+// liga (widok agregujący) — do ekranu rankingu w Fazie D
+export async function fetchLeague(limit=50){
+  const c=sb(); if(!c) return [];
+  try{
+    const { data, error } = await c.from('league_standings').select('*').limit(limit);
+    return error ? [] : (data||[]);
+  }catch(e){ return []; }
+}
