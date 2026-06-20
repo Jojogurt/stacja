@@ -9,7 +9,7 @@ import {
 } from './core/match.js';
 import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
-import { playReverse } from './adapters-web/webAudio.js';
+import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
@@ -578,8 +578,7 @@ let mpLastNonce=null;       // ostatnio odtworzony nonce
 let mpLastArmNonce=null;    // ostatnio zbuforowana runda (faza gotowości)
 let mpReady=new Set();      // host: id graczy, którzy zbuforowali audio
 let mpArmTimer=null;        // host: bezpiecznik startu mimo braku gotowości
-let mpArmAudio=null;        // lokalnie zbuforowana zajawka (do natychmiastowego startu)
-let mpAudio=null;
+let mpAudio=null;           // jeden trwały, odblokowany gestem element audio (MP)
 let mpRevSrc=null;          // BufferSource trybu „od tyłu" w MP
 let mpTally={};             // id -> {name, correct}  (do MVP)
 let mpScribeTouched=false;
@@ -625,8 +624,8 @@ $m('mpLeave').onclick=()=>{ mpLeave(); showScreen('menu'); };
 
 async function mpLeave(){
   if(mpCh){ try{ await mpCh.unsubscribe(); }catch(e){} mpCh=null; }
-  if(mpAudio){ mpAudio.pause(); mpAudio=null; } stopSpeech(); mpStopRev();
-  if(mpArmAudio){ try{mpArmAudio.pause();}catch(e){} mpArmAudio=null; }
+  if(mpAudio){ try{mpAudio.pause();}catch(e){} }   // element trwały — pauza, nie zeruj
+  stopSpeech(); mpStopRev();
   if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
   mpReady=new Set(); mpLastArmNonce=null;
   mpCode=null; mpHost=false; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
@@ -634,12 +633,12 @@ async function mpLeave(){
 }
 
 /* ---- tworzenie / dołączanie ---- */
-$m('mpCreate').onclick=()=>{ const n=$m('mpName').value.trim(); if(!n){ mpErr('Podaj ksywę.'); return; } mpMe.name=n; mpEnterRoom(mpRandCode(), true); };
+$m('mpCreate').onclick=()=>{ const n=$m('mpName').value.trim(); if(!n){ mpErr('Podaj ksywę.'); return; } mpUnlockAudio(); mpMe.name=n; mpEnterRoom(mpRandCode(), true); };
 $m('mpJoin').onclick=()=>{
   const n=$m('mpName').value.trim(); const c=$m('mpCode').value.trim().toUpperCase();
   if(!n){ mpErr('Podaj ksywę.'); return; }
   if(c.length<4){ mpErr('Wpisz 4-znakowy kod.'); return; }
-  mpMe.name=n; mpEnterRoom(c, false);
+  mpUnlockAudio(); mpMe.name=n; mpEnterRoom(c, false);
 };
 $m('mpCopy').onclick=()=>{
   const url=location.origin+location.pathname+'?room='+mpCode;
@@ -657,8 +656,8 @@ async function mpEnterRoom(code, asHost){
   mpCh=sb.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
-  mpCh.on('broadcast',{event:'react'},({payload})=>{ mpFloatEmoji(payload.emoji, payload.byName); });
-  mpCh.on('broadcast',{event:'say'},({payload})=>{ mpFloatSay(payload.text, payload.byName); });
+  mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
+  mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatSay(payload.text, payload.byName); });
   mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost) mpBroadcast(); });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
@@ -683,7 +682,14 @@ function mpRenderMembers(){
 
 /* ---- broadcast / sync ---- */
 function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',event:'sync',payload:mpGame}); } }
-function mpSend(act){ if(mpCh){ act.by=mpMe.id; act.byName=mpMe.name; mpCh.send({type:'broadcast',event:'act',payload:act}); } }
+let mpSeenActs=new Set();   // id zastosowanych akcji — by akcja nie zadziałała dwa razy
+function mpSend(act){
+  act.by=mpMe.id; act.byName=mpMe.name; act.aid=mpMe.id+'-'+Math.random().toString(36).slice(2);
+  // host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host,
+  // więc gdy hostem jestem ja, nie ma po co wysyłać — sync i tak roześle stan
+  if(mpHost){ mpHandleAct(act); return; }
+  if(mpCh){ mpCh.send({type:'broadcast',event:'act',payload:act}); }
+}
 function mpAfterSync(){
   // faza gotowości: zbuforuj utwór i zgłoś „ready" (raz na rundę)
   if(mpGame && mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce){
@@ -699,14 +705,31 @@ function mpSetKnob(playing){
   const i=$m('mpKnobIcon'); if(!i) return;
   i.innerHTML = playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
 }
-// faza gotowości — preload zajawki, potem zgłoś hostowi „ready" (#4)
+// JEDEN trwały element audio dla MP — odblokowany gestem (mobilna autoplay-policy),
+// reużywany co rundę przez podmianę .src. Zdarzenia gałki wpinane raz.
+function mpEnsureAudio(){
+  if(!mpAudio){
+    mpAudio=new Audio(); mpAudio.preload='auto';
+    mpAudio.addEventListener('playing',()=>mpSetKnob(true));
+    mpAudio.addEventListener('pause',  ()=>mpSetKnob(false));
+    mpAudio.addEventListener('ended',  ()=>mpSetKnob(false));
+  }
+  return mpAudio;
+}
+// odblokuj audio w geście (tworzenie/dołączanie/start/stuknięcie gałki) — bez tego
+// host nie usłyszy muzyki, bo play() leci poza gestem (po fazie gotowości)
+function mpUnlockAudio(){ unlockCtx(); unlockAudioElement(mpEnsureAudio()); }
+// usuń ewentualny watchdog fragmentu z poprzedniej rundy (element jest trwały)
+function mpClearSnip(a){ if(a._snipStop){ a.removeEventListener('timeupdate', a._snipStop); a._snipStop=null; } }
+
+// faza gotowości — preload zajawki na trwałym elemencie, potem zgłoś hostowi „ready" (#4)
 function mpArm(){
-  if(mpArmAudio){ try{mpArmAudio.pause();}catch(e){} mpArmAudio=null; }
   mpSetKnob(false);
   const armNonce=mpGame.armNonce;
   // lektor / brak zajawki — nic do buforowania, gotów od razu
   if(mpGame.mode==='lektor' || !mpGame.preview){ mpSend({type:'ready', armNonce}); return; }
-  const a=new Audio(mpGame.preview); a.preload='auto'; mpArmAudio=a;
+  const a=mpEnsureAudio(); mpClearSnip(a);
+  if(a.src!==mpGame.preview) a.src=mpGame.preview;
   let done=false;
   const ready=()=>{ if(done) return; done=true; mpSend({type:'ready', armNonce}); };
   a.addEventListener('canplaythrough', ready, {once:true});
@@ -721,29 +744,22 @@ function mpPlayLocal(){
   if(mpGame.mode==='lektor'){ if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, ()=>{}); return; }
   if(!mpGame.preview) return;
   if(mpGame.mode==='reverse'){ return mpPlayReverse(); }
-  // music / snippet — element audio (zbuforowany z arming, gdy pasuje)
-  let a=mpArmAudio;
-  if(!a || a.src!==mpGame.preview){ a=new Audio(mpGame.preview); a.preload='auto'; }
-  mpArmAudio=null;
-  if(mpAudio && mpAudio!==a){ try{mpAudio.pause();}catch(e){} }
-  mpAudio=a;
-  mpAudio.addEventListener('playing',()=>mpSetKnob(true));
-  mpAudio.addEventListener('pause',  ()=>mpSetKnob(false));
-  mpAudio.addEventListener('ended',  ()=>mpSetKnob(false));
+  // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
+  const a=mpEnsureAudio(); mpClearSnip(a);
+  if(a.src!==mpGame.preview) a.src=mpGame.preview;
   if(mpGame.mode==='snippet'){
     const start=mpGame.snipStart||0.5;
-    const seek=()=>{ try{ mpAudio.currentTime=start; }catch(e){} };
-    if(mpAudio.readyState>=1) seek(); else mpAudio.addEventListener('loadedmetadata', seek, {once:true});
-    const stop=()=>{ if(mpAudio && (mpAudio.currentTime-start)>=SNIP){ mpAudio.pause(); mpAudio.removeEventListener('timeupdate', stop); } };
-    mpAudio.addEventListener('timeupdate', stop);
-    mpAudio.play().catch(()=>{}); return;
+    const seek=()=>{ try{ a.currentTime=start; }catch(e){} };
+    if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
+    const stop=()=>{ if((a.currentTime-start)>=SNIP){ a.pause(); mpClearSnip(a); } };
+    a._snipStop=stop; a.addEventListener('timeupdate', stop);
+    a.play().catch(()=>{}); return;
   }
-  try{ mpAudio.currentTime=0; }catch(e){}
-  mpAudio.play().catch(()=>{});
+  try{ a.currentTime=0; }catch(e){}
+  a.play().catch(()=>{});
 }
 // „od tyłu" w MP — każdy klient dekoduje+odwraca lokalnie (wspólny AudioPort.playReverse)
 async function mpPlayReverse(){
-  if(mpArmAudio){ try{mpArmAudio.pause();}catch(e){} mpArmAudio=null; }
   if(mpAudio){ try{mpAudio.pause();}catch(e){} }
   mpSetKnob(false);
   revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
@@ -771,6 +787,7 @@ function mpGo(){
 /* ---- host: akcje od graczy ---- */
 function mpHandleAct(a){
   if(!mpGame) return;
+  if(a.aid){ if(mpSeenActs.has(a.aid)) return; mpSeenActs.add(a.aid); }   // pomiń echo własnej akcji
   // faza gotowości — host orkiestruje (presence + bezpiecznik), zliczanie w core
   if(a.type==='ready' && mpGame.phase===MP.ARMING){
     if(a.armNonce!==mpGame.armNonce) return;       // ready ze starej rundy — ignoruj
@@ -814,6 +831,7 @@ function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(ca
 function mpStart(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   if(r.error||!r.slots){ mpRender(); return; }
+  mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   mpGame={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
     proposals:[], sure:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0,
@@ -829,6 +847,7 @@ function mpHostNextQuestion(){
   mpHostNewRound();
 }
 async function mpHostNewRound(){
+  mpSeenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
   mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.sure=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
@@ -1032,7 +1051,7 @@ function mpTickTimer(){
   if(el){ el.textContent='⏱ '+s+' s'; el.style.color = s<=10 ? 'var(--red)' : 'var(--amber)'; }
   if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase===MP.PLAY){ mpLock(); }
 }
-function mpReact(e){ if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name}}); }
+function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
 function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
   let fx=$m('mpFx');
   if(!fx){ fx=document.createElement('div'); fx.id='mpFx'; document.body.appendChild(fx); }
@@ -1045,7 +1064,8 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
 function mpSay(){
   const el=$m('mpSayIn'); if(!el) return;
   const t=el.value.trim().slice(0,32); if(!t) return;
-  if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name}});
+  mpFloatSay(t, mpMe.name);   // pokaż od razu u siebie (bez round-tripu)
+  if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
   el.value='';
 }
 function mpFloatSay(text, byName){
