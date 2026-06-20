@@ -34,6 +34,10 @@ group('scoring.textMatch', ()=>{
   ok(!textMatch('Yesterday','Help'),'różne tytuły odrzucone');
   ok(!textMatch('',''),'puste odrzucone');
   ok(textMatch('Imagine','Imagine (Remastered)'),'sufiks remaster pomijany');
+  ok(textMatch('problem','PRO8L3M'),'leetspeak: „problem” == „PRO8L3M”');
+  ok(textMatch('PRO8L3M','problem'),'leetspeak: symetrycznie');
+  ok(textMatch('pro8l3m','PRO8L3M'),'oryginalny zapis też zalicza');
+  ok(!textMatch('problem','Ulica'),'leet nie psuje normalnego odrzucenia');
 });
 
 /* --- match --- */
@@ -110,6 +114,10 @@ group('mpReducer.reduceAction', ()=>{
   eq(g.sure.length,1,'1 pewniak');
   reduceAction(g,{type:'sure',by:'u2',byName:'B'});
   eq(g.sure.length,0,'pewniak wyłączony (toggle)');
+  ok(reduceAction(g,{type:'pass',by:'u2',byName:'B'}),'pas włączony');
+  eq(g.passed.length,1,'1 pas');
+  reduceAction(g,{type:'pass',by:'u2',byName:'B'});
+  eq(g.passed.length,0,'pas wyłączony (toggle)');
   ok(reduceAction(g,{type:'unpropose',by:'u1',pid}),'autor usuwa propozycję');
   eq(g.proposals.length,0,'propozycja usunięta');
   ok(!reduceAction(g,{type:'nieznana'}),'nieznana akcja → brak zmian');

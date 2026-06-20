@@ -31,9 +31,15 @@ export function lev(a,b){
   return prev[n];
 }
 
-// czy odpowiedź „pasuje" do prawdy (tolerancja literówek i diakrytyków)
-export function textMatch(guess,actual){
-  const g=norm(guess),a=norm(actual);
+// leetspeak: cyfry „udające" litery (np. PRO8L3M = problem). Mapujemy je na litery,
+// żeby zapis fonetyczny zaliczał się tak samo jak oryginalny.
+function deLeet(s){
+  return s.replace(/0/g,'o').replace(/1/g,'l').replace(/3/g,'e').replace(/4/g,'a')
+    .replace(/5/g,'s').replace(/7/g,'t').replace(/8/g,'b').replace(/9/g,'g');
+}
+
+// rdzeń porównania znormalizowanych napisów (tolerancja literówek)
+function nearMatch(g,a){
   if(!g||!a) return false;
   if(g===a) return true;
   if(g.length>3 && a.length>3 && (a.includes(g)||g.includes(a))) return true;
@@ -41,6 +47,16 @@ export function textMatch(guess,actual){
   if(d<=1 && Math.min(g.length,a.length)>=4) return true;  // jedna literówka — ale nie w krótkich (≤3 znaki)
   const ratio=1-d/Math.max(g.length,a.length);
   return ratio>=0.84;
+}
+
+// czy odpowiedź „pasuje" do prawdy (tolerancja literówek, diakrytyków i leetspeaku)
+export function textMatch(guess,actual){
+  const g=norm(guess),a=norm(actual);
+  if(nearMatch(g,a)) return true;
+  // dodatkowa ścieżka: porównaj wersje „odleetowane" (tylko gdy były cyfry-litery)
+  const gl=deLeet(g),al=deLeet(a);
+  if((gl!==g || al!==a) && nearMatch(gl,al)) return true;
+  return false;
 }
 
 // rok trafiony, gdy odgadnięto i mieści się w ±2 latach

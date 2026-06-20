@@ -925,7 +925,7 @@ function mpStart(){
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   mpGame={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
-    proposals:[], sure:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0,
+    proposals:[], sure:[], passed:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
   mpTally={};
   mpHostSeen.clear();
@@ -940,7 +940,7 @@ function mpHostNextQuestion(){
 }
 async function mpHostNewRound(){
   mpSeenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
-  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.sure=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
+  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.sure=[]; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
   if(mpGame.mode==='lektor'){
@@ -1078,9 +1078,17 @@ function mpPewniakHTML(g){
   return `<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})" title="pewniak dotyczy odpowiedzi drużyny">🍺 pewniak${iAmSure?' ✓':''}</button>
     <span class="mp-state" style="margin:0">${sureNames?('pewni odpowiedzi: '+sureNames):'pewny odpowiedzi drużyny? postaw 🍺'}</span>`;
 }
+// „pas" — kto już nic nie doda (sygnał dla hosta/stołu: ten gracz skończył myśleć)
+function mpPassHTML(g){
+  const passed=g.passed||[]; const total=mpMembers().length;
+  const iPassed=passed.some(p=>p.id===mpMe.id);
+  const names=passed.map(p=>escapeHtml(p.name)).join(', ');
+  return `<button class="mp-pass${iPassed?' on':''}" onclick="mpSend({type:'pass'})" title="nic już nie dodam do tej rundy">🤚 pas${iPassed?' ✓':''}</button>
+    <span class="mp-state" style="margin:0">${passed.length?`spasowali (${passed.length}/${total}): ${names}`:'nie wiesz? kliknij „pas”'}</span>`;
+}
 function mpRenderPlay(g, head, st){
   const top=mpTopProp(), mine=mpMyVote();
-  const board=mpBoardHTML(g, top, mine), team=mpTeamHTML(top), pewniak=mpPewniakHTML(g);
+  const board=mpBoardHTML(g, top, mine), team=mpTeamHTML(top), pewniak=mpPewniakHTML(g), pass=mpPassHTML(g);
   // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
   // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
   if(mpPlayRound!==g.playNonce || !$m('mpBoard')){
@@ -1104,12 +1112,14 @@ function mpRenderPlay(g, head, st){
       </div>
       <div class="mp-board" id="mpBoard">${board}</div>
       <div class="mp-team" id="mpTeam">${team}</div>
-      <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>${reacts}${scribe}`;
+      <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>
+      <div class="mp-pewniak" id="mpPass">${pass}</div>${reacts}${scribe}`;
   } else {
-    // tylko odśwież tablicę, kartę drużyny i pewniaka — pola zostają nietknięte
+    // tylko odśwież tablicę, kartę drużyny, pewniaka i pas — pola zostają nietknięte
     $m('mpBoard').innerHTML=board;
     if($m('mpTeam')) $m('mpTeam').innerHTML=team;
     $m('mpPewniak').innerHTML=pewniak;
+    if($m('mpPass')) $m('mpPass').innerHTML=pass;
   }
   // podpowiedź pisarza (top głosów) — dopóki host sam nie zacznie pisać
   if(mpHost && !mpScribeTouched && top && $m('mpScTitle')){ $m('mpScTitle').value=top.title; $m('mpScArtist').value=top.artist; }

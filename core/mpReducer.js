@@ -28,6 +28,12 @@ export function reduceAction(game, a){
       if(i>=0) game.sure.splice(i,1); else game.sure.push({ id:a.by, name:a.byName });
       return true;
     }
+    case 'pass': {                                     // toggle „pasu" (już nic nie dodam)
+      game.passed = game.passed || [];
+      const i=game.passed.findIndex(p=>p.id===a.by);
+      if(i>=0) game.passed.splice(i,1); else game.passed.push({ id:a.by, name:a.byName });
+      return true;
+    }
     default:
       return false;
   }
