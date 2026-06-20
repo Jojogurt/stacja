@@ -316,6 +316,9 @@
     background:var(--green);color:#fff;box-shadow:0 5px 0 var(--green-d);transition:transform .08s,box-shadow .08s}
   .mp-knob:active{transform:translateY(5px);box-shadow:0 0 0 var(--green-d)}
   .mp-knob svg{width:34px;height:34px;fill:currentColor}
+  .mp-knob.loading{background:var(--amber);box-shadow:0 5px 0 #b07d00}
+  .mp-knob.loading svg{animation:mpspin .9s linear infinite;transform-origin:center}
+  @keyframes mpspin{to{transform:rotate(360deg)}}
   .mp-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px}
   .mp-form input{background:var(--panel2);border:2px solid var(--line);border-radius:12px;color:var(--ink);
     font-family:var(--body);font-weight:700;font-size:15px;padding:11px;outline:none;min-width:0}

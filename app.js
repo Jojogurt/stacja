@@ -764,11 +764,12 @@ function mpAfterSync(){
   if(mpGame && mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce && !mpRevealPending()){
     mpArm();
   }
-  // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start)
-  if(mpGame && mpGame.phase===MP.PLAY && mpGame.playNonce!==mpLastNonce){
-    mpLastNonce=mpGame.playNonce; mpPlayLocal();
-  }
+  // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start).
+  // Render NAJPIERW, żeby gałka/status już istniały, gdy mpPlayLocal ustawia „ładowanie…".
+  const startPlay = mpGame && mpGame.phase===MP.PLAY && mpGame.playNonce!==mpLastNonce;
+  if(startPlay) mpLastNonce=mpGame.playNonce;
   mpRender();
+  if(startPlay) mpPlayLocal();
 }
 // czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
 function mpRevealPending(){ return !!mpRevealSnap && mpAck!==mpRevealNonce; }
@@ -791,18 +792,27 @@ function mpAdvance(){
     mpRender();
   }
 }
-function mpSetKnob(playing){
-  const i=$m('mpKnobIcon'); if(!i) return;
-  i.innerHTML = playing ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>' : '<path d="M8 5v14l11-7z"/>';
+// stany gałki: 'pause' (∥ gra), 'wait' (⏳ ładowanie), 'play' (▶ idle/pauza)
+function mpSetKnob(state){
+  if(state===true) state='pause'; if(state===false) state='play';
+  const i=$m('mpKnobIcon');
+  if(i) i.innerHTML = state==='pause' ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
+    : state==='wait' ? '<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+    : '<path d="M8 5v14l11-7z"/>';
+  const k=$m('mpKnob'); if(k) k.classList.toggle('loading', state==='wait');
 }
+function mpSetPlayStatus(t){ const e=$m('mpPlayStatus'); if(e) e.textContent=t; }
 // JEDEN trwały element audio dla MP — odblokowany gestem (mobilna autoplay-policy),
-// reużywany co rundę przez podmianę .src. Zdarzenia gałki wpinane raz.
+// reużywany co rundę przez podmianę .src. Zdarzenia gałki wpinane raz — gałka i status
+// JADĄ ZA REALNYMI zdarzeniami odtwarzacza (koniec rozjazdu ikona vs dźwięk).
 function mpEnsureAudio(){
   if(!mpAudio){
     mpAudio=new Audio(); mpAudio.preload='auto';
-    mpAudio.addEventListener('playing',()=>mpSetKnob(true));
-    mpAudio.addEventListener('pause',  ()=>mpSetKnob(false));
-    mpAudio.addEventListener('ended',  ()=>mpSetKnob(false));
+    mpAudio.addEventListener('playing',()=>{ mpSetKnob('pause'); mpSetPlayStatus(mpGame&&mpGame.mode==='snippet'?'gra fragment…':'gra…'); });
+    mpAudio.addEventListener('waiting',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
+    mpAudio.addEventListener('stalled',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
+    mpAudio.addEventListener('pause',  ()=>{ if(!mpAudio.ended){ mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
+    mpAudio.addEventListener('ended',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); });
   }
   return mpAudio;
 }
@@ -830,41 +840,44 @@ function mpArm(){
   a.load();
 }
 function mpStopRev(){ if(mpRevSrc){ mpRevSrc.stop(); mpRevSrc=null; } }   // uchwyt z playReverse
+// play() zablokowane przez przeglądarkę (autoplay poza gestem) → poproś o stuknięcie
+function mpPlayBlocked(){ mpSetKnob('play'); mpSetPlayStatus('stuknij ▶, by odtworzyć'); }
 function mpPlayLocal(){
   lektorStop(); mpStopRev();
-  if(mpGame.mode==='lektor'){ if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, ()=>{}); return; }
-  if(!mpGame.preview) return;
+  if(mpGame.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, ()=>{}); return; }
+  if(!mpGame.preview){ mpSetPlayStatus('brak zajawki'); return; }
   if(mpGame.mode==='reverse'){ return mpPlayReverse(); }
   // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
   const a=mpEnsureAudio(); mpClearSnip(a);
   if(a.src!==mpGame.preview) a.src=mpGame.preview;
+  mpSetKnob('wait'); mpSetPlayStatus('ładowanie…');   // od razu pokaż, że się wczytuje
   if(mpGame.mode==='snippet'){
     const start=mpGame.snipStart||0.5;
     const seek=()=>{ try{ a.currentTime=start; }catch(e){} };
     if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
     const stop=()=>{ if((a.currentTime-start)>=SNIP){ a.pause(); mpClearSnip(a); } };
     a._snipStop=stop; a.addEventListener('timeupdate', stop);
-    a.play().catch(()=>{}); return;
+    a.play().catch(mpPlayBlocked); return;
   }
   try{ a.currentTime=0; }catch(e){}
-  a.play().catch(()=>{});
+  a.play().catch(mpPlayBlocked);
 }
 // „od tyłu" w MP — każdy klient dekoduje+odwraca lokalnie (wspólny AudioPort.playReverse)
 async function mpPlayReverse(){
   if(mpAudio){ try{mpAudio.pause();}catch(e){} }
-  mpSetKnob(false);
+  mpSetKnob('wait'); mpSetPlayStatus('odwracam…');
   revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
   if(revCtx.state==='suspended'){ try{ revCtx.resume(); }catch(e){} }
   const url=mpGame.preview;
   const r=await playReverse(revCtx, url, {
     cfg: window.STACJA_CONFIG,
     shouldPlay: ()=>mpGame.preview===url,    // runda mogła się zmienić w trakcie dekodowania
-    onEnded: ()=>mpSetKnob(false),
+    onEnded: ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); },
   });
-  if(r.ok){ mpRevSrc=r; mpSetKnob(true); return; }
+  if(r.ok){ mpRevSrc=r; mpSetKnob('pause'); mpSetPlayStatus('gra od tyłu…'); return; }
   if(r.aborted) return;                       // cisza — runda już inna
-  // CORS/dekodowanie padło → zagraj normalnie
-  mpAudio=new Audio(url); mpAudio.addEventListener('playing',()=>mpSetKnob(true)); mpAudio.play().catch(()=>{});
+  // CORS/dekodowanie padło → zagraj normalnie (ten sam trwały element z eventami)
+  const a=mpEnsureAudio(); a.src=url; a.play().catch(mpPlayBlocked);
 }
 // host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
 function mpGo(){
@@ -1102,9 +1115,9 @@ function mpRenderPlay(g, head, st){
     const reacts=mpReactsBarHTML();
     st.innerHTML=`<div class="mp-deck">${head}
       <div class="mp-state" id="mpCountdown"></div>
-      <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
-        <svg viewBox="0 0 24 24"><path id="mpKnobIcon" d="M8 5v14l11-7z"/></svg></button>
-      <div class="mp-state">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+      <button class="mp-knob" id="mpKnob" onclick="mpPlayLocal()" aria-label="Odtwórz">
+        <svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
       ${g.mode==='lektor'&&g.lyric?`<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>`:''}
       <div class="mp-form">
         <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
