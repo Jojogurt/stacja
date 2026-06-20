@@ -9,6 +9,7 @@ import {
 } from './core/match.js';
 import { SOLO, MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
+import { fetchAudioBytes, playReverse } from './adapters-web/webAudio.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
@@ -367,7 +368,7 @@ async function newSongRound(eraKey){
 }
 
 /* ============ audio ============ */
-let revCtx=null, revSrc=null, revTimer=null;   // tryb „od tyłu" (Web Audio)
+let revCtx=null, revSrc=null;   // tryb „od tyłu" (Web Audio) — revSrc to uchwyt z playReverse
 const SNIP=2;                                   // długość fragmentu (s)
 // iOS: AudioContext trzeba odblokować w geście (synchronicznie), zanim użyjemy go po await
 function unlockCtx(){ try{ if(!revCtx) revCtx=new (window.AudioContext||window.webkitAudioContext)(); if(revCtx.state==='suspended') revCtx.resume(); }catch(e){} }
@@ -426,40 +427,17 @@ function startSnippet(){
   });
 }
 
-// pobierz bajty zajawki — najpierw wprost (iTunes daje CORS), a gdy padnie
-// (np. previews Deezer *.dzcdn.net bez ACAO) — przez proxy audio na Supabase (#13)
-async function fetchAudioBytes(url){
-  try{ return await (await fetch(url,{mode:'cors'})).arrayBuffer(); }
-  catch(e){
-    const cfg=window.STACJA_CONFIG||{};
-    if(!cfg.supabaseUrl) throw e;
-    const pu=cfg.supabaseUrl+'/functions/v1/audio?u='+encodeURIComponent(url);
-    return await (await fetch(pu,{headers: cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}})).arrayBuffer();
-  }
-}
-
-// 🔄 od tyłu — dekoduje zajawkę i odtwarza odwróconą (Web Audio)
+// 🔄 od tyłu — dekoduje zajawkę i odtwarza odwróconą (Web Audio, przez AudioPort)
 async function startReverse(){
   setIcon('wait'); setState('odwracam…');
   revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
   if(revCtx.state==='suspended'){ try{ await revCtx.resume(); }catch(e){} }
-  let decoded=null;
-  try{
-    const buf=await fetchAudioBytes(current.preview);
-    decoded=await revCtx.decodeAudioData(buf);
-  }catch(e){ decoded=null; }
-  if(decoded){
-    for(let c=0;c<decoded.numberOfChannels;c++){ decoded.getChannelData(c).reverse(); }
-    const src=revCtx.createBufferSource(); src.buffer=decoded;
-    const gain=revCtx.createGain(); gain.gain.value=1;          // pewny tor sygnału
-    src.connect(gain); gain.connect(revCtx.destination);
-    const t0=revCtx.currentTime, dur=decoded.duration;
-    src.onended=()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); if(revTimer){clearInterval(revTimer);revTimer=null;} };
-    src.start(); revSrc=src;
-    revTimer=setInterval(()=>{ if(revSrc) setRing(Math.min(1,(revCtx.currentTime-t0)/dur)); }, 100);
-    setIcon('pause'); setState('słuchaj — od tyłu!'); armControls();
-    return;
-  }
+  const r=await playReverse(revCtx, current.preview, {
+    cfg: window.STACJA_CONFIG,
+    onProgress: f=>setRing(f),
+    onEnded: ()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); },
+  });
+  if(r.ok){ revSrc=r; setIcon('pause'); setState('słuchaj — od tyłu!'); armControls(); return; }
   // i proxy i dekodowanie padło → zagraj normalnie, żeby runda działała
   audio=new Audio(current.preview); bindAudioUI(audio);
   audio.play().then(()=>{ setState('„od tyłu" niedostępne tutaj — gram normalnie'); armControls(); }).catch(()=>{ setState('nie udało się odtworzyć'); armControls(); });
@@ -467,8 +445,7 @@ async function startReverse(){
 
 function stopAudio(){
   if(audio){audio.pause();audio=null;}
-  if(revSrc){ try{revSrc.onended=null; revSrc.stop();}catch(e){} revSrc=null; }
-  if(revTimer){ clearInterval(revTimer); revTimer=null; }
+  if(revSrc){ revSrc.stop(); revSrc=null; }   // uchwyt z playReverse sam czyści timer
   lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live');
 }
 function toggleAudio(){
@@ -828,7 +805,7 @@ function mpArm(){
   setTimeout(ready, 6000);                                  // bezpiecznik
   a.load();
 }
-function mpStopRev(){ if(mpRevSrc){ try{mpRevSrc.onended=null; mpRevSrc.stop();}catch(e){} mpRevSrc=null; } }
+function mpStopRev(){ if(mpRevSrc){ mpRevSrc.stop(); mpRevSrc=null; } }   // uchwyt z playReverse
 function mpPlayLocal(){
   lektorStop(); mpStopRev();
   if(mpGame.mode==='lektor'){ if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, ()=>{}); return; }
@@ -854,24 +831,23 @@ function mpPlayLocal(){
   try{ mpAudio.currentTime=0; }catch(e){}
   mpAudio.play().catch(()=>{});
 }
-// „od tyłu" w MP — każdy klient dekoduje+odwraca lokalnie (reużycie revCtx/fetchAudioBytes)
-function mpPlayReverse(){
+// „od tyłu" w MP — każdy klient dekoduje+odwraca lokalnie (wspólny AudioPort.playReverse)
+async function mpPlayReverse(){
   if(mpArmAudio){ try{mpArmAudio.pause();}catch(e){} mpArmAudio=null; }
   if(mpAudio){ try{mpAudio.pause();}catch(e){} }
   mpSetKnob(false);
   revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
   if(revCtx.state==='suspended'){ try{ revCtx.resume(); }catch(e){} }
   const url=mpGame.preview;
-  fetchAudioBytes(url).then(buf=>revCtx.decodeAudioData(buf)).then(decoded=>{
-    if(mpGame.preview!==url) return;                    // runda się zmieniła
-    for(let c=0;c<decoded.numberOfChannels;c++){ decoded.getChannelData(c).reverse(); }
-    const src=revCtx.createBufferSource(); src.buffer=decoded;
-    const gain=revCtx.createGain(); src.connect(gain); gain.connect(revCtx.destination);
-    src.onended=()=>mpSetKnob(false);
-    src.start(); mpRevSrc=src; mpSetKnob(true);
-  }).catch(()=>{ // CORS/dekodowanie padło → zagraj normalnie
-    mpAudio=new Audio(url); mpAudio.addEventListener('playing',()=>mpSetKnob(true)); mpAudio.play().catch(()=>{});
+  const r=await playReverse(revCtx, url, {
+    cfg: window.STACJA_CONFIG,
+    shouldPlay: ()=>mpGame.preview===url,    // runda mogła się zmienić w trakcie dekodowania
+    onEnded: ()=>mpSetKnob(false),
   });
+  if(r.ok){ mpRevSrc=r; mpSetKnob(true); return; }
+  if(r.aborted) return;                       // cisza — runda już inna
+  // CORS/dekodowanie padło → zagraj normalnie
+  mpAudio=new Audio(url); mpAudio.addEventListener('playing',()=>mpSetKnob(true)); mpAudio.play().catch(()=>{});
 }
 // host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
 function mpGo(){
