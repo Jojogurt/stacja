@@ -94,6 +94,22 @@
   .scene .sub{text-align:center;font-size:11px;font-weight:700;color:#8fb0cc;margin-top:4px}
   .scene .floats{display:flex;gap:6px;justify-content:center;margin-top:13px;flex-wrap:wrap}
   .scene .fl{font-size:12px;font-weight:700;background:#1f2a38;border-radius:9px;padding:4px 8px}
+  .roster{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 11px;margin-bottom:11px;border-bottom:2px solid var(--line)}
+  .pl{display:flex;align-items:center;gap:5px;background:#fff;border:2px solid var(--line);border-radius:999px;padding:3px 9px 3px 3px;font-size:11px;font-weight:800;color:var(--ink)}
+  .pl .av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:900;background:var(--panel2);color:var(--muted);font-style:normal}
+  .pl .s{font-size:11px}
+  .pl.ans{border-color:var(--green)} .pl.ans .av{background:var(--green);color:#fff} .pl.ans .s{color:var(--green)}
+  .pl.sure{border-color:var(--gold);background:#FFFBEC} .pl.sure .av{background:var(--gold);color:#fff} .pl.sure .s{color:var(--gold-d)}
+  .pl.type{border-color:var(--blue)} .pl.type .av{background:var(--blue);color:#fff} .pl.type .s{color:var(--blue);letter-spacing:1px}
+  .pl.pass{opacity:.5} .pl.pass .s{filter:grayscale(1)}
+  .pl.you{box-shadow:0 0 0 3px #EAF6FF}
+  .pl.type .s{animation:blink 1s steps(1) infinite}
+  @keyframes blink{50%{opacity:.35}}
+  .legend{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;font-size:10px;font-weight:700;color:var(--muted);margin:-3px 0 12px}
+  .scene .roster{border-bottom-color:#2c3a4d;justify-content:center}
+  .scene .pl{background:#1f2a38;border-color:#2c3a4d;color:#cfe0ee}
+  .scene .pl .av{background:#2c3a4d;color:#8fb0cc}
+  .scene .pl.ans .av{background:var(--green)} .scene .pl.sure{background:#3a3413;border-color:var(--gold)} .scene .pl.sure .av{background:var(--gold)} .scene .pl.type .av{background:var(--blue)}
   .hide{display:none!important}
   .foot{text-align:center;font-weight:700;font-size:11px;color:var(--muted);margin-top:26px;line-height:1.6}
 </style>
@@ -115,6 +131,14 @@
   <section id="sc0">
     <div class="ph">
       <div class="bar"><span>runda <span class="g">2/4</span></span><span>drużyna 14 pkt</span><span class="t">⏱ 18s</span></div>
+      <div class="roster">
+        <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
+        <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
+        <div class="pl type"><span class="av">M</span>Michał<span class="s">···</span></div>
+        <div class="pl pass"><span class="av">Z</span>Zofia<span class="s">🤚</span></div>
+        <div class="pl you"><span class="av">T</span>Ty<span class="s">·</span></div>
+      </div>
+      <div class="legend"><span>🍺 pewniak</span><span>✓ wrzucił</span><span>··· pisze</span><span>🤚 pas</span><span>· myśli</span></div>
       <div class="bub sys">▶ utwór leci — stuknij, by powtórzyć</div>
       <div class="bub prop top"><div class="gx"><span class="who">Karol · top odpowiedź</span><b>Kombinacja</b> <span>· Maanam</span></div><span class="vote on">👍 3</span></div>
       <div class="bub prop"><div class="gx"><span class="who">Ola</span><b>Lucciola</b> <span>· Maanam</span></div><span class="vote">👍 1</span></div>
@@ -137,6 +161,13 @@
         <div class="node on" onclick="phase(2)"><div class="dot">👍</div><div class="lab">głosuj</div></div>
         <div class="seg"></div>
         <div class="node" onclick="phase(3)"><div class="dot">👁</div><div class="lab">odsłona</div></div>
+      </div>
+      <div class="roster">
+        <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
+        <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
+        <div class="pl type"><span class="av">M</span>Michał<span class="s">···</span></div>
+        <div class="pl pass"><span class="av">Z</span>Zofia<span class="s">🤚</span></div>
+        <div class="pl you"><span class="av">T</span>Ty<span class="s">·</span></div>
       </div>
 
       <div id="p0" class="hide">
@@ -185,6 +216,12 @@
     <p class="lbl">wspólny ekran — scena (laptop / TV)</p>
     <div class="scene">
       <div class="lab2">runda 2 · ⏱ 18s · drużyna 14 pkt</div>
+      <div class="roster">
+        <div class="pl sure"><span class="av">K</span>Karol<span class="s">🍺</span></div>
+        <div class="pl ans"><span class="av">O</span>Ola<span class="s">✓</span></div>
+        <div class="pl type"><span class="av">M</span>Michał<span class="s">···</span></div>
+        <div class="pl pass"><span class="av">Z</span>Zofia<span class="s">🤚</span></div>
+      </div>
       <div class="cover">💿</div>
       <div class="ans">Kombinacja · Maanam</div>
       <div class="sub">odpowiedź drużyny — 3 👍 · pewniacy: Karol, Ola</div>
