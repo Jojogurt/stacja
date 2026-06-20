@@ -213,10 +213,25 @@
     background:var(--blue);border:none;border-radius:12px;padding:9px 14px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--blue-d)}
   .mp-enter:active{transform:translateY(3px);box-shadow:none}
   #mp{display:none;margin-top:6px}
-  body.mp .dial,body.mp .session,body.mp .deck,body.mp .form,body.mp .reveal,
-  body.mp .summary,body.mp .score,body.mp .foot{display:none}
   body.mp #mp{display:block}
-  body.mp .mp-enter{display:none}
+  /* trzy ekrany: menu / solo / mp */
+  #menu{display:none}
+  body.menu #menu{display:block}
+  body:not(.solo) .dial, body:not(.solo) .session, body:not(.solo) .deck,
+  body:not(.solo) .form, body:not(.solo) .reveal, body:not(.solo) .summary,
+  body:not(.solo) .score, body:not(.solo) .foot{display:none}
+  body.menu .to-menu{display:none}
+  .menu-hero{text-align:center;color:var(--muted);font-family:var(--display);font-weight:800;font-size:13px;
+    letter-spacing:.02em;margin:10px 0 22px;text-transform:uppercase}
+  .menu-btn{display:flex;flex-direction:column;align-items:center;gap:5px;width:100%;margin-bottom:16px;
+    font-family:var(--display);font-weight:900;font-size:23px;letter-spacing:.01em;color:#fff;border:none;
+    border-radius:var(--r-lg);padding:30px 24px;cursor:pointer;text-transform:uppercase}
+  .menu-btn small{font-family:var(--body);font-weight:700;font-size:13px;letter-spacing:0;text-transform:none;opacity:.92}
+  .menu-btn.solo{background:var(--green);box-shadow:0 5px 0 var(--green-d)}
+  .menu-btn.mp{background:var(--blue);box-shadow:0 5px 0 var(--blue-d)}
+  .menu-btn:active{transform:translateY(5px);box-shadow:none}
+  .to-menu{font-family:var(--display);font-weight:800;font-size:10px;letter-spacing:.02em;color:var(--muted);
+    background:var(--panel);border:2px solid var(--line);border-radius:10px;padding:7px 11px;cursor:pointer;text-transform:uppercase}
   .mp-head{display:flex;justify-content:space-between;align-items:center;padding:6px 2px 14px;
     font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.03em;color:var(--muted);text-transform:uppercase}
   .mp-head b{color:var(--green);font-size:18px;font-weight:900;letter-spacing:.06em}
@@ -318,11 +333,17 @@
     100%{opacity:0;transform:translateY(-150px)}}
 </style>
 </head>
-<body>
+<body class="menu">
   <div class="top">
     <div class="brand">STA<b>·</b>CJA</div>
-    <button class="mp-enter" id="mpEnter">👥 ze znajomymi</button>
+    <button class="to-menu" id="toMenu">← menu</button>
   </div>
+
+  <section id="menu">
+    <div class="menu-hero">muzyczny trener pubquizowy</div>
+    <button class="menu-btn solo" id="goSolo">🎧 Solo<small>trenuj sam, w swoim tempie</small></button>
+    <button class="menu-btn mp" id="goMp">👥 Ze znajomymi<small>mecz drużynowy w pokoju</small></button>
+  </section>
 
   <section id="mp">
     <!-- LOBBY -->
@@ -1145,14 +1166,21 @@ function mpConnect(){
 }
 
 /* ---- wejście / wyjście z trybu ---- */
-$m('mpEnter').onclick=()=>{
+function showScreen(s){ document.body.classList.remove('menu','solo','mp'); document.body.classList.add(s); }
+$m('goSolo').onclick=()=>{ showScreen('solo'); };
+$m('goMp').onclick=()=>{
   stopAudio(); stopSpeech();
-  document.body.classList.add('mp');
+  showScreen('mp');
   const pre=new URLSearchParams(location.search).get('room');
   if(pre){ $m('mpCode').value=pre.toUpperCase(); }
 };
-$m('mpExit').onclick=()=>{ document.body.classList.remove('mp'); };
-$m('mpLeave').onclick=()=>{ mpLeave(); };
+$m('toMenu').onclick=()=>{
+  if(document.body.classList.contains('mp')){ mpLeave(); }
+  stopAudio(); stopSpeech();
+  showScreen('menu');
+};
+$m('mpExit').onclick=()=>{ showScreen('menu'); };
+$m('mpLeave').onclick=()=>{ mpLeave(); showScreen('menu'); };
 
 async function mpLeave(){
   if(mpCh){ try{ await mpCh.unsubscribe(); }catch(e){} mpCh=null; }
@@ -1586,7 +1614,7 @@ function mpFloatSay(text, byName){
 }
 
 /* autostart lobby gdy w URL jest ?room= */
-if(new URLSearchParams(location.search).get('room')){ document.body.classList.add('mp'); $m('mpCode').value=new URLSearchParams(location.search).get('room').toUpperCase(); }
+if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCode').value=new URLSearchParams(location.search).get('room').toUpperCase(); }
 </script>
 </body>
 </html>
