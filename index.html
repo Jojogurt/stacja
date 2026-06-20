@@ -214,9 +214,44 @@
   .mp-enter:active{transform:translateY(3px);box-shadow:none}
   #mp{display:none;margin-top:6px}
   body.mp #mp{display:block}
-  /* trzy ekrany: menu / solo / mp */
+  /* ekrany: menu / solo / mp / liga / profil */
   #menu{display:none}
   body.menu #menu{display:block}
+  #liga,#profil{display:none}
+  body.liga #liga{display:block}
+  body.profil #profil{display:block}
+  .menu-sub{display:flex;gap:12px;margin-top:2px}
+  .menu-sub button{flex:1;font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:.02em;
+    color:var(--text);background:var(--panel);border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;
+    padding:13px;cursor:pointer;text-transform:uppercase}
+  .menu-sub button:active{transform:translateY(2px);border-bottom-width:2px}
+  .screen-head{display:flex;align-items:center;justify-content:space-between;margin:6px 0 16px}
+  .screen-head span{font-family:var(--display);font-weight:900;font-size:20px;letter-spacing:.01em;text-transform:uppercase}
+  .liga-list{display:flex;flex-direction:column;gap:8px}
+  .liga-row{display:flex;align-items:center;gap:12px;background:var(--panel);border:2px solid var(--line);
+    border-radius:14px;padding:12px 14px}
+  .liga-row .rank{font-family:var(--display);font-weight:900;font-size:18px;color:var(--muted);min-width:26px;text-align:center}
+  .liga-row.me{border-color:var(--green)}
+  .liga-row .who{flex:1;font-weight:800}
+  .liga-row .who small{display:block;font-weight:700;font-size:12px;color:var(--muted)}
+  .liga-row .pts{font-family:var(--display);font-weight:900;font-size:18px;color:var(--gold)}
+  .liga-empty,.profil-empty{font-family:var(--body);font-weight:700;color:var(--muted);text-align:center;padding:30px 10px;line-height:1.6}
+  .profil-card{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:16px}
+  .profil-handle{display:flex;gap:8px}
+  .profil-handle input{flex:1}
+  .profil-handle button{font-family:var(--display);font-weight:800;font-size:13px;color:#fff;background:var(--blue);
+    border:none;border-radius:12px;padding:0 16px;cursor:pointer;box-shadow:0 3px 0 var(--blue-d);text-transform:uppercase}
+  .profil-handle button:active{transform:translateY(3px);box-shadow:none}
+  .profil-stats{margin-top:16px;display:flex;flex-direction:column;gap:8px}
+  .stat-big{display:flex;gap:10px}
+  .stat-big div{flex:1;text-align:center;background:var(--bg);border:2px solid var(--line);border-radius:12px;padding:12px 6px}
+  .stat-big b{display:block;font-family:var(--display);font-weight:900;font-size:22px}
+  .stat-big small{font-weight:700;font-size:11px;color:var(--muted);text-transform:uppercase}
+  .stat-cat{display:flex;align-items:center;gap:10px;font-weight:700;font-size:14px}
+  .stat-cat .lbl{flex:1}
+  .stat-cat .bar{flex:0 0 90px;height:8px;background:var(--line);border-radius:6px;overflow:hidden}
+  .stat-cat .bar i{display:block;height:100%;background:var(--green)}
+  .stat-cat .pct{min-width:38px;text-align:right;color:var(--muted);font-size:12px}
   body:not(.solo) .dial, body:not(.solo) .session, body:not(.solo) .deck,
   body:not(.solo) .form, body:not(.solo) .reveal, body:not(.solo) .summary,
   body:not(.solo) .score, body:not(.solo) .foot{display:none}
@@ -355,6 +390,25 @@
     <div class="menu-hero">muzyczny trener pubquizowy</div>
     <button class="menu-btn solo" id="goSolo">🎧 Solo<small>trenuj sam, w swoim tempie</small></button>
     <button class="menu-btn mp" id="goMp">👥 Ze znajomymi<small>mecz drużynowy w pokoju</small></button>
+    <div class="menu-sub">
+      <button id="goLiga">🏆 Liga</button>
+      <button id="goProfil">👤 Profil</button>
+    </div>
+  </section>
+
+  <section id="liga">
+    <div class="screen-head"><span>🏆 Liga</span></div>
+    <div class="liga-list" id="ligaList"></div>
+  </section>
+
+  <section id="profil">
+    <div class="screen-head"><span>👤 Profil</span></div>
+    <div class="profil-card">
+      <div class="field"><label for="profilHandle">Ksywa</label>
+        <div class="profil-handle"><input id="profilHandle" autocomplete="off" maxlength="16" placeholder="gracz"><button id="profilSave">Zapisz</button></div>
+      </div>
+      <div class="profil-stats" id="profilStats"></div>
+    </div>
   </section>
 
   <section id="mp">

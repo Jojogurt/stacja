@@ -11,7 +11,7 @@ import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
-import { sb, ensureSession, setHandle, recordMatch } from './adapters-web/supabase.js';
+import { sb, ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile, myId } from './adapters-web/supabase.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
@@ -621,8 +621,53 @@ function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klien
 ensureSession().then(id=>{ if(id && !mpCode) mpMe.id=id; });
 
 /* ---- wejście / wyjście z trybu ---- */
-function showScreen(s){ document.body.classList.remove('menu','solo','mp'); document.body.classList.add(s); }
+function showScreen(s){ document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s); }
 $m('goSolo').onclick=()=>{ showScreen('solo'); };
+
+/* ---- Liga + Profil (Etap 1 / Faza D) ---- */
+$m('goLiga').onclick=()=>{ showScreen('liga'); renderLiga(); };
+$m('goProfil').onclick=()=>{ showScreen('profil'); renderProfil(); };
+
+async function renderLiga(){
+  const el=$m('ligaList'); el.innerHTML='<div class="liga-empty">ładowanie…</div>';
+  const [rows, me]=await Promise.all([fetchLeague(50), myId()]);
+  if(!rows.length){ el.innerHTML='<div class="liga-empty">Pusto na razie.<br>Rozegraj mecz, żeby pojawić się w lidze.<br><small>(wymaga włączonego logowania w projekcie)</small></div>'; return; }
+  el.innerHTML=rows.map((r,i)=>{
+    const acc=r.matches?Math.round((r.correct/(r.matches||1))*10)/10:0;
+    return `<div class="liga-row${r.profile_id===me?' me':''}">
+      <span class="rank">${i+1}</span>
+      <span class="who">${escapeHtml(r.handle||'gracz')}<small>${r.matches} mecz(e) · ${r.correct} trafnych</small></span>
+      <span class="pts">${r.points}</span>
+    </div>`;
+  }).join('');
+}
+
+async function renderProfil(){
+  const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
+  const p=await fetchProfile();
+  if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Włącz logowanie anonimowe w projekcie Supabase, żeby zapisywać postępy.</div>'; return; }
+  $m('profilHandle').value=p.handle;
+  const s=p.standing;
+  const cats=Object.entries(p.byCat).sort((a,b)=>b[1].n-a[1].n);
+  const catRows=cats.length? cats.map(([k,v])=>{
+    const pct=Math.round(v.ok/v.n*100);
+    return `<div class="stat-cat"><span class="lbl">${escapeHtml(catLabel(k))}</span>
+      <span class="bar"><i style="width:${pct}%"></i></span><span class="pct">${pct}%</span></div>`;
+  }).join('') : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>';
+  el.innerHTML=`<div class="stat-big">
+      <div><b>${s.matches}</b><small>mecze</small></div>
+      <div><b>${s.correct}</b><small>trafne</small></div>
+      <div><b>${s.points}</b><small>punkty</small></div>
+    </div>
+    <div class="band-label" style="margin:16px 0 4px">celność per kategoria (solo)</div>
+    ${catRows}`;
+}
+$m('profilSave').onclick=async()=>{
+  const v=$m('profilHandle').value.trim(); if(!v) return;
+  const btn=$m('profilSave'); btn.textContent='…';
+  await setHandle(v); mpMe.name=mpMe.name||v;
+  btn.textContent='✓'; setTimeout(()=>btn.textContent='Zapisz',1200);
+};
 $m('goMp').onclick=()=>{
   stopAudio(); stopSpeech();
   showScreen('mp');

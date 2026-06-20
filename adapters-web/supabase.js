@@ -46,11 +46,34 @@ export async function recordMatch(payload){
   }catch(e){ console.warn('[stacja] record_match:', e?.message||e); return null; }
 }
 
-// liga (widok agregujący) — do ekranu rankingu w Fazie D
+// liga (widok agregujący) — do ekranu rankingu
 export async function fetchLeague(limit=50){
   const c=sb(); if(!c) return [];
   try{
     const { data, error } = await c.from('league_standings').select('*').limit(limit);
     return error ? [] : (data||[]);
   }catch(e){ return []; }
+}
+
+// mój uid (jak zalogowany) — do podświetlenia siebie w lidze
+export async function myId(){
+  const c=sb(); if(!c) return null;
+  try{ const { data:{ session } } = await c.auth.getSession(); return session?.user?.id || null; }
+  catch(e){ return null; }
+}
+
+// profil zalogowanego: ksywka, pozycja w lidze, celność per kategoria (z match_answers).
+// null = brak sesji/backendu.
+export async function fetchProfile(){
+  const c=sb(); if(!c) return null;
+  try{
+    const { data:{ session } } = await c.auth.getSession();
+    const id=session?.user?.id; if(!id) return null;
+    const prof = (await c.from('profiles').select('handle').eq('id',id).maybeSingle()).data;
+    const standing = (await c.from('league_standings').select('matches,correct,points').eq('profile_id',id).maybeSingle()).data;
+    const answers = (await c.from('match_answers').select('cat_key,ok').eq('profile_id',id)).data || [];
+    const byCat={};
+    answers.forEach(a=>{ const k=a.cat_key||'?'; (byCat[k]=byCat[k]||{n:0,ok:0}); byCat[k].n++; if(a.ok) byCat[k].ok++; });
+    return { id, handle: prof?.handle || 'gracz', standing: standing || {matches:0,correct:0,points:0}, byCat };
+  }catch(e){ return null; }
 }
