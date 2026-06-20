@@ -75,8 +75,12 @@ function stopSpeech(){ if('speechSynthesis' in window) speechSynthesis.cancel();
 let piperOn = localStorage.getItem('stacjaPiper')==='1';
 const PIPER_VOICE = 'pl_PL-gosia-medium';
 let piperMod=null, piperReady=false, lektorAudio=null;
+// token „pokolenia": każde nowe odtworzenie/stop unieważnia poprzednie. Bez tego
+// wolna synteza Piper z poprzedniego pytania kończyła się PO zmianie rundy i czytała
+// stary tekst (oraz nakładała się = brzmiało jak zapętlenie).
+let lektorGen=0;
 
-function lektorStop(){ if(lektorAudio){ lektorAudio.pause(); lektorAudio=null; } stopSpeech(); }
+function lektorStop(){ lektorGen++; if(lektorAudio){ lektorAudio.pause(); lektorAudio=null; } stopSpeech(); }
 
 async function piperEnsure(onPct){
   if(!piperMod) piperMod = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
@@ -84,23 +88,28 @@ async function piperEnsure(onPct){
   return piperMod;
 }
 
-// odtwarza lektora; callback onStatus(tekst) do pokazania postępu w UI
+// odtwarza lektora RAZ; callback onStatus(tekst) do pokazania postępu w UI.
+// Powtórka tylko ręcznie (gałka / przycisk ↻) — tu nie ma żadnej pętli.
 async function lektorPlay(text, ttsUrl, onStatus){
   lektorStop();
-  if(ttsUrl){ lektorAudio=new Audio(ttsUrl); lektorAudio.play().catch(()=>{}); return; }
+  const gen=lektorGen;                          // to odtworzenie; jeśli zmieni się — przerwij
+  if(ttsUrl){ const a=new Audio(ttsUrl); if(gen!==lektorGen) return; lektorAudio=a; a.play().catch(()=>{}); return; }
   if(piperOn){
     try{
-      onStatus && onStatus('przygotowuję głos…');
-      const mod = await Promise.race([ piperEnsure(p=>onStatus&&onStatus('pobieram głos… '+p+'%')),
+      onStatus && onStatus('przygotowuję lepszy głos…');
+      const mod = await Promise.race([ piperEnsure(p=>{ if(gen===lektorGen) onStatus&&onStatus('pobieram głos… '+p+'%'); }),
         new Promise((_,r)=>setTimeout(()=>r(new Error('load')),120000)) ]);
-      onStatus && onStatus('lektor czyta…');
+      if(gen!==lektorGen) return;                // runda się zmieniła w trakcie pobierania
+      onStatus && onStatus('lektor czyta (Piper)…');
       const wav = await Promise.race([ mod.predict({text, voiceId:PIPER_VOICE}),
-        new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),25000)) ]);
+        new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),60000)) ]);
+      if(gen!==lektorGen) return;                // synteza skończyła się po zmianie pytania → NIE graj starego
       const url=URL.createObjectURL(wav);
-      lektorAudio=new Audio(url); lektorAudio.onended=()=>URL.revokeObjectURL(url);
-      await lektorAudio.play(); return;
-    }catch(e){ /* fallback do głosu systemowego */ }
+      const a=new Audio(url); a.onended=()=>URL.revokeObjectURL(url);
+      lektorAudio=a; await a.play(); return;
+    }catch(e){ if(gen!==lektorGen) return; onStatus && onStatus('Piper niedostępny — głos systemowy'); }
   }
+  if(gen!==lektorGen) return;
   onStatus && onStatus('lektor czyta…');
   speak(text);
 }
