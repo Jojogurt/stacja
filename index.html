@@ -220,6 +220,14 @@
   body:not(.solo) .dial, body:not(.solo) .session, body:not(.solo) .deck,
   body:not(.solo) .form, body:not(.solo) .reveal, body:not(.solo) .summary,
   body:not(.solo) .score, body:not(.solo) .foot{display:none}
+  /* solo: ekran układania meczu (.dial) vs ekran gry (deck/form/…) */
+  body.solo:not(.playing) .deck, body.solo:not(.playing) .form, body.solo:not(.playing) .reveal,
+  body.solo:not(.playing) .summary, body.solo:not(.playing) .score, body.solo:not(.playing) .session,
+  body.solo:not(.playing) .foot{display:none}
+  body.solo.playing .dial{display:none}
+  body.solo.playing #modePick{display:none}   /* tryb ustala slot meczu, nie ręcznie */
+  .match-info{font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);text-align:center;margin-top:14px;min-height:16px}
+  .match-info.err{color:var(--red)}
   body.menu .to-menu{display:none}
   .menu-hero{text-align:center;color:var(--muted);font-family:var(--display);font-weight:800;font-size:13px;
     letter-spacing:.02em;margin:10px 0 22px;text-transform:uppercase}
@@ -376,7 +384,7 @@
   </section>
 
   <section class="dial">
-    <div class="dial-head"><span>strojenie</span><span id="dialNote">wybierz kategorię</span></div>
+    <div class="dial-head"><span>ułóż mecz</span><span id="dialNote">wybierz kategorie i tryby</span></div>
     <div class="band-label">dekady</div>
     <div class="ticks" id="ticks"></div>
     <div class="band-label">style i gatunki</div>
@@ -392,20 +400,22 @@
       <button id="plGo">Importuj</button>
       <div class="pl-status" id="plStatus"></div>
     </div>
+    <div class="band-label">tryby <small style="font-weight:700;color:var(--muted)">(można kilka)</small></div>
+    <div class="ticks" id="modeTicks"></div>
+    <div class="band-label">rundy <small style="font-weight:700;color:var(--muted)">(× 3 kategorie × 5 pytań)</small></div>
+    <div class="lenpick" id="roundPick">
+      <button data-r="1">1</button>
+      <button data-r="2">2</button>
+      <button data-r="3">3</button>
+      <button data-r="4" class="on">4</button>
+    </div>
+    <div class="match-info" id="matchInfo"></div>
+    <button class="sess-start" id="matchStart" style="width:100%;margin-top:14px">Start meczu →</button>
   </section>
 
   <section class="session" id="session">
-    <div class="sess-setup" id="sessSetup">
-      <span class="sess-lbl">sesja</span>
-      <div class="lenpick" id="lenPick">
-        <button data-len="5">5</button>
-        <button data-len="10" class="on">10</button>
-        <button data-len="15">15</button>
-      </div>
-      <button class="sess-start" id="sessStart">Start sesji →</button>
-    </div>
     <div class="sess-live" id="sessLive">
-      <span class="sess-prog" id="sessProg">Runda 1 / 10</span>
+      <span class="sess-prog" id="sessProg">Runda 1 / 4</span>
       <span class="sess-mini" id="sessMini">0 trafionych</span>
       <button class="sess-end" id="sessEnd">Zakończ</button>
     </div>
@@ -458,7 +468,7 @@
       <div class="sum-sub" id="sumSub">koniec sesji</div>
     </div>
     <div class="sum-list" id="sumList"></div>
-    <button class="sum-again" id="sumAgain">Nowa sesja</button>
+    <button class="sum-again" id="sumAgain">Nowy mecz</button>
   </section>
 
   <div class="score">
@@ -489,6 +499,7 @@ const QPC=5, CPR=3;   // pytań na kategorię, kategorii na rundę (jak prawdziw
 const ALL_MODES=['music','lektor','reverse','snippet'];
 const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment'};
 const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment'};
+const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak', snippet:'2 s'};
 // jakie tryby obsługuje kategoria (kompatybilność)
 function modesFor(catKey){
   const c=ALL_CATS[catKey]; if(!c) return [];
@@ -533,9 +544,11 @@ let recentArtists = [];     // ostatnio użyci, by nie powtarzać
 let seenTracks = new Set(); // już zagrane tytuły
 let score = 0, total = 0, streak = 0;
 let busy = false;
-let session = null;         // {len, idx, results:[]} podczas sesji
-let sessLen = 10;           // wybrana długość sesji
-let mode = 'music';         // 'music' | 'lektor'
+let session = null;         // {match, results:[]} podczas meczu solo
+let soloCats = new Set();    // pula kategorii (multi-select)
+let soloModes = new Set(['music']); // pula trybów (multi-select)
+let soloRounds = 4;         // liczba rund meczu
+let mode = 'music';         // bieżący tryb pytania (ustawiany ze slotu meczu)
 let plVoice = null;         // głos pl-PL do lektora
 
 /* ============ lektor: synteza mowy ============ */
@@ -607,13 +620,13 @@ ERA_KEYS.forEach(k=>{
   const b=document.createElement('button');
   b.className='tick'; b.dataset.era=k;
   b.innerHTML = ERAS[k].label.replace('lata ','') + '<small>'+ERAS[k].range+'</small>';
-  b.onclick=()=>pickEra(k);
+  b.onclick=()=>toggleCat(k);
   ticksEl.appendChild(b);
 });
 const rndBtn=document.createElement('button');
 rndBtn.className='tick rnd'; rndBtn.dataset.era='rnd';
-rndBtn.innerHTML='LOS<small>dowolna</small>';
-rndBtn.onclick=()=>pickEra('rnd');
+rndBtn.innerHTML='wszystkie<small>zaznacz/odznacz</small>';
+rndBtn.onclick=()=>selectAllCats();
 ticksEl.appendChild(rndBtn);
 
 const styleTicksEl = document.getElementById('styleTicks');
@@ -621,7 +634,7 @@ STYLE_KEYS.forEach(k=>{
   const b=document.createElement('button');
   b.className='tick gen'; b.dataset.era=k;
   b.innerHTML = STYLES[k].label + '<small>'+STYLES[k].desc+'</small>';
-  b.onclick=()=>pickEra(k);
+  b.onclick=()=>toggleCat(k);
   styleTicksEl.appendChild(b);
 });
 
@@ -630,7 +643,7 @@ READY_KEYS.forEach(k=>{
   const b=document.createElement('button');
   b.className='tick pl'; b.dataset.era=k;
   b.innerHTML = escapeHtml(READY[k].label) + '<small>'+escapeHtml(READY[k].desc||(READY[k].songs.length+' utw.'))+'</small>';
-  b.onclick=()=>pickEra(k);
+  b.onclick=()=>toggleCat(k);
   readyTicksEl.appendChild(b);
 });
 
@@ -639,7 +652,7 @@ LYRICS_KEYS.forEach(k=>{
   const b=document.createElement('button');
   b.className='tick gen'; b.dataset.era=k;
   b.innerHTML = escapeHtml(LYRICS[k].label) + '<small>'+escapeHtml(LYRICS[k].desc||(LYRICS[k].songs.length+' tekstów'))+'</small>';
-  b.onclick=()=>pickEra(k);
+  b.onclick=()=>toggleCat(k);
   lyricsTicksEl.appendChild(b);
 });
 
@@ -658,7 +671,7 @@ function plRenderTicks(){
     const b=document.createElement('button'); b.className='tick pl'; b.dataset.era=k;
     b.innerHTML=escapeHtml(pls[k].label)+'<small>'+pls[k].songs.length+' utw.</small><span class="rm" title="usuń">×</span>';
     b.querySelector('.rm').onclick=(e)=>{ e.stopPropagation(); plRemove(k); };
-    b.onclick=()=>pickEra(k);
+    b.onclick=()=>toggleCat(k);
     el.appendChild(b);
   });
 }
@@ -686,23 +699,49 @@ async function plImport(){
     if(!songs.length){ throw new Error('Pusta lub niepubliczna playlista.'); }
     const key=PL_PREFIX+Math.random().toString(36).slice(2,8);
     const pls=plLoad(); pls[key]={label:d.name||'Playlista', songs, kind:'playlist'}; plSave(pls);
-    plMerge(); plRenderTicks(); pickEra(key);
-    st.className='pl-status ok'; st.textContent='✓ '+(d.name||'')+' — '+songs.length+' utw. Wybrana; naciśnij gałkę.';
+    plMerge(); plRenderTicks(); soloCats.add(key); syncCatTicks(); updateMatchInfo();
+    st.className='pl-status ok'; st.textContent='✓ '+(d.name||'')+' — '+songs.length+' utw. Dodana do puli.';
     document.getElementById('plUrl').value='';
   }catch(e){ st.className='pl-status err'; st.textContent='Nie udało się: '+(e.message||e); }
 }
 plMerge(); plRenderTicks();
+renderModeChips();
+(function wireRounds(){
+  const rp=document.getElementById('roundPick'); if(!rp) return;
+  rp.querySelectorAll('button').forEach(btn=>{ btn.onclick=()=>{
+    soloRounds=+btn.dataset.r; rp.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn)); updateMatchInfo();
+  }; });
+})();
+document.getElementById('matchStart').onclick=startMatch;
+updateMatchInfo();
 
-function pickEra(k){
-  selectedEra=k;
-  document.querySelectorAll('.tick').forEach(t=>t.classList.toggle('on', t.dataset.era===k));
-  const note = k==='rnd' ? 'dowolna kategoria'
-    : (ALL_CATS[k].range || ALL_CATS[k].label);
-  document.getElementById('dialNote').textContent = note;
-  // kategorie tekstowe (tłumaczenia) grają tylko w trybie lektor — przełącz automatycznie
-  if(k!=='rnd' && ALL_CATS[k] && ALL_CATS[k].kind==='lyrics' && mode!=='lektor'){
-    const lb=document.querySelector('#modePick button[data-mode="lektor"]'); if(lb) lb.click();
-  }
+/* ====== wybór puli kategorii/trybów do meczu (multi-select) ====== */
+function toggleCat(k){ if(soloCats.has(k)) soloCats.delete(k); else soloCats.add(k); syncCatTicks(); updateMatchInfo(); }
+function selectAllCats(){
+  if(ALL_KEYS.length && ALL_KEYS.every(k=>soloCats.has(k))) soloCats.clear();
+  else ALL_KEYS.forEach(k=>soloCats.add(k));
+  syncCatTicks(); updateMatchInfo();
+}
+function syncCatTicks(){
+  document.querySelectorAll('.tick').forEach(t=>{ const k=t.dataset.era; if(k&&k!=='rnd') t.classList.toggle('on', soloCats.has(k)); });
+  const rb=document.querySelector('.tick.rnd'); if(rb) rb.classList.toggle('on', ALL_KEYS.length>0 && ALL_KEYS.every(k=>soloCats.has(k)));
+}
+function toggleMode(m){ if(soloModes.has(m)) soloModes.delete(m); else soloModes.add(m); renderModeChips(); updateMatchInfo(); }
+function renderModeChips(){
+  const el=document.getElementById('modeTicks'); if(!el) return; el.innerHTML='';
+  ALL_MODES.forEach(m=>{
+    const b=document.createElement('button'); b.className='tick gen'+(soloModes.has(m)?' on':''); b.dataset.mode=m;
+    b.innerHTML=MODE_LABEL[m]+'<small>'+MODE_SUB[m]+'</small>';
+    b.onclick=()=>toggleMode(m); el.appendChild(b);
+  });
+}
+function updateMatchInfo(){
+  const el=document.getElementById('matchInfo'); if(!el) return;
+  if(!soloCats.size || !soloModes.size){ el.className='match-info'; el.textContent='zaznacz kategorie i tryby'; return; }
+  const r=buildMatch([...soloCats],[...soloModes],soloRounds);
+  if(r.error){ el.className='match-info err'; el.textContent=r.error; return; }
+  el.className='match-info';
+  el.textContent=`${soloRounds} ${soloRounds===1?'runda':(soloRounds<5?'rundy':'rund')} × ${CPR} kategorie × ${QPC} pytań = ${soloRounds*CPR*QPC} pytań`;
 }
 
 /* ============ iTunes przez fetch (CORS) z fallbackiem na JSONP ============ */
@@ -1004,63 +1043,79 @@ async function newLektorRound(){
   document.getElementById('fTitle').focus({preventScroll:true});
 }
 document.getElementById('skip').onclick=()=>{
-  if(session && current){ session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true}); }
+  if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, round:s?s.round:0, mode:s?s.mode:mode}); }
   streak=0; updateScore();
   advance();
 };
 
-/* ============ sesja: rundy + wynik końcowy ============ */
-const lenPick=document.getElementById('lenPick');
-lenPick.querySelectorAll('button').forEach(btn=>{
-  btn.onclick=()=>{
-    sessLen=+btn.dataset.len;
-    lenPick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
-  };
-});
-document.getElementById('sessStart').onclick=startSession;
-document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishSession(); else endSession(); };
-document.getElementById('sumAgain').onclick=()=>{ hideSummary(); startSession(); };
+/* ============ MECZ solo: rundy × kategorie × pytania ============ */
+document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishMatch(); else endMatch(); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing'); };
 
-function startSession(){
-  if(!selectedEra){ flash('najpierw wybierz kategorię na skali'); return; }
-  session={len:sessLen, results:[]};
-  hideSummary();
+function startMatch(){
+  if(!soloCats.size){ updateMatchInfo(); return; }
+  if(!soloModes.size){ updateMatchInfo(); return; }
+  const r=buildMatch([...soloCats],[...soloModes],soloRounds);
+  if(r.error){ const el=document.getElementById('matchInfo'); el.className='match-info err'; el.textContent=r.error; return; }
+  session={match:{slots:r.slots, rounds:r.rounds, si:0, qi:0}, results:[]};
+  seenTracks.clear(); recentArtists=[]; score=0; total=0; streak=0; updateScore();
+  hideSummary(); hideReveal(); resetForm();
+  document.body.classList.add('playing');
   document.getElementById('session').classList.add('live');
+  loadSlotQuestion();
+}
+function loadSlotQuestion(){
+  const s=matchSlot(session.match); if(!s){ finishMatch(); return; }
+  selectedEra=s.cat; mode=s.mode;
+  document.querySelectorAll('#modePick button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
   updateSessUI();
   newRound();
 }
-function endSession(){
+function endMatch(){
   session=null;
   document.getElementById('session').classList.remove('live');
+  document.body.classList.remove('playing');
+  hideSummary(); stopAudio(); setIcon('play');
 }
 function updateSessUI(){
   if(!session) return;
-  const n=Math.min(session.results.length+1, session.len);
-  document.getElementById('sessProg').textContent='Runda '+n+' / '+session.len;
+  document.getElementById('sessProg').textContent=matchHeader(session.match);
   const hits=session.results.filter(r=>r.okTitle&&r.okArtist).length;
   document.getElementById('sessMini').textContent=hits+' trafionych';
 }
 function advance(){
-  if(session && session.results.length>=session.len){ finishSession(); return; }
-  newRound();
+  if(!session) return;
+  const more=matchAdvance(session.match);
+  if(!more){ finishMatch(); return; }
+  loadSlotQuestion();
 }
-function finishSession(){
-  const res=session.results, len=session.len;
+function finishMatch(){
+  const res=session.results;
+  const tot=session.match.slots.length*QPC;
   const hits=res.filter(r=>r.okTitle&&r.okArtist).length;
   stopAudio(); setIcon('play'); hideReveal();
-  document.getElementById('sumBig').textContent=hits+' / '+len;
-  let best=0,cur=0; res.forEach(r=>{ if(r.okTitle&&r.okArtist){cur++;best=Math.max(best,cur);}else cur=0; });
-  document.getElementById('sumSub').textContent='koniec sesji · najlepsza seria '+best;
+  document.getElementById('sumBig').textContent=hits+' / '+tot;
+  document.getElementById('sumSub').textContent='koniec meczu';
   const list=document.getElementById('sumList'); list.innerHTML='';
-  res.forEach((r,i)=>{
-    const ok=r.okTitle&&r.okArtist;
-    const d=document.createElement('div'); d.className='sum-row';
-    const badge=r.skipped?'<span class="no">↷</span>':(ok?'<span class="ok">✓</span>':(r.okTitle||r.okArtist?'<span style="color:var(--amber)">±</span>':'<span class="no">✗</span>'));
-    d.innerHTML='<span class="n">'+(i+1)+'</span><span class="badge">'+badge+'</span>'+
-      '<span class="song"><b>'+escapeHtml(r.track)+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>';
-    list.appendChild(d);
+  const byRound={};
+  res.forEach(r=>{ (byRound[r.round]=byRound[r.round]||[]).push(r); });
+  Object.keys(byRound).sort((a,b)=>a-b).forEach(rd=>{
+    const grp=byRound[rd], rh=grp.filter(x=>x.okTitle&&x.okArtist).length;
+    const hdr=document.createElement('div'); hdr.className='band-label'; hdr.style.margin='12px 0 4px';
+    hdr.textContent='Runda '+rd+' — '+rh+'/'+grp.length;
+    list.appendChild(hdr);
+    grp.forEach(r=>{
+      const ok=r.okTitle&&r.okArtist;
+      const d=document.createElement('div'); d.className='sum-row';
+      const badge=r.skipped?'<span class="no">↷</span>':(ok?'<span class="ok">✓</span>':(r.okTitle||r.okArtist?'<span style="color:var(--amber)">±</span>':'<span class="no">✗</span>'));
+      d.innerHTML='<span class="badge">'+badge+'</span>'+
+        '<span class="song"><b>'+escapeHtml(r.track)+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>'+
+        '<span class="n" style="opacity:.55;font-size:11px;text-transform:uppercase">'+escapeHtml(MODE_SHORT[r.mode]||'')+'</span>';
+      list.appendChild(d);
+    });
   });
-  endSession();
+  session=null;
+  document.getElementById('session').classList.remove('live');  // body.playing zostaje → summary widoczne
   document.getElementById('summary').classList.add('show');
   document.getElementById('summary').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
@@ -1079,7 +1134,7 @@ function check(){
   const roundOk = okTitle && okArtist;
   total++; if(roundOk){score++;streak++;} else streak=0;
   updateScore();
-  if(session){ session.results.push({track:current.track, artist:current.artist, okTitle, okArtist}); updateSessUI(); }
+  if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle, okArtist, round:s?s.round:0, mode:s?s.mode:mode}); updateSessUI(); }
 
   const r=document.getElementById('rmeta');
   r.innerHTML='';
