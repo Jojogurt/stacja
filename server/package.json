@@ -1,0 +1,16 @@
+{
+  "name": "stacja-rooms",
+  "private": true,
+  "type": "module",
+  "description": "Autorytet pokoju STACJA (Cloudflare Durable Object) — Etap 2. Niepodpięty do produkcji.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy"
+  },
+  "dependencies": {
+    "partyserver": "^0.0.71"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  }
+}

@@ -1,0 +1,19 @@
+# wrangler.toml — deploy autorytetu pokoju (Cloudflare Worker + Durable Object)
+# Deploy:  cd server && npm install && npx wrangler login && npx wrangler deploy
+name = "stacja-rooms"
+main = "index.js"
+compatibility_date = "2025-06-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Durable Object pokoju gry. SQLite-backed → działa na DARMOWYM planie Workers.
+[[durable_objects.bindings]]
+name = "GameRoom"
+class_name = "GameRoom"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["GameRoom"]
+
+# Sekret (NIE tutaj — ustaw poza repo):
+#   npx wrangler secret put SUPABASE_SERVICE_KEY
+# Użyjesz go, gdy DO będzie zapisywać wynik meczu przez record_match (Etap 2 / orkiestracja).
