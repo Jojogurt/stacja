@@ -595,6 +595,9 @@ let mpLastNonce=null;       // ostatnio odtworzony nonce
 let mpLastArmNonce=null;    // ostatnio zbuforowana runda (faza gotowości)
 let mpReady=new Set();      // host: id graczy, którzy zbuforowali audio
 let mpArmTimer=null;        // host: bezpiecznik startu mimo braku gotowości
+let mpAck=null;             // playNonce odsłony, którą TEN klient już zamknął („dalej")
+let mpRevealNonce=null;     // playNonce ostatnio pokazanej odsłony
+let mpRevealSnap=null;      // migawka odsłony do renderu we własnym tempie
 let mpAudio=null;           // jeden trwały, odblokowany gestem element audio (MP)
 let mpRevSrc=null;          // BufferSource trybu „od tyłu" w MP
 let mpTally={};             // id -> {name, correct}  (do MVP)
@@ -605,7 +608,6 @@ let mpTimerInt=null;        // interwał odliczania
 const $m=id=>document.getElementById(id);
 const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
 /* nazwane stałe (zamiast magic numbers rozsianych po kodzie) */
-const MP_ARM_TIMEOUT_MS=7000;   // host: bezpiecznik — start mimo braku potwierdzeń gotowości
 const MP_BUFFER_TIMEOUT_MS=6000;// klient: bezpiecznik — zgłoś „ready" mimo zawieszonego buforowania
 const MP_SNIP_WINDOW_S=16;      // okno losowania startu fragmentu (s)
 const EMOJI_TTL_MS=2400;        // jak długo leci emotka po ekranie
@@ -689,6 +691,7 @@ async function mpLeave(){
   stopSpeech(); mpStopRev();
   if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
   mpReady=new Set(); mpLastArmNonce=null;
+  mpAck=mpRevealNonce=mpRevealSnap=null;
   mpCode=null; mpHost=false; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
@@ -720,7 +723,7 @@ async function mpEnterRoom(code, asHost){
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatSay(payload.text, payload.byName); });
-  mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost) mpBroadcast(); });
+  mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost){ mpBroadcast(); mpMaybeGo(); } });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
     else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
@@ -756,15 +759,37 @@ function mpSend(act){
   if(mpCh){ mpCh.send({type:'broadcast',event:'act',payload:act}); }
 }
 function mpAfterSync(){
-  // faza gotowości: zbuforuj utwór i zgłoś „ready" (raz na rundę)
-  if(mpGame && mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce){
-    mpLastArmNonce=mpGame.armNonce; mpArm();
+  // faza gotowości: zbuforuj utwór i zgłoś „ready" — ale TYLKO gdy nie ma odsłony do
+  // zamknięcia. Z zaległą odsłoną klient zbroi się dopiero po kliknięciu „dalej".
+  if(mpGame && mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce && !mpRevealPending()){
+    mpArm();
   }
   // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start)
   if(mpGame && mpGame.phase===MP.PLAY && mpGame.playNonce!==mpLastNonce){
     mpLastNonce=mpGame.playNonce; mpPlayLocal();
   }
   mpRender();
+}
+// czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
+function mpRevealPending(){ return !!mpRevealSnap && mpAck!==mpRevealNonce; }
+// host: sprawdź, czy można już wystartować pytanie (wszyscy obecni gotowi)
+function mpMaybeGo(){
+  if(!mpHost || !mpGame || mpGame.phase!==MP.ARMING) return;
+  const r=countReady(mpMembers().map(m=>m.id), mpReady);
+  mpGame.readyCount=r.count; mpGame.readyTotal=r.total;
+  if(r.all){ mpGo(); } else { mpBroadcast(); mpRender(); }
+}
+// „dalej" na ekranie wyniku — KAŻDY klika sam, we własnym tempie
+function mpAdvance(){
+  if(!mpGame) return;
+  mpAck=mpRevealNonce;                                  // zamknij u siebie odsłonę
+  if(mpHost){
+    if(mpGame.phase===MP.REVEAL){ mpNext(); }           // host rusza następne pytanie (host też się zbroi)
+    else { mpRender(); }
+  } else {
+    if(mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce){ mpArm(); }  // host już zbroi → zgłoś gotowość
+    mpRender();
+  }
 }
 function mpSetKnob(playing){
   const i=$m('mpKnobIcon'); if(!i) return;
@@ -791,6 +816,7 @@ function mpClearSnip(a){ if(a._snipStop){ a.removeEventListener('timeupdate', a.
 function mpArm(){
   mpSetKnob(false);
   const armNonce=mpGame.armNonce;
+  mpLastArmNonce=armNonce;   // ta runda już zbrojona przez tego klienta (anty-dublowanie)
   // lektor / brak zajawki — nic do buforowania, gotów od razu
   if(mpGame.mode==='lektor' || !mpGame.preview){ mpSend({type:'ready', armNonce}); return; }
   const a=mpEnsureAudio(); mpClearSnip(a);
@@ -903,6 +929,7 @@ function mpStart(){
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
   mpTally={};
   mpHostSeen.clear();
+  mpAck=mpRevealNonce=mpRevealSnap=null;   // świeży mecz → brak zaległej odsłony
   mpHostNextQuestion();
 }
 // ustaw kategorię/tryb/rundę z bieżącego slotu i rozwiąż pytanie
@@ -937,9 +964,10 @@ async function mpHostNewRound(){
   mpGame.endsAt=null; mpGame.readyCount=0; mpGame.readyTotal=mpMembers().length;
   mpReady=new Set();
   mpBroadcast(); mpRender();
-  mpArm();                                   // host też buforuje i zgłosi swoją gotowość
-  if(mpArmTimer) clearTimeout(mpArmTimer);
-  mpArmTimer=setTimeout(()=>mpGo(), MP_ARM_TIMEOUT_MS);   // bezpiecznik: start mimo braku potwierdzeń
+  mpArm();                                   // host też buforuje i zgłasza swoją gotowość
+  // brak twardego timeoutu: pytanie rusza dopiero, gdy WSZYSCY klikną „dalej" (gotowość).
+  // Jeśli ktoś wyjdzie, presence-sync przeliczy gotowość (mpMaybeGo) i odblokuje start.
+  if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
 }
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
@@ -972,7 +1000,7 @@ function mpFinish(){
   (async()=>{ const uid=await ensureSession(); if(uid) recordMatch(buildMpRecord(snap)); })();
   mpGame.phase=MP.DONE; mpBroadcast(); mpRender();
 }
-function mpNewGame(){ mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
+function mpNewGame(){ mpAck=mpRevealNonce=mpRevealSnap=null; mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
 
 /* ---- render sceny ---- */
 function mpMyVote(){ return _myVote(mpGame, mpMe.id); }
@@ -988,21 +1016,38 @@ function mpRender(){
   const g=mpGame;
   const head=`<div class="mp-round">${escapeHtml(matchHeader(g))}</div>
     <div class="mp-state">drużyna: ${g.score} pkt</div>`;
+  // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
+  if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
+    mpRevealNonce=g.playNonce;
+    mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
+  }
+  // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
+  if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(mpRevealSnap); return; }
   switch(g.phase){
     case MP.LOADING: st.innerHTML=mpRenderLoading(head); return;
     case MP.ARMING:  st.innerHTML=mpRenderArming(g, head); return;
     case MP.NETERR:  st.innerHTML=mpRenderNetErr(g, head); return;
     case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
     case MP.PLAY:    mpRenderPlay(g, head, st); return;
-    case MP.REVEAL:  st.innerHTML=mpRenderReveal(g, head); return;
+    case MP.REVEAL:  st.innerHTML=mpRenderWaitNext(head); return;   // już kliknąłem „dalej" — czekam na resztę
     case MP.DONE:    st.innerHTML=mpRenderDone(g, head); return;
   }
+}
+// pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania
+function mpReactsBarHTML(){
+  return `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
+    <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
 const mpRenderLoading = (head)=> `<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRenderArming = (g, head)=>{
   const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
-  return `<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">muzyka ruszy równo u wszystkich</div></div>`;
+  return `<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div>${mpReactsBarHTML()}</div>`;
+};
+// klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
+const mpRenderWaitNext = (head)=>{
+  const rc=(mpGame&&mpGame.readyCount)||0, rt=(mpGame&&mpGame.readyTotal)||mpMembers().length;
+  return `<div class="mp-deck">${head}<div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div>${mpReactsBarHTML()}</div>`;
 };
 const mpRenderNetErr = (g, head)=>{
   const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
@@ -1046,8 +1091,7 @@ function mpRenderPlay(g, head, st){
           <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
         </div>
         <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>` : '';
-    const reacts=`<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
-      <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
+    const reacts=mpReactsBarHTML();
     st.innerHTML=`<div class="mp-deck">${head}
       <div class="mp-state" id="mpCountdown"></div>
       <button class="mp-knob" onclick="mpPlayLocal()" aria-label="Odtwórz">
@@ -1072,9 +1116,9 @@ function mpRenderPlay(g, head, st){
   mpTickTimer();
 }
 
-function mpRenderReveal(g, head){
-  const r=g.reveal;
-  const isLast = g.si>=g.slots.length-1 && g.qi>=QPC-1;
+// ekran wyniku z migawki — KAŻDY klika „dalej" sam (to jego sygnał gotowości)
+function mpRenderRevealCard(snap){
+  const r=snap.reveal, head=snap.head;
   return `<div class="mp-deck">${head}</div>
     <div class="reveal show mp-reveal" style="display:block">
       <div style="padding:16px">
@@ -1086,7 +1130,8 @@ function mpRenderReveal(g, head){
         ${r.pewniakWin?`<div class="mp-state" style="color:var(--green)">pewni i trafili: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} 🎯</div>`:''}
         <div class="mp-state" style="opacity:.7">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
       </div>
-      ${mpHost?`<button class="next" onclick="mpNext()">${isLast?'Wynik końcowy →':'Następne pytanie →'}</button>`:'<div class="next" style="opacity:.6">czekaj na hosta…</div>'}
+      ${mpReactsBarHTML()}
+      <button class="next" onclick="mpAdvance()">${snap.isLast?'Wynik końcowy →':'Dalej →'}</button>
     </div>`;
 }
 
@@ -1153,5 +1198,5 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCo
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer,
-  mpStart, mpToggleCat, mpToggleMode,
+  mpStart, mpToggleCat, mpToggleMode, mpAdvance,
 });
