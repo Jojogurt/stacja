@@ -111,10 +111,7 @@ group('mpReducer.reduceAction', ()=>{
   eq(g.votes.title.u2,'Hey Jude','głos zapisany');
   reduceAction(g,{type:'vote',by:'u2',slot:'title',value:'Hey Jude'});  // ten sam = wycofanie
   ok(!('u2' in g.votes.title),'ponowny głos = wycofanie');
-  ok(reduceAction(g,{type:'sure',by:'u2',byName:'B'}),'pewniak włączony');
-  eq(g.sure.length,1,'1 pewniak');
-  reduceAction(g,{type:'sure',by:'u2',byName:'B'});
-  eq(g.sure.length,0,'pewniak wyłączony (toggle)');
+  eq(g.proposals[0].conf,'sure','pewniak = typ z conf=sure (bez osobnego zakładu)');
   ok(reduceAction(g,{type:'pass',by:'u2',byName:'B'}),'pas włączony');
   eq(g.passed.length,1,'1 pas');
   reduceAction(g,{type:'pass',by:'u2',byName:'B'});
@@ -123,7 +120,7 @@ group('mpReducer.reduceAction', ()=>{
   ok(reduceAction(g,{type:'unpropose',by:'u1',pid}),'autor usuwa typ');
   eq(g.proposals.length,0,'typ usunięty');
   ok(!reduceAction(g,{type:'nieznana'}),'nieznana akcja → brak zmian');
-  const armed={phase:MP.ARMING, answerSlots:slotsFor(), proposals:[], votes:{}, sure:[]};
+  const armed={phase:MP.ARMING, answerSlots:slotsFor(), proposals:[], votes:{}};
   ok(!reduceAction(armed,{type:'propose',by:'x',values:{title:'a'}}),'propose poza fazą play → ignorowane');
 });
 group('mpReducer.countReady', ()=>{
@@ -134,19 +131,22 @@ group('mpReducer.countReady', ()=>{
   eq(countReady([],s).all,false,'pusta lista → nie all');
 });
 group('mpReducer.evaluateAnswer', ()=>{
-  const g={phase:MP.PLAY, round:2, answerSlots:slotsFor(), sure:[{id:'u1',name:'Ala'}],
-    proposals:[{by:'u9',byName:'Zoe',conf:'normal',values:{title:'Hey Jude',artist:'The Beatles'}}],
+  const g={phase:MP.PLAY, round:2, answerSlots:slotsFor(),
+    proposals:[{by:'u9',byName:'Zoe',conf:'sure',values:{title:'Hey Jude',artist:'The Beatles'}}],
     votes:{ title:{u9:'Hey Jude'}, artist:{u9:'The Beatles'} }};
   const cur={track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:''};
   const ev=evaluateAnswer(g, cur);   // locked = odpowiedź drużyny (górka głosów)
   ok(ev.teamOk,'drużyna trafiła (oba sloty)');
-  eq(ev.gained,2,'pewniak + trafienie = 2 pkt');
+  eq(ev.gained,2,'pewniak (conf=sure) + trafienie = 2 pkt');
+  eq(ev.pewniacy,['Zoe'],'pewniacy z typów conf=sure');
   eq(ev.firstBy,'Zoe','pierwszy trafny = Zoe');
-  eq(ev.firstById,'u9','id pierwszego trafnego');
   ok(ev.reveal.pewniakWin,'pewniak wygrany');
   eq(ev.result.round,2,'wynik z numerem rundy');
-  const bad=evaluateAnswer({phase:MP.PLAY,round:1,answerSlots:slotsFor(),sure:[{id:'u1',name:'A'}],proposals:[],votes:{}}, cur);
-  eq(bad.gained,0,'brak głosów → brak trafienia = 0 pkt');
+  // pewniak nietrafiony: typ conf=sure, który nie pasuje → pewniakLose
+  const bad=evaluateAnswer({phase:MP.PLAY,round:1,answerSlots:slotsFor(),
+    proposals:[{by:'u1',byName:'A',conf:'sure',values:{title:'Złe',artist:'Złe'}}],
+    votes:{ title:{u1:'Złe'}, artist:{u1:'Złe'} }}, cur);
+  eq(bad.gained,0,'pewniak nietrafiony = 0 pkt');
   ok(bad.reveal.pewniakLose,'pewniak przegrany');
 });
 group('mpReducer.selektory', ()=>{

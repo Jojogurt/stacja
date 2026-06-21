@@ -938,7 +938,7 @@ function mpStart(){
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   mpGame={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
-    answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, sure:[], passed:[],
+    answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, passed:[],
     reveal:null, results:[], preview:'', lyric:'', playNonce:0,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
   mpTally={};
@@ -955,7 +955,7 @@ function mpHostNextQuestion(){
 }
 async function mpHostNewRound(){
   mpSeenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
-  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.votes={}; mpGame.sure=[]; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpAutoLocked=false;
+  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.votes={}; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
   if(mpGame.mode==='lektor'){
@@ -1067,14 +1067,15 @@ function mpReactsBarHTML(){
 }
 
 const mpRenderLoading = (head)=> `<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`;
+const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||mpGame||{})}</div>`;
 const mpRenderArming = (g, head)=>{
   const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
-  return `<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div>${mpReactsBarHTML()}</div>`;
+  return `<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpRosterStrip(g)}${mpReactsBarHTML()}`;
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
   const rc=(mpGame&&mpGame.readyCount)||0, rt=(mpGame&&mpGame.readyTotal)||mpMembers().length;
-  return `<div class="mp-deck">${head}<div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div>${mpReactsBarHTML()}</div>`;
+  return `<div class="mp-deck">${head}<div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${mpRosterStrip()}${mpReactsBarHTML()}`;
 };
 const mpRenderNetErr = (g, head)=>{
   const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
@@ -1115,25 +1116,14 @@ function mpTeamHTML(g){
   return `<div class="lab">odpowiedź drużyny</div>
     <div class="ans">${any?parts.join(' · '):'— wrzućcie i przegłosujcie —'}</div>`;
 }
-// wybór pewności przy wrzucaniu typu (etykieta: roster + tag kandydata)
+// wybór pewności typu (zwykła/niepewny/pewniak) + „pas" — jeden wiersz, bez dubli na dole.
+// pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
+// Stan kto pewniakuje / spasował widać na pasku osób (roster), więc tu bez list imion.
 function mpConfHTML(){
   const opt=(v,label,cls)=>`<button class="mp-cf ${cls}${mpConf===v?' on':''}" onclick="mpSetConf('${v}')">${label}</button>`;
-  return `<span class="c-lab">pewność:</span>${opt('normal','zwykła','')}${opt('unsure','niepewny','u')}${opt('sure','🍺 pewniak','s')}`;
-}
-// pewniak dotyczy ODPOWIEDZI DRUŻYNY (top), nie pojedynczej propozycji (#11)
-function mpPewniakHTML(g){
-  const iAmSure=(g.sure||[]).some(s=>s.id===mpMe.id);
-  const sureNames=(g.sure||[]).map(s=>escapeHtml(s.name)).join(', ');
-  return `<button class="mp-sure${iAmSure?' on':''}" onclick="mpSend({type:'sure'})" title="pewniak dotyczy odpowiedzi drużyny">🍺 pewniak${iAmSure?' ✓':''}</button>
-    <span class="mp-state" style="margin:0">${sureNames?('pewni odpowiedzi: '+sureNames):'pewny odpowiedzi drużyny? postaw 🍺'}</span>`;
-}
-// „pas" — kto już nic nie doda (sygnał dla hosta/stołu: ten gracz skończył myśleć)
-function mpPassHTML(g){
-  const passed=g.passed||[]; const total=mpMembers().length;
-  const iPassed=passed.some(p=>p.id===mpMe.id);
-  const names=passed.map(p=>escapeHtml(p.name)).join(', ');
-  return `<button class="mp-pass${iPassed?' on':''}" onclick="mpSend({type:'pass'})" title="nic już nie dodam do tej rundy">🤚 pas${iPassed?' ✓':''}</button>
-    <span class="mp-state" style="margin:0">${passed.length?`spasowali (${passed.length}/${total}): ${names}`:'nie wiesz? kliknij „pas”'}</span>`;
+  const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
+  const pas = `<button class="mp-cf p${iPassed?' on':''}" onclick="mpSend({type:'pass'})" title="nic już nie dodam do tej rundy">🤚 pas${iPassed?' ✓':''}</button>`;
+  return `<span class="c-lab">pewność:</span>${opt('normal','zwykła','')}${opt('unsure','niepewny','u')}${opt('sure','🍺 pewniak','s')}<span style="flex:1 0 6px"></span>${pas}`;
 }
 // przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
 function mpSkinToggleHTML(cur){
@@ -1166,14 +1156,12 @@ function mpFormHTML(g){
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
-// blok typowania+głosowania (kolumny, team, pewniak/pas) — wspólny
+// blok typowania+głosowania (formularz, pewność+pas, kolumny, team) — wspólny
 function mpGuessBlockHTML(g, withForm){
   return `${withForm?mpFormHTML(g):''}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     <div class="mp-board" id="mpBoard"></div>
     <div class="mp-team" id="mpTeam"></div>
-    <div class="mp-pewniak" id="mpPewniak"></div>
-    <div class="mp-pewniak" id="mpPass"></div>
     ${mpLockBtnHTML(false)}`;
 }
 // composer „@odp" (czat): pole czatu ⇄ chipy slotów; bez @ → czat, z @/typem → propozycja
@@ -1221,10 +1209,9 @@ function mpScaffoldChat(g, head){
     <div class="mp-chatfeed" id="mpChatFeed"></div>
     <div class="mp-board" id="mpBoard"></div>
     <div class="mp-team" id="mpTeam"></div>
-    <div class="mp-pewniak" id="mpPewniak"></div>
-    <div class="mp-pewniak" id="mpPass"></div>
     ${mpLockBtnHTML(true)}
     ${mpComposerHTML(g)}
+    <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     <div class="mp-chint">z <b>@</b> wrzucasz typ · bez @ piszesz na czat</div>
     <div class="mp-hr"></div>
     <div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
@@ -1235,8 +1222,7 @@ function mpRefreshDynamic(g){
   set('mpRoster', mpRosterHTML(g));
   set('mpBoard', mpSlotsHTML(g));
   set('mpTeam', mpTeamHTML(g));
-  set('mpPewniak', mpPewniakHTML(g));
-  set('mpPass', mpPassHTML(g));
+  set('mpConf', mpConfHTML());            // odśwież stan „pas" (pewność czyta trwały mpConf)
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 function mpRenderPlay(g, head, st){
@@ -1261,7 +1247,7 @@ function mpRenderPlay(g, head, st){
 function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head;
   const rail = mpSkin()==='fazy' ? mpRailHTML('odslona') : '';
-  return `<div class="mp-deck">${head}</div>${rail}
+  return `<div class="mp-deck">${head}</div>${rail}${mpRosterStrip()}
     <div class="reveal show mp-reveal" style="display:block">
       <div style="padding:16px">
         ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}

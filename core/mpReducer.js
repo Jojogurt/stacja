@@ -57,11 +57,7 @@ export function reduceAction(game, a){
       if(sv[a.by] === a.value) delete sv[a.by]; else sv[a.by] = a.value;
       return true;
     }
-    case 'sure': {                                           // toggle „pewniaka" (zakład ×2 na odpowiedź drużyny)
-      const i=game.sure.findIndex(s=>s.id===a.by);
-      if(i>=0) game.sure.splice(i,1); else game.sure.push({ id:a.by, name:a.byName });
-      return true;
-    }
+    // „pewniak" nie jest osobnym zakładem — to typ z conf='sure' (pewniacy liczeni z proposals)
     case 'pass': {                                           // toggle „pasu" (już nic nie dodam)
       game.passed = game.passed || [];
       const i=game.passed.findIndex(p=>p.id===a.by);
@@ -132,7 +128,9 @@ export function evaluateAnswer(game, current, locked, match=textMatch){
   const teamOk = slots.every(s=>okBySlot[s.key]);
   const okTitle = !!okBySlot.title, okArtist = !!okBySlot.artist;
 
-  const pewniacy = (game.sure||[]).map(s=>s.name);
+  // pewniacy = autorzy typów oznaczonych jako „pewniak" (conf='sure'), bez duplikatów
+  const pewniacy=[], seenSure=new Set();
+  for(const p of (game.proposals||[])){ if(p.conf==='sure' && !seenSure.has(p.by)){ seenSure.add(p.by); pewniacy.push(p.byName); } }
   const anySure = pewniacy.length>0;
   const gained = teamOk ? (anySure?2:1) : 0;
 
