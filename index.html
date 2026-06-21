@@ -431,14 +431,39 @@
   .mp-chatfeed:empty{display:none}
   .mp-cm{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:7px 11px;font-family:var(--body);font-size:13px;font-weight:700;line-height:1.35;color:var(--ink)}
   .mp-cm b{font-family:var(--display);font-weight:800;font-size:9px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);display:block;margin-bottom:1px}
-  .mp-composer{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:4px}
-  .mp-composer input{background:var(--panel2);border:2px solid var(--blue);border-radius:12px;color:var(--ink);
-    font-family:var(--body);font-weight:700;font-size:15px;padding:11px;outline:none;min-width:0}
+  .mp-chint{font-family:var(--body);font-weight:700;font-size:11px;color:var(--muted);margin:8px 0 2px;text-align:center;line-height:1.45}
+  .mp-chint b{color:var(--blue-d)}
+
+  /* ---- PR4: pasek faz + legenda + bąbel systemowy + composer @odp z chipami ---- */
+  .mp-rail{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px}
+  .mp-rnode{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+  .mp-rdot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:14px;background:var(--panel);border:2px solid var(--line);color:var(--muted)}
+  .mp-rnode.on .mp-rdot{background:var(--blue);border-color:var(--blue-d);color:#fff}
+  .mp-rnode.done .mp-rdot{background:var(--green);border-color:var(--green-d);color:#fff}
+  .mp-rlab{font-family:var(--display);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.02em;color:var(--muted)}
+  .mp-rnode.on .mp-rlab{color:var(--blue-d)}
+  .mp-rseg{height:2px;background:var(--line);flex:0 0 8px;margin-bottom:15px}
+  .mp-roster-nb{border-bottom:none;padding-bottom:0;margin-bottom:8px}
+  .mp-legend{display:flex;gap:9px;flex-wrap:wrap;justify-content:center;font-family:var(--body);font-size:10px;font-weight:700;
+    color:var(--muted);margin:0 0 12px;padding-bottom:11px;border-bottom:2px solid var(--line)}
+  .mp-sys{display:flex;align-items:center;justify-content:center;gap:8px;width:100%;background:#EAF6FF;border:2px solid var(--blue);
+    color:var(--blue-d);border-radius:14px;padding:12px;font-family:var(--display);font-weight:800;font-size:13px;cursor:pointer;margin-bottom:10px}
+  .mp-sys-ic{width:18px;height:18px;fill:var(--blue-d);flex:0 0 auto}
+  .mp-sys.loading .mp-sys-ic{animation:mpspin .9s linear infinite;transform-origin:center}
+  .mp-composer{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:4px;align-items:stretch}
+  .mp-compfield{min-width:0}
+  .mp-cwrap{display:flex;align-items:center;gap:5px;flex-wrap:wrap;background:var(--panel2);border:2px solid var(--blue);
+    border-radius:12px;padding:6px 9px;min-height:44px}
+  .mp-cwrap input{border:none;background:transparent;outline:none;font-family:var(--body);font-weight:700;font-size:15px;color:var(--ink);min-width:0;flex:1;padding:4px 0}
+  .mp-at{font-family:var(--display);font-weight:900;color:var(--blue-d);font-size:15px}
+  .mp-slotchip{flex:0 1 auto;background:#fff;border:2px solid var(--line);border-radius:8px;padding:5px 9px;font-size:13px;font-weight:800;min-width:74px}
+  .mp-slotchip:focus{border-color:var(--green-d)}
+  .mp-sep{color:var(--muted);font-weight:900}
   .mp-composer button{font-family:var(--display);font-weight:800;color:#fff;background:var(--blue);border:none;
     border-radius:12px;padding:0 16px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--blue-d)}
   .mp-composer button:active{transform:translateY(3px);box-shadow:none}
-  .mp-chint{font-family:var(--body);font-weight:700;font-size:11px;color:var(--muted);margin:8px 0 2px;text-align:center;line-height:1.45}
-  .mp-chint b{color:var(--blue-d)}
+  .mp-comptoggle{display:flex;justify-content:flex-start;margin-top:7px}
+  .mp-hr{height:2px;background:var(--line);margin:13px 0 2px}
 </style>
 </head>
 <body class="menu">
