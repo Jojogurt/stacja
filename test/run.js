@@ -166,6 +166,8 @@ group('mpReducer.selektory', ()=>{
   eq(rosterState(g,'u1'),'sure','u1 wrzucił pewniaka');
   eq(rosterState(g,'u2'),'unsure','u2 tylko niepewny');
   eq(rosterState(g,'zzz'),'idle','brak aktywności → myśli');
+  eq(rosterState(g,'zzz',new Set(['zzz'])),'type','w secie typing (bez typu) → pisze');
+  eq(rosterState(g,'u1',new Set(['u1'])),'sure','typ ma priorytet nad „pisze"');
   eq(rosterState({...g,passed:[{id:'u1'}]},'u1'),'pass','pas ma priorytet');
 });
 

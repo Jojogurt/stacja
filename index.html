@@ -397,6 +397,8 @@
   .mp-pl.unsure{border-color:var(--purple)} .mp-pl.unsure .av{background:var(--purple);color:#fff} .mp-pl.unsure .s{color:#9B4DDB}
   .mp-pl.type{border-color:var(--blue)} .mp-pl.type .av{background:var(--blue);color:#fff} .mp-pl.type .s{color:var(--blue)}
   .mp-pl.pass{opacity:.5}
+  .mp-pl.type .s{animation:mpblink 1s steps(1) infinite}
+  @keyframes mpblink{50%{opacity:.3}}
   .mp-pl.you{box-shadow:0 0 0 3px #EAF6FF}
   .mp-slots{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .mp-slot-h{font-family:var(--display);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin:0 0 6px 2px}

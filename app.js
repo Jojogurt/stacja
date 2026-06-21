@@ -722,6 +722,7 @@ async function mpEnterRoom(code, asHost){
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpPushChat(payload.byName, payload.text); mpFloatSay(payload.text, payload.byName); } });
+  mpCh.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
   mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost){ mpBroadcast(); mpMaybeGo(); } });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
@@ -1017,7 +1018,9 @@ function mpNewGame(){ mpAck=mpRevealNonce=mpRevealSnap=null; mpGame={hostId:mpMe
 
 /* ---- render sceny ---- */
 let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykieta: normal/unsure/sure)
-let mpTypingSet=new Set();      // kto „pisze…" (PR3: zasilane broadcastem; dziś puste)
+let mpTypingSet=new Set();      // PR3: kto „pisze…" (zasilane ulotnym broadcastem „typing")
+let mpTypingTimers={};          // id → timeout wygaszający stan „pisze" po ~3 s
+let mpLastTyping=0;             // throttle wysyłki własnego „typing" (max raz / 1.5 s)
 let mpChatLog=[];               // PR2: feed czatu (klient-side, z broadcastów „say") — ring buffer
 let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
 const mpSkin = ()=> localStorage.getItem('stacjaUI')||'kolumny';   // skórka = preferencja klienta (czysty render)
@@ -1140,7 +1143,7 @@ function mpChatFeedHTML(){ return mpChatLog.map(c=>`<div class="mp-cm"><b>${esca
 // SKÓRKA „kolumny" — formularz per slot + wybór pewności, kontrolki rozdzielone
 function mpScaffoldColumns(g, head){
   const slots=g.answerSlots||slotsFor();
-  const formInputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}">`).join('');
+  const formInputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()">`).join('');
   const formCols=slots.map(()=>'1fr').join(' ')+' auto';
   return `${mpSkinToggleHTML('kolumny')}<div class="mp-deck">${head}
       <div class="mp-state" id="mpCountdown"></div>
@@ -1171,7 +1174,7 @@ function mpScaffoldChat(g, head){
       ${mpLockBtnHTML(true)}
       <div class="mp-chatfeed" id="mpChatFeed"></div>
       <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-      <div class="mp-composer"><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="napisz… albo @tytuł, wykonawca" onkeydown="if(event.key==='Enter')mpComposerSend()"><button onclick="mpComposerSend()">wyślij</button></div>
+      <div class="mp-composer"><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="napisz… albo @tytuł, wykonawca" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()"><button onclick="mpComposerSend()">wyślij</button></div>
       <div class="mp-chint">z <b>@</b> wrzucasz typ (np. @Kombinacja, Maanam) · bez @ piszesz na czat</div>
       <div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
 }
@@ -1187,8 +1190,10 @@ function mpRefreshDynamic(g){
 }
 function mpRenderPlay(g, head, st){
   const skin=mpSkin();
+  const newRound = mpPlayRound!==g.playNonce;
   // przebuduj scaffold przy nowej rundzie lub zmianie skórki; inaczej tylko odśwież dynamikę
-  if(mpPlayRound!==g.playNonce || mpPlaySkin!==skin || !$m('mpBoard')){
+  if(newRound || mpPlaySkin!==skin || !$m('mpBoard')){
+    if(newRound) mpClearTyping();   // nowe pytanie → zeruj stan „pisze"
     mpPlayRound=g.playNonce; mpPlaySkin=skin;
     st.innerHTML = skin==='czat' ? mpScaffoldChat(g, head) : mpScaffoldColumns(g, head);
   }
@@ -1293,6 +1298,21 @@ function mpFloatSay(text, byName){
   s.style.left=(6+Math.random()*36)+'%';
   fx.appendChild(s); setTimeout(()=>s.remove(), SAY_TTL_MS);
 }
+/* PR3: sygnał „pisze…" — ulotny broadcast (poza host-authority), throttle + wygaszanie */
+function mpTypingPing(){
+  const now=Date.now();
+  if(now-mpLastTyping < 1500) return;          // max raz na 1.5 s
+  mpLastTyping=now;
+  if(mpCh && mpGame && mpGame.phase===MP.PLAY) mpCh.send({type:'broadcast',event:'typing',payload:{by:mpMe.id, byName:mpMe.name}});
+}
+function mpMarkTyping(id){
+  mpTypingSet.add(id);
+  if(mpTypingTimers[id]) clearTimeout(mpTypingTimers[id]);
+  mpTypingTimers[id]=setTimeout(()=>{ mpTypingSet.delete(id); delete mpTypingTimers[id]; mpRefreshRoster(); }, 3000);
+  mpRefreshRoster();
+}
+function mpRefreshRoster(){ if(mpGame && mpGame.phase===MP.PLAY){ const el=$m('mpRoster'); if(el) el.innerHTML=mpRosterHTML(mpGame); } }
+function mpClearTyping(){ mpTypingSet.clear(); Object.values(mpTypingTimers).forEach(clearTimeout); mpTypingTimers={}; }
 
 /* autostart lobby gdy w URL jest ?room= */
 if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCode').value=new URLSearchParams(location.search).get('room').toUpperCase(); }
@@ -1301,6 +1321,6 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCo
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
-  mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend,
+  mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance,
 });
