@@ -195,23 +195,30 @@ function plRemove(k){
 document.getElementById('plImport').onclick=()=>document.getElementById('plPanel').classList.toggle('show');
 document.getElementById('plGo').onclick=plImport;
 document.getElementById('plUrl').addEventListener('keydown',e=>{ if(e.key==='Enter') plImport(); });
+/* wspólny rdzeń importu — fetch z edge function „spotify", zapis do localStorage, merge do ALL_CATS.
+   Zwraca {key,name,count} albo rzuca błędem. Używany przez solo (plImport) i MP (mpPlImport). */
+async function plFetch(url){
+  const cfg=window.STACJA_CONFIG||{};
+  if(!cfg.supabaseUrl){ throw new Error('Brak połączenia z serwerem.'); }
+  const r=await fetch(cfg.supabaseUrl+'/functions/v1/spotify?url='+encodeURIComponent(url), {headers:cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}});
+  const d=await r.json();
+  if(!r.ok || d.error){ throw new Error(d.error||('http '+r.status)); }
+  const songs=(d.tracks||[]).filter(t=>t.title&&t.artist);
+  if(!songs.length){ throw new Error('Pusta lub niepubliczna playlista.'); }
+  const key=PL_PREFIX+Math.random().toString(36).slice(2,8);
+  const pls=plLoad(); pls[key]={label:d.name||'Playlista', songs, kind:'playlist'}; plSave(pls);
+  plMerge();
+  return { key, name:d.name||'', count:songs.length };
+}
 async function plImport(){
   const url=document.getElementById('plUrl').value.trim();
   const st=document.getElementById('plStatus');
   if(!url){ st.className='pl-status err'; st.textContent='Wklej link do playlisty Spotify.'; return; }
-  const cfg=window.STACJA_CONFIG||{};
-  if(!cfg.supabaseUrl){ st.className='pl-status err'; st.textContent='Brak połączenia z serwerem.'; return; }
   st.className='pl-status'; st.textContent='importuję…';
   try{
-    const r=await fetch(cfg.supabaseUrl+'/functions/v1/spotify?url='+encodeURIComponent(url), {headers:cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}});
-    const d=await r.json();
-    if(!r.ok || d.error){ throw new Error(d.error||('http '+r.status)); }
-    const songs=(d.tracks||[]).filter(t=>t.title&&t.artist);
-    if(!songs.length){ throw new Error('Pusta lub niepubliczna playlista.'); }
-    const key=PL_PREFIX+Math.random().toString(36).slice(2,8);
-    const pls=plLoad(); pls[key]={label:d.name||'Playlista', songs, kind:'playlist'}; plSave(pls);
-    plMerge(); plRenderTicks(); soloCats.add(key); syncCatTicks(); updateMatchInfo();
-    st.className='pl-status ok'; st.textContent='✓ '+(d.name||'')+' — '+songs.length+' utw. Dodana do puli.';
+    const res=await plFetch(url);
+    plRenderTicks(); soloCats.add(res.key); syncCatTicks(); updateMatchInfo();
+    st.className='pl-status ok'; st.textContent='✓ '+res.name+' — '+res.count+' utw. Dodana do puli.';
     document.getElementById('plUrl').value='';
   }catch(e){ st.className='pl-status err'; st.textContent='Nie udało się: '+(e.message||e); }
 }
@@ -998,6 +1005,21 @@ function mpHandleAct(a){
 /* ---- host: start gry / runda ---- */
 /* ---- host: ekran układania meczu (multi-select, jak solo) ---- */
 let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickRounds=4, mpPickTimer=60;
+let mpPlOpen=false, mpPlStatus='', mpPlStatusCls='';   // panel importu Spotify w pickerze MP
+function mpPlToggle(){ mpPlOpen=!mpPlOpen; mpRender(); }
+async function mpPlImport(){
+  const inp=document.getElementById('mpPlUrl'); const url=(inp&&inp.value||'').trim();
+  const st=document.getElementById('mpPlStatus');
+  const setSt=(cls,txt)=>{ mpPlStatusCls=cls; mpPlStatus=txt; if(st){ st.className='pl-status '+cls; st.textContent=txt; } };
+  if(!url){ setSt('err','Wklej link do playlisty Spotify.'); return; }
+  setSt('','importuję…');
+  try{
+    const res=await plFetch(url);
+    mpPickCats.add(res.key);
+    mpPlStatusCls='ok'; mpPlStatus='✓ '+res.name+' — '+res.count+' utw. Dodana.'; mpPlOpen=true;
+    mpRender();
+  }catch(e){ setSt('err','Nie udało się: '+(e.message||e)); }
+}
 function mpToggleCat(k){ if(mpPickCats.has(k)) mpPickCats.delete(k); else mpPickCats.add(k); mpRender(); }
 function mpToggleMode(m){ if(mpPickModes.has(m)) mpPickModes.delete(m); else mpPickModes.add(m); mpRender(); }
 function mpSetRounds(r){ mpPickRounds=r; mpRender(); }
@@ -1006,6 +1028,12 @@ function mpPickerHTML(){
   const band=(title,keys,cls)=> keys.length? `<div class="band-label">${title}</div><div class="ticks">`+
     keys.map(k=>`<button class="tick ${cls} ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>` : '';
   const cats=band('dekady',ERA_KEYS,'')+band('style i gatunki',STYLE_KEYS,'gen')+band('gotowe playlisty',READY_KEYS,'pl')+band('teksty — tłumaczenia 🌐',LYRICS_KEYS,'gen');
+  // twoje playlisty ze Spotify — host rozwiązuje utwory sam, więc wystarczy mieć je w ALL_CATS (plMerge)
+  const PL_KEYS=Object.keys(plLoad());
+  const plBand=`<div class="band-label">twoje playlisty <button class="pl-add" onclick="mpPlToggle()">+ ze Spotify</button></div>`+
+    (PL_KEYS.length? `<div class="ticks">`+PL_KEYS.map(k=>`<button class="tick pl ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${(ALL_CATS[k].songs||[]).length} utw.</small></button>`).join('')+`</div>`
+      : `<div class="ticks"><span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span></div>`)+
+    `<div class="pl-panel${mpPlOpen?' show':''}"><input id="mpPlUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus">${escapeHtml(mpPlStatus)}</div></div>`;
   const modes=`<div class="band-label">tryby (można kilka)</div><div class="ticks">`+
     ALL_MODES.map(m=>`<button class="tick gen ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}<small>${MODE_SUB[m]}</small></button>`).join('')+`</div>`;
   const rounds=`<div class="band-label">rundy (× 3 kategorie × 5 pytań)</div><div class="lenpick">`+
@@ -1015,7 +1043,7 @@ function mpPickerHTML(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   const bad=(!mpPickCats.size||!mpPickModes.size||r.error);
   const info=(!mpPickCats.size||!mpPickModes.size)?'zaznacz kategorie i tryby':(r.error||`${mpPickRounds} × 3 × 5 = ${mpPickRounds*15} pytań`);
-  return `<div class="mp-deck"><div class="mp-state">ułóż mecz</div>${cats}${modes}${rounds}${timer}
+  return `<div class="mp-deck"><div class="mp-state">ułóż mecz</div>${cats}${plBand}${modes}${rounds}${timer}
     <button class="match-rand" onclick="mpRandomPick()">🎲 Losuj kategorie i tryby</button>
     <div class="match-info ${bad?'err':''}">${escapeHtml(info)}</div>
     <button class="mp-btn" style="width:100%;margin-top:12px${bad?';opacity:.5':''}" ${bad?'disabled':''} onclick="mpStart()">Start meczu →</button></div>`;
@@ -1556,5 +1584,5 @@ Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
-  mpStart, mpToggleCat, mpToggleMode, mpAdvance,
+  mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
 });
