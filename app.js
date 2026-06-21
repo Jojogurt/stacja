@@ -12,6 +12,7 @@ import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
 import { sb, ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile, myId } from './adapters-web/supabase.js';
+import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo, authInfo, linkOAuth, linkEmail } from './adapters-web/supabase.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
@@ -634,23 +635,82 @@ function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klien
 function showScreen(s){ document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s); }
 $m('goSolo').onclick=()=>{ showScreen('solo'); };
 
-/* ---- Liga + Profil (Etap 1 / Faza D) ---- */
-$m('goLiga').onclick=()=>{ showScreen('liga'); renderLiga(); };
+/* ---- Drużyna / Znajomi (zastępuje Ligę) + Profil ---- */
+$m('goLiga').onclick=()=>{ showScreen('liga'); renderDruzyna(); };
 $m('goProfil').onclick=()=>{ showScreen('profil'); renderProfil(); };
 
-async function renderLiga(){
-  const el=$m('ligaList'); el.innerHTML='<div class="liga-empty">ładowanie…</div>';
-  const [rows, me]=await Promise.all([fetchLeague(50), myId()]);
-  if(!rows.length){ el.innerHTML='<div class="liga-empty">Pusto na razie.<br>Rozegraj mecz, żeby pojawić się w lidze.<br><small>(wymaga włączonego logowania w projekcie)</small></div>'; return; }
-  el.innerHTML=rows.map((r,i)=>{
-    const acc=r.matches?Math.round((r.correct/(r.matches||1))*10)/10:0;
-    return `<div class="liga-row${r.profile_id===me?' me':''}">
-      <span class="rank">${i+1}</span>
-      <span class="who">${escapeHtml(r.handle||'gracz')}<small>${r.matches} mecz(e) · ${r.correct} trafnych</small></span>
-      <span class="pts">${r.points}</span>
+let dzMe=null;   // {id, handle, emoji, friend_code}
+async function renderDruzyna(){
+  const el=$m('druzynaBody'); if(!el) return;
+  el.innerHTML='<div class="liga-empty">ładowanie…</div>';
+  await ensureSession();
+  const [meR, teamsR, friR, penR, auth] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), authInfo()]);
+  if(meR.error && !meR.data){ el.innerHTML='<div class="liga-empty">Brak połączenia z serwerem.<br><small>Drużyny i znajomi wymagają włączonego logowania anonimowego w projekcie Supabase.</small></div>'; return; }
+  dzMe = (meR.data&&meR.data[0]) || null;
+  const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[];
+  const av=(n,c)=>`<span class="dz-av" style="background:${mpAvatarColor(n)}">${escapeHtml((n||'?').slice(0,1).toUpperCase())}</span>`;
+
+  // === DRUŻYNA ===
+  const teamCards = teams.map(t=>`
+    <div class="dz-team">
+      <div class="dz-team-top"><span class="em">${escapeHtml(t.emoji||'🍺')}</span>
+        <span class="nm"><b>${escapeHtml(t.name)}</b><small>${t.members} os. · kod <b>${escapeHtml(t.code)}</b></small></span></div>
+      <div class="dz-team-btns">
+        <button class="dz-play" onclick="dzPlay()">🎮 Zagraj z drużyną</button>
+        <button class="dz-mini" onclick="dzCopy('${escapeHtml(t.code)}')">📋 kod</button>
+        <button class="dz-mini" onclick="dzLeave('${t.id}')">wyjdź</button>
+      </div>
+    </div>`).join('');
+  const teamSection = `
+    <div class="dz-lbl">Twoja drużyna</div>
+    ${teamCards || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
+    <div class="dz-row2">
+      <input id="dzName" maxlength="20" placeholder="nazwa drużyny">
+      <input id="dzEmoji" maxlength="2" placeholder="🍺" value="🍺" class="dz-emoji">
+      <button class="dz-go" onclick="dzCreate()">Stwórz</button>
+    </div>
+    <div class="dz-row2">
+      <input id="dzJoin" maxlength="6" placeholder="KOD DRUŻYNY" style="text-transform:uppercase">
+      <button class="dz-go blue" onclick="dzJoin()">Dołącz</button>
     </div>`;
-  }).join('');
+
+  // === ZNAJOMI ===
+  const myCode = dzMe?.friend_code || '—';
+  const pendRows = pending.map(p=>`
+    <div class="dz-fr"><span class="who">${av(p.handle)}${escapeHtml(p.handle||'gracz')}</span>
+      <span class="acts"><button class="dz-yes" onclick="dzRespond(${p.req_id},true)">✓</button><button class="dz-no" onclick="dzRespond(${p.req_id},false)">✗</button></span></div>`).join('');
+  const friendRows = friends.map(f=>`<div class="dz-fr"><span class="who">${av(f.handle)}${escapeHtml(f.handle||'gracz')}</span><span class="code">${escapeHtml(f.friend_code||'')}</span></div>`).join('')
+    || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie.</div>';
+  const friendSection = `
+    <div class="dz-lbl">Twój kod znajomego</div>
+    <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">📋 kopiuj</button></div>
+    <div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>
+    ${pending.length?`<div class="dz-lbl">Zaproszenia (${pending.length})</div>${pendRows}`:''}
+    <div class="dz-lbl">Znajomi</div>
+    ${friendRows}`;
+
+  // === KONTO (opcjonalne logowanie) ===
+  const loginSection = (auth && auth.isAnon) ? `
+    <div class="dz-lbl">Konto</div>
+    <div class="dz-acct">Grasz jako gość — zaloguj, by drużyny i znajomi działali na innych urządzeniach.</div>
+    <div class="dz-row2"><input id="dzEmail" type="email" placeholder="twój e-mail"><button class="dz-go" onclick="dzLoginEmail()">E-mail</button></div>
+    <div class="dz-oauth"><button class="dz-prov g" onclick="dzLogin('google')">Google</button><button class="dz-prov a" onclick="dzLogin('apple')">Apple</button></div>
+    <div class="dz-hint" id="dzMsg"></div>`
+    : (auth && auth.email ? `<div class="dz-acct ok">✓ Zalogowano: ${escapeHtml(auth.email)}</div>` : '');
+
+  el.innerHTML = teamSection + friendSection + loginSection;
 }
+function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
+async function dzCreate(){ const n=$m('dzName')?.value, e=$m('dzEmoji')?.value; const r=await teamCreate(n,e); if(r.error){ dzMsg('Nie udało się: '+r.error,true); } else renderDruzyna(); }
+async function dzJoin(){ const c=$m('dzJoin')?.value; if(!c) return; const r=await teamJoin(c); if(r.error){ dzMsg(r.error==='group_not_found'?'Nie ma takiej drużyny.':r.error,true); } else renderDruzyna(); }
+async function dzLeave(id){ await teamLeave(id); renderDruzyna(); }
+async function dzAddFriend(){ const c=$m('dzFriend')?.value; if(!c) return; const r=await friendAdd(c); if(r.error){ dzMsg(r.error==='profile_not_found'?'Nie ma takiego kodu.':(r.error==='self'?'To Twój kod 🙂':r.error),true); } else renderDruzyna(); }
+async function dzRespond(id,ok){ await friendRespond(id,ok); renderDruzyna(); }
+function dzCopy(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
+function dzPlay(){ showScreen('mp'); }
+async function dzLogin(prov){ const r=await linkOAuth(prov); if(r.error) dzMsg('Logowanie '+prov+': '+r.error,true); }
+async function dzLoginEmail(){ const em=$m('dzEmail')?.value?.trim(); if(!em) return; const r=await linkEmail(em); dzMsg(r.error?('Błąd: '+r.error):'Sprawdź skrzynkę — wysłaliśmy link.',!!r.error); }
+Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzLogin, dzLoginEmail });
 
 async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';

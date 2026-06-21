@@ -65,6 +65,40 @@ export async function myId(){
   catch(e){ return null; }
 }
 
+// ===== Drużyny i znajomi (MVP-1) — wszystko przez RPC SECURITY DEFINER =====
+async function rpc(fn, args){
+  const c=sb(); if(!c) return { error:'no-backend' };
+  try{ const { data, error } = await c.rpc(fn, args||{}); return error ? { error:error.message } : { data }; }
+  catch(e){ return { error:String(e?.message||e) }; }
+}
+export const teamCreate  = (name,emoji)=> rpc('app_create_group', { p_name:name, p_emoji:emoji });
+export const teamJoin    = (code)=> rpc('app_join_group', { p_code:code });
+export const teamLeave   = (id)=> rpc('app_leave_group', { p_group:id });
+export const myTeams     = ()=> rpc('app_my_groups');
+export const teamMembers = (id)=> rpc('app_group_members', { p_group:id });
+export const friendAdd      = (code)=> rpc('app_add_friend', { p_code:code });
+export const friendRespond  = (id,accept)=> rpc('app_respond_friend', { p_id:id, p_accept:accept });
+export const friendsList    = ()=> rpc('app_friends');
+export const pendingFriends = ()=> rpc('app_pending_friends');
+export const meInfo         = ()=> rpc('app_me');
+
+// ===== opcjonalne logowanie (anon → konto, ten sam uid) =====
+export async function authInfo(){
+  const c=sb(); if(!c) return null;
+  try{ const { data:{ session } } = await c.auth.getSession(); const u=session?.user; if(!u) return null;
+    return { id:u.id, isAnon: !!u.is_anonymous, email:u.email||null }; }catch(e){ return null; }
+}
+export async function linkOAuth(provider){
+  const c=sb(); if(!c) return { error:'no-backend' };
+  try{ const { error } = await c.auth.linkIdentity({ provider, options:{ redirectTo: location.href.split('#')[0] } });
+    return error ? { error:error.message } : { ok:true }; }catch(e){ return { error:String(e?.message||e) }; }
+}
+export async function linkEmail(email){
+  const c=sb(); if(!c) return { error:'no-backend' };
+  try{ const { error } = await c.auth.updateUser({ email });
+    return error ? { error:error.message } : { ok:true }; }catch(e){ return { error:String(e?.message||e) }; }
+}
+
 // profil zalogowanego: ksywka, pozycja w lidze, celność per kategoria (z match_answers).
 // null = brak sesji/backendu.
 export async function fetchProfile(){

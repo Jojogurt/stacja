@@ -704,6 +704,44 @@
   .pf-badge{flex:1;aspect-ratio:1;background:#FFF8E0;border:2px solid #FFE9A8;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
   .pf-badge span{font-size:24px} .pf-badge small{font-family:var(--display);font-weight:800;font-size:9px;color:#9a8a4a;text-align:center}
   .pf-badge.lock{background:#F4F4F2;border:2px dashed #E5E5E5} .pf-badge.lock span{opacity:.4}
+
+  /* ===== Drużyna / Znajomi ===== */
+  .dz-lbl{font-family:var(--display);font-weight:900;font-size:14px;color:var(--ink);margin:18px 2px 8px}
+  .dz-lbl:first-child{margin-top:4px}
+  .dz-empty{font-family:var(--body);font-weight:700;font-size:13px;color:#9a958c;background:var(--panel2);border:2px dashed var(--line);border-radius:14px;padding:14px;text-align:center}
+  .dz-team{background:#EAF7FF;border:2px solid var(--blue);border-radius:18px;padding:14px;margin-bottom:10px}
+  .dz-team-top{display:flex;align-items:center;gap:12px}
+  .dz-team-top .em{font-size:30px;flex:0 0 auto}
+  .dz-team-top .nm{display:flex;flex-direction:column;min-width:0}
+  .dz-team-top .nm b{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink)}
+  .dz-team-top .nm small{font-family:var(--body);font-weight:700;font-size:12px;color:#1899D6}
+  .dz-team-btns{display:flex;gap:8px;margin-top:12px}
+  .dz-play{flex:1;font-family:var(--display);font-weight:900;font-size:14px;color:#fff;background:var(--green);border:none;border-radius:14px;padding:12px;cursor:pointer;box-shadow:0 4px 0 var(--green-d)}
+  .dz-play:active{transform:translateY(4px);box-shadow:none}
+  .dz-mini{font-family:var(--display);font-weight:800;font-size:12px;color:#7a756c;background:#fff;border:2px solid var(--line);border-bottom-width:3px;border-radius:12px;padding:9px 12px;cursor:pointer}
+  .dz-row2{display:flex;gap:8px;margin-bottom:10px}
+  .dz-row2 input{flex:1;min-width:0;background:var(--panel2);border:2px solid var(--line);border-radius:12px;color:var(--ink);font-family:var(--body);font-weight:700;font-size:16px;padding:11px;outline:none}
+  .dz-row2 input:focus{border-color:var(--blue)}
+  .dz-row2 .dz-emoji{flex:0 0 52px;text-align:center}
+  .dz-go{font-family:var(--display);font-weight:800;font-size:14px;color:#fff;background:var(--green);border:none;border-radius:12px;padding:0 16px;cursor:pointer;box-shadow:0 3px 0 var(--green-d)}
+  .dz-go.blue{background:var(--blue);box-shadow:0 3px 0 var(--blue-d)}
+  .dz-go:active{transform:translateY(3px);box-shadow:none}
+  .dz-mycode{display:flex;align-items:center;gap:10px;background:#FFF8E0;border:2px solid var(--gold);border-radius:14px;padding:11px 14px}
+  .dz-mycode b{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.18em;color:#7a5a00;flex:1}
+  .dz-fr{display:flex;align-items:center;gap:10px;background:#fff;border:2px solid var(--line);border-radius:14px;padding:9px 13px;margin-bottom:8px}
+  .dz-fr .who{display:flex;align-items:center;gap:10px;flex:1;font-family:var(--display);font-weight:800;font-size:14px;color:var(--ink);min-width:0}
+  .dz-fr .code{font-family:var(--display);font-weight:800;font-size:12px;color:#bdb8ae;letter-spacing:.1em}
+  .dz-av{width:32px;height:32px;border-radius:50%;color:#fff;font-family:var(--display);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .dz-fr .acts{display:flex;gap:6px}
+  .dz-yes,.dz-no{width:36px;height:36px;border-radius:11px;border:none;font-size:16px;font-weight:900;cursor:pointer}
+  .dz-yes{background:var(--green);color:#fff} .dz-no{background:#fff;border:2px solid var(--line);color:var(--red)}
+  .dz-acct{font-family:var(--body);font-weight:700;font-size:13px;color:#9a958c;background:var(--panel2);border:2px solid var(--line);border-radius:14px;padding:12px;margin-bottom:10px;line-height:1.5}
+  .dz-acct.ok{color:#46A302;background:#F0FBE6;border-color:#D7F0B8}
+  .dz-oauth{display:flex;gap:10px;margin-bottom:6px}
+  .dz-prov{flex:1;font-family:var(--display);font-weight:800;font-size:14px;border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px;cursor:pointer;background:#fff;color:var(--ink)}
+  .dz-prov.g{color:#1899D6} .dz-prov.a{color:#3C3C3C}
+  .dz-hint{font-family:var(--body);font-weight:700;font-size:12px;color:#9a958c;margin-top:8px;min-height:14px;text-align:center}
+  .dz-hint.err{color:var(--red)}
 </style>
 </head>
 <body class="menu">
@@ -723,14 +761,14 @@
     <button class="mh-card solo" id="goSolo"><span class="ic">🎧</span><span class="tx"><b>SOLO</b><small>Trening, własne tempo</small></span><span class="ar">›</span></button>
     <button class="mh-card mp" id="goMp"><span class="ic">👥</span><span class="tx"><b>ZE ZNAJOMYMI</b><small>Mecz w pokoju, na żywo</small></span><span class="ar">›</span></button>
     <div class="mh-row">
-      <button class="mh-mini" id="goLiga"><span>🏆</span>Liga</button>
+      <button class="mh-mini" id="goLiga"><span>👥</span>Drużyna</button>
       <button class="mh-mini" id="goProfil"><span>👤</span>Profil</button>
     </div>
   </section>
 
   <section id="liga">
-    <div class="screen-head"><span>🏆 Liga</span></div>
-    <div class="liga-list" id="ligaList"></div>
+    <div class="screen-head"><span>👥 Drużyna i znajomi</span></div>
+    <div class="dz-body" id="druzynaBody"></div>
   </section>
 
   <section id="profil">
