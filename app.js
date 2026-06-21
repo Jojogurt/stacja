@@ -8,7 +8,7 @@ import {
   randomPools as _randomPools, matchHeader as _matchHeader,
 } from './core/match.js';
 import { MP, assertMp } from './core/phases.js';
-import { reduceAction, countReady, evaluateAnswer, myVote as _myVote, topProposal as _topProposal } from './core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from './core/mpReducer.js';
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
 import { sb, ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile, myId } from './adapters-web/supabase.js';
@@ -601,7 +601,6 @@ let mpRevealSnap=null;      // migawka odsłony do renderu we własnym tempie
 let mpAudio=null;           // jeden trwały, odblokowany gestem element audio (MP)
 let mpRevSrc=null;          // BufferSource trybu „od tyłu" w MP
 let mpTally={};             // id -> {name, correct}  (do MVP)
-let mpScribeTouched=false;
 let mpAutoLocked=false;     // czy timer/host już zatwierdził rundę
 let mpPlayRound=null;       // dla której rundy jest już zbudowany formularz (by nie czyścić pól)
 let mpTimerInt=null;        // interwał odliczania
@@ -938,7 +937,8 @@ function mpStart(){
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   mpGame={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
-    proposals:[], sure:[], passed:[], reveal:null, results:[], preview:'', lyric:'', playNonce:0,
+    answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, sure:[], passed:[],
+    reveal:null, results:[], preview:'', lyric:'', playNonce:0,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
   mpTally={};
   mpHostSeen.clear();
@@ -949,11 +949,12 @@ function mpStart(){
 function mpHostNextQuestion(){
   const s=mpGame.slots[mpGame.si]; if(!s){ mpFinish(); return; }
   mpGame.catKey=s.cat; mpGame.mode=s.mode; mpGame.round=s.round; mpGame.catLabel=catLabel(s.cat);
+  mpGame.answerSlots=slotsFor(s.mode, s.cat);
   mpHostNewRound();
 }
 async function mpHostNewRound(){
   mpSeenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
-  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.sure=[]; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpScribeTouched=false; mpAutoLocked=false;
+  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.votes={}; mpGame.sure=[]; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
   if(mpGame.mode==='lektor'){
@@ -986,9 +987,8 @@ async function mpHostNewRound(){
 function mpLock(){
   if(!mpHost || !mpGame || mpGame.phase!==MP.PLAY) return;
   mpAutoLocked=true;
-  const title=($m('mpScTitle')?$m('mpScTitle').value:'').trim(), artist=($m('mpScArtist')?$m('mpScArtist').value:'').trim();
   const c=mpHostCurrent;
-  const ev=evaluateAnswer(mpGame, c, {title, artist});   // czysta ocena (core)
+  const ev=evaluateAnswer(mpGame, c);   // czysta ocena (core) — locked = odpowiedź drużyny (górka głosów per slot)
   // nałóż wyliczenia na stan/tally (efekty zostają w app.js)
   mpGame.score += ev.gained;
   if(ev.firstById){ mpTally[ev.firstById]=mpTally[ev.firstById]||{name:ev.firstBy,correct:0}; mpTally[ev.firstById].correct++; }
@@ -1016,8 +1016,8 @@ function mpFinish(){
 function mpNewGame(){ mpAck=mpRevealNonce=mpRevealSnap=null; mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
 
 /* ---- render sceny ---- */
-function mpMyVote(){ return _myVote(mpGame, mpMe.id); }
-function mpTopProp(){ return _topProposal(mpGame); }
+let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykieta: normal/unsure/sure)
+let mpTypingSet=new Set();      // kto „pisze…" (PR3: zasilane broadcastem; dziś puste)
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 function mpRender(){
@@ -1069,20 +1069,42 @@ const mpRenderNetErr = (g, head)=>{
 const mpRenderNoLyric = (head)=> `<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
 
 /* --- faza gry: małe budowniki HTML + częściowa aktualizacja (nie czyść pól) --- */
-function mpBoardHTML(g, top, mine){
-  if(!g.proposals.length) return `<div class="mp-state">brak propozycji — wrzuć pierwszą</div>`;
-  return g.proposals.map(p=>{
-    const isTop = top && p.id===top.id && p.votes.length>0;
-    const delBtn = p.by===mpMe.id ? `<button class="mp-del" onclick="mpSend({type:'unpropose',pid:'${p.id}'})" title="usuń moją propozycję">✕</button>` : '';
-    return `<div class="mp-prop${isTop?' top':''}">
-      <div class="guess"><span class="who">${escapeHtml(p.byName)}</span><b>${escapeHtml(p.title||'—')}</b> <span>· ${escapeHtml(p.artist||'—')}</span></div>
-      <button class="mp-vote${mine===p.id?' voted':''}" onclick="mpSend({type:'vote',pid:'${p.id}'})">👍 ${p.votes.length}</button>${delBtn}
-    </div>`; }).join('');
+// pasek osób: gałka + stan (myśli/pisze/wrzucił/niepewny/pewniak/pas)
+const ROSTER_ICON={ idle:'·', type:'···', ans:'✓', unsure:'?', sure:'🍺', pass:'🤚' };
+function mpRosterHTML(g){
+  return mpMembers().map(m=>{
+    const stt=rosterState(g, m.id, mpTypingSet);
+    const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
+    return `<div class="mp-pl ${stt}${m.id===mpMe.id?' you':''}"><span class="av">${av}</span>${escapeHtml(m.name)}<span class="s">${ROSTER_ICON[stt]}</span></div>`;
+  }).join('');
 }
-// karta „odpowiedź drużyny" = najczęściej głosowana propozycja (#8), widoczna dla wszystkich
-function mpTeamHTML(top){
-  return `<div class="lab">odpowiedź drużyny${top&&top.votes.length?(' · '+top.votes.length+' 👍'):''}</div>
-    <div class="ans">${top?(escapeHtml(top.title||'—')+' · '+escapeHtml(top.artist||'—')):'— wrzuć i przegłosuj propozycję —'}</div>`;
+// tablica kolumnami: osobne głosowanie na każdy slot (tytuł / wykonawca / …)
+function mpSlotsHTML(g){
+  const slots=g.answerSlots||slotsFor();
+  return `<div class="mp-slots">${slots.map(s=>{
+    const cands=candidatesForSlot(g, s.key);
+    const myVal=myVoteForSlot(g, s.key, mpMe.id);
+    const rows = cands.length ? cands.map((c,i)=>{
+      const isTop=i===0 && c.votes.length>0;
+      const voted = myVal && norm(myVal)===norm(c.value);
+      const tag = c.tag==='sure'?'<span class="mp-ct sure">🍺</span>':(c.tag==='unsure'?'<span class="mp-ct unsure">?</span>':'<span class="mp-ct"></span>');
+      return `<div class="mp-cand${isTop?' top':''}"><span class="cv">${escapeHtml(c.value)}</span>${tag}<button class="mp-vt${voted?' on':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">👍 ${c.votes.length}</button></div>`;
+    }).join('') : `<div class="mp-state" style="opacity:.55;padding:6px 2px">— brak —</div>`;
+    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)} — głosuj</div>${rows}</div>`;
+  }).join('')}</div>`;
+}
+// „odpowiedź drużyny" = górka głosów w każdym slocie (miks najlepszych pól)
+function mpTeamHTML(g){
+  const ta=teamAnswer(g), slots=g.answerSlots||slotsFor();
+  const any=slots.some(s=>ta[s.key]);
+  const parts=slots.map(s=> ta[s.key] ? escapeHtml(ta[s.key]) : '—');
+  return `<div class="lab">odpowiedź drużyny</div>
+    <div class="ans">${any?parts.join(' · '):'— wrzućcie i przegłosujcie —'}</div>`;
+}
+// wybór pewności przy wrzucaniu typu (etykieta: roster + tag kandydata)
+function mpConfHTML(){
+  const opt=(v,label,cls)=>`<button class="mp-cf ${cls}${mpConf===v?' on':''}" onclick="mpSetConf('${v}')">${label}</button>`;
+  return `<span class="c-lab">pewność:</span>${opt('normal','zwykła','')}${opt('unsure','niepewny','u')}${opt('sure','🍺 pewniak','s')}`;
 }
 // pewniak dotyczy ODPOWIEDZI DRUŻYNY (top), nie pojedynczej propozycji (#11)
 function mpPewniakHTML(g){
@@ -1100,42 +1122,38 @@ function mpPassHTML(g){
     <span class="mp-state" style="margin:0">${passed.length?`spasowali (${passed.length}/${total}): ${names}`:'nie wiesz? kliknij „pas”'}</span>`;
 }
 function mpRenderPlay(g, head, st){
-  const top=mpTopProp(), mine=mpMyVote();
-  const board=mpBoardHTML(g, top, mine), team=mpTeamHTML(top), pewniak=mpPewniakHTML(g), pass=mpPassHTML(g);
+  const roster=mpRosterHTML(g), board=mpSlotsHTML(g), team=mpTeamHTML(g), pewniak=mpPewniakHTML(g), pass=mpPassHTML(g);
   // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
   // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
   if(mpPlayRound!==g.playNonce || !$m('mpBoard')){
     mpPlayRound=g.playNonce;
-    const scribe = mpHost ? `<div class="mp-scribe"><div class="lab">host — zatwierdź odpowiedź drużyny (podstawiona top-głosowana)</div>
-        <div class="mp-form" style="grid-template-columns:1fr 1fr">
-          <input id="mpScTitle" placeholder="tytuł" oninput="mpScribeTouched=true">
-          <input id="mpScArtist" placeholder="wykonawca" oninput="mpScribeTouched=true">
-        </div>
-        <button class="mp-btn" style="width:100%" onclick="mpLock()">Zatwierdź odpowiedź ✓</button></div>` : '';
+    const slots=g.answerSlots||slotsFor();
+    const formInputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}">`).join('');
+    const formCols=slots.map(()=>'1fr').join(' ')+' auto';
+    const lockBtn = mpHost ? `<button class="mp-btn" style="width:100%;margin-top:4px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
     const reacts=mpReactsBarHTML();
     st.innerHTML=`<div class="mp-deck">${head}
       <div class="mp-state" id="mpCountdown"></div>
       <button class="mp-knob" id="mpKnob" onclick="mpPlayLocal()" aria-label="Odtwórz">
         <svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
       <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+      <div class="mp-roster" id="mpRoster">${roster}</div>
       ${g.mode==='lektor'&&g.lyric?`<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>`:''}
-      <div class="mp-form">
-        <input id="mpPropT" placeholder="tytuł"><input id="mpPropA" placeholder="wykonawca">
-        <button onclick="mpPropose()">Wrzuć</button>
-      </div>
+      <div class="mp-form" style="grid-template-columns:${formCols}">${formInputs}<button onclick="mpPropose()">Wrzuć</button></div>
+      <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
       <div class="mp-board" id="mpBoard">${board}</div>
       <div class="mp-team" id="mpTeam">${team}</div>
       <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>
-      <div class="mp-pewniak" id="mpPass">${pass}</div>${reacts}${scribe}`;
+      <div class="mp-pewniak" id="mpPass">${pass}</div>
+      ${lockBtn}${reacts}`;
   } else {
-    // tylko odśwież tablicę, kartę drużyny, pewniaka i pas — pola zostają nietknięte
+    // tylko odśwież roster/tablicę/team/pewniaka/pas — pola zostają nietknięte
+    if($m('mpRoster')) $m('mpRoster').innerHTML=roster;
     $m('mpBoard').innerHTML=board;
     if($m('mpTeam')) $m('mpTeam').innerHTML=team;
     $m('mpPewniak').innerHTML=pewniak;
     if($m('mpPass')) $m('mpPass').innerHTML=pass;
   }
-  // podpowiedź pisarza (top głosów) — dopóki host sam nie zacznie pisać
-  if(mpHost && !mpScribeTouched && top && $m('mpScTitle')){ $m('mpScTitle').value=top.title; $m('mpScArtist').value=top.artist; }
   mpTickTimer();
 }
 
@@ -1173,11 +1191,16 @@ function mpRenderDone(g, head){
     ${mpHost?'<button class="sum-again" onclick="mpNewGame()">Nowa gra</button>':'<div class="next" style="opacity:.6">host może zacząć nową grę</div>'}</div>`;
 }
 function mpPropose(){
-  const t=$m('mpPropT').value.trim(), a=$m('mpPropA').value.trim();
-  if(!t&&!a) return;
-  mpSend({type:'propose', title:t, artist:a});
-  $m('mpPropT').value=''; $m('mpPropA').value='';
+  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+  const values={}; let any=false;
+  slots.forEach(s=>{ const el=$m('mpProp_'+s.key); const v=el?el.value.trim():''; if(v){ values[s.key]=v; any=true; } });
+  if(!any) return;
+  mpSend({type:'propose', conf:mpConf, values});
+  slots.forEach(s=>{ const el=$m('mpProp_'+s.key); if(el) el.value=''; });
+  mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML();
 }
+function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
+function mpSetConf(v){ mpConf=v; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
 
 function mpTickTimer(){
   const el=$m('mpCountdown');
@@ -1219,7 +1242,7 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCo
 /* ============ most do HTML: app.js to moduł ES (własny scope), więc handlery
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 Object.assign(window, {
-  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose,
+  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance,
 });

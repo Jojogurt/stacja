@@ -2,7 +2,7 @@
  * Uruchom: node test/run.js */
 import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
-import { reduceAction, countReady, evaluateAnswer, myVote, topProposal } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from '../core/mpReducer.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 import { buildSoloRecord, buildMpRecord } from '../core/matchRecord.js';
@@ -99,17 +99,18 @@ group('scoring.evaluateGuess', ()=>{
 });
 
 /* --- mpReducer --- */
-function mkGame(){ return {phase:MP.PLAY, round:1, proposals:[], sure:[]}; }
+function mkGame(){ return {phase:MP.PLAY, round:1, answerSlots:slotsFor(), proposals:[], votes:{}, sure:[]}; }
 group('mpReducer.reduceAction', ()=>{
   const g=mkGame();
-  ok(reduceAction(g,{type:'propose',by:'u1',byName:'Ala',title:'Hey Jude',artist:'Beatles'}),'propose zmienia stan');
+  ok(reduceAction(g,{type:'propose',by:'u1',byName:'Ala',conf:'sure',values:{title:'Hey Jude',artist:'Beatles'}}),'propose zmienia stan');
   eq(g.proposals.length,1,'1 propozycja');
-  ok(!reduceAction(g,{type:'propose',by:'u2',byName:'B',title:'',artist:''}),'pusta propozycja odrzucona');
-  const pid=g.proposals[0].id;
-  ok(reduceAction(g,{type:'vote',by:'u2',pid}),'głos dodany');
-  eq(g.proposals[0].votes,['u2'],'głos zapisany');
-  reduceAction(g,{type:'vote',by:'u2',pid});  // ponowny głos na to samo
-  eq(g.proposals[0].votes,['u2'],'głos nie dubluje');
+  ok(!reduceAction(g,{type:'propose',by:'u2',byName:'B',values:{title:'',artist:''}}),'pusty typ odrzucony');
+  eq(g.votes.title.u1,'Hey Jude','auto-głos na własny tytuł');
+  eq(g.votes.artist.u1,'Beatles','auto-głos na własnego wykonawcę');
+  ok(reduceAction(g,{type:'vote',by:'u2',slot:'title',value:'Hey Jude'}),'głos na slot dodany');
+  eq(g.votes.title.u2,'Hey Jude','głos zapisany');
+  reduceAction(g,{type:'vote',by:'u2',slot:'title',value:'Hey Jude'});  // ten sam = wycofanie
+  ok(!('u2' in g.votes.title),'ponowny głos = wycofanie');
   ok(reduceAction(g,{type:'sure',by:'u2',byName:'B'}),'pewniak włączony');
   eq(g.sure.length,1,'1 pewniak');
   reduceAction(g,{type:'sure',by:'u2',byName:'B'});
@@ -118,11 +119,12 @@ group('mpReducer.reduceAction', ()=>{
   eq(g.passed.length,1,'1 pas');
   reduceAction(g,{type:'pass',by:'u2',byName:'B'});
   eq(g.passed.length,0,'pas wyłączony (toggle)');
-  ok(reduceAction(g,{type:'unpropose',by:'u1',pid}),'autor usuwa propozycję');
-  eq(g.proposals.length,0,'propozycja usunięta');
+  const pid=g.proposals[0].id;
+  ok(reduceAction(g,{type:'unpropose',by:'u1',pid}),'autor usuwa typ');
+  eq(g.proposals.length,0,'typ usunięty');
   ok(!reduceAction(g,{type:'nieznana'}),'nieznana akcja → brak zmian');
-  const armed={phase:MP.ARMING, proposals:[], sure:[]};
-  ok(!reduceAction(armed,{type:'propose',by:'x',title:'a'}),'propose poza fazą play → ignorowane');
+  const armed={phase:MP.ARMING, answerSlots:slotsFor(), proposals:[], votes:{}, sure:[]};
+  ok(!reduceAction(armed,{type:'propose',by:'x',values:{title:'a'}}),'propose poza fazą play → ignorowane');
 });
 group('mpReducer.countReady', ()=>{
   const s=new Set(['a','b']);
@@ -132,26 +134,39 @@ group('mpReducer.countReady', ()=>{
   eq(countReady([],s).all,false,'pusta lista → nie all');
 });
 group('mpReducer.evaluateAnswer', ()=>{
-  const g={phase:MP.PLAY, round:2, sure:[{id:'u1',name:'Ala'}],
-    proposals:[{by:'u9',byName:'Zoe',title:'Hey Jude',artist:'The Beatles'}]};
+  const g={phase:MP.PLAY, round:2, answerSlots:slotsFor(), sure:[{id:'u1',name:'Ala'}],
+    proposals:[{by:'u9',byName:'Zoe',conf:'normal',values:{title:'Hey Jude',artist:'The Beatles'}}],
+    votes:{ title:{u9:'Hey Jude'}, artist:{u9:'The Beatles'} }};
   const cur={track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:''};
-  const ev=evaluateAnswer(g, cur, {title:'hey jude', artist:'beatles'});
-  ok(ev.teamOk,'drużyna trafiła');
+  const ev=evaluateAnswer(g, cur);   // locked = odpowiedź drużyny (górka głosów)
+  ok(ev.teamOk,'drużyna trafiła (oba sloty)');
   eq(ev.gained,2,'pewniak + trafienie = 2 pkt');
   eq(ev.firstBy,'Zoe','pierwszy trafny = Zoe');
   eq(ev.firstById,'u9','id pierwszego trafnego');
   ok(ev.reveal.pewniakWin,'pewniak wygrany');
   eq(ev.result.round,2,'wynik z numerem rundy');
-  const bad=evaluateAnswer({phase:MP.PLAY,round:1,sure:[{id:'u1',name:'A'}],proposals:[]}, cur, {title:'zle',artist:'zle'});
-  eq(bad.gained,0,'brak trafienia = 0 pkt');
+  const bad=evaluateAnswer({phase:MP.PLAY,round:1,answerSlots:slotsFor(),sure:[{id:'u1',name:'A'}],proposals:[],votes:{}}, cur);
+  eq(bad.gained,0,'brak głosów → brak trafienia = 0 pkt');
   ok(bad.reveal.pewniakLose,'pewniak przegrany');
 });
 group('mpReducer.selektory', ()=>{
-  const g={proposals:[{id:'p1',votes:['me']},{id:'p2',votes:['a','b']}]};
-  eq(myVote(g,'me'),'p1','mój głos znaleziony');
-  eq(myVote(g,'x'),null,'brak głosu → null');
-  eq(topProposal(g).id,'p2','najwięcej głosów na górze');
-  eq(myVote(null,'me'),null,'brak gry → null');
+  const g={answerSlots:slotsFor(), proposals:[
+    {id:'p1',by:'u1',byName:'A',conf:'sure',values:{title:'Hey Jude',artist:'Beatles'}},
+    {id:'p2',by:'u2',byName:'B',conf:'unsure',values:{title:'Help',artist:'Beatles'}},
+  ], votes:{ title:{u1:'Hey Jude',u2:'Help',u3:'Hey Jude'}, artist:{u1:'Beatles',u2:'Beatles'} }};
+  const tc=candidatesForSlot(g,'title');
+  eq(tc[0].value,'Hey Jude','najwięcej głosów na górze');
+  eq(tc[0].votes.length,2,'„Hey Jude" ma 2 głosy');
+  eq(tc[0].tag,'sure','tag pewniaka z propozycji u1');
+  const ta=teamAnswer(g);
+  eq(ta.title,'Hey Jude','tytuł drużyny = górka');
+  eq(ta.artist,'Beatles','wykonawca drużyny = górka');
+  eq(myVoteForSlot(g,'title','u2'),'Help','mój głos w slocie');
+  eq(myVoteForSlot(g,'title','x'),null,'brak głosu → null');
+  eq(rosterState(g,'u1'),'sure','u1 wrzucił pewniaka');
+  eq(rosterState(g,'u2'),'unsure','u2 tylko niepewny');
+  eq(rosterState(g,'zzz'),'idle','brak aktywności → myśli');
+  eq(rosterState({...g,passed:[{id:'u1'}]},'u1'),'pass','pas ma priorytet');
 });
 
 /* --- phases (FSM) --- */

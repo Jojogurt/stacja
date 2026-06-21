@@ -385,6 +385,36 @@
     9%{opacity:1;transform:translateY(0) scale(1)}
     82%{opacity:1;transform:translateY(-120px)}
     100%{opacity:0;transform:translateY(-150px)}}
+
+  /* ---- PR1: pasek osób (roster) + kolumny per slot + pewność ---- */
+  .mp-roster{display:flex;gap:6px;flex-wrap:wrap;padding:0 0 11px;margin:0 0 12px;border-bottom:2px solid var(--line)}
+  .mp-pl{display:flex;align-items:center;gap:5px;background:var(--panel);border:2px solid var(--line);border-radius:999px;
+    padding:3px 9px 3px 3px;font-family:var(--display);font-weight:800;font-size:11px;color:var(--ink)}
+  .mp-pl .av{width:20px;height:20px;border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:900;background:var(--panel2);color:var(--muted)}
+  .mp-pl .s{font-size:11px}
+  .mp-pl.ans{border-color:var(--green)} .mp-pl.ans .av{background:var(--green);color:#fff} .mp-pl.ans .s{color:var(--green)}
+  .mp-pl.sure{border-color:var(--gold);background:#FFFBEC} .mp-pl.sure .av{background:var(--gold);color:#fff} .mp-pl.sure .s{color:var(--gold-d)}
+  .mp-pl.unsure{border-color:var(--purple)} .mp-pl.unsure .av{background:var(--purple);color:#fff} .mp-pl.unsure .s{color:#9B4DDB}
+  .mp-pl.type{border-color:var(--blue)} .mp-pl.type .av{background:var(--blue);color:#fff} .mp-pl.type .s{color:var(--blue)}
+  .mp-pl.pass{opacity:.5}
+  .mp-pl.you{box-shadow:0 0 0 3px #EAF6FF}
+  .mp-slots{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  .mp-slot-h{font-family:var(--display);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin:0 0 6px 2px}
+  .mp-cand{display:flex;align-items:center;gap:5px;background:var(--panel);border:2px solid var(--line);border-radius:11px;padding:8px 9px;margin-bottom:6px}
+  .mp-cand.top{border-color:var(--green);background:#F0FBE6}
+  .mp-cand .cv{flex:1;min-width:0;font-size:13px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mp-cand .mp-ct{font-size:10px;font-weight:800;width:14px;text-align:center;flex:0 0 auto}
+  .mp-cand .mp-ct.sure{color:var(--gold-d)} .mp-cand .mp-ct.unsure{color:#9B4DDB}
+  .mp-vt{font-family:var(--display);font-size:11px;font-weight:800;color:var(--muted);background:var(--panel2);border:2px solid var(--line);
+    border-radius:8px;padding:4px 7px;white-space:nowrap;cursor:pointer}
+  .mp-vt.on{color:#fff;background:var(--green);border-color:var(--green-d)}
+  .mp-conf{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+  .mp-conf .c-lab{font-family:var(--display);font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+  .mp-cf{font-family:var(--display);font-weight:800;font-size:11px;color:var(--muted);background:var(--panel);border:2px solid var(--line);
+    border-bottom-width:3px;border-radius:10px;padding:6px 10px;cursor:pointer}
+  .mp-cf.on{color:#fff;background:var(--green);border-color:var(--green-d)}
+  .mp-cf.u{color:#9B4DDB;border-color:var(--purple)} .mp-cf.u.on{color:#fff;background:var(--purple);border-color:#9B4DDB}
+  .mp-cf.s{color:var(--gold-d);border-color:var(--gold)} .mp-cf.s.on{color:#fff;background:var(--gold);border-color:var(--gold-d)}
 </style>
 </head>
 <body class="menu">
