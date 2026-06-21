@@ -53,8 +53,19 @@
     max-width:520px; margin:0 auto; line-height:1.4; overflow-x:hidden;
   }
   /* ---- header / brand ---- */
-  .top{display:flex;align-items:center;justify-content:space-between;padding:18px 2px 16px}
+  /* nagłówek ekranu wg designu: ← menu | Tytuł | badge */
+  .top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:16px 2px 14px}
+  body.menu .top, body.mp .top{display:none}   /* menu ma brand w hero; mp ma własne nagłówki */
+  .scr-back{justify-self:start;font-family:var(--display);font-weight:800;font-size:15px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 2px}
+  .scr-title{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink);text-align:center}
+  .scr-badge{justify-self:end;background:#F0FBE6;color:var(--green-d);font-family:var(--display);font-weight:900;font-size:13px;padding:6px 11px;border-radius:11px}
   .brand{font-family:var(--display);font-weight:900;letter-spacing:.02em;font-size:23px;color:var(--green)}
+  /* ustawienie układu gry MP na ekranie głównym */
+  .mh-setting{display:flex;align-items:center;gap:12px;margin-top:14px;padding:4px 2px}
+  .mh-setting>span{font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted)}
+  .seg{margin-left:auto;display:flex;gap:4px;background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:3px}
+  .seg button{font-family:var(--display);font-weight:800;font-size:12px;color:var(--muted);background:none;border:none;border-radius:9px;padding:7px 13px;cursor:pointer}
+  .seg button.on{color:#fff;background:var(--blue)}
   .brand b{color:var(--gold)}
   .eyebrow{font-family:var(--display);font-weight:800;font-size:11px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 
@@ -475,12 +486,7 @@
   .mp-cf.s{color:var(--gold-d);border-color:var(--gold)} .mp-cf.s.on{color:#fff;background:var(--gold);border-color:var(--gold-d)}
   .mp-cf.p.on{color:#fff;background:var(--muted);border-color:var(--ink)}
 
-  /* ---- PR2: przełącznik skórki + skórka „czat" (composer @odp + feed) ---- */
-  .mp-skin{display:flex;align-items:center;gap:6px;justify-content:flex-end;margin:0 0 8px}
-  .mp-skin-lab{font-family:var(--display);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
-  .mp-skinbtn{font-family:var(--display);font-weight:800;font-size:10px;color:var(--muted);background:var(--panel);
-    border:2px solid var(--line);border-radius:9px;padding:4px 9px;cursor:pointer;text-transform:uppercase}
-  .mp-skinbtn.on{color:#fff;background:var(--blue);border-color:var(--blue-d)}
+  /* ---- PR2: skórka „czat" (composer @odp + feed) — przełącznik układu jest w menu ---- */
   .mp-deck-slim{padding:14px}
   .mp-knob-sm{width:60px;height:60px;box-shadow:0 4px 0 var(--green-d)} .mp-knob-sm svg{width:24px;height:24px}
   .mp-knob-sm:active{transform:translateY(4px);box-shadow:0 0 0 var(--green-d)}
@@ -780,8 +786,9 @@
 </head>
 <body class="menu">
   <div class="top">
-    <div class="brand">STA<b>·</b>CJA</div>
-    <button class="to-menu" id="toMenu">← menu</button>
+    <button class="scr-back" id="toMenu">← menu</button>
+    <span class="scr-title" id="scrTitle"></span>
+    <span class="scr-badge" id="scrBadge" style="display:none"></span>
   </div>
 
   <section id="menu">
@@ -798,15 +805,20 @@
       <button class="mh-mini" id="goLiga"><span>👥</span>Drużyna</button>
       <button class="mh-mini" id="goProfil"><span>👤</span>Profil</button>
     </div>
+    <div class="mh-setting">
+      <span>Układ gry ze znajomymi</span>
+      <div class="seg" id="skinSeg">
+        <button data-skin="kolumny">kolumny</button>
+        <button data-skin="czat">czat</button>
+      </div>
+    </div>
   </section>
 
   <section id="liga">
-    <div class="screen-head"><span>👥 Drużyna i znajomi</span></div>
     <div class="dz-body" id="druzynaBody"></div>
   </section>
 
   <section id="profil">
-    <div class="screen-head"><span>👤 Profil</span></div>
     <div class="pf-head" id="profilHead"></div>
     <div class="pf-edit"><label for="profilHandle">Ksywa</label>
       <div class="profil-handle"><input id="profilHandle" autocomplete="off" maxlength="16" placeholder="gracz"><button id="profilSave">Zapisz</button></div>
@@ -852,7 +864,7 @@
   </section>
 
   <section class="dial">
-    <div class="dial-head"><span>ułóż mecz</span><span id="dialNote">wybierz kategorie i tryby</span></div>
+    <div class="dial-head"><span id="dialNote">wybierz kategorie i tryby</span></div>
     <div class="band-label">dekady</div>
     <div class="ticks" id="ticks"></div>
     <div class="band-label">style i gatunki</div>

@@ -640,8 +640,23 @@ function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klien
 // na każdym wejściu na stronę, tylko gdy realnie zapisujemy postęp.
 
 /* ---- wejście / wyjście z trybu ---- */
-function showScreen(s){ document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s); if(s==='mp') mpPrefillName(); }
+const SCR_HEAD={ solo:{t:'Ułóż mecz', b:'SOLO'}, liga:{t:'Drużyna i znajomi', b:''}, profil:{t:'Profil', b:''} };
+function showScreen(s){
+  document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s);
+  if(s==='mp') mpPrefillName();
+  const cfg=SCR_HEAD[s]||{t:'',b:''};
+  const tt=$m('scrTitle'), bb=$m('scrBadge');
+  if(tt) tt.textContent=cfg.t;
+  if(bb){ bb.textContent=cfg.b; bb.style.display=cfg.b?'':'none'; }
+}
 $m('goSolo').onclick=()=>{ showScreen('solo'); };
+// przełącznik układu gry MP (kolumny/czat) — przeniesiony na ekran główny (ustawienie)
+(function wireSkinSeg(){
+  const seg=document.getElementById('skinSeg'); if(!seg) return;
+  const sync=()=>{ const cur=localStorage.getItem('stacjaUI')==='czat'?'czat':'kolumny'; seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.skin===cur)); };
+  seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{ mpSetSkin(b.dataset.skin); sync(); });
+  sync();
+})();
 
 /* ---- Drużyna / Znajomi (zastępuje Ligę) + Profil ---- */
 $m('goLiga').onclick=()=>{ showScreen('liga'); renderDruzyna(); };
@@ -1354,11 +1369,6 @@ function mpConfHTML(){
   return `${seg('normal','zwykła','',1)}${seg('unsure','🟣 niepewny','u',1.2)}${seg('sure','🟡 PEWNIAK ×2','s',1.5)}<button class="mp-seg p${iPassed?' on':''}" style="flex:.9" onclick="mpSend({type:'pass'})">✋ pas</button>`;
 }
 // przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
-function mpSkinToggleHTML(cur){
-  return `<div class="mp-skin"><span class="mp-skin-lab">układ</span>
-    <button class="mp-skinbtn${cur==='kolumny'?' on':''}" onclick="mpSetSkin('kolumny')">kolumny</button>
-    <button class="mp-skinbtn${cur==='czat'?' on':''}" onclick="mpSetSkin('czat')">czat</button></div>`;
-}
 const mpHr = ()=> `<div class="mp-hr"></div>`;
 // czas fazy „słuchaj" — z kategorii (cat.listenSecs) albo domyślnie wg trybu
 const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12 };
@@ -1469,8 +1479,7 @@ function mpKombinujCzatHTML(g){
 // scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
 function mpScaffoldPlay(g, head){
   const skin=mpSkin();
-  const top=`${mpSkinToggleHTML(skin)}
-    ${head}
+  const top=`${head}
     ${mpRailHTML(mpSub==='sluchaj'?'sluchaj':'kombinuj')}
     <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>
     ${skin==='czat'?mpLegendHTML():''}`;
