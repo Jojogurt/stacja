@@ -644,9 +644,11 @@ const DZ_OAUTH=false;   // Google/Apple ukryte do czasu konfiguracji kluczy w Su
 async function renderDruzyna(){
   const el=$m('druzynaBody'); if(!el) return;
   el.innerHTML='<div class="liga-empty">ładowanie…</div>';
-  await ensureSession();
+  try{
+  await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność (np. gdy hCaptcha się wiesza)
   const [meR, teamsR, friR, penR, auth] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), authInfo()]);
-  if(meR.error && !meR.data){ el.innerHTML='<div class="liga-empty">Brak połączenia z serwerem.<br><small>Drużyny i znajomi wymagają włączonego logowania anonimowego w projekcie Supabase.</small></div>'; return; }
+  const noAuth = (meR.error && !meR.data);   // brak sesji (anon-auth nie ruszył) — pokaż baner, ale NIE chowaj ekranu
+  const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Nie udało się zalogować — drużyny i znajomi wymagają działającego logowania anonimowego (Supabase → Auth → „Allow anonymous sign-ins" + ew. hCaptcha). Akcje poniżej będą zablokowane do czasu naprawy.</div>` : '';
   dzMe = (meR.data&&meR.data[0]) || null;
   const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[];
   const av=(n,c)=>`<span class="dz-av" style="background:${mpAvatarColor(n)}">${escapeHtml((n||'?').slice(0,1).toUpperCase())}</span>`;
@@ -700,7 +702,8 @@ async function renderDruzyna(){
     <div class="dz-hint" id="dzMsg">${DZ_OAUTH?'':'Logowanie przez Google / Apple — wkrótce'}</div>`
     : (auth && auth.email ? `<div class="dz-acct ok">✓ Zalogowano: ${escapeHtml(auth.email)}</div>` : '');
 
-  el.innerHTML = teamSection + friendSection + loginSection;
+  el.innerHTML = notice + teamSection + friendSection + loginSection;
+  }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
 }
 function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
 async function dzCreate(){ const n=$m('dzName')?.value, e=$m('dzEmoji')?.value; const r=await teamCreate(n,e); if(r.error){ dzMsg('Nie udało się: '+r.error,true); } else renderDruzyna(); }
