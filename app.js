@@ -639,7 +639,7 @@ function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klien
 // na każdym wejściu na stronę, tylko gdy realnie zapisujemy postęp.
 
 /* ---- wejście / wyjście z trybu ---- */
-function showScreen(s){ document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s); }
+function showScreen(s){ document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s); if(s==='mp') mpPrefillName(); }
 $m('goSolo').onclick=()=>{ showScreen('solo'); };
 
 /* ---- Drużyna / Znajomi (zastępuje Ligę) + Profil ---- */
@@ -648,6 +648,34 @@ $m('goProfil').onclick=()=>{ showScreen('profil'); renderProfil(); };
 
 let dzMe=null;   // {id, handle, emoji, friend_code}
 const DZ_OAUTH=false;   // Google/Apple ukryte do czasu konfiguracji kluczy w Supabase (zostaje e-mail)
+
+/* ---- ksywa: jedna tożsamość dla profilu i lobby MP ----
+   Brak ksywy → generujemy zabawną, „muzyczną" (np. „głuchy suseł”) i zapisujemy.
+   Pary dobrane tak, by przymiotnik (rodzaj męski) zgadzał się ze zwierzęciem i mieścił w maxlength=16. */
+let myHandle=null;
+const HANDLE_ADJ=['głuchy','basowy','zgrany','niemy','dęty','funkowy','jazzowy','punkowy','technowy','discowy','rapowy','fałszywy','kręcony','bujający','skoczny','rzewny','gitarowy','winylowy','chórowy','rytmiczny'];
+const HANDLE_ANIM=['suseł','borsuk','kojot','łoś','jeż','bóbr','kret','chomik','tapir','lemur','manat','żuraw','dudek','narwal','mors','ryś','karp','bażant','gawron','słowik','szpak','kos','paw'];
+function funnyHandle(){
+  const a=HANDLE_ADJ[Math.floor(Math.random()*HANDLE_ADJ.length)];
+  const n=HANDLE_ANIM[Math.floor(Math.random()*HANDLE_ANIM.length)];
+  const h=a+' '+n;
+  return h.length<=16 ? h : n;   // bezpiecznik na maxlength
+}
+// zwróć stabilną ksywę: z profilu, a jak brak — wygeneruj i zapisz (idempotentne, cache w myHandle)
+async function ensureHandle(){
+  if(myHandle) return myHandle;
+  await ensureSession();
+  const p=await fetchProfile();
+  let h=p&&p.handle;
+  if(!h || h==='gracz'){ h=funnyHandle(); setHandle(h); }
+  myHandle=h; return h;
+}
+// lobby MP: wstaw ksywę do pola, jeśli puste (nie nadpisuje tego, co gracz wpisał)
+async function mpPrefillName(){
+  const inp=$m('mpName'); if(!inp || inp.value.trim()) return;
+  const h=await ensureHandle();
+  if(h && !inp.value.trim()){ inp.value=h; mpMe.name=mpMe.name||h; }
+}
 async function renderDruzyna(){
   const el=$m('druzynaBody'); if(!el) return;
   el.innerHTML='<div class="liga-empty">ładowanie…</div>';
@@ -729,6 +757,8 @@ async function renderProfil(){
   await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
   const p=await fetchProfile();
   if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Włącz logowanie anonimowe w projekcie Supabase, żeby zapisywać postępy.</div>'; return; }
+  if(!p.handle || p.handle==='gracz'){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa
+  myHandle=p.handle;
   $m('profilHandle').value=p.handle;
   const s=p.standing;
   const acc = s.correct&&s.matches ? Math.round(s.correct/(s.matches||1)) : null;
@@ -763,7 +793,7 @@ async function renderProfil(){
 $m('profilSave').onclick=async()=>{
   const v=$m('profilHandle').value.trim(); if(!v) return;
   const btn=$m('profilSave'); btn.textContent='…';
-  await setHandle(v); mpMe.name=mpMe.name||v;
+  await setHandle(v); myHandle=v; mpMe.name=mpMe.name||v;
   btn.textContent='✓'; setTimeout(()=>btn.textContent='Zapisz',1200);
 };
 $m('goMp').onclick=()=>{
