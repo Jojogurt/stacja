@@ -561,6 +561,7 @@ function check(){
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${tt}</b><small>${sub}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
   document.getElementById('reveal').classList.add('show');
+  if(okTitle && okArtist) confetti();   // pełne trafienie → confetti
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -591,6 +592,24 @@ function setRing(p){ document.getElementById('ring').style.background=
   `conic-gradient(var(--gold) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`; }
 function setState(t){ const e=document.getElementById('state'); e.classList.remove('err'); e.textContent=t; }
 function flash(t){ const e=document.getElementById('state'); e.classList.add('err'); e.textContent=t; setIcon('play'); }
+// confetti przy trafieniu (lekkie, czysty DOM/CSS; pomijane przy reduce-motion)
+function confetti(n=90){
+  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+  let fx=document.getElementById('confettiFx');
+  if(!fx){ fx=document.createElement('div'); fx.id='confettiFx'; document.body.appendChild(fx); }
+  const colors=['#58CC02','#1CB0F6','#FFC800','#FF4B4B','#CE82FF'];
+  for(let i=0;i<n;i++){
+    const p=document.createElement('i'); p.className='cf';
+    p.style.left=Math.random()*100+'%';
+    p.style.background=colors[i%colors.length];
+    p.style.setProperty('--x',(Math.random()*220-110)+'px');
+    p.style.setProperty('--r',(Math.random()*720-360)+'deg');
+    p.style.animationDelay=(Math.random()*0.2).toFixed(2)+'s';
+    p.style.animationDuration=(1.6+Math.random()*1.2).toFixed(2)+'s';
+    if(i%3===0) p.style.borderRadius='50%';
+    fx.appendChild(p); setTimeout(()=>p.remove(), 3200);
+  }
+}
 function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
   document.getElementById('sStreak').textContent=streak; }
 function val(id){ return document.getElementById(id).value.trim(); }
@@ -1272,6 +1291,7 @@ function mpRender(){
   if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
     mpRevealNonce=g.playNonce;
     mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
+    if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti (raz)
   }
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
   if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(mpRevealSnap); return; }
@@ -1576,7 +1596,7 @@ function mpTickTimer(){
   if(!mpGame || mpGame.phase!==MP.PLAY || !mpGame.endsAt){ if(el) el.textContent=''; return; }
   const rem=Math.max(0, mpGame.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
-  if(el){ const m=Math.floor(s/60); el.textContent='⏱ '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); }
+  if(el){ const m=Math.floor(s/60); el.textContent='⏱ '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
   if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase===MP.PLAY){ mpLock(); }
 }
 function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
