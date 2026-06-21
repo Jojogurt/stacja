@@ -1180,7 +1180,7 @@ const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumn
 function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
 function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.pause();}catch(e){} } }
-function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); }
+function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpSub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 function mpRender(){
@@ -1195,6 +1195,7 @@ function mpRender(){
   const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
   // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
   if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
+    mpStopAudio();                          // odsłona = koniec audio dla tego pytania
     mpRevealNonce=g.playNonce;
     mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
   }
@@ -1376,7 +1377,9 @@ function mpHeaderHTML(g){
     </div>
   </div>`;
 }
-const mpLockNoteHTML = ()=> `<div class="mp-locknote">🔒 Audio dostępne tylko w fazie słuchania</div>`;
+// audio dostępne też w fazie „kombinuj" (replay) — wspólny wiersz z gałką
+const mpAudioRowHTML = (g)=> `<div class="mp-deck">${mpKnobHTML()}
+    <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor — stuknij, by powtórzyć':'stuknij, by posłuchać'}</div></div>`;
 const mpReactsOnlyHTML = ()=> `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
 
 // FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna)
@@ -1390,7 +1393,7 @@ function mpSluchajBodyHTML(g){
 }
 // FAZA „kombinuj" — widok KOLUMNOWY (bez audio)
 function mpKombinujKolumnyHTML(g){
-  return `${mpLockNoteHTML()}${mpLyricHTML(g)}
+  return `${mpAudioRowHTML(g)}${mpLyricHTML(g)}
     ${mpFormHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     ${mpAnswerBlockHTML(g, false)}
@@ -1398,7 +1401,7 @@ function mpKombinujKolumnyHTML(g){
 }
 // FAZA „kombinuj" — widok CZAT: czat w środku, kolumny/team/zatwierdź na dole nad emotkami (item 5)
 function mpKombinujCzatHTML(g){
-  return `${mpLockNoteHTML()}${mpLyricHTML(g)}
+  return `${mpAudioRowHTML(g)}${mpLyricHTML(g)}
     <div class="mp-chatfeed" id="mpChatFeed"></div>
     ${mpComposerHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
@@ -1447,6 +1450,7 @@ function mpRenderPlay(g, head, st){
     mpPlayRound=g.playNonce; mpPlaySkin=skin; mpPlaySub=mpSub;
     st.innerHTML = mpScaffoldPlay(g, head);
     if(mpSub==='sluchaj') mpAnimListenBar();
+    else if(mpAudio && !mpAudio.paused){ mpSetKnob('pause'); mpSetPlayStatus(g.mode==='snippet'?'gra fragment…':'gra…'); }
   }
   mpRefreshDynamic(g);
   mpTickTimer();
