@@ -659,14 +659,11 @@ function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klien
 // na każdym wejściu na stronę, tylko gdy realnie zapisujemy postęp.
 
 /* ---- wejście / wyjście z trybu ---- */
-const SCR_HEAD={ solo:{t:'Ułóż mecz', b:'SOLO'}, liga:{t:'Drużyna i znajomi', b:''}, profil:{t:'Profil', b:''} };
+const SCR_HEAD={ solo:'Ułóż mecz', liga:'Drużyna i znajomi', profil:'Profil' };
 function showScreen(s){
   document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s);
   if(s==='mp') mpPrefillName();
-  const cfg=SCR_HEAD[s]||{t:'',b:''};
-  const tt=$m('scrTitle'), bb=$m('scrBadge');
-  if(tt) tt.textContent=cfg.t;
-  if(bb){ bb.textContent=cfg.b; bb.style.display=cfg.b?'':'none'; }
+  const tt=$m('scrTitle'); if(tt) tt.textContent=SCR_HEAD[s]||'';
 }
 $m('goSolo').onclick=()=>{ showScreen('solo'); };
 // przełącznik układu gry MP (kolumny/czat) — przeniesiony na ekran główny (ustawienie)
@@ -843,7 +840,6 @@ $m('toMenu').onclick=()=>{
   showScreen('menu');
 };
 $m('mpExit').onclick=()=>{ showScreen('menu'); };
-$m('mpLeave').onclick=()=>{ mpLeave(); showScreen('menu'); };
 
 async function mpLeave(){
   if(mpCh){ try{ await mpCh.unsubscribe(); }catch(e){} mpCh=null; }
@@ -891,11 +887,9 @@ function mpShare(btn){
   if(btn){ const t=btn.textContent; btn.textContent='✓ skopiowano'; setTimeout(()=>btn.textContent=t,1500); }
 }
 function mpLobbyStart(){ mpRoomStage='build'; mpRender(); }   // host: poczekalnia → „ułóż mecz"
-$m('mpCopy').onclick=()=>{
-  const url=location.origin+location.pathname+'?room='+mpCode;
-  navigator.clipboard?.writeText(url); $m('mpCopy').textContent='skopiowano!';
-  setTimeout(()=>$m('mpCopy').textContent='kopiuj link',1500);
-};
+function mpLobbyBack(){ mpRoomStage='wait'; mpRender(); }     // picker → poczekalnia (wstecz)
+function mpRoomBack(){ mpLeave(); }                           // wyjdź z pokoju → ekran wejścia
+function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu'); }   // ☰ → menu
 
 async function mpEnterRoom(code, asHost){
   mpErr('');
@@ -904,7 +898,6 @@ async function mpEnterRoom(code, asHost){
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = auth.uid PRZED presence
   mpCode=code; mpHost=asHost; mpRoomStage='wait';
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
-  $m('mpRoomCode').textContent=code;
   mpCh=client.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
@@ -926,8 +919,9 @@ function mpMembers(){
   return out;
 }
 function mpRenderMembers(){
+  const el=$m('mpMembers'); if(!el) return;   // pasek członków usunięty — lista jest w poczekalni
   const ms=mpMembers();
-  $m('mpMembers').innerHTML=ms.map(m=>{
+  el.innerHTML=ms.map(m=>{
     const host = mpGame? (m.id===mpGame.hostId) : (m.id===mpMe.id && mpHost);
     return `<span class="mp-chip${host?' host':''}${m.id===mpMe.id?' you':''}">${escapeHtml(m.name)}</span>`;
   }).join('');
@@ -1135,7 +1129,12 @@ function mpPickerHTML(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   const bad=(!mpPickCats.size||!mpPickModes.size||r.error);
   const info=(!mpPickCats.size||!mpPickModes.size)?'zaznacz kategorie i tryby':(r.error||`${mpPickRounds} × 3 × 5 = ${mpPickRounds*15} pytań`);
-  return `<div class="mp-deck"><div class="mp-state">ułóż mecz</div>${cats}${plBand}${modes}${rounds}${timer}
+  return `<div class="mpnav">
+      <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">←</button>
+      <span class="nav-title">Ułóż mecz</span>
+      <button class="nav-menu" onclick="mpExitMenu()" aria-label="menu">☰</button>
+    </div>
+    <div class="mp-deck">${cats}${plBand}${modes}${rounds}${timer}
     <button class="match-rand" onclick="mpRandomPick()">🎲 Losuj kategorie i tryby</button>
     <div class="match-info ${bad?'err':''}">${escapeHtml(info)}</div>
     <button class="mp-btn" style="width:100%;margin-top:12px${bad?';opacity:.5':''}" ${bad?'disabled':''} onclick="mpStart()">Start meczu →</button></div>`;
@@ -1264,7 +1263,7 @@ function mpLobbyWaitHTML(){
     : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
   return `<div class="pcz">
     <div class="pcz-hd">
-      <div class="pcz-hd-r1"><span class="pcz-exit" onclick="document.getElementById('mpLeave').click()">← wyjdź</span><span class="pcz-lbl">KOD POKOJU</span></div>
+      <div class="pcz-hd-r1"><span class="pcz-exit" onclick="mpRoomBack()">← wyjdź</span><span class="pcz-lbl">KOD POKOJU</span></div>
       <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(mpCode||'····')}</span><button class="pcz-share" onclick="mpShare(this)">🔗 Udostępnij</button></div>
     </div>
     <div class="pcz-team"><span>Drużyna</span><span class="pcz-count">${n} ${word}</span></div>
@@ -1274,17 +1273,12 @@ function mpLobbyWaitHTML(){
 }
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
-  const head0=$m('mpRoomHead');
   if(!mpGame || mpGame.phase==null){
-    // przed grą: poczekalnia (06) → host „ZACZNIJ" → picker „ułóż mecz"
+    // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
     const building = mpHost && mpRoomStage==='build';
-    const mm=$m('mpMembers'); if(mm) mm.style.display = building ? '' : 'none';
-    if(head0) head0.style.display = building ? '' : 'none';   // poczekalnia ma własny niebieski nagłówek
     st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
     return;
   }
-  const mm=$m('mpMembers'); if(mm) mm.style.display='none';   // w grze roster zastępuje pasek członków
-  if(head0) head0.style.display='';
   const g=mpGame;
   const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
   // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
@@ -1455,7 +1449,7 @@ function mpHeaderHTML(g){
   const MODE={music:'♪ muzyka',lektor:'🗣 lektor',reverse:'🔄 od tyłu',snippet:'✂️ fragment'};
   return `<div class="mp-hd">
     <div class="mp-hd-r1">
-      <span class="mp-hd-back" onclick="(document.getElementById('mpLeave')||{}).click&&document.getElementById('mpLeave').click()">←</span>
+      <span class="mp-hd-back" onclick="mpRoomBack()">←</span>
       <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(mpCode||'')}</span>
       <span class="mp-hd-timer" id="mpCountdown"></span>
     </div>
@@ -1577,7 +1571,7 @@ function mpRenderDone(g, head){
     ${mvp}${stawia}
     <div class="dn-lbl">Wkład drużyny</div>
     <div class="dn-wk">${rows}</div>
-    <div class="dn-btns"><button class="dn-menu" onclick="(document.getElementById('toMenu')||{}).click&&document.getElementById('toMenu').click()">← menu</button>${mpHost?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
+    <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">← menu</button>${mpHost?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
 }
 function mpPropose(){
   const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
@@ -1703,5 +1697,5 @@ Object.assign(window, {
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
-  mpLobbyStart, mpShare,
+  mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });

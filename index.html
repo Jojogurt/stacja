@@ -53,12 +53,12 @@
     max-width:520px; margin:0 auto; line-height:1.4; overflow-x:hidden;
   }
   /* ---- header / brand ---- */
-  /* nagłówek ekranu wg designu: ← menu | Tytuł | badge */
-  .top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:16px 2px 14px}
-  body.menu .top, body.mp .top{display:none}   /* menu ma brand w hero; mp ma własne nagłówki */
-  .scr-back{justify-self:start;font-family:var(--display);font-weight:800;font-size:15px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 2px}
-  .scr-title{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink);text-align:center}
-  .scr-badge{justify-self:end;background:#F0FBE6;color:var(--green-d);font-family:var(--display);font-weight:900;font-size:13px;padding:6px 11px;border-radius:11px}
+  /* JEDEN navbar dla wszystkich ekranów: ← back | tytuł (środek) | ☰ menu (opcjonalnie) */
+  .top, .mpnav{display:grid;grid-template-columns:1fr auto 1fr;align-items:center;padding:16px 2px 14px}
+  body.menu .top, body.mp .top{display:none}   /* menu ma logo w hero; mp ma navbar w treści */
+  .nav-back{justify-self:start;font-family:var(--display);font-weight:800;font-size:20px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 8px;line-height:1}
+  .nav-title{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink);text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .nav-menu{justify-self:end;font-size:20px;line-height:1;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px 8px}
   .brand{font-family:var(--display);font-weight:900;letter-spacing:.02em;font-size:23px;color:var(--green)}
   /* ustawienie układu gry MP na ekranie głównym */
   .mh-setting{display:flex;align-items:center;gap:12px;margin-top:14px;padding:4px 2px}
@@ -814,9 +814,9 @@
 </head>
 <body class="menu">
   <div class="top">
-    <button class="scr-back" id="toMenu">← menu</button>
-    <span class="scr-title" id="scrTitle"></span>
-    <span class="scr-badge" id="scrBadge" style="display:none"></span>
+    <button class="nav-back" id="toMenu" aria-label="wstecz">←</button>
+    <span class="nav-title" id="scrTitle"></span>
+    <span class="nav-menu" style="visibility:hidden">☰</span>
   </div>
 
   <section id="menu">
@@ -877,13 +877,8 @@
       <button class="lb-join" id="mpJoin">DOŁĄCZ DO POKOJU</button>
     </div>
 
-    <!-- ROOM: poczekalnia (06) → picker → gra -->
+    <!-- ROOM: poczekalnia (06) → picker → gra (każdy ma własny navbar) -->
     <div id="mpRoom" style="display:none">
-      <div class="mp-head" id="mpRoomHead">
-        <span>pokój <b id="mpRoomCode">····</b> <button class="mp-copy" id="mpCopy">kopiuj link</button></span>
-        <button class="mp-back" id="mpLeave">← wyjdź</button>
-      </div>
-      <div class="mp-members" id="mpMembers"></div>
       <div id="mpStage"></div>
     </div>
   </section>
