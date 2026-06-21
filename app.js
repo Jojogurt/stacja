@@ -1414,7 +1414,8 @@ function mpChatFeedHTML(){
 // pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
 function mpRailHTML(active){
   const order=['sluchaj','kombinuj','odslona'];
-  const meta={ sluchaj:['🎧','słuchaj'], kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
+  const listen = (mpGame&&mpGame.mode==='lektor') ? ['📖','czytaj'] : ['🎧','słuchaj'];   // lektor czyta tekst, reszta słucha
+  const meta={ sluchaj:listen, kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
   const ai=order.indexOf(active);
   let out='<div class="mp-rail">';
   order.forEach((k,i)=>{
@@ -1482,18 +1483,16 @@ function mpSluchajBodyHTML(g){
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
     ${mpHr()}${mpReactsBarHTML()}`;
 }
-// FAZA „kombinuj" — widok KOLUMNOWY (bez audio)
+// FAZA „kombinuj" — widok KOLUMNOWY (bez audio i bez tekstu — jak dla muzyki zajawka znika)
 function mpKombinujKolumnyHTML(g){
-  return `${mpLyricHTML(g)}
-    ${mpFormHTML(g)}
+  return `${mpFormHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     ${mpAnswerBlockHTML(g, false)}
     ${mpHr()}${mpReactsBarHTML()}`;
 }
 // FAZA „kombinuj" — widok CZAT: czat w środku, kolumny/team/zatwierdź na dole nad emotkami (item 5)
 function mpKombinujCzatHTML(g){
-  return `${mpLyricHTML(g)}
-    <div class="mp-chatfeed" id="mpChatFeed"></div>
+  return `<div class="mp-chatfeed" id="mpChatFeed"></div>
     ${mpComposerHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     <div class="mp-chint">z <b>@</b> wrzucasz typ · bez @ piszesz na czat</div>
