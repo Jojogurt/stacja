@@ -640,6 +640,7 @@ $m('goLiga').onclick=()=>{ showScreen('liga'); renderDruzyna(); };
 $m('goProfil').onclick=()=>{ showScreen('profil'); renderProfil(); };
 
 let dzMe=null;   // {id, handle, emoji, friend_code}
+const DZ_OAUTH=false;   // Google/Apple ukryte do czasu konfiguracji kluczy w Supabase (zostaje e-mail)
 async function renderDruzyna(){
   const el=$m('druzynaBody'); if(!el) return;
   el.innerHTML='<div class="liga-empty">ładowanie…</div>';
@@ -690,12 +691,13 @@ async function renderDruzyna(){
     ${friendRows}`;
 
   // === KONTO (opcjonalne logowanie) ===
+  const oauthRow = DZ_OAUTH ? `<div class="dz-oauth"><button class="dz-prov g" onclick="dzLogin('google')">Google</button><button class="dz-prov a" onclick="dzLogin('apple')">Apple</button></div>` : '';
   const loginSection = (auth && auth.isAnon) ? `
     <div class="dz-lbl">Konto</div>
-    <div class="dz-acct">Grasz jako gość — zaloguj, by drużyny i znajomi działali na innych urządzeniach.</div>
-    <div class="dz-row2"><input id="dzEmail" type="email" placeholder="twój e-mail"><button class="dz-go" onclick="dzLoginEmail()">E-mail</button></div>
-    <div class="dz-oauth"><button class="dz-prov g" onclick="dzLogin('google')">Google</button><button class="dz-prov a" onclick="dzLogin('apple')">Apple</button></div>
-    <div class="dz-hint" id="dzMsg"></div>`
+    <div class="dz-acct">Grasz jako gość — podaj e-mail, żeby drużyny i znajomi działały też na innych urządzeniach.</div>
+    <div class="dz-row2"><input id="dzEmail" type="email" placeholder="twój e-mail"><button class="dz-go" onclick="dzLoginEmail()">Wyślij link</button></div>
+    ${oauthRow}
+    <div class="dz-hint" id="dzMsg">${DZ_OAUTH?'':'Logowanie przez Google / Apple — wkrótce'}</div>`
     : (auth && auth.email ? `<div class="dz-acct ok">✓ Zalogowano: ${escapeHtml(auth.email)}</div>` : '');
 
   el.innerHTML = teamSection + friendSection + loginSection;
