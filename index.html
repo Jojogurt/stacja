@@ -66,6 +66,30 @@
   .seg{margin-left:auto;display:flex;gap:4px;background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:3px}
   .seg button{font-family:var(--display);font-weight:800;font-size:12px;color:var(--muted);background:none;border:none;border-radius:9px;padding:7px 13px;cursor:pointer}
   .seg button.on{color:#fff;background:var(--blue)}
+
+  /* ===== ANIMACJE ===== */
+  @keyframes scrIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+  @keyframes tickpop{0%{transform:scale(1)}40%{transform:scale(1.09)}100%{transform:scale(1)}}
+  /* wejście ekranów */
+  body:not(.menu):not(.mp) .top{animation:scrIn .3s cubic-bezier(.2,.8,.2,1) both}
+  body.solo:not(.playing) .dial, body.mp #mp, body.liga #liga, body.profil #profil{animation:scrIn .32s cubic-bezier(.2,.8,.2,1) both}
+  /* menu — wejście kaskadowe */
+  body.menu .mh-hero{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both}
+  body.menu .mh-card.solo{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.06s}
+  body.menu .mh-card.mp{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.12s}
+  body.menu .mh-row{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.18s}
+  body.menu .mh-setting{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.24s}
+  /* mikrointerakcje */
+  .tick.on{animation:tickpop .22s ease}
+  .tick:active{transform:scale(.95)}
+  .mh-card{transition:transform .08s}
+  .mh-card:active{transform:translateY(3px)}
+  .mh-mini{transition:transform .08s}
+  .mh-mini:active{transform:translateY(2px)}
+  .pcz-m{animation:scrIn .3s cubic-bezier(.2,.8,.2,1) both}
+  @media (prefers-reduced-motion: reduce){
+    *,*::before,*::after{animation-duration:.001ms !important;animation-iteration-count:1 !important;transition-duration:.001ms !important;scroll-behavior:auto !important}
+  }
   .brand b{color:var(--gold)}
   .eyebrow{font-family:var(--display);font-weight:800;font-size:11px;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 
