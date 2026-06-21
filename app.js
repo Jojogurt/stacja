@@ -1419,10 +1419,11 @@ function mpTeamHTML(g){
 // wybór pewności typu (zwykła/niepewny/pewniak) + „pas" — jeden wiersz, bez dubli na dole.
 // pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
 // Stan kto pewniakuje / spasował widać na pasku osób (roster), więc tu bez list imion.
-function mpConfHTML(){
+function mpConfHTML(withPass=true){
   const seg=(v,label,cls,flex)=>`<button class="mp-seg ${cls}${mpConf===v?' on':''}" style="flex:${flex}" onclick="mpSetConf('${v}')">${label}</button>`;
   const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
-  return `${seg('normal','zwykła','',1)}${seg('unsure','🟣 niepewny','u',1.2)}${seg('sure','🟡 PEWNIAK ×2','s',1.5)}<button class="mp-seg p${iPassed?' on':''}" style="flex:.9" onclick="mpSend({type:'pass'})">✋ pas</button>`;
+  const pass = withPass ? `<button class="mp-seg p${iPassed?' on':''}" style="flex:.9" onclick="mpSend({type:'pass'})">✋ pas</button>` : '';
+  return `${seg('normal','zwykła','',1)}${seg('unsure','🟣 niepewny','u',1.2)}${seg('sure','🟡 PEWNIAK ×2','s',1.5)}${pass}`;
 }
 // przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
 const mpHr = ()=> `<div class="mp-hr"></div>`;
@@ -1521,15 +1522,22 @@ function mpKombinujKolumnyHTML(g){
     ${mpAnswerBlockHTML(g, false)}
     ${mpHr()}${mpReactsBarHTML()}`;
 }
-// FAZA „kombinuj" — widok CZAT: czat w środku, kolumny/team/zatwierdź na dole nad emotkami (item 5)
+// FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
+// strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
 function mpKombinujCzatHTML(g){
-  return `<div class="mp-chatfeed" id="mpChatFeed"></div>
-    ${mpComposerHTML(g)}
-    <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-    <div class="mp-chint">z <b>@</b> wrzucasz typ · bez @ piszesz na czat</div>
-    ${mpHr()}
-    ${mpAnswerBlockHTML(g, true)}
-    ${mpHr()}${mpReactsOnlyHTML()}`;
+  const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
+  return `<div class="mp-team" id="mpTeam"></div>
+    ${mpLockBtnHTML(true)}
+    <div class="mp-chatfeed" id="mpChatFeed"></div>
+    <div class="mp-comp">
+      <div class="mp-comp-react">
+        ${REACTIONS.map(e=>`<button class="mp-rbtn" onclick="mpReact('${e}')">${e}</button>`).join('')}
+        <button class="mp-pass${iPassed?' on':''}" onclick="mpSend({type:'pass'})">✋ pas</button>
+      </div>
+      <div class="mp-conf" id="mpConf">${mpConfHTML(false)}</div>
+      ${mpComposerHTML(g)}
+      <div class="mp-chint">z <b>@</b> wrzucasz typ · bez @ piszesz na czat</div>
+    </div>`;
 }
 // scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
 function mpScaffoldPlay(g, head){
@@ -1547,7 +1555,7 @@ function mpRefreshDynamic(g){
   set('mpRoster', mpRosterHTML(g));
   set('mpBoard', mpSlotsHTML(g));
   set('mpTeam', mpTeamHTML(g));
-  set('mpConf', mpConfHTML());            // odśwież stan „pas" (pewność czyta trwały mpConf)
+  set('mpConf', mpConfHTML(mpSkin()!=='czat'));   // czat: „pas" jest w rzędzie emotek, nie w pewności
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 // start okna fazy słuchania (licznik czasu + auto-przejście do „kombinuj") — po intro

@@ -543,8 +543,16 @@
   .mp-deck-slim{padding:14px}
   .mp-knob-sm{width:60px;height:60px;box-shadow:0 4px 0 var(--green-d)} .mp-knob-sm svg{width:24px;height:24px}
   .mp-knob-sm:active{transform:translateY(4px);box-shadow:0 0 0 var(--green-d)}
-  .mp-chatfeed{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:12px 0;padding:2px}
+  .mp-chatfeed{max-height:280px;min-height:60px;overflow-y:auto;display:flex;flex-direction:column;gap:9px;margin:10px 0;padding:2px}
   .mp-chatfeed:empty{display:none}
+  /* composer (design 08): rząd emotek + ✋pas → pewność → pole @odp */
+  .mp-comp{border-top:2px solid #F0F0F0;padding-top:10px;margin-top:8px;display:flex;flex-direction:column;gap:9px}
+  .mp-comp-react{display:flex;gap:5px;align-items:center}
+  .mp-rbtn{font-size:18px;line-height:1;background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:11px;padding:5px 9px;cursor:pointer}
+  .mp-rbtn:active{transform:translateY(2px);border-bottom-width:2px}
+  .mp-pass{margin-left:auto;background:#FFF1F1;color:#E63946;border:2px solid #FFD4D4;border-bottom-width:4px;border-radius:11px;padding:6px 12px;font-family:var(--display);font-weight:900;font-size:12px;cursor:pointer}
+  .mp-pass:active{transform:translateY(2px);border-bottom-width:2px}
+  .mp-pass.on{background:#E63946;color:#fff;border-color:#C62A38}
   .mp-cm{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:7px 11px;font-family:var(--body);font-size:13px;font-weight:700;line-height:1.35;color:var(--ink)}
   .mp-cm b{font-family:var(--display);font-weight:800;font-size:9px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);display:block;margin-bottom:1px}
   .mp-chint{font-family:var(--body);font-weight:700;font-size:11px;color:var(--muted);margin:8px 0 2px;text-align:center;line-height:1.45}
