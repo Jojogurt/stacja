@@ -721,7 +721,7 @@ async function mpEnterRoom(code, asHost){
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
-  mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatSay(payload.text, payload.byName); });
+  mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpPushChat(payload.byName, payload.text); mpFloatSay(payload.text, payload.byName); } });
   mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost){ mpBroadcast(); mpMaybeGo(); } });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
@@ -1018,6 +1018,10 @@ function mpNewGame(){ mpAck=mpRevealNonce=mpRevealSnap=null; mpGame={hostId:mpMe
 /* ---- render sceny ---- */
 let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykieta: normal/unsure/sure)
 let mpTypingSet=new Set();      // kto „pisze…" (PR3: zasilane broadcastem; dziś puste)
+let mpChatLog=[];               // PR2: feed czatu (klient-side, z broadcastów „say") — ring buffer
+let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
+const mpSkin = ()=> localStorage.getItem('stacjaUI')||'kolumny';   // skórka = preferencja klienta (czysty render)
+function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 function mpRender(){
@@ -1121,39 +1125,74 @@ function mpPassHTML(g){
   return `<button class="mp-pass${iPassed?' on':''}" onclick="mpSend({type:'pass'})" title="nic już nie dodam do tej rundy">🤚 pas${iPassed?' ✓':''}</button>
     <span class="mp-state" style="margin:0">${passed.length?`spasowali (${passed.length}/${total}): ${names}`:'nie wiesz? kliknij „pas”'}</span>`;
 }
-function mpRenderPlay(g, head, st){
-  const roster=mpRosterHTML(g), board=mpSlotsHTML(g), team=mpTeamHTML(g), pewniak=mpPewniakHTML(g), pass=mpPassHTML(g);
-  // pełna przebudowa TYLKO przy wejściu w rundę; potem aktualizujemy same dynamiczne części,
-  // żeby NIE czyścić pól, w które ktoś właśnie wpisuje
-  if(mpPlayRound!==g.playNonce || !$m('mpBoard')){
-    mpPlayRound=g.playNonce;
-    const slots=g.answerSlots||slotsFor();
-    const formInputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}">`).join('');
-    const formCols=slots.map(()=>'1fr').join(' ')+' auto';
-    const lockBtn = mpHost ? `<button class="mp-btn" style="width:100%;margin-top:4px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
-    const reacts=mpReactsBarHTML();
-    st.innerHTML=`<div class="mp-deck">${head}
+// przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
+function mpSkinToggleHTML(cur){
+  return `<div class="mp-skin"><span class="mp-skin-lab">układ</span>
+    <button class="mp-skinbtn${cur==='kolumny'?' on':''}" onclick="mpSetSkin('kolumny')">kolumny</button>
+    <button class="mp-skinbtn${cur==='czat'?' on':''}" onclick="mpSetSkin('czat')">czat</button></div>`;
+}
+const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpPlayLocal()" aria-label="Odtwórz"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
+const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
+const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
+// feed czatu (klient-side, z broadcastów „say")
+function mpChatFeedHTML(){ return mpChatLog.map(c=>`<div class="mp-cm"><b>${escapeHtml(c.byName||'')}</b>${escapeHtml(c.text)}</div>`).join(''); }
+
+// SKÓRKA „kolumny" — formularz per slot + wybór pewności, kontrolki rozdzielone
+function mpScaffoldColumns(g, head){
+  const slots=g.answerSlots||slotsFor();
+  const formInputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}">`).join('');
+  const formCols=slots.map(()=>'1fr').join(' ')+' auto';
+  return `${mpSkinToggleHTML('kolumny')}<div class="mp-deck">${head}
       <div class="mp-state" id="mpCountdown"></div>
-      <button class="mp-knob" id="mpKnob" onclick="mpPlayLocal()" aria-label="Odtwórz">
-        <svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>
+      ${mpKnobHTML()}
       <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta u każdego':'gra u każdego'} · stuknij, by powtórzyć</div></div>
-      <div class="mp-roster" id="mpRoster">${roster}</div>
-      ${g.mode==='lektor'&&g.lyric?`<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>`:''}
+      <div class="mp-roster" id="mpRoster"></div>
+      ${mpLyricHTML(g)}
       <div class="mp-form" style="grid-template-columns:${formCols}">${formInputs}<button onclick="mpPropose()">Wrzuć</button></div>
       <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-      <div class="mp-board" id="mpBoard">${board}</div>
-      <div class="mp-team" id="mpTeam">${team}</div>
-      <div class="mp-pewniak" id="mpPewniak">${pewniak}</div>
-      <div class="mp-pewniak" id="mpPass">${pass}</div>
-      ${lockBtn}${reacts}`;
-  } else {
-    // tylko odśwież roster/tablicę/team/pewniaka/pas — pola zostają nietknięte
-    if($m('mpRoster')) $m('mpRoster').innerHTML=roster;
-    $m('mpBoard').innerHTML=board;
-    if($m('mpTeam')) $m('mpTeam').innerHTML=team;
-    $m('mpPewniak').innerHTML=pewniak;
-    if($m('mpPass')) $m('mpPass').innerHTML=pass;
+      <div class="mp-board" id="mpBoard"></div>
+      <div class="mp-team" id="mpTeam"></div>
+      <div class="mp-pewniak" id="mpPewniak"></div>
+      <div class="mp-pewniak" id="mpPass"></div>
+      ${mpLockBtnHTML(false)}${mpReactsBarHTML()}`;
+}
+// SKÓRKA „czat" — strumień + jedno pole (composer @odp): tekst→czat, @→typ
+function mpScaffoldChat(g, head){
+  return `${mpSkinToggleHTML('czat')}<div class="mp-deck mp-deck-slim">${head}
+      ${mpKnobHTML('mpKnob','mp-knob mp-knob-sm')}
+      <div class="mp-state" id="mpCountdown"></div>
+      <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+      <div class="mp-roster" id="mpRoster"></div>
+      ${mpLyricHTML(g)}
+      <div class="mp-board" id="mpBoard"></div>
+      <div class="mp-team" id="mpTeam"></div>
+      <div class="mp-pewniak" id="mpPewniak"></div>
+      <div class="mp-pewniak" id="mpPass"></div>
+      ${mpLockBtnHTML(true)}
+      <div class="mp-chatfeed" id="mpChatFeed"></div>
+      <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
+      <div class="mp-composer"><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="napisz… albo @tytuł, wykonawca" onkeydown="if(event.key==='Enter')mpComposerSend()"><button onclick="mpComposerSend()">wyślij</button></div>
+      <div class="mp-chint">z <b>@</b> wrzucasz typ (np. @Kombinacja, Maanam) · bez @ piszesz na czat</div>
+      <div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
+}
+// odśwież dynamiczne części (wspólne dla obu skórek) — bez ruszania pól wpisywanych
+function mpRefreshDynamic(g){
+  const set=(id,html)=>{ const el=$m(id); if(el) el.innerHTML=html; };
+  set('mpRoster', mpRosterHTML(g));
+  set('mpBoard', mpSlotsHTML(g));
+  set('mpTeam', mpTeamHTML(g));
+  set('mpPewniak', mpPewniakHTML(g));
+  set('mpPass', mpPassHTML(g));
+  const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
+}
+function mpRenderPlay(g, head, st){
+  const skin=mpSkin();
+  // przebuduj scaffold przy nowej rundzie lub zmianie skórki; inaczej tylko odśwież dynamikę
+  if(mpPlayRound!==g.playNonce || mpPlaySkin!==skin || !$m('mpBoard')){
+    mpPlayRound=g.playNonce; mpPlaySkin=skin;
+    st.innerHTML = skin==='czat' ? mpScaffoldChat(g, head) : mpScaffoldColumns(g, head);
   }
+  mpRefreshDynamic(g);
   mpTickTimer();
 }
 
@@ -1219,12 +1258,31 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
   s.style.left=(8+Math.random()*78)+'%';
   fx.appendChild(s); setTimeout(()=>s.remove(), EMOJI_TTL_MS);
 }
-// #10: krótka wiadomość (kilka słów) — biały dymek lecący przez ekran
-function mpSay(){
-  const el=$m('mpSayIn'); if(!el) return;
-  const t=el.value.trim().slice(0,32); if(!t) return;
+// #10: krótka wiadomość — dymek lecący przez ekran + wpis w feed czatu (skórka „czat")
+function mpPushChat(byName, text){
+  mpChatLog.push({byName, text}); if(mpChatLog.length>40) mpChatLog.shift();
+  const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
+}
+function mpDoSay(text){
+  const t=(text||'').trim().slice(0,64); if(!t) return;
+  mpPushChat(mpMe.name, t);
   mpFloatSay(t, mpMe.name);   // pokaż od razu u siebie (bez round-tripu)
   if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
+}
+function mpSay(){ const el=$m('mpSayIn'); if(!el) return; mpDoSay(el.value); el.value=''; }
+// composer „@odp" (skórka czat): @prefix → typ (pola po przecinku), inaczej → czat
+function mpComposerSend(){
+  const el=$m('mpChatIn'); if(!el) return;
+  const raw=el.value.trim(); if(!raw){ return; }
+  if(raw[0]==='@' || raw[0]==='/'){
+    const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+    const parts=raw.slice(1).split(',').map(x=>x.trim());
+    const values={}; let any=false;
+    slots.forEach((s,i)=>{ if(parts[i]){ values[s.key]=parts[i]; any=true; } });
+    if(any){ mpSend({type:'propose', conf:mpConf, values}); mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+  } else {
+    mpDoSay(raw);
+  }
   el.value='';
 }
 function mpFloatSay(text, byName){
@@ -1243,6 +1301,6 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCo
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
-  mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer,
+  mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance,
 });

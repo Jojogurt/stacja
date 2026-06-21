@@ -415,6 +415,28 @@
   .mp-cf.on{color:#fff;background:var(--green);border-color:var(--green-d)}
   .mp-cf.u{color:#9B4DDB;border-color:var(--purple)} .mp-cf.u.on{color:#fff;background:var(--purple);border-color:#9B4DDB}
   .mp-cf.s{color:var(--gold-d);border-color:var(--gold)} .mp-cf.s.on{color:#fff;background:var(--gold);border-color:var(--gold-d)}
+
+  /* ---- PR2: przełącznik skórki + skórka „czat" (composer @odp + feed) ---- */
+  .mp-skin{display:flex;align-items:center;gap:6px;justify-content:flex-end;margin:0 0 8px}
+  .mp-skin-lab{font-family:var(--display);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted)}
+  .mp-skinbtn{font-family:var(--display);font-weight:800;font-size:10px;color:var(--muted);background:var(--panel);
+    border:2px solid var(--line);border-radius:9px;padding:4px 9px;cursor:pointer;text-transform:uppercase}
+  .mp-skinbtn.on{color:#fff;background:var(--blue);border-color:var(--blue-d)}
+  .mp-deck-slim{padding:14px}
+  .mp-knob-sm{width:60px;height:60px;box-shadow:0 4px 0 var(--green-d)} .mp-knob-sm svg{width:24px;height:24px}
+  .mp-knob-sm:active{transform:translateY(4px);box-shadow:0 0 0 var(--green-d)}
+  .mp-chatfeed{max-height:150px;overflow-y:auto;display:flex;flex-direction:column;gap:6px;margin:12px 0;padding:2px}
+  .mp-chatfeed:empty{display:none}
+  .mp-cm{background:var(--panel);border:2px solid var(--line);border-radius:12px;padding:7px 11px;font-family:var(--body);font-size:13px;font-weight:700;line-height:1.35;color:var(--ink)}
+  .mp-cm b{font-family:var(--display);font-weight:800;font-size:9px;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);display:block;margin-bottom:1px}
+  .mp-composer{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:4px}
+  .mp-composer input{background:var(--panel2);border:2px solid var(--blue);border-radius:12px;color:var(--ink);
+    font-family:var(--body);font-weight:700;font-size:15px;padding:11px;outline:none;min-width:0}
+  .mp-composer button{font-family:var(--display);font-weight:800;color:#fff;background:var(--blue);border:none;
+    border-radius:12px;padding:0 16px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--blue-d)}
+  .mp-composer button:active{transform:translateY(3px);box-shadow:none}
+  .mp-chint{font-family:var(--body);font-weight:700;font-size:11px;color:var(--muted);margin:8px 0 2px;text-align:center;line-height:1.45}
+  .mp-chint b{color:var(--blue-d)}
 </style>
 </head>
 <body class="menu">
