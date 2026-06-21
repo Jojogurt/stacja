@@ -1273,7 +1273,6 @@ let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (k
 let mpPlaySub=null;             // dla którego pod-stanu fazy zbudowany scaffold (sluchaj/kombinuj)
 let mpSub='sluchaj';            // klient-lokalny pod-stan fazy PLAY (obie skórki mają fazy)
 let mpSubTimer=null;            // auto-przejście słuchaj → kombinuj po czasie fazy słuchania
-let mpComposerMode='chat';      // tryb composera @odp w skórce czat (chat/typ)
 let mpListenStart=0, mpListenDur=0;   // okno fazy „słuchaj" (pasek czasu)
 // skórka = preferencja klienta (czysty render); obie mają fazy, różnią się fazą „kombinuj"
 const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
@@ -1498,15 +1497,12 @@ function mpAnswerBlockHTML(g, ghostLock){
     <div class="mp-team" id="mpTeam"></div>
     ${mpLockBtnHTML(ghostLock)}`;
 }
-// composer „@odp" (czat): [✍️ typ] po LEWEJ + pole czatu ⇄ chipy slotów + [wyślij]
+// composer „@odp" (czat, design 08): JEDNO pole — „@ tytuł, wykonawca" = typ, inaczej = czat.
+// (bez morfowania w chipy — to powodowało bug pól na iOS Safari)
 function mpComposerHTML(g){
-  const slots=g.answerSlots||slotsFor();
-  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
-      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
       <div class="mp-compfield">
-        <div class="mp-cwrap" id="mpCompChat"><span class="mp-odp">@odp</span><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="@ → typ · tekst → czat" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
-        <div class="mp-cwrap" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
+        <div class="mp-cwrap" id="mpCompChat"><span class="mp-odp">@odp</span><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="@ → typ · tekst → czat" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
       </div>
       <button id="mpCompBtn" class="mp-send" onclick="mpComposerSend()">➤</button>
     </div>`;
@@ -1594,7 +1590,7 @@ function mpRenderPlay(g, head, st){
   const skin=mpSkin();
   const newRound = mpPlayRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
-    mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
+    mpClearTyping(); mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
     // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
   if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
@@ -1705,46 +1701,12 @@ function mpDoSay(text){
   if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
 }
 function mpSay(){ const el=$m('mpSayIn'); if(!el) return; mpDoSay(el.value); el.value=''; }
-// composer „@odp" (skórka czat): @prefix → typ (pola po przecinku), inaczej → czat
-// przełącz composer czat ⇄ typ (chipy slotów)
-function mpSetComposerMode(m){
-  mpComposerMode=m;
-  const chat=$m('mpCompChat'), typ=$m('mpCompTyp'), tog=$m('mpTypToggle'), btn=$m('mpCompBtn');
-  if(chat) chat.style.display = m==='typ'?'none':'flex';
-  if(typ)  typ.style.display  = m==='typ'?'flex':'none';
-  if(tog)  tog.textContent    = m==='typ'?'💬':'✍️';
-  if(btn)  btn.textContent    = '➤';
-}
-function mpComposerToggle(){
-  mpSetComposerMode(mpComposerMode==='typ'?'chat':'typ');
-  const first=$m('mpChatIn'), slots=(mpGame&&mpGame.answerSlots)||slotsFor();
-  const focusEl = mpComposerMode==='typ' ? $m('mpTyp_'+slots[0].key) : first;
-  if(focusEl) focusEl.focus();
-}
-// wpisanie „@" w polu czatu morfuje composer w chipy slotów (treść po @ rozbija po przecinku)
-function mpChatInput(){
-  mpTypingPing();
-  const el=$m('mpChatIn'); if(!el || el.value[0]!=='@') return;
-  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
-  const parts=el.value.slice(1).split(',');
-  mpSetComposerMode('typ');
-  slots.forEach((s,i)=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=(parts[i]||'').trim(); });
-  el.value='';
-  const first=$m('mpTyp_'+slots[0].key); if(first) first.focus();
-}
+// composer „@odp" (skórka czat): jedno pole — „@tytuł, wykonawca" → typ, inaczej → czat
 function mpComposerSend(){
   const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
-  if(mpComposerMode==='typ'){
-    const values={}; let any=false;
-    slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); const v=c?c.value.trim():''; if(v){ values[s.key]=v; any=true; } });
-    if(any){ mpSend({type:'propose', conf:mpConf, values}); mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
-    slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=''; });
-    mpSetComposerMode('chat');
-    return;
-  }
   const el=$m('mpChatIn'); if(!el) return;
   const raw=el.value.trim(); if(!raw){ return; }
-  if(raw[0]==='@' || raw[0]==='/'){      // fallback (np. wklejone) — parsuj jako typ
+  if(raw[0]==='@' || raw[0]==='/'){      // „@tytuł, wykonawca" → typ (pola po przecinku)
     const parts=raw.slice(1).split(',').map(x=>x.trim());
     const values={}; let any=false;
     slots.forEach((s,i)=>{ if(parts[i]){ values[s.key]=parts[i]; any=true; } });
@@ -1786,7 +1748,7 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); mpSetCod
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
-  mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
+  mpGoKombinuj, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
