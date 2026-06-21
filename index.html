@@ -643,17 +643,11 @@
 
   /* ===== DESIGN v2 — Fala 3: menu ===== */
   body.menu .top{display:none}
-  .mh-hero{background:var(--green);color:#fff;border-radius:22px;padding:22px 20px;margin:6px 0 18px;box-shadow:0 5px 0 var(--green-d)}
-  .mh-top{display:flex;align-items:center;gap:10px}
-  .mh-eq{display:flex;align-items:flex-end;gap:3px;height:22px}
-  .mh-eq i{width:5px;background:#fff;border-radius:2px}
-  .mh-eq i:nth-child(1){height:12px;animation:mpeq 1s ease-in-out infinite}
-  .mh-eq i:nth-child(2){height:20px;animation:mpeq 1s .18s ease-in-out infinite}
-  .mh-eq i:nth-child(3){height:9px;animation:mpeq 1s .34s ease-in-out infinite}
+  .mh-hero{text-align:center;margin:24px 0 24px;padding:0}
   @keyframes mpeq{0%,100%{height:7px}50%{height:20px}}
-  .mh-brand{font-family:var(--display);font-weight:900;font-size:26px;letter-spacing:.05em}
-  .mh-streak{margin-left:auto;background:rgba(255,255,255,.22);border-radius:13px;padding:7px 12px;font-family:var(--display);font-weight:800;font-size:15px}
-  .mh-sub{font-family:var(--body);font-weight:700;font-size:15px;opacity:.95;margin-top:9px}
+  .mh-logo{font-family:var(--display);font-weight:900;font-size:52px;letter-spacing:.02em;color:var(--green);line-height:1}
+  .mh-logo b{color:#FF8A00}   /* pomarańczowa kropka */
+  .mh-sub{font-family:var(--body);font-weight:700;font-size:16px;color:var(--muted);margin-top:8px}
   .mh-card{display:flex;align-items:center;gap:15px;width:100%;border:none;border-radius:20px;padding:18px;cursor:pointer;text-align:left;margin-bottom:15px}
   .mh-card.solo{background:var(--green);box-shadow:0 5px 0 var(--green-d)}
   .mh-card.mp{background:var(--blue);box-shadow:0 5px 0 var(--blue-d)}
@@ -827,11 +821,8 @@
 
   <section id="menu">
     <div class="mh-hero">
-      <div class="mh-top">
-        <span class="mh-eq"><i></i><i></i><i></i></span>
-        <span class="mh-brand">STACJA</span>
-      </div>
-      <div class="mh-sub">Trener muzycznego pubquizu</div>
+      <div class="mh-logo">STA<b>·</b>CJA</div>
+      <div class="mh-sub">grupowy quiz muzyczny</div>
     </div>
     <button class="mh-card solo" id="goSolo"><span class="ic">🎧</span><span class="tx"><b>SOLO</b><small>Trening, własne tempo</small></span><span class="ar">›</span></button>
     <button class="mh-card mp" id="goMp"><span class="ic">👥</span><span class="tx"><b>ZE ZNAJOMYMI</b><small>Mecz w pokoju, na żywo</small></span><span class="ar">›</span></button>
