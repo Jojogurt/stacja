@@ -2,3 +2,6 @@
 .DS_Store
 server/node_modules/
 server/.wrangler/
+
+# lokalny podgląd design-exportu (nie commitować)
+_designref/

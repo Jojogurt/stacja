@@ -1038,6 +1038,8 @@ function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=nu
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
+  // pasek członków pokoju (#mpMembers) chowamy w grze — roster go zastępuje; widać go tylko w lobby
+  const mm=$m('mpMembers'); if(mm) mm.style.display = (!mpGame || mpGame.phase==null) ? '' : 'none';
   if(!mpGame || mpGame.phase==null){
     st.innerHTML = mpHost ? mpPickerHTML() : `<div class="mp-deck"><div class="mp-state">host układa mecz…</div></div>`;
     return;
@@ -1085,13 +1087,24 @@ const mpRenderNetErr = (g, head)=>{
 const mpRenderNoLyric = (head)=> `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
 
 /* --- faza gry: małe budowniki HTML + częściowa aktualizacja (nie czyść pól) --- */
-// pasek osób: gałka + stan (myśli/pisze/wrzucił/niepewny/pewniak/pas)
-const ROSTER_ICON={ idle:'·', type:'···', ans:'✓', unsure:'?', sure:'🍺', pass:'🤚' };
+// pasek osób (design): awatar w kole (kolor = stan) + etykieta stanu pod spodem
+const ROSTER_META={
+  idle:  {bg:'#E5E5E5',fg:'#9a958c',lab:'myśli',lc:'#9a958c'},
+  type:  {bg:'#1CB0F6',fg:'#fff',lab:'pisze…',lc:'#1899D6'},
+  ans:   {bg:'#58CC02',fg:'#fff',lab:'✓ typ',lc:'#46A302'},
+  unsure:{bg:'#CE82FF',fg:'#fff',lab:'🟣 niepewny',lc:'#A568CC',ring:'#EBD6FF'},
+  sure:  {bg:'#FFC800',fg:'#7a5a00',lab:'🟡 pewniak',lc:'#E6A800',ring:'#FFE9A8'},
+  pass:  {bg:'#E5E5E5',fg:'#9a958c',lab:'✋ pas',lc:'#9a958c',dim:1},
+};
 function mpRosterHTML(g){
   return mpMembers().map(m=>{
-    const stt=rosterState(g, m.id, mpTypingSet);
+    const st=rosterState(g,m.id,mpTypingSet), me=ROSTER_META[st]||ROSTER_META.idle;
     const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
-    return `<div class="mp-pl ${stt}${m.id===mpMe.id?' you':''}"><span class="av">${av}</span>${escapeHtml(m.name)}<span class="s">${ROSTER_ICON[stt]}</span></div>`;
+    const ring=me.ring?`box-shadow:0 0 0 3px ${me.ring};`:'';
+    return `<div class="mp-rz${me.dim?' dim':''}${m.id===mpMe.id?' you':''}">
+      <span class="mp-rz-av" style="background:${me.bg};color:${me.fg};${ring}">${av}</span>
+      <span class="mp-rz-lab" style="color:${me.lc}">${me.lab}</span>
+    </div>`;
   }).join('');
 }
 // tablica kolumnami: osobne głosowanie na każdy slot (tytuł / wykonawca / …)
@@ -1121,10 +1134,9 @@ function mpTeamHTML(g){
 // pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
 // Stan kto pewniakuje / spasował widać na pasku osób (roster), więc tu bez list imion.
 function mpConfHTML(){
-  const opt=(v,label,cls)=>`<button class="mp-cf ${cls}${mpConf===v?' on':''}" onclick="mpSetConf('${v}')">${label}</button>`;
+  const seg=(v,label,cls,flex)=>`<button class="mp-seg ${cls}${mpConf===v?' on':''}" style="flex:${flex}" onclick="mpSetConf('${v}')">${label}</button>`;
   const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
-  const pas = `<button class="mp-cf p${iPassed?' on':''}" onclick="mpSend({type:'pass'})" title="nic już nie dodam do tej rundy">🤚 pas${iPassed?' ✓':''}</button>`;
-  return `<span class="c-lab">pewność</span>${opt('normal','zwykła','')}${opt('unsure','niepewny','u')}${opt('sure','🍺 pewniak','s')}${pas}`;
+  return `${seg('normal','zwykła','',1)}${seg('unsure','🟣 niepewny','u',1.2)}${seg('sure','🟡 PEWNIAK ×2','s',1.5)}<button class="mp-seg p${iPassed?' on':''}" style="flex:.9" onclick="mpSend({type:'pass'})">✋ pas</button>`;
 }
 // przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
 function mpSkinToggleHTML(cur){
@@ -1143,15 +1155,19 @@ const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${
 const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 function mpChatFeedHTML(){ return mpChatLog.map(c=>`<div class="mp-cm"><b>${escapeHtml(c.byName||'')}</b>${escapeHtml(c.text)}</div>`).join(''); }
-// pasek faz (rail): słuchaj → kombinujcie → odsłona
+// pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
 function mpRailHTML(active){
   const order=['sluchaj','kombinuj','odslona'];
   const meta={ sluchaj:['🎧','słuchaj'], kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
   const ai=order.indexOf(active);
-  return `<div class="mp-rail">`+order.map((k,i)=>{
+  let out='<div class="mp-rail">';
+  order.forEach((k,i)=>{
     const cls = i<ai?'done':(i===ai?'on':'');
-    return `<div class="mp-rnode ${cls}"><div class="mp-rdot">${meta[k][0]}</div><div class="mp-rlab">${meta[k][1]}</div></div>`;
-  }).join('<div class="mp-rseg"></div>')+`</div>`;
+    const dot = cls==='done' ? '✓' : meta[k][0];
+    out += `<div class="mp-rnode ${cls}"><span class="mp-rdot">${dot}</span><span class="mp-rlab">${meta[k][1]}</span></div>`;
+    if(i<order.length-1) out += `<span class="mp-rseg${i<ai?' done':''}"></span>`;
+  });
+  return out+'</div>';
 }
 // legenda stanów rostera (skórka czat — nad kreską)
 function mpLegendHTML(){
@@ -1183,16 +1199,23 @@ function mpComposerHTML(g){
       <button id="mpCompBtn" onclick="mpComposerSend()">wyślij</button>
     </div>`;
 }
-// kompaktowy nagłówek (jak makieta): wiersz 1 = runda · drużyna · timer; wiersz 2 = kategoria · tryb
+// nagłówek gry (design): kolorowy pas — wiersz 1 runda·pokój·timer; wiersz 2 chipy kat/tryb/pyt
 function mpHeaderHTML(g){
-  const MODE={music:'muzyka',lektor:'lektor',reverse:'od tyłu',snippet:'fragment'};
-  return `<div class="mp-bar">
-      <span class="mp-bar-r">Runda ${g.round||1}/${g.rounds||1}</span>
-      <span class="mp-bar-s">drużyna ${g.score||0} pkt</span>
-      <span class="mp-bar-t" id="mpCountdown"></span>
+  const MODE={music:'♪ muzyka',lektor:'🗣 lektor',reverse:'🔄 od tyłu',snippet:'✂️ fragment'};
+  return `<div class="mp-hd">
+    <div class="mp-hd-r1">
+      <span class="mp-hd-back" onclick="(document.getElementById('mpLeave')||{}).click&&document.getElementById('mpLeave').click()">←</span>
+      <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(mpCode||'')}</span>
+      <span class="mp-hd-timer" id="mpCountdown"></span>
     </div>
-    <div class="mp-bar2">${escapeHtml(g.catLabel||g.catKey||'')} · ${MODE[g.mode]||g.mode||''} · pyt. ${(g.qi||0)+1}/${QPC}</div>`;
+    <div class="mp-hd-chips">
+      <span>${escapeHtml(g.catLabel||g.catKey||'—')}</span>
+      <span>${MODE[g.mode]||g.mode||''}</span>
+      <span>Pyt. ${(g.qi||0)+1}/${QPC}</span>
+    </div>
+  </div>`;
 }
+const mpLockNoteHTML = ()=> `<div class="mp-locknote">🔒 Audio dostępne tylko w fazie słuchania</div>`;
 const mpReactsOnlyHTML = ()=> `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
 
 // FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna)
@@ -1206,7 +1229,7 @@ function mpSluchajBodyHTML(g){
 }
 // FAZA „kombinuj" — widok KOLUMNOWY (bez audio)
 function mpKombinujKolumnyHTML(g){
-  return `${mpLyricHTML(g)}
+  return `${mpLockNoteHTML()}${mpLyricHTML(g)}
     ${mpFormHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     ${mpAnswerBlockHTML(g, false)}
@@ -1214,7 +1237,7 @@ function mpKombinujKolumnyHTML(g){
 }
 // FAZA „kombinuj" — widok CZAT: czat w środku, kolumny/team/zatwierdź na dole nad emotkami (item 5)
 function mpKombinujCzatHTML(g){
-  return `${mpLyricHTML(g)}
+  return `${mpLockNoteHTML()}${mpLyricHTML(g)}
     <div class="mp-chatfeed" id="mpChatFeed"></div>
     ${mpComposerHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
@@ -1318,7 +1341,7 @@ function mpTickTimer(){
   if(!mpGame || mpGame.phase!==MP.PLAY || !mpGame.endsAt){ if(el) el.textContent=''; return; }
   const rem=Math.max(0, mpGame.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
-  if(el){ el.textContent='⏱ '+s+' s'; el.style.color = s<=10 ? 'var(--red)' : 'var(--amber)'; }
+  if(el){ const m=Math.floor(s/60); el.textContent='⏱ '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); }
   if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase===MP.PLAY){ mpLock(); }
 }
 function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }

@@ -477,6 +477,40 @@
     border-bottom:2px solid var(--line);margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .mp-listenbar{width:100%;height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:14px}
   .mp-listenbar i{display:block;height:100%;width:100%;background:var(--blue);border-radius:6px}
+
+  /* ===== DESIGN v2 (STACJA.dc.html) — Fala 1: górny pas ekranu gry ===== */
+  .mp-hd{background:var(--blue);color:#fff;border-radius:18px;padding:13px 15px;margin-bottom:14px;box-shadow:0 4px 0 var(--blue-d)}
+  .mp-hd-r1{display:flex;align-items:center;gap:10px}
+  .mp-hd-back{font-family:var(--display);font-weight:800;font-size:18px;color:rgba(255,255,255,.85);cursor:pointer;flex:0 0 auto}
+  .mp-hd-title{font-family:var(--display);font-weight:900;font-size:16px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mp-hd-timer{margin-left:auto;font-family:var(--display);font-weight:900;font-size:14px;color:#fff;white-space:nowrap}
+  .mp-hd-timer:not(:empty){background:var(--red);padding:6px 12px;border-radius:12px;box-shadow:0 3px 0 var(--red-d)}
+  .mp-hd-chips{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
+  .mp-hd-chips span{background:rgba(255,255,255,.2);padding:4px 10px;border-radius:9px;font-family:var(--display);font-weight:800;font-size:12px;color:#fff;white-space:nowrap}
+  .mp-rail{display:flex;align-items:center;gap:6px;margin:0 0 12px}
+  .mp-rnode{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px}
+  .mp-rnode .mp-rdot{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-size:15px;background:#fff;border:2px solid var(--line);color:#bdb8ae}
+  .mp-rnode .mp-rlab{font-family:var(--display);font-weight:800;font-size:11px;color:#bdb8ae}
+  .mp-rnode.done{opacity:.65}
+  .mp-rnode.done .mp-rdot{background:var(--green);border-color:var(--green);color:#fff}
+  .mp-rnode.done .mp-rlab{color:#9a958c}
+  .mp-rnode.on .mp-rdot{width:38px;height:38px;font-size:17px;background:var(--blue);border-color:var(--blue);color:#fff;box-shadow:0 0 0 4px #D6F0FC}
+  .mp-rnode.on .mp-rlab{color:var(--blue-d);font-weight:900}
+  .mp-rseg{flex:0 0 16px;height:3px;border-radius:2px;background:var(--line);margin-bottom:18px}
+  .mp-rseg.done{background:var(--green)}
+  .mp-locknote{display:flex;align-items:center;justify-content:center;gap:8px;background:#F4F4F2;border-radius:12px;padding:8px;font-family:var(--display);font-weight:800;font-size:12px;color:#9a958c;margin-bottom:12px}
+  .mp-roster{display:flex;gap:8px;justify-content:center;padding:0;margin:0 0 14px;border-bottom:none!important}
+  .mp-rz{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+  .mp-rz.dim{opacity:.55}
+  .mp-rz-av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:900;font-size:16px}
+  .mp-rz.you .mp-rz-av{outline:2px solid var(--ink);outline-offset:1px}
+  .mp-rz-lab{font-family:var(--display);font-weight:800;font-size:10px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+  .mp-conf{display:flex;gap:6px;flex-wrap:nowrap;overflow:visible;margin:12px 0}
+  .mp-seg{flex:1;font-family:var(--display);font-weight:800;font-size:11px;color:#9a958c;background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:13px;padding:9px 3px;cursor:pointer;text-align:center;white-space:nowrap;min-width:0}
+  .mp-seg.on{background:#F0FBE6;border-color:var(--green);color:var(--green-d)}
+  .mp-seg.u{color:#A568CC} .mp-seg.u.on{background:#F3E9FF;border-color:var(--purple);color:#A568CC}
+  .mp-seg.s{color:#E6A800;font-weight:900} .mp-seg.s.on{background:#FFF8E0;border-color:var(--gold);color:#E6A800}
+  .mp-seg.p.on{background:#FFF1F1;border-color:var(--red);color:#E63946}
 </style>
 </head>
 <body class="menu">
