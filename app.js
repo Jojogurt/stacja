@@ -1272,6 +1272,7 @@ let mpSeenPass=new Set();        // id graczy, których pas już zaksięgowano
 let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
 let mpPlaySub=null;             // dla którego pod-stanu fazy zbudowany scaffold (sluchaj/kombinuj)
 let mpSub='sluchaj';            // klient-lokalny pod-stan fazy PLAY (obie skórki mają fazy)
+let mpComposerMode='chat';     // composer @odp: 'chat' (pisanie) / 'typ' (pola slotów)
 let mpSubTimer=null;            // auto-przejście słuchaj → kombinuj po czasie fazy słuchania
 let mpListenStart=0, mpListenDur=0;   // okno fazy „słuchaj" (pasek czasu)
 // skórka = preferencja klienta (czysty render); obie mają fazy, różnią się fazą „kombinuj"
@@ -1421,8 +1422,9 @@ function mpTeamHTML(g){
   const val = any ? slots.map(s=> ta[s.key]?escapeHtml(ta[s.key]):'—').join(' — ') : '— wrzućcie i przegłosujcie —';
   const sure = (g.proposals||[]).some(p=>p.conf==='sure');
   const badge = sure ? '<span class="mp-x2">🟡 ×2</span>' : '';
+  const lock = mpHost ? `<button class="mp-lockmini" onclick="mpLock()" title="Zatwierdź odpowiedź drużyny" aria-label="Zatwierdź odpowiedź drużyny">✓</button>` : '';
   const cls = mpSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
-  return `<div class="${cls}"><span class="ic">🎯</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}</div>`;
+  return `<div class="${cls}"><span class="ic">🎯</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}${lock}</div>`;
 }
 // wybór pewności typu (zwykła/niepewny/pewniak) + „pas" — jeden wiersz, bez dubli na dole.
 // pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
@@ -1494,15 +1496,18 @@ function mpFormHTML(g){
 // kolumny + odpowiedź drużyny + zatwierdź (host) — wspólny blok odpowiedzi
 function mpAnswerBlockHTML(g, ghostLock){
   return `<div class="mp-board" id="mpBoard"></div>
-    <div class="mp-team" id="mpTeam"></div>
-    ${mpLockBtnHTML(ghostLock)}`;
+    <div class="mp-team" id="mpTeam"></div>`;
 }
-// composer „@odp" (czat, design 08): JEDNO pole — „@ tytuł, wykonawca" = typ, inaczej = czat.
-// (bez morfowania w chipy — to powodowało bug pól na iOS Safari)
+// composer „@odp" (czat): po wpisaniu „@" pole morfuje w pola slotów (tytuł/wykonawca) z szarymi
+// placeholderami — klikalne osobno. Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
 function mpComposerHTML(g){
+  const slots=g.answerSlots||slotsFor();
+  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
+      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
       <div class="mp-compfield">
-        <div class="mp-cwrap" id="mpCompChat"><span class="mp-odp">@odp</span><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="@ → typ · tekst → czat" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
+        <div class="mp-cwrap" id="mpCompChat"><span class="mp-odp">@odp</span><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="@ → typ · tekst → czat" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
+        <div class="mp-cwrap mp-cwrap-typ" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
       </div>
       <button id="mpCompBtn" class="mp-send" onclick="mpComposerSend()">➤</button>
     </div>`;
@@ -1545,7 +1550,6 @@ function mpKombinujKolumnyHTML(g){
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
 function mpKombinujCzatHTML(g){
   return `<div class="mp-team" id="mpTeam"></div>
-    ${mpLockBtnHTML(true)}
     <div class="mp-chatfeed" id="mpChatFeed"></div>
     <div class="mp-comp">
       ${mpComposerHTML(g)}
@@ -1590,7 +1594,7 @@ function mpRenderPlay(g, head, st){
   const skin=mpSkin();
   const newRound = mpPlayRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
-    mpClearTyping(); mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
+    mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
     // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
   if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
@@ -1701,12 +1705,44 @@ function mpDoSay(text){
   if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
 }
 function mpSay(){ const el=$m('mpSayIn'); if(!el) return; mpDoSay(el.value); el.value=''; }
-// composer „@odp" (skórka czat): jedno pole — „@tytuł, wykonawca" → typ, inaczej → czat
+// composer „@odp" (skórka czat): „@" → pola slotów (tytuł/wykonawca), inaczej → czat
+function mpSetComposerMode(m){
+  mpComposerMode=m;
+  const chat=$m('mpCompChat'), typ=$m('mpCompTyp'), tog=$m('mpTypToggle');
+  if(chat) chat.style.display = m==='typ'?'none':'flex';
+  if(typ)  typ.style.display  = m==='typ'?'flex':'none';
+  if(tog)  tog.textContent    = m==='typ'?'💬':'✍️';
+}
+function mpComposerToggle(){
+  mpSetComposerMode(mpComposerMode==='typ'?'chat':'typ');
+  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+  const focusEl = mpComposerMode==='typ' ? $m('mpTyp_'+slots[0].key) : $m('mpChatIn');
+  if(focusEl) focusEl.focus();
+}
+// wpisanie „@" w polu czatu morfuje w pola slotów (treść po @ rozbita po przecinku trafia do pól)
+function mpChatInput(){
+  mpTypingPing();
+  const el=$m('mpChatIn'); if(!el || el.value[0]!=='@') return;
+  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+  const parts=el.value.slice(1).split(',');
+  mpSetComposerMode('typ');
+  slots.forEach((s,i)=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=(parts[i]||'').trim(); });
+  el.value='';
+  const first=$m('mpTyp_'+slots[0].key); if(first) first.focus();
+}
 function mpComposerSend(){
   const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+  if(mpComposerMode==='typ'){              // pola slotów → typ
+    const values={}; let any=false;
+    slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); const v=c?c.value.trim():''; if(v){ values[s.key]=v; any=true; } });
+    if(any){ mpSend({type:'propose', conf:mpConf, values}); mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+    slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=''; });
+    mpSetComposerMode('chat');
+    return;
+  }
   const el=$m('mpChatIn'); if(!el) return;
   const raw=el.value.trim(); if(!raw){ return; }
-  if(raw[0]==='@' || raw[0]==='/'){      // „@tytuł, wykonawca" → typ (pola po przecinku)
+  if(raw[0]==='@' || raw[0]==='/'){      // fallback (wklejone) — „@tytuł, wykonawca" → typ
     const parts=raw.slice(1).split(',').map(x=>x.trim());
     const values={}; let any=false;
     slots.forEach((s,i)=>{ if(parts[i]){ values[s.key]=parts[i]; any=true; } });
@@ -1748,7 +1784,7 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); mpSetCod
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
-  mpGoKombinuj, mpFocusTyp,
+  mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
