@@ -680,6 +680,30 @@
   .rv-shead.win{background:#F0FBE6} .rv-shead.win .ic{background:var(--green)} .rv-shead.win .tx b{color:var(--green-d)} .rv-shead.win .tx small{color:#5a8a2a} .rv-shead.win .strk{color:#E6A800}
   .rv-shead.part{background:#FFF8E0} .rv-shead.part .ic{background:var(--gold);color:#7a5a00} .rv-shead.part .tx b{color:#E6A800} .rv-shead.part .tx small{color:#9a8a4a}
   .rv-shead.fail{background:#FFF1F1} .rv-shead.fail .ic{background:var(--red)} .rv-shead.fail .tx b{color:#E63946} .rv-shead.fail .tx small{color:#c0727a}
+
+  /* ===== DESIGN v2 — Fala 8: profil ===== */
+  .pf-head{display:flex;flex-direction:column;align-items:center;gap:8px;margin:4px 0 14px}
+  .pf-av{width:88px;height:88px;border-radius:50%;color:#fff;font-family:var(--display);font-weight:900;font-size:36px;display:flex;align-items:center;justify-content:center;box-shadow:0 5px 0 rgba(0,0,0,.12)}
+  .pf-name{font-family:var(--display);font-weight:900;font-size:22px;color:var(--ink)}
+  .pf-edit{background:var(--panel2);border:2px solid var(--line);border-radius:14px;padding:8px 12px;margin-bottom:16px}
+  .pf-edit label{display:block;font-family:var(--display);font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin-bottom:4px}
+  .pf-stats{display:flex;gap:12px;margin-bottom:16px}
+  .pf-st{flex:1;border-radius:18px;padding:14px 6px;text-align:center;border:2px solid}
+  .pf-st b{display:block;font-family:var(--display);font-weight:900;font-size:26px;line-height:1}
+  .pf-st small{font-family:var(--display);font-weight:800;font-size:11px;color:#9a958c}
+  .pf-st.g{background:#F7FCEF;border-color:#D7F0B8} .pf-st.g b{color:#46A302}
+  .pf-st.b{background:#EAF7FF;border-color:#BEE7FB} .pf-st.b b{color:#1899D6}
+  .pf-st.y{background:#FFF8E0;border-color:#FFE9A8} .pf-st.y b{color:#E6A800}
+  .pf-lbl{font-family:var(--display);font-weight:900;font-size:14px;color:var(--ink);margin:6px 2px 8px}
+  .pf-cat{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+  .pf-cat .lbl{font-family:var(--display);font-weight:800;font-size:13px;color:var(--ink);width:110px;flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pf-cat .bar{flex:1;height:12px;border-radius:6px;background:#EDEDED;overflow:hidden}
+  .pf-cat .bar i{display:block;height:100%;border-radius:6px}
+  .pf-cat .pct{font-family:var(--display);font-weight:900;font-size:12px;min-width:38px;text-align:right}
+  .pf-badges{display:flex;gap:10px;margin-bottom:8px}
+  .pf-badge{flex:1;aspect-ratio:1;background:#FFF8E0;border:2px solid #FFE9A8;border-radius:16px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px}
+  .pf-badge span{font-size:24px} .pf-badge small{font-family:var(--display);font-weight:800;font-size:9px;color:#9a8a4a;text-align:center}
+  .pf-badge.lock{background:#F4F4F2;border:2px dashed #E5E5E5} .pf-badge.lock span{opacity:.4}
 </style>
 </head>
 <body class="menu">
@@ -711,12 +735,11 @@
 
   <section id="profil">
     <div class="screen-head"><span>👤 Profil</span></div>
-    <div class="profil-card">
-      <div class="field"><label for="profilHandle">Ksywa</label>
-        <div class="profil-handle"><input id="profilHandle" autocomplete="off" maxlength="16" placeholder="gracz"><button id="profilSave">Zapisz</button></div>
-      </div>
-      <div class="profil-stats" id="profilStats"></div>
+    <div class="pf-head" id="profilHead"></div>
+    <div class="pf-edit"><label for="profilHandle">Ksywa</label>
+      <div class="profil-handle"><input id="profilHandle" autocomplete="off" maxlength="16" placeholder="gracz"><button id="profilSave">Zapisz</button></div>
     </div>
+    <div class="profil-stats" id="profilStats"></div>
   </section>
 
   <section id="mp">

@@ -659,19 +659,34 @@ async function renderProfil(){
   if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Włącz logowanie anonimowe w projekcie Supabase, żeby zapisywać postępy.</div>'; return; }
   $m('profilHandle').value=p.handle;
   const s=p.standing;
+  const acc = s.correct&&s.matches ? Math.round(s.correct/(s.matches||1)) : null;
+  // nagłówek: awatar + ksywa (design)
+  const hd=$m('profilHead');
+  if(hd){
+    const av=escapeHtml((p.handle||'?').slice(0,1).toUpperCase());
+    hd.innerHTML=`<span class="pf-av" style="background:${mpAvatarColor(p.handle)}">${av}</span>
+      <div class="pf-name">${escapeHtml(p.handle||'gracz')}</div>`;
+  }
   const cats=Object.entries(p.byCat).sort((a,b)=>b[1].n-a[1].n);
-  const catRows=cats.length? cats.map(([k,v])=>{
-    const pct=Math.round(v.ok/v.n*100);
-    return `<div class="stat-cat"><span class="lbl">${escapeHtml(catLabel(k))}</span>
-      <span class="bar"><i style="width:${pct}%"></i></span><span class="pct">${pct}%</span></div>`;
+  const CATCOL=['var(--green)','var(--blue)','var(--purple)','var(--gold)'];
+  const catRows=cats.length? cats.map(([k,v],i)=>{
+    const pct=Math.round(v.ok/v.n*100), col=CATCOL[i%CATCOL.length];
+    return `<div class="pf-cat"><span class="lbl">${escapeHtml(catLabel(k))}</span>
+      <span class="bar"><i style="width:${pct}%;background:${col}"></i></span><span class="pct" style="color:${col}">${pct}%</span></div>`;
   }).join('') : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>';
-  el.innerHTML=`<div class="stat-big">
-      <div><b>${s.matches}</b><small>mecze</small></div>
-      <div><b>${s.correct}</b><small>trafne</small></div>
-      <div><b>${s.points}</b><small>punkty</small></div>
+  // odznaki: kilka pochodnych ze statystyk + reszta zablokowana (placeholdery — pełny system później)
+  const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:'🔒'}</span><small>${on?lab:'—'}</small></div>`;
+  const badges=[ badge(s.matches>0,'🎵','Pierwszy mecz'), badge(s.matches>=10,'🔥','10 meczów'),
+    badge(s.points>=100,'💯','100 pkt'), badge(false,'','') ].join('');
+  el.innerHTML=`<div class="pf-stats">
+      <div class="pf-st g"><b>${s.matches}</b><small>MECZE</small></div>
+      <div class="pf-st b"><b>${s.correct}</b><small>TRAFNE</small></div>
+      <div class="pf-st y"><b>${s.points}</b><small>PUNKTY</small></div>
     </div>
-    <div class="band-label" style="margin:16px 0 4px">celność per kategoria (solo)</div>
-    ${catRows}`;
+    <div class="pf-lbl">Najlepsze kategorie</div>
+    ${catRows}
+    <div class="pf-lbl">Odznaki</div>
+    <div class="pf-badges">${badges}</div>`;
 }
 $m('profilSave').onclick=async()=>{
   const v=$m('profilHandle').value.trim(); if(!v) return;
