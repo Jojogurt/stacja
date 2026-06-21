@@ -667,6 +667,33 @@
   .mp-cmb{background:#F4F4F2;border-radius:4px 14px 14px 14px;padding:8px 12px;min-width:0}
   .mp-cmb .nm{font-family:var(--display);font-weight:900;font-size:11px;color:#9a958c}
   .mp-cmb .tx{font-family:var(--body);font-weight:700;font-size:14px;color:var(--ink);word-break:break-word}
+  /* typ w strumieniu (dymek z chipem @slot) */
+  .mp-cmb.typ{background:#EAF7FF;border:2px solid var(--blue)}
+  .mp-cmb.typ .nm{color:var(--blue-d)}
+  .mp-cmb.typ.me{background:#F0FBE6;border-color:var(--green)}
+  .mp-cmb.typ.me .nm{color:var(--green-d)}
+  .mp-typline{display:flex;align-items:center;gap:6px;margin-top:3px}
+  .mp-typchip{background:var(--blue);color:#fff;font-family:var(--display);font-weight:900;font-size:9px;padding:2px 6px;border-radius:6px;flex:0 0 auto}
+  .mp-cmb.typ.me .mp-typchip{background:var(--green)}
+  .mp-typline .val{font-family:var(--display);font-weight:900;font-size:14px;color:var(--ink);word-break:break-word}
+  /* linia systemowa (pewniak/pas) */
+  .mp-csys{align-self:center;background:#F4F4F2;border-radius:20px;padding:5px 12px;font-family:var(--display);font-weight:800;font-size:11px;color:var(--muted);text-align:center}
+  .mp-csys.sure{background:#FFF8E0;color:#E6A800}
+  /* „pisze…" */
+  .mp-ctyping{align-items:center}
+  .mp-typing{display:flex;gap:3px;align-items:center;background:#F4F4F2;border-radius:14px;padding:9px 13px;flex:0 0 auto}
+  .mp-typing span{width:7px;height:7px;border-radius:50%;background:#bdb8ae;animation:mpdot .8s infinite}
+  .mp-typing span:nth-child(2){animation-delay:.15s} .mp-typing span:nth-child(3){animation-delay:.3s}
+  @keyframes mpdot{50%{opacity:.3;transform:translateY(-2px)}}
+  .mp-typname{font-family:var(--body);font-weight:700;font-size:11px;color:var(--muted)}
+  /* roster „stół:" (kompaktowe pigułki, skórka czat) */
+  .mp-roster-nb{display:flex!important;gap:6px;align-items:center;justify-content:flex-start!important;overflow-x:auto;padding-bottom:2px;flex-wrap:nowrap}
+  .mp-stol{font-family:var(--display);font-weight:800;font-size:10px;color:var(--muted);flex:0 0 auto}
+  .mp-rchip{display:flex;align-items:center;gap:5px;background:var(--panel2);border-radius:20px;padding:3px 10px 3px 3px;flex:0 0 auto}
+  .mp-rchip.dim{opacity:.6}
+  .mp-rchip b{width:20px;height:20px;border-radius:50%;font-family:var(--display);font-weight:900;font-size:10px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .mp-rchip>span{font-family:var(--display);font-weight:800;font-size:10px;white-space:nowrap}
+  .mp-rchip.you{outline:2px solid var(--ink);outline-offset:1px}
 
   /* ===== DESIGN v2 — Fala 3: menu ===== */
   body.menu .top{display:none}

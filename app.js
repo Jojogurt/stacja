@@ -1266,7 +1266,9 @@ let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykie
 let mpTypingSet=new Set();      // PR3: kto „pisze…" (zasilane ulotnym broadcastem „typing")
 let mpTypingTimers={};          // id → timeout wygaszający stan „pisze" po ~3 s
 let mpLastTyping=0;             // throttle wysyłki własnego „typing" (max raz / 1.5 s)
-let mpChatLog=[];               // PR2: feed czatu (klient-side, z broadcastów „say") — ring buffer
+let mpChatLog=[];               // feed czatu (klient-side): {kind:'chat'|'typ'|'sys', ...} — ring buffer
+let mpSeenProp=new Set();        // id już zaksięgowanych typów (anty-dubel w feedzie)
+let mpSeenPass=new Set();        // id graczy, których pas już zaksięgowano
 let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
 let mpPlaySub=null;             // dla którego pod-stanu fazy zbudowany scaffold (sluchaj/kombinuj)
 let mpSub='sluchaj';            // klient-lokalny pod-stan fazy PLAY (obie skórki mają fazy)
@@ -1375,6 +1377,13 @@ const ROSTER_META={
   pass:  {bg:'#E5E5E5',fg:'#9a958c',lab:'✋ pas',lc:'#9a958c',dim:1},
 };
 function mpRosterHTML(g){
+  if(mpSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
+    return `<span class="mp-stol">stół:</span>`+mpMembers().map(m=>{
+      const st=rosterState(g,m.id,mpTypingSet), me=ROSTER_META[st]||ROSTER_META.idle;
+      const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
+      return `<span class="mp-rchip${me.dim?' dim':''}${m.id===mpMe.id?' you':''}"><b style="background:${me.bg};color:${me.fg}">${av}</b><span style="color:${me.lc}">${me.lab}</span></span>`;
+    }).join('');
+  }
   return mpMembers().map(m=>{
     const st=rosterState(g,m.id,mpTypingSet), me=ROSTER_META[st]||ROSTER_META.idle;
     const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
@@ -1438,10 +1447,24 @@ const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
 function mpChatFeedHTML(){
-  return mpChatLog.map(c=>{
+  const rows=mpChatLog.map(c=>{
+    if(c.kind==='sys') return `<div class="mp-csys ${c.cls||''}">${escapeHtml(c.text)}</div>`;
     const av=escapeHtml((c.byName||'?').slice(0,1).toUpperCase());
-    return `<div class="mp-cmsg"><b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b><div class="mp-cmb"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text)}</div></div></div>`;
+    const avb=`<b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b>`;
+    if(c.kind==='typ'){
+      const chips=(c.chips||[]).map(ch=>`<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span class="val">${escapeHtml(ch.val||'')}</span></span>`).join('');
+      return `<div class="mp-cmsg">${avb}<div class="mp-cmb typ${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')} · typ</span>${chips}</div></div>`;
+    }
+    return `<div class="mp-cmsg">${avb}<div class="mp-cmb"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
   }).join('');
+  return rows + mpTypingFeedHTML();
+}
+function mpTypingFeedHTML(){
+  const ids=[...(mpTypingSet||[])].filter(id=>id && id!==mpMe.id);
+  if(!ids.length) return '';
+  const names=ids.map(mpNameOf), first=names[0]||'?';
+  return `<div class="mp-cmsg mp-ctyping"><b class="mp-cmav" style="background:${mpAvatarColor(first)}">${escapeHtml(first.slice(0,1).toUpperCase())}</b>`+
+    `<span class="mp-typing"><span></span><span></span><span></span></span><span class="mp-typname">${escapeHtml(names.join(', '))} pisze…</span></div>`;
 }
 // pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
 function mpRailHTML(active){
@@ -1556,6 +1579,7 @@ function mpRefreshDynamic(g){
   set('mpBoard', mpSlotsHTML(g));
   set('mpTeam', mpTeamHTML(g));
   set('mpConf', mpConfHTML(mpSkin()!=='czat'));   // czat: „pas" jest w rzędzie emotek, nie w pewności
+  mpIngestFeed(g);                                  // dopisz nowe typy/pasy do feedu
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 // start okna fazy słuchania (licznik czasu + auto-przejście do „kombinuj") — po intro
@@ -1576,7 +1600,7 @@ function mpRenderPlay(g, head, st){
   const skin=mpSkin();
   const newRound = mpPlayRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
-    mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj';
+    mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
     // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
   if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
@@ -1658,8 +1682,27 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
 }
 // #10: krótka wiadomość — dymek lecący przez ekran + wpis w feed czatu (skórka „czat")
 function mpPushChat(byName, text){
-  mpChatLog.push({byName, text}); if(mpChatLog.length>40) mpChatLog.shift();
+  mpChatLog.push({kind:'chat', byName, text}); if(mpChatLog.length>60) mpChatLog.shift();
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
+}
+function mpNameOf(id){ const m=mpMembers().find(x=>x.id===id); return m?m.name:'gracz'; }
+function mpFeedReset(){ mpChatLog=[]; mpSeenProp=new Set(); mpSeenPass=new Set(); }
+// zaksięguj NOWE typy i pasy do feedu czatu (w kolejności napływu) — typy jako dymki, pas jako linia systemowa
+function mpIngestFeed(g){
+  if(!g) return;
+  const slots=g.answerSlots||slotsFor();
+  const label=(k)=>{ const s=slots.find(x=>x.key===k); return s?s.label:k; };
+  (g.proposals||[]).forEach(p=>{
+    if(mpSeenProp.has(p.id)) return; mpSeenProp.add(p.id);
+    const chips=Object.keys(p.values||{}).map(k=>({slot:label(k), val:p.values[k]}));
+    mpChatLog.push({kind:'typ', byName:p.byName, chips, mine:p.by===mpMe.id});
+    if(p.conf==='sure') mpChatLog.push({kind:'sys', cls:'sure', text:`${p.byName} ustawił(a) 🟡 PEWNIAK`});
+  });
+  (g.passed||[]).forEach(pp=>{
+    if(mpSeenPass.has(pp.id)) return; mpSeenPass.add(pp.id);
+    mpChatLog.push({kind:'sys', cls:'pass', text:`${pp.name||'gracz'} spasował(a) ✋`});
+  });
+  if(mpChatLog.length>60) mpChatLog.splice(0, mpChatLog.length-60);
 }
 function mpDoSay(text){
   const t=(text||'').trim().slice(0,64); if(!t) return;
