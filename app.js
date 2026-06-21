@@ -1548,18 +1548,13 @@ function mpKombinujKolumnyHTML(g){
 // FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
 function mpKombinujCzatHTML(g){
-  const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
   return `<div class="mp-team" id="mpTeam"></div>
     ${mpLockBtnHTML(true)}
     <div class="mp-chatfeed" id="mpChatFeed"></div>
     <div class="mp-comp">
-      <div class="mp-comp-react">
-        ${REACTIONS.map(e=>`<button class="mp-rbtn" onclick="mpReact('${e}')">${e}</button>`).join('')}
-        <button class="mp-pass${iPassed?' on':''}" onclick="mpSend({type:'pass'})">✋ pas</button>
-      </div>
-      <div class="mp-conf" id="mpConf">${mpConfHTML(false)}</div>
       ${mpComposerHTML(g)}
-      <div class="mp-chint">z <b>@</b> wrzucasz typ · bez @ piszesz na czat</div>
+      <div class="mp-conf" id="mpConf">${mpConfHTML(true)}</div>
+      <div class="mp-comp-react">${REACTIONS.map(e=>`<button class="mp-rbtn" onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
     </div>`;
 }
 // scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
@@ -1567,8 +1562,7 @@ function mpScaffoldPlay(g, head){
   const skin=mpSkin();
   const top=`${head}
     ${mpRailHTML(mpSub==='sluchaj'?'sluchaj':'kombinuj')}
-    <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>
-    ${skin==='czat'?mpLegendHTML():''}`;
+    <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>`;
   if(mpSub==='sluchaj') return top+mpSluchajBodyHTML(g);
   return top+(skin==='czat'?mpKombinujCzatHTML(g):mpKombinujKolumnyHTML(g));
 }
@@ -1578,7 +1572,7 @@ function mpRefreshDynamic(g){
   set('mpRoster', mpRosterHTML(g));
   set('mpBoard', mpSlotsHTML(g));
   set('mpTeam', mpTeamHTML(g));
-  set('mpConf', mpConfHTML(mpSkin()!=='czat'));   // czat: „pas" jest w rzędzie emotek, nie w pewności
+  set('mpConf', mpConfHTML());   // zwykła/niepewny/pewniak/pas w jednej linii (obie skórki)
   mpIngestFeed(g);                                  // dopisz nowe typy/pasy do feedu
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
