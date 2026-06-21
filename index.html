@@ -37,11 +37,12 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
+  html{overflow-x:hidden}
   body{
     background:var(--bg);
     color:var(--ink); font-family:var(--body); font-weight:600;
     min-height:100dvh; padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 18px);
-    max-width:520px; margin:0 auto; line-height:1.4;
+    max-width:520px; margin:0 auto; line-height:1.4; overflow-x:hidden;
   }
   /* ---- header / brand ---- */
   .top{display:flex;align-items:center;justify-content:space-between;padding:18px 2px 16px}
@@ -410,10 +411,11 @@
   .mp-vt{font-family:var(--display);font-size:11px;font-weight:800;color:var(--muted);background:var(--panel2);border:2px solid var(--line);
     border-radius:8px;padding:4px 7px;white-space:nowrap;cursor:pointer}
   .mp-vt.on{color:#fff;background:var(--green);border-color:var(--green-d)}
-  .mp-conf{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px}
-  .mp-conf .c-lab{font-family:var(--display);font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
-  .mp-cf{font-family:var(--display);font-weight:800;font-size:11px;color:var(--muted);background:var(--panel);border:2px solid var(--line);
-    border-bottom-width:3px;border-radius:10px;padding:6px 10px;cursor:pointer}
+  .mp-conf{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+  .mp-conf::-webkit-scrollbar{display:none}
+  .mp-conf .c-lab{flex:0 0 auto;font-family:var(--display);font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
+  .mp-cf{flex:0 0 auto;font-family:var(--display);font-weight:800;font-size:11px;color:var(--muted);background:var(--panel);border:2px solid var(--line);
+    border-bottom-width:3px;border-radius:10px;padding:6px 9px;cursor:pointer;white-space:nowrap}
   .mp-cf.on{color:#fff;background:var(--green);border-color:var(--green-d)}
   .mp-cf.u{color:#9B4DDB;border-color:var(--purple)} .mp-cf.u.on{color:#fff;background:var(--purple);border-color:#9B4DDB}
   .mp-cf.s{color:var(--gold-d);border-color:var(--gold)} .mp-cf.s.on{color:#fff;background:var(--gold);border-color:var(--gold-d)}
@@ -451,20 +453,30 @@
     color:var(--blue-d);border-radius:14px;padding:12px;font-family:var(--display);font-weight:800;font-size:13px;cursor:pointer;margin-bottom:10px}
   .mp-sys-ic{width:18px;height:18px;fill:var(--blue-d);flex:0 0 auto}
   .mp-sys.loading .mp-sys-ic{animation:mpspin .9s linear infinite;transform-origin:center}
-  .mp-composer{display:grid;grid-template-columns:1fr auto;gap:7px;margin-top:4px;align-items:stretch}
+  .mp-composer{display:grid;grid-template-columns:auto 1fr auto;gap:7px;margin-top:4px;align-items:stretch}
+  .mp-typtoggle{white-space:nowrap;align-self:stretch}
   .mp-compfield{min-width:0}
   .mp-cwrap{display:flex;align-items:center;gap:5px;flex-wrap:wrap;background:var(--panel2);border:2px solid var(--blue);
     border-radius:12px;padding:6px 9px;min-height:44px}
   .mp-cwrap input{border:none;background:transparent;outline:none;font-family:var(--body);font-weight:700;font-size:15px;color:var(--ink);min-width:0;flex:1;padding:4px 0}
+  .mp-cwrap input.mp-slotchip{flex:0 0 auto}
   .mp-at{font-family:var(--display);font-weight:900;color:var(--blue-d);font-size:15px}
-  .mp-slotchip{flex:0 1 auto;background:#fff;border:2px solid var(--line);border-radius:8px;padding:5px 9px;font-size:13px;font-weight:800;min-width:74px}
+  .mp-slotchip{background:#fff;border:2px solid var(--line);border-radius:8px;padding:5px 9px;font-size:13px;font-weight:800;width:42%;max-width:140px}
   .mp-slotchip:focus{border-color:var(--green-d)}
   .mp-sep{color:var(--muted);font-weight:900}
-  .mp-composer button{font-family:var(--display);font-weight:800;color:#fff;background:var(--blue);border:none;
-    border-radius:12px;padding:0 16px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--blue-d)}
-  .mp-composer button:active{transform:translateY(3px);box-shadow:none}
-  .mp-comptoggle{display:flex;justify-content:flex-start;margin-top:7px}
+  .mp-composer>button{font-family:var(--display);font-weight:800;color:#fff;background:var(--blue);border:none;
+    border-radius:12px;padding:0 14px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--blue-d)}
+  .mp-composer>button:active{transform:translateY(3px);box-shadow:none}
   .mp-hr{height:2px;background:var(--line);margin:13px 0 2px}
+  /* nagłówek kompaktowy (2 wiersze) + pasek czasu fazy słuchania */
+  .mp-bar{display:flex;align-items:center;gap:8px;padding:2px 2px 5px;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.02em;text-transform:uppercase}
+  .mp-bar-r{color:var(--green);font-weight:900}
+  .mp-bar-s{flex:1;text-align:center;color:var(--muted)}
+  .mp-bar-t{color:var(--red);font-weight:900;min-width:40px;text-align:right}
+  .mp-bar2{font-family:var(--display);font-weight:800;font-size:13px;color:var(--ink);padding:0 2px 12px;
+    border-bottom:2px solid var(--line);margin-bottom:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mp-listenbar{width:100%;height:8px;background:var(--line);border-radius:6px;overflow:hidden;margin-top:14px}
+  .mp-listenbar i{display:block;height:100%;width:100%;background:var(--blue);border-radius:6px}
 </style>
 </head>
 <body class="menu">

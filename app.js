@@ -1022,16 +1022,18 @@ let mpTypingSet=new Set();      // PR3: kto „pisze…" (zasilane ulotnym broad
 let mpTypingTimers={};          // id → timeout wygaszający stan „pisze" po ~3 s
 let mpLastTyping=0;             // throttle wysyłki własnego „typing" (max raz / 1.5 s)
 let mpChatLog=[];               // PR2: feed czatu (klient-side, z broadcastów „say") — ring buffer
-let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (fazy/czat)
+let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
 let mpPlaySub=null;             // dla którego pod-stanu fazy zbudowany scaffold (sluchaj/kombinuj)
-let mpSub='sluchaj';            // PR4: klient-lokalny pod-stan fazy PLAY w skórce „fazy"
-let mpSubTimer=null;            // auto-przejście słuchaj → kombinuj (żeby nikt nie utknął)
-let mpComposerMode='chat';      // PR4: tryb composera @odp w skórce czat (chat/typ)
-// skórka = preferencja klienta (czysty render); migracja starej nazwy „kolumny" → „fazy"
-const mpSkin = ()=>{ const v=localStorage.getItem('stacjaUI'); return v==='kolumny'?'fazy':(v||'fazy'); };
+let mpSub='sluchaj';            // klient-lokalny pod-stan fazy PLAY (obie skórki mają fazy)
+let mpSubTimer=null;            // auto-przejście słuchaj → kombinuj po czasie fazy słuchania
+let mpComposerMode='chat';      // tryb composera @odp w skórce czat (chat/typ)
+let mpListenStart=0, mpListenDur=0;   // okno fazy „słuchaj" (pasek czasu)
+// skórka = preferencja klienta (czysty render); obie mają fazy, różnią się fazą „kombinuj"
+const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
 function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
-// PR4: przejście słuchaj → kombinujcie (klient-lokalne, prezentacja)
-function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpSub='kombinuj'; mpRender(); }
+// audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
+function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.pause();}catch(e){} } }
+function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 function mpRender(){
@@ -1041,8 +1043,7 @@ function mpRender(){
     return;
   }
   const g=mpGame;
-  const head=`<div class="mp-round">${escapeHtml(matchHeader(g))}</div>
-    <div class="mp-state">drużyna: ${g.score} pkt</div>`;
+  const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
   // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
   if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
     mpRevealNonce=g.playNonce;
@@ -1066,22 +1067,22 @@ function mpReactsBarHTML(){
     <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
-const mpRenderLoading = (head)=> `<div class="mp-deck">${head}<div class="mp-state">host losuje utwór…</div></div>`;
+const mpRenderLoading = (head)=> `${head}<div class="mp-deck"><div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||mpGame||{})}</div>`;
 const mpRenderArming = (g, head)=>{
   const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
-  return `<div class="mp-deck">${head}<div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpRosterStrip(g)}${mpReactsBarHTML()}`;
+  return `${head}${mpRosterStrip(g)}<div class="mp-deck"><div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
   const rc=(mpGame&&mpGame.readyCount)||0, rt=(mpGame&&mpGame.readyTotal)||mpMembers().length;
-  return `<div class="mp-deck">${head}<div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${mpRosterStrip()}${mpReactsBarHTML()}`;
+  return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${mpReactsBarHTML()}`;
 };
 const mpRenderNetErr = (g, head)=>{
   const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
-  return `<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
+  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
 };
-const mpRenderNoLyric = (head)=> `<div class="mp-deck">${head}<div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
+const mpRenderNoLyric = (head)=> `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
 
 /* --- faza gry: małe budowniki HTML + częściowa aktualizacja (nie czyść pól) --- */
 // pasek osób: gałka + stan (myśli/pisze/wrzucił/niepewny/pewniak/pas)
@@ -1123,13 +1124,20 @@ function mpConfHTML(){
   const opt=(v,label,cls)=>`<button class="mp-cf ${cls}${mpConf===v?' on':''}" onclick="mpSetConf('${v}')">${label}</button>`;
   const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
   const pas = `<button class="mp-cf p${iPassed?' on':''}" onclick="mpSend({type:'pass'})" title="nic już nie dodam do tej rundy">🤚 pas${iPassed?' ✓':''}</button>`;
-  return `<span class="c-lab">pewność:</span>${opt('normal','zwykła','')}${opt('unsure','niepewny','u')}${opt('sure','🍺 pewniak','s')}<span style="flex:1 0 6px"></span>${pas}`;
+  return `<span class="c-lab">pewność</span>${opt('normal','zwykła','')}${opt('unsure','niepewny','u')}${opt('sure','🍺 pewniak','s')}${pas}`;
 }
 // przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
 function mpSkinToggleHTML(cur){
   return `<div class="mp-skin"><span class="mp-skin-lab">układ</span>
-    <button class="mp-skinbtn${cur==='fazy'?' on':''}" onclick="mpSetSkin('fazy')">fazy</button>
+    <button class="mp-skinbtn${cur==='kolumny'?' on':''}" onclick="mpSetSkin('kolumny')">kolumny</button>
     <button class="mp-skinbtn${cur==='czat'?' on':''}" onclick="mpSetSkin('czat')">czat</button></div>`;
+}
+const mpHr = ()=> `<div class="mp-hr"></div>`;
+// czas fazy „słuchaj" — z kategorii (cat.listenSecs) albo domyślnie wg trybu
+const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12 };
+function mpListenSecs(g){
+  const cat=ALL_CATS[g.catKey], c=cat&&cat.listenSecs;
+  return (c>0 ? c : (LISTEN_SECS[g.mode]||15));
 }
 const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpPlayLocal()" aria-label="Odtwórz"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
 const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
@@ -1156,67 +1164,77 @@ function mpFormHTML(g){
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
-// blok typowania+głosowania (formularz, pewność+pas, kolumny, team) — wspólny
-function mpGuessBlockHTML(g, withForm){
-  return `${withForm?mpFormHTML(g):''}
-    <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-    <div class="mp-board" id="mpBoard"></div>
+// kolumny + odpowiedź drużyny + zatwierdź (host) — wspólny blok odpowiedzi
+function mpAnswerBlockHTML(g, ghostLock){
+  return `<div class="mp-board" id="mpBoard"></div>
     <div class="mp-team" id="mpTeam"></div>
-    ${mpLockBtnHTML(false)}`;
+    ${mpLockBtnHTML(ghostLock)}`;
 }
-// composer „@odp" (czat): pole czatu ⇄ chipy slotów; bez @ → czat, z @/typem → propozycja
+// composer „@odp" (czat): [✍️ typ] po LEWEJ + pole czatu ⇄ chipy slotów + [wyślij]
 function mpComposerHTML(g){
   const slots=g.answerSlots||slotsFor();
   const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
+      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ">✍️ typ</button>
       <div class="mp-compfield">
         <div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="napisz… (albo @ — wrzuć typ)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
         <div class="mp-cwrap" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
       </div>
       <button id="mpCompBtn" onclick="mpComposerSend()">wyślij</button>
+    </div>`;
+}
+// kompaktowy nagłówek (jak makieta): wiersz 1 = runda · drużyna · timer; wiersz 2 = kategoria · tryb
+function mpHeaderHTML(g){
+  const MODE={music:'muzyka',lektor:'lektor',reverse:'od tyłu',snippet:'fragment'};
+  return `<div class="mp-bar">
+      <span class="mp-bar-r">Runda ${g.round||1}/${g.rounds||1}</span>
+      <span class="mp-bar-s">drużyna ${g.score||0} pkt</span>
+      <span class="mp-bar-t" id="mpCountdown"></span>
     </div>
-    <div class="mp-comptoggle"><button class="mp-cf" id="mpTypToggle" onclick="mpComposerToggle()">✍️ typ</button></div>`;
+    <div class="mp-bar2">${escapeHtml(g.catLabel||g.catKey||'')} · ${MODE[g.mode]||g.mode||''} · pyt. ${(g.qi||0)+1}/${QPC}</div>`;
 }
+const mpReactsOnlyHTML = ()=> `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
 
-// SKÓRKA „fazy" — pasek faz + przepływ słuchaj → kombinujcie
-function mpScaffoldFazy(g, head){
-  const top=`${mpSkinToggleHTML('fazy')}
-    <div class="mp-deck">${head}<div class="mp-state" id="mpCountdown"></div></div>
-    ${mpRailHTML(mpSub==='sluchaj'?'sluchaj':'kombinuj')}
-    <div class="mp-roster" id="mpRoster"></div>`;
-  if(mpSub==='sluchaj'){
-    return `${top}
-      <div class="mp-deck">${mpKnobHTML()}
-        <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta u każdego':'posłuchaj uważnie'} · stuknij, by powtórzyć</div></div>
-      ${mpLyricHTML(g)}
-      <button class="mp-btn" style="width:100%;margin-top:6px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
-      ${mpReactsBarHTML()}`;
-  }
-  return `${top}
-    <div class="mp-deck mp-deck-slim">${mpKnobHTML('mpKnob','mp-knob mp-knob-sm')}
-      <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'gra u każdego'} · stuknij, by powtórzyć</div></div>
+// FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna)
+function mpSluchajBodyHTML(g){
+  return `<div class="mp-deck">${mpKnobHTML()}
+      <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć</div>
+      <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
     ${mpLyricHTML(g)}
-    ${mpGuessBlockHTML(g, true)}${mpReactsBarHTML()}`;
+    <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
+    ${mpHr()}${mpReactsBarHTML()}`;
 }
-// SKÓRKA „czat" — strumień: bąbel „utwór leci" (replay) + feed + composer @odp na dole
-function mpScaffoldChat(g, head){
-  return `${mpSkinToggleHTML('czat')}
-    <div class="mp-deck">${head}<div class="mp-state" id="mpCountdown"></div></div>
-    <div class="mp-roster mp-roster-nb" id="mpRoster"></div>
-    ${mpLegendHTML()}
-    <button class="mp-sys" id="mpKnob" onclick="mpPlayLocal()"><svg id="mpKnobIcon" class="mp-sys-ic" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg><span id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'utwór leci'} — stuknij, by powtórzyć</span></button>
-    ${mpLyricHTML(g)}
+// FAZA „kombinuj" — widok KOLUMNOWY (bez audio)
+function mpKombinujKolumnyHTML(g){
+  return `${mpLyricHTML(g)}
+    ${mpFormHTML(g)}
+    <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
+    ${mpAnswerBlockHTML(g, false)}
+    ${mpHr()}${mpReactsBarHTML()}`;
+}
+// FAZA „kombinuj" — widok CZAT: czat w środku, kolumny/team/zatwierdź na dole nad emotkami (item 5)
+function mpKombinujCzatHTML(g){
+  return `${mpLyricHTML(g)}
     <div class="mp-chatfeed" id="mpChatFeed"></div>
-    <div class="mp-board" id="mpBoard"></div>
-    <div class="mp-team" id="mpTeam"></div>
-    ${mpLockBtnHTML(true)}
     ${mpComposerHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     <div class="mp-chint">z <b>@</b> wrzucasz typ · bez @ piszesz na czat</div>
-    <div class="mp-hr"></div>
-    <div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
+    ${mpHr()}
+    ${mpAnswerBlockHTML(g, true)}
+    ${mpHr()}${mpReactsOnlyHTML()}`;
 }
-// odśwież dynamiczne części (wspólne dla obu skórek) — bez ruszania pól wpisywanych
+// scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
+function mpScaffoldPlay(g, head){
+  const skin=mpSkin();
+  const top=`${mpSkinToggleHTML(skin)}
+    ${head}
+    ${mpRailHTML(mpSub==='sluchaj'?'sluchaj':'kombinuj')}
+    <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>
+    ${skin==='czat'?mpLegendHTML():''}`;
+  if(mpSub==='sluchaj') return top+mpSluchajBodyHTML(g);
+  return top+(skin==='czat'?mpKombinujCzatHTML(g):mpKombinujKolumnyHTML(g));
+}
+// odśwież dynamiczne części (wspólne) — bez ruszania pól wpisywanych
 function mpRefreshDynamic(g){
   const set=(id,html)=>{ const el=$m(id); if(el) el.innerHTML=html; };
   set('mpRoster', mpRosterHTML(g));
@@ -1225,19 +1243,26 @@ function mpRefreshDynamic(g){
   set('mpConf', mpConfHTML());            // odśwież stan „pas" (pewność czyta trwały mpConf)
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
+// animuj pasek czasu fazy słuchania (CSS-transition od pozostałego % do 0)
+function mpAnimListenBar(){
+  const bar=$m('mpListenBar'); if(!bar) return; const i=bar.querySelector('i'); if(!i) return;
+  const remMs=Math.max(0, mpListenDur-(Date.now()-mpListenStart));
+  i.style.transition='none'; i.style.width=(mpListenDur?remMs/mpListenDur*100:0)+'%';
+  requestAnimationFrame(()=>{ i.style.transition=`width ${remMs}ms linear`; i.style.width='0%'; });
+}
 function mpRenderPlay(g, head, st){
   const skin=mpSkin();
   const newRound = mpPlayRound!==g.playNonce;
-  if(newRound){                                  // nowe pytanie → start od „słuchaj", zeruj „pisze"
-    mpClearTyping(); mpComposerMode='chat';
-    mpSub='sluchaj';
+  if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
+    mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj';
+    mpListenStart=Date.now(); mpListenDur=mpListenSecs(g)*1000;
     if(mpSubTimer) clearTimeout(mpSubTimer);
-    mpSubTimer=setTimeout(()=>{ if(mpSub==='sluchaj' && mpGame && mpGame.phase===MP.PLAY) mpGoKombinuj(); }, 9000);
+    mpSubTimer=setTimeout(()=>{ if(mpSub==='sluchaj' && mpGame && mpGame.phase===MP.PLAY) mpGoKombinuj(); }, mpListenDur);
   }
-  // przebuduj scaffold przy nowej rundzie / zmianie skórki / zmianie pod-stanu fazy / braku korzenia
-  if(newRound || mpPlaySkin!==skin || (skin==='fazy' && mpPlaySub!==mpSub) || !$m('mpRoster')){
+  if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
     mpPlayRound=g.playNonce; mpPlaySkin=skin; mpPlaySub=mpSub;
-    st.innerHTML = skin==='czat' ? mpScaffoldChat(g, head) : mpScaffoldFazy(g, head);
+    st.innerHTML = mpScaffoldPlay(g, head);
+    if(mpSub==='sluchaj') mpAnimListenBar();
   }
   mpRefreshDynamic(g);
   mpTickTimer();
@@ -1246,8 +1271,7 @@ function mpRenderPlay(g, head, st){
 // ekran wyniku z migawki — KAŻDY klika „dalej" sam (to jego sygnał gotowości)
 function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head;
-  const rail = mpSkin()==='fazy' ? mpRailHTML('odslona') : '';
-  return `<div class="mp-deck">${head}</div>${rail}${mpRosterStrip()}
+  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
     <div class="reveal show mp-reveal" style="display:block">
       <div style="padding:16px">
         ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}
