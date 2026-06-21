@@ -1305,38 +1305,44 @@ function mpRenderPlay(g, head, st){
   mpTickTimer();
 }
 
-// ekran wyniku z migawki — KAŻDY klika „dalej" sam (to jego sygnał gotowości)
+// odsłona rundy (design): rail + zielona karta utworu + baner pewniaka + odpowiedź drużyny
 function mpRenderRevealCard(snap){
-  const r=snap.reveal, head=snap.head;
+  const r=snap.reveal, head=snap.head, last=snap.isLast;
+  const cover = r.art?`<img class="rv-cover" src="${r.art}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">💿</div>`;
+  const meta=[r.album,r.year].filter(Boolean).join(' · ');
+  const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span><span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
+  let banner;
+  if(r.pewniakWin) banner=`<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${r.gained}</span></div>`;
+  else if(r.pewniakLose) banner=`<div class="rv-banner lose"><span class="ic">🍺</span><span class="tx"><b>Pewniak przepalony</b><small>stawia: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} — odbiór na żywo 😏</small></span></div>`;
+  else if(r.teamOk) banner=`<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+r.gained+' pkt'}</small></span><span class="pts">+${r.gained}</span></div>`;
+  else banner=`<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
   return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
-    <div class="reveal show mp-reveal" style="display:block">
-      <div style="padding:16px">
-        ${r.art?`<img class="mp-art" src="${r.art}" referrerpolicy="no-referrer">`:''}
-        <div class="rline"><span class="mk ${r.okTitle?'ok':'no'}">${r.okTitle?'✓':'✗'}</span><span class="v"><span class="k">Tytuł</span>${escapeHtml(r.track)}</span></div>
-        <div class="rline"><span class="mk ${r.okArtist?'ok':'no'}">${r.okArtist?'✓':'✗'}</span><span class="v"><span class="k">Wykonawca</span>${escapeHtml(r.artist)}</span></div>
-        <div class="mp-state" style="margin-top:10px">${r.teamOk?`<span class="ok">drużyna zgarnia +${r.gained} pkt${r.pewniakWin?' (pewniak ×2!)':''}</span>`:'<span class="no">tym razem nie (0 pkt)</span>'}${r.firstBy?` · pierwszy trafny typ: <b style="color:var(--amber)">${escapeHtml(r.firstBy)}</b>`:''}</div>
-        ${r.pewniakLose?`<div class="mp-beer">🍺 pewniak nietrafiony — stawia: <b>${(r.pewniacy||[]).map(escapeHtml).join(', ')}</b><br><span style="font-weight:400;opacity:.8">(odbiór na żywo 😏)</span></div>`:''}
-        ${r.pewniakWin?`<div class="mp-state" style="color:var(--green)">pewni i trafili: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} 🎯</div>`:''}
-        <div class="mp-state" style="opacity:.7">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
-      </div>
-      ${mpReactsBarHTML()}
-      <button class="next" onclick="mpAdvance()">${snap.isLast?'Wynik końcowy →':'Dalej →'}</button>
-    </div>`;
+    <div class="rv-card">
+      <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.track)}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
+      ${slot(r.okTitle,'TYTUŁ',r.track)}${slot(r.okArtist,'WYK.',r.artist)}
+    </div>
+    ${banner}
+    <div class="rv-locked">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
+    ${mpReactsBarHTML()}
+    <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
 }
 
+// wynik meczu (design): złoty hero + MVP + kto stawia + paski wkładu
 function mpRenderDone(g, head){
-  const rows=(g.tallyList||[]).map(t=>`<div class="row"><span>${escapeHtml(t.name)}</span><b>${t.correct} trafnych typów</b></div>`).join('')||'<div class="mp-state">brak trafnych propozycji</div>';
-  // #12: kto stawia (przegrane pewniaki) i ile
+  const tally=(g.tallyList||[]);
+  const max=Math.max(1,...tally.map(t=>t.correct));
+  const rows=tally.map((t,i)=>{
+    const col=mpAvatarColor(t.name), pct=Math.round(t.correct/max*100), av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
+    return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${col}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${pct}%;background:${i===0?'var(--green)':(t.correct?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${t.correct}</span></div>`;
+  }).join('')||'<div class="mp-state">brak trafnych typów</div>';
+  const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${g.mvp.correct} trafnych typów</small></span></div>`:'';
   const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
-  const beerBlock = beer.length
-    ? `<div class="mp-beer">🍺 stawiają: ${beer.map(([n,c])=>`<b>${escapeHtml(n)}</b>${c>1?` (${c}×)`:''}`).join(', ')}<br><span style="font-weight:400;opacity:.8">odbiór na żywo 😏</span></div>`
-    : `<div class="mp-state" style="opacity:.7">nikt nie przepalił pewniaka — brawo 🍻</div>`;
-  return `<div class="summary show" style="display:block">
-    <div class="sum-head"><div class="sum-big">${g.score} pkt</div>
-      <div class="sum-sub">${g.slots?g.slots.length*QPC:0} pytań · wynik drużyny${g.mvp?` · MVP: ${escapeHtml(g.mvp.name)}`:''}</div></div>
-    <div class="mp-sb" style="padding:0 16px">${rows}</div>
-    <div style="padding:0 16px">${beerBlock}</div>
-    ${mpHost?'<button class="sum-again" onclick="mpNewGame()">Nowa gra</button>':'<div class="next" style="opacity:.6">host może zacząć nową grę</div>'}</div>`;
+  const stawia = beer.length?`<div class="dn-stawia"><span class="ic">🍺</span><span class="tx"><span class="l">STAWIA KOLEJKĘ</span><b>${beer.map(([n,c])=>escapeHtml(n)+(c>1?` (${c}×)`:'')).join(', ')}</b><small>przepalone pewniaki 🟡💥</small></span></div>`:'';
+  return `<div class="dn-hero"><div class="ic">🏆</div><div class="t">Mecz zakończony!</div><div class="s">wynik drużyny</div><div class="sc">${g.score}</div></div>
+    ${mvp}${stawia}
+    <div class="dn-lbl">Wkład drużyny</div>
+    <div class="dn-wk">${rows}</div>
+    <div class="dn-btns"><button class="dn-menu" onclick="(document.getElementById('toMenu')||{}).click&&document.getElementById('toMenu').click()">← menu</button>${mpHost?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
 }
 function mpPropose(){
   const slots=(mpGame&&mpGame.answerSlots)||slotsFor();

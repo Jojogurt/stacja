@@ -574,6 +574,62 @@
   .mh-mini{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:18px;padding:16px 10px;cursor:pointer;font-family:var(--display);font-weight:800;font-size:15px;color:var(--ink)}
   .mh-mini span{font-size:26px}
   .mh-mini:active{transform:translateY(2px);border-bottom-width:2px}
+
+  /* ===== DESIGN v2 — Fala 4: odsłona MP + wynik meczu ===== */
+  .rv-card{background:#F0FBE6;border:2px solid var(--green);border-radius:20px;padding:16px;display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+  .rv-track{display:flex;align-items:center;gap:14px}
+  .rv-cover{width:72px;height:72px;border-radius:16px;flex:0 0 auto;object-fit:cover;background:#2B2440;display:grid;place-items:center;font-size:28px}
+  .rv-info{display:flex;flex-direction:column;gap:2px;min-width:0}
+  .rv-info .t{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink);line-height:1.2}
+  .rv-info .a{font-family:var(--display);font-weight:800;font-size:14px;color:var(--blue-d)}
+  .rv-info .m{font-family:var(--body);font-weight:700;font-size:12px;color:#9a958c}
+  .rv-slot{background:#fff;border:2px solid #D7F0B8;border-radius:13px;padding:9px 12px;display:flex;align-items:center;gap:8px}
+  .rv-slot .k{font-family:var(--display);font-weight:900;font-size:11px;color:#9a958c;width:54px;flex:0 0 auto}
+  .rv-slot .v{font-family:var(--display);font-weight:800;font-size:13px;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rv-slot .mk{margin-left:auto;font-size:16px;font-weight:900}
+  .rv-slot .mk.ok{color:var(--green)} .rv-slot .mk.no{color:var(--red)}
+  .rv-banner{display:flex;align-items:center;gap:12px;border-radius:16px;padding:13px 15px;margin-bottom:12px}
+  .rv-banner .ic{font-size:24px;flex:0 0 auto}
+  .rv-banner .tx{display:flex;flex-direction:column;min-width:0}
+  .rv-banner .tx b{font-family:var(--display);font-weight:900;font-size:15px}
+  .rv-banner .tx small{font-family:var(--body);font-weight:700;font-size:12px}
+  .rv-banner .pts{margin-left:auto;font-family:var(--display);font-weight:900;font-size:22px;color:var(--green)}
+  .rv-banner.win{background:#FFF8E0;border:2px solid var(--gold)} .rv-banner.win b{color:#E6A800} .rv-banner.win small{color:#9a8a4a}
+  .rv-banner.lose{background:#FFF1F1;border:2px solid var(--red)} .rv-banner.lose b{color:#E63946} .rv-banner.lose small{color:#c0727a}
+  .rv-banner.ok{background:#F0FBE6;border:2px solid var(--green)} .rv-banner.ok b{color:var(--green-d)} .rv-banner.ok small{color:#5a8a2a}
+  .rv-banner.no{background:#F4F4F2;border:2px solid var(--line)} .rv-banner.no b{color:#9a958c} .rv-banner.no small{color:#9a958c} .rv-banner.no .ic{color:var(--red)}
+  .rv-locked{font-family:var(--body);font-weight:700;font-size:12px;color:#9a958c;text-align:center;margin-bottom:10px}
+  .mp-next{width:100%;font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:.04em;color:#fff;background:var(--blue);border:none;border-radius:18px;padding:16px;cursor:pointer;box-shadow:0 5px 0 var(--blue-d);margin-top:6px}
+  .mp-next:active{transform:translateY(5px);box-shadow:none}
+  .dn-hero{background:var(--gold);color:#7a5a00;text-align:center;border-radius:22px;padding:22px 18px;margin-bottom:14px}
+  .dn-hero .ic{font-size:46px;line-height:1}
+  .dn-hero .t{font-family:var(--display);font-weight:900;font-size:23px;margin-top:6px}
+  .dn-hero .s{font-family:var(--display);font-weight:800;font-size:13px;opacity:.85}
+  .dn-hero .sc{font-family:var(--display);font-weight:900;font-size:52px;margin-top:4px;letter-spacing:.02em}
+  .dn-mvp,.dn-stawia{display:flex;align-items:center;gap:13px;border-radius:18px;padding:15px 17px;margin-bottom:12px}
+  .dn-mvp{background:#F3E9FF;border:2px solid var(--purple)} .dn-stawia{background:#FFF1F1;border:2px solid var(--red)}
+  .dn-mvp .av{width:48px;height:48px;border-radius:50%;color:#fff;font-family:var(--display);font-weight:900;font-size:18px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .dn-stawia .ic{font-size:30px;flex:0 0 auto}
+  .dn-mvp .tx,.dn-stawia .tx{display:flex;flex-direction:column;min-width:0}
+  .dn-mvp .l{font-family:var(--display);font-weight:900;font-size:12px;color:#A568CC;letter-spacing:.03em}
+  .dn-stawia .l{font-family:var(--display);font-weight:900;font-size:12px;color:#E63946;letter-spacing:.03em}
+  .dn-mvp .tx b,.dn-stawia .tx b{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink)}
+  .dn-mvp small{font-family:var(--body);font-weight:700;font-size:12px;color:#9a958c}
+  .dn-stawia small{font-family:var(--body);font-weight:700;font-size:12px;color:#c0727a}
+  .dn-lbl{font-family:var(--display);font-weight:900;font-size:13px;color:#9a958c;margin:4px 2px 8px}
+  .dn-wk{display:flex;flex-direction:column;gap:8px;margin-bottom:14px}
+  .wk-row{display:flex;align-items:center;gap:10px}
+  .wk-row .rk{font-family:var(--display);font-weight:900;font-size:13px;color:#9a958c;width:16px}
+  .wk-row .av{width:30px;height:30px;border-radius:50%;color:#fff;font-family:var(--display);font-weight:900;font-size:13px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .wk-row .nm{font-family:var(--display);font-weight:800;font-size:14px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34%}
+  .wk-row .bar{flex:1;height:10px;border-radius:5px;background:#EDEDED;overflow:hidden}
+  .wk-row .bar i{display:block;height:100%;border-radius:5px}
+  .wk-row .pts{font-family:var(--display);font-weight:900;font-size:13px;color:var(--ink);min-width:24px;text-align:right}
+  .dn-btns{display:flex;gap:12px}
+  .dn-menu{flex:1;background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:18px;padding:15px;font-family:var(--display);font-weight:900;font-size:15px;color:#7a756c;cursor:pointer}
+  .dn-again{flex:2;background:var(--green);border:none;border-radius:18px;padding:16px;font-family:var(--display);font-weight:900;font-size:16px;color:#fff;letter-spacing:.04em;cursor:pointer;box-shadow:0 5px 0 var(--green-d)}
+  .dn-again:active{transform:translateY(5px);box-shadow:none}
+  .dn-wait{flex:2;text-align:center;font-family:var(--display);font-weight:800;font-size:13px;color:#9a958c;align-self:center}
 </style>
 </head>
 <body class="menu">
