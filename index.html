@@ -649,6 +649,25 @@
   .lb-join button{font-family:var(--display);font-weight:900;letter-spacing:.04em;font-size:15px;color:#fff;background:var(--green);
     border:none;border-radius:16px;padding:0 22px;cursor:pointer;box-shadow:0 5px 0 var(--green-d)}
   .lb-join button:active{transform:translateY(5px);box-shadow:none}
+
+  /* ===== DESIGN v2 — Fala 6: gra solo (ciemna karta + equalizer) ===== */
+  body.solo.playing .deck{background:#2B2440;border:none;border-radius:24px;box-shadow:none;padding:26px 20px 22px}
+  body.solo.playing .deck .deck-state{color:rgba(255,255,255,.92)}
+  body.solo.playing .deck .deck-state.err{color:#FFB4B4}
+  body.solo.playing .deck .lyric-box{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff}
+  body.solo.playing .deck .lyric-box .lyric-cap{color:#8fd0ff}
+  body.solo.playing .deck .mini button{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
+  body.solo.playing .deck .mini button:disabled{opacity:.35}
+  .deck-eq{display:none;align-items:flex-end;justify-content:center;gap:4px;height:30px;margin-top:16px}
+  body.solo.playing .deck-eq{display:flex}
+  .deck-eq i{width:6px;border-radius:3px;background:var(--blue)}
+  .deck-eq i:nth-child(1){height:14px;animation:mpeq .9s ease-in-out infinite}
+  .deck-eq i:nth-child(2){height:26px;animation:mpeq .9s .1s ease-in-out infinite}
+  .deck-eq i:nth-child(3){height:18px;animation:mpeq .9s .2s ease-in-out infinite}
+  .deck-eq i:nth-child(4){height:30px;animation:mpeq .9s .3s ease-in-out infinite}
+  .deck-eq i:nth-child(5){height:12px;animation:mpeq .9s .4s ease-in-out infinite}
+  .deck-eq i:nth-child(6){height:22px;animation:mpeq .9s .5s ease-in-out infinite}
+  .deck-eq i:nth-child(7){height:16px;animation:mpeq .9s .6s ease-in-out infinite}
 </style>
 </head>
 <body class="menu">
@@ -770,6 +789,7 @@
         </button>
       </div>
     </div>
+    <div class="deck-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="deck-state" id="state" role="status" aria-live="polite">naciśnij, żeby wylosować</div>
     <div class="lyric-box" id="lyricBox" hidden></div>
     <div class="mini">
