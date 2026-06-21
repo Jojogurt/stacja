@@ -312,6 +312,52 @@
   .mp-chip.host::after{content:' ★';color:var(--gold)}
   .mp-chip.you{border-color:var(--blue);color:var(--blue)}
 
+  /* 05 Pokój — wejście (stwórz / dołącz) */
+  #mpLobby{display:flex;flex-direction:column;gap:18px}
+  .lb-top{display:grid;grid-template-columns:1fr auto 1fr;align-items:center}
+  .lb-back{justify-self:start;font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);background:none;border:none;cursor:pointer;padding:4px}
+  .lb-title{font-family:var(--display);font-weight:900;font-size:18px;color:var(--ink)}
+  .lb-create{display:grid;gap:6px;text-align:left;background:var(--blue);border:none;border-radius:24px;padding:22px 20px;cursor:pointer;box-shadow:0 5px 0 var(--blue-d);color:#fff;transition:transform .06s,box-shadow .06s}
+  .lb-create:active{transform:translateY(5px);box-shadow:0 0 0 var(--blue-d)}
+  .lb-create .lb-ic{font-size:34px;line-height:1}
+  .lb-create b{font-family:var(--display);font-weight:900;font-size:20px}
+  .lb-create small{font-family:var(--body);font-weight:700;font-size:14px;color:rgba(255,255,255,.92);line-height:1.3}
+  .lb-create .lb-cta{justify-self:start;margin-top:8px;background:#fff;color:var(--blue-d);font-family:var(--display);font-weight:900;font-size:13px;padding:9px 16px;border-radius:13px;box-shadow:0 3px 0 rgba(0,0,0,.12)}
+  .lb-or{display:flex;align-items:center;gap:12px}
+  .lb-or i{flex:1;height:2px;background:var(--line)}
+  .lb-or span{font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted)}
+  .lb-code{display:flex;gap:10px;justify-content:center}
+  .lb-cell{width:62px;height:72px;border:2px solid var(--blue);border-bottom-width:4px;border-radius:16px;text-align:center;font-family:var(--display);font-weight:900;font-size:32px;color:var(--ink);text-transform:uppercase;outline:none;background:var(--panel);min-width:0;padding:0}
+  .lb-cell:focus{border-color:var(--blue-d);box-shadow:0 0 0 3px rgba(28,176,246,.18)}
+  .lb-link{text-align:center;font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted)}
+  .lb-link b{color:var(--blue-d)}
+  .lb-join{width:100%;background:var(--green);border:none;border-radius:18px;padding:16px;box-shadow:0 5px 0 var(--green-d);font-family:var(--display);font-weight:900;font-size:17px;letter-spacing:.04em;color:#fff;cursor:pointer;text-transform:uppercase;transition:transform .06s,box-shadow .06s}
+  .lb-join:active{transform:translateY(5px);box-shadow:0 0 0 var(--green-d)}
+
+  /* 06 Lobby — poczekalnia */
+  .pcz{border:2px solid var(--line);border-radius:24px;overflow:hidden;box-shadow:0 3px 0 var(--line)}
+  .pcz-hd{background:var(--blue);padding:18px 20px;color:#fff}
+  .pcz-hd-r1{display:flex;align-items:center;gap:10px}
+  .pcz-exit{font-family:var(--display);font-weight:800;font-size:14px;color:rgba(255,255,255,.85);cursor:pointer}
+  .pcz-lbl{margin-left:auto;font-family:var(--display);font-weight:700;font-size:12px;color:rgba(255,255,255,.85);letter-spacing:.04em}
+  .pcz-hd-r2{display:flex;align-items:center;gap:12px;margin-top:6px}
+  .pcz-code{font-family:var(--display);font-weight:900;font-size:38px;letter-spacing:.18em}
+  .pcz-share{margin-left:auto;background:rgba(255,255,255,.22);border:none;border-radius:13px;padding:9px 14px;font-family:var(--display);font-weight:900;font-size:13px;color:#fff;cursor:pointer}
+  .pcz-team{display:flex;align-items:center;padding:18px 20px 6px}
+  .pcz-team>span:first-child{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink)}
+  .pcz-count{margin-left:auto;font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted)}
+  .pcz-list{padding:0 20px;display:flex;flex-direction:column;gap:10px}
+  .pcz-m{display:flex;align-items:center;gap:12px;background:#F7FCEF;border:2px solid #D7F0B8;border-radius:16px;padding:11px 14px}
+  .pcz-av{width:40px;height:40px;border-radius:50%;color:#fff;font-family:var(--display);font-weight:900;font-size:16px;display:flex;align-items:center;justify-content:center;flex:none}
+  .pcz-mn{display:flex;flex-direction:column;min-width:0}
+  .pcz-mn b{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .pcz-mn small{font-family:var(--body);font-weight:700;font-size:12px;color:var(--muted)}
+  .pcz-badge{margin-left:auto;background:var(--green);color:#fff;font-family:var(--display);font-weight:900;font-size:11px;padding:5px 10px;border-radius:9px;flex:none}
+  .pcz-foot{padding:16px 20px}
+  .pcz-start{width:100%;background:var(--green);border:none;border-radius:18px;padding:16px;box-shadow:0 5px 0 var(--green-d);font-family:var(--display);font-weight:900;font-size:17px;letter-spacing:.04em;color:#fff;cursor:pointer;text-transform:uppercase;transition:transform .06s,box-shadow .06s}
+  .pcz-start:active{transform:translateY(5px);box-shadow:0 0 0 var(--green-d)}
+  .pcz-waitmsg{text-align:center;font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);padding:8px}
+
   /* stage */
   .mp-deck{background:var(--panel);border:2px solid var(--line);
     border-radius:var(--r-md);padding:20px;text-align:center;margin-bottom:14px}
@@ -638,25 +684,6 @@
   .dn-again:active{transform:translateY(5px);box-shadow:none}
   .dn-wait{flex:2;text-align:center;font-family:var(--display);font-weight:800;font-size:13px;color:#9a958c;align-self:center}
 
-  /* ===== DESIGN v2 — Fala 5: pokój (stwórz / dołącz) ===== */
-  .lb-name{margin-bottom:16px}
-  .lb-blue{display:flex;align-items:center;gap:14px;width:100%;background:var(--blue);border:none;border-radius:22px;padding:20px 18px;cursor:pointer;text-align:left;box-shadow:0 5px 0 var(--blue-d);margin-bottom:18px}
-  .lb-blue:active{transform:translateY(5px);box-shadow:none}
-  .lb-blue .ic{font-size:32px;flex:0 0 auto}
-  .lb-blue .tx{display:flex;flex-direction:column}
-  .lb-blue .tx b{font-family:var(--display);font-weight:900;font-size:20px;color:#fff}
-  .lb-blue .tx small{font-family:var(--body);font-weight:700;font-size:13px;color:rgba(255,255,255,.92);line-height:1.35}
-  .lb-blue .ar{margin-left:auto;color:#fff;font-size:24px;font-weight:900}
-  .lb-or{display:flex;align-items:center;gap:12px;margin:0 0 16px}
-  .lb-or::before,.lb-or::after{content:"";flex:1;height:2px;background:#EDEDED}
-  .lb-or span{font-family:var(--display);font-weight:800;font-size:13px;color:#bdb8ae}
-  .lb-join{display:grid;grid-template-columns:1fr auto;gap:10px}
-  .lb-join input{background:var(--panel2);border:2px solid var(--blue);border-bottom-width:4px;border-radius:16px;color:var(--ink);
-    font-family:var(--display);font-size:24px;font-weight:900;letter-spacing:.3em;text-align:center;padding:14px;outline:none;width:100%}
-  .lb-join button{font-family:var(--display);font-weight:900;letter-spacing:.04em;font-size:15px;color:#fff;background:var(--green);
-    border:none;border-radius:16px;padding:0 22px;cursor:pointer;box-shadow:0 5px 0 var(--green-d)}
-  .lb-join button:active{transform:translateY(5px);box-shadow:none}
-
   /* ===== DESIGN v2 — Fala 6: gra solo (ciemna karta + equalizer) ===== */
   body.solo.playing .deck{background:#2B2440;border:none;border-radius:24px;box-shadow:none;padding:26px 20px 22px}
   body.solo.playing .deck .deck-state{color:rgba(255,255,255,.92)}
@@ -788,25 +815,34 @@
   </section>
 
   <section id="mp">
-    <!-- LOBBY -->
+    <!-- 05 POKÓJ — wejście (stwórz / dołącz) -->
     <div id="mpLobby">
-      <div class="mp-head">
-        <span>graj ze znajomymi</span>
-        <button class="mp-back" id="mpExit">← menu</button>
+      <div class="lb-top">
+        <button class="lb-back" id="mpExit">← menu</button>
+        <span class="lb-title">Ze znajomymi</span>
+        <span></span>
       </div>
-      <div class="field lb-name"><label for="mpName">Twoja ksywa</label><input id="mpName" autocomplete="off" maxlength="16" placeholder="np. Karol"></div>
-      <button class="lb-blue" id="mpCreate"><span class="ic">👑</span><span class="tx"><b>Stwórz pokój</b><small>Jesteś hostem — wyślij kod znajomym i zaczynajcie</small></span><span class="ar">→</span></button>
-      <div class="lb-or"><span>albo dołącz kodem</span></div>
-      <div class="lb-join">
-        <input id="mpCode" autocomplete="off" maxlength="4" placeholder="K O D" style="text-transform:uppercase">
-        <button id="mpJoin">DOŁĄCZ</button>
+      <button class="lb-create" id="mpCreate">
+        <span class="lb-ic">👑</span>
+        <b>Stwórz pokój</b>
+        <small>Jesteś hostem — wyślij kod znajomym i zaczynajcie.</small>
+        <span class="lb-cta">STWÓRZ →</span>
+      </button>
+      <div class="lb-or"><i></i><span>albo dołącz kodem</span><i></i></div>
+      <div class="lb-code" id="mpCodeBoxes">
+        <input class="lb-cell" maxlength="1" autocomplete="off" aria-label="kod 1">
+        <input class="lb-cell" maxlength="1" autocomplete="off" aria-label="kod 2">
+        <input class="lb-cell" maxlength="1" autocomplete="off" aria-label="kod 3">
+        <input class="lb-cell" maxlength="1" autocomplete="off" aria-label="kod 4">
       </div>
+      <div class="lb-link">…lub wklej link <b>stacja.app/?room=</b></div>
       <div class="mp-err" id="mpErr"></div>
+      <button class="lb-join" id="mpJoin">DOŁĄCZ DO POKOJU</button>
     </div>
 
-    <!-- ROOM -->
+    <!-- ROOM: poczekalnia (06) → picker → gra -->
     <div id="mpRoom" style="display:none">
-      <div class="mp-head">
+      <div class="mp-head" id="mpRoomHead">
         <span>pokój <b id="mpRoomCode">····</b> <button class="mp-copy" id="mpCopy">kopiuj link</button></span>
         <button class="mp-back" id="mpLeave">← wyjdź</button>
       </div>

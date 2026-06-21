@@ -605,6 +605,7 @@ function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidd
 let mpSb=null, mpCh=null;
 let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
 let mpCode=null, mpHost=false;
+let mpRoomStage='wait';     // przed grą: 'wait' = poczekalnia (06), 'build' = picker „ułóż mecz" (host)
 let mpGame=null;            // stan współdzielony (host = źródło prawdy)
 let mpHostCurrent=null;     // pełny utwór znany tylko hostowi
 let mpHostSeen=new Set();   // antypowtórki po stronie hosta
@@ -800,7 +801,7 @@ $m('goMp').onclick=()=>{
   stopAudio(); stopSpeech();
   showScreen('mp');
   const pre=new URLSearchParams(location.search).get('room');
-  if(pre){ $m('mpCode').value=pre.toUpperCase(); }
+  if(pre){ mpSetCode(pre); }
 };
 $m('toMenu').onclick=()=>{
   if(document.body.classList.contains('mp')){ mpLeave(); }
@@ -817,18 +818,45 @@ async function mpLeave(){
   if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
   mpReady=new Set(); mpLastArmNonce=null;
   mpAck=mpRevealNonce=mpRevealSnap=null;
-  mpCode=null; mpHost=false; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
+  mpCode=null; mpHost=false; mpRoomStage='wait'; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
 
-/* ---- tworzenie / dołączanie ---- */
-$m('mpCreate').onclick=()=>{ const n=$m('mpName').value.trim(); if(!n){ mpErr('Podaj ksywę.'); return; } mpUnlockAudio(); mpMe.name=n; setHandle(n); mpEnterRoom(mpRandCode(), true); };
-$m('mpJoin').onclick=()=>{
-  const n=$m('mpName').value.trim(); const c=$m('mpCode').value.trim().toUpperCase();
-  if(!n){ mpErr('Podaj ksywę.'); return; }
+/* ---- tworzenie / dołączanie (ksywa z profilu — bez pola w UI) ---- */
+$m('mpCreate').onclick=async()=>{ mpUnlockAudio(); const n=await ensureHandle(); mpMe.name=n; setHandle(n); mpEnterRoom(mpRandCode(), true); };
+$m('mpJoin').onclick=()=>mpJoinFromCode();
+
+// 4-boksowy kod (design 05): odczyt/zapis + auto-przeskok + wklejanie linku
+function mpReadCode(){ return Array.from(document.querySelectorAll('#mpCodeBoxes .lb-cell')).map(c=>c.value).join('').toUpperCase().slice(0,4); }
+function mpSetCode(str){
+  const v=(String(str||'').match(/[?&]room=([A-Za-z0-9]{1,4})/)?.[1] ?? str ?? '').toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,4);
+  const cells=document.querySelectorAll('#mpCodeBoxes .lb-cell');
+  cells.forEach((c,i)=> c.value=v[i]||'');
+  const next=Math.min(v.length, cells.length-1); if(cells[next]) cells[next].focus();
+}
+async function mpJoinFromCode(){
+  mpUnlockAudio();
+  const c=mpReadCode();
   if(c.length<4){ mpErr('Wpisz 4-znakowy kod.'); return; }
-  mpUnlockAudio(); mpMe.name=n; setHandle(n); mpEnterRoom(c, false);
-};
+  const n=await ensureHandle(); mpMe.name=n; setHandle(n);
+  mpEnterRoom(c, false);
+}
+(function mpWireCode(){
+  const cells=Array.from(document.querySelectorAll('#mpCodeBoxes .lb-cell'));
+  cells.forEach((c,i)=>{
+    c.addEventListener('input',()=>{ c.value=c.value.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,1); if(c.value && cells[i+1]) cells[i+1].focus(); });
+    c.addEventListener('keydown',(e)=>{ if(e.key==='Backspace' && !c.value && cells[i-1]){ cells[i-1].focus(); } else if(e.key==='Enter'){ mpJoinFromCode(); } });
+    c.addEventListener('paste',(e)=>{ e.preventDefault(); const t=(e.clipboardData||window.clipboardData).getData('text')||''; mpSetCode(t); });
+  });
+})();
+// udostępnij pokój (natywne share na mobile, fallback: kopiuj link)
+function mpShare(btn){
+  const url=location.origin+location.pathname+'?room='+(mpCode||'');
+  if(navigator.share){ navigator.share({title:'STACJA — dołącz do pokoju', text:'Kod pokoju: '+(mpCode||''), url}).catch(()=>{}); return; }
+  navigator.clipboard?.writeText(url);
+  if(btn){ const t=btn.textContent; btn.textContent='✓ skopiowano'; setTimeout(()=>btn.textContent=t,1500); }
+}
+function mpLobbyStart(){ mpRoomStage='build'; mpRender(); }   // host: poczekalnia → „ułóż mecz"
 $m('mpCopy').onclick=()=>{
   const url=location.origin+location.pathname+'?room='+mpCode;
   navigator.clipboard?.writeText(url); $m('mpCopy').textContent='skopiowano!';
@@ -840,7 +868,7 @@ async function mpEnterRoom(code, asHost){
   const client=mpConnect();
   if(!client){ mpErr('Brak połączenia z serwerem (config.js / supabase-js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = auth.uid PRZED presence
-  mpCode=code; mpHost=asHost;
+  mpCode=code; mpHost=asHost; mpRoomStage='wait';
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
   $m('mpRoomCode').textContent=code;
   mpCh=client.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
@@ -849,7 +877,7 @@ async function mpEnterRoom(code, asHost){
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpPushChat(payload.byName, payload.text); mpFloatSay(payload.text, payload.byName); } });
   mpCh.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
-  mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(mpHost){ mpBroadcast(); mpMaybeGo(); } });
+  mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(!mpGame || mpGame.phase==null) mpRender(); if(mpHost){ mpBroadcast(); mpMaybeGo(); } });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
     else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
@@ -1183,14 +1211,46 @@ function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.paus
 function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
+// 06 Lobby — poczekalnia (host: kod + udostępnij + gracze + „ZACZNIJ"; gość: czeka na hosta)
+function mpLobbyWaitHTML(){
+  const ms=mpMembers();
+  const hostId = mpGame ? mpGame.hostId : (mpHost ? mpMe.id : null);
+  const cards = ms.map(m=>{
+    const isHost = m.id===hostId, you = m.id===mpMe.id;
+    const av = escapeHtml((m.name||'?').slice(0,1).toUpperCase());
+    return `<div class="pcz-m">
+      <span class="pcz-av" style="background:${mpAvatarColor(m.name)}">${av}</span>
+      <div class="pcz-mn"><b>${escapeHtml(m.name||'gracz')}${isHost?' 👑':''}${you?' (Ty)':''}</b><small>${isHost?'host':'w pokoju'}</small></div>
+      <span class="pcz-badge">W POKOJU</span>
+    </div>`;
+  }).join('') || `<div class="pcz-waitmsg">czekamy na graczy…</div>`;
+  const n=ms.length, word = n===1?'osoba' : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? 'osoby' : 'osób';
+  const foot = mpHost
+    ? `<button class="pcz-start" onclick="mpLobbyStart()">ZACZNIJ →</button>`
+    : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
+  return `<div class="pcz">
+    <div class="pcz-hd">
+      <div class="pcz-hd-r1"><span class="pcz-exit" onclick="document.getElementById('mpLeave').click()">← wyjdź</span><span class="pcz-lbl">KOD POKOJU</span></div>
+      <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(mpCode||'····')}</span><button class="pcz-share" onclick="mpShare(this)">🔗 Udostępnij</button></div>
+    </div>
+    <div class="pcz-team"><span>Drużyna</span><span class="pcz-count">${n} ${word}</span></div>
+    <div class="pcz-list">${cards}</div>
+    <div class="pcz-foot">${foot}</div>
+  </div>`;
+}
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
-  // pasek członków pokoju (#mpMembers) chowamy w grze — roster go zastępuje; widać go tylko w lobby
-  const mm=$m('mpMembers'); if(mm) mm.style.display = (!mpGame || mpGame.phase==null) ? '' : 'none';
+  const head0=$m('mpRoomHead');
   if(!mpGame || mpGame.phase==null){
-    st.innerHTML = mpHost ? mpPickerHTML() : `<div class="mp-deck"><div class="mp-state">host układa mecz…</div></div>`;
+    // przed grą: poczekalnia (06) → host „ZACZNIJ" → picker „ułóż mecz"
+    const building = mpHost && mpRoomStage==='build';
+    const mm=$m('mpMembers'); if(mm) mm.style.display = building ? '' : 'none';
+    if(head0) head0.style.display = building ? '' : 'none';   // poczekalnia ma własny niebieski nagłówek
+    st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
     return;
   }
+  const mm=$m('mpMembers'); if(mm) mm.style.display='none';   // w grze roster zastępuje pasek członków
+  if(head0) head0.style.display='';
   const g=mpGame;
   const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
   // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
@@ -1605,7 +1665,7 @@ function mpRefreshRoster(){ if(mpGame && mpGame.phase===MP.PLAY){ const el=$m('m
 function mpClearTyping(){ mpTypingSet.clear(); Object.values(mpTypingTimers).forEach(clearTimeout); mpTypingTimers={}; }
 
 /* autostart lobby gdy w URL jest ?room= */
-if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCode').value=new URLSearchParams(location.search).get('room').toUpperCase(); }
+if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); mpSetCode(new URLSearchParams(location.search).get('room')); }
 
 /* ============ most do HTML: app.js to moduł ES (własny scope), więc handlery
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
@@ -1614,4 +1674,5 @@ Object.assign(window, {
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
+  mpLobbyStart, mpShare,
 });
