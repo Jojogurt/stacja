@@ -617,8 +617,8 @@ function confetti(n=90){
     fx.appendChild(p); setTimeout(()=>p.remove(), 3200);
   }
 }
-// intro fazy: pełna zapowiedź — białe tło zakrywa treść, tytuł na środku → wylatuje w górę
-// i kurczy się ku railowi, tło znika (odsłania treść), a na końcu odpala onDone (np. start piosenki).
+// intro fazy: zakrywa TYLKO zmienną część (pod railem/rosterem), tytuł na środku tego obszaru →
+// wylatuje w górę i kurczy się DOKŁADNIE na pozycję raila, tło znika (odsłania treść), na końcu onDone.
 function mpPhaseIntro(key, onDone){
   let fired=false;
   const finish=()=>{ if(fired) return; fired=true; const el=document.getElementById('mpPhaseFx'); if(el) el.remove(); try{ onDone&&onDone(); }catch(e){} };
@@ -628,11 +628,22 @@ function mpPhaseIntro(key, onDone){
   let reduce=false; try{ reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
   if(!m || reduce){ finish(); return; }   // bez animacji wciąż odpal onDone (audio/confetti muszą ruszyć)
   const old=document.getElementById('mpPhaseFx'); if(old) old.remove();
+  // obszar zmiennej treści = od dołu rostera (lub raila) w dół; cel lotu = środek raila
+  const vh=window.innerHeight;
+  const roster=document.querySelector('#mpStage .mp-roster');
+  const rail=document.querySelector('#mpStage .mp-rail');
+  const rTop = roster ? roster.getBoundingClientRect().bottom : (rail ? rail.getBoundingClientRect().bottom : vh*0.3);
+  const regTop = Math.max(0, rTop);
+  const regCenter = (regTop + vh)/2;
+  const railRect = rail ? rail.getBoundingClientRect() : null;
+  const railY = railRect ? (railRect.top + railRect.height/2) : vh*0.14;
+  const dy = Math.round(railY - regCenter);   // ujemne → w górę, ląduje na railu
   const fx=document.createElement('div'); fx.id='mpPhaseFx';
-  fx.innerHTML=`<div class="mp-phase-bg"></div><div class="mp-phase-card pk-${key}"><span class="ic">${m[0]}</span><span class="tx">${escapeHtml(m[1])}</span></div>`;
+  fx.innerHTML=`<div class="mp-phase-bg" style="top:${Math.round(regTop)}px"></div>`+
+    `<div class="mp-phase-card pk-${key}" style="top:${Math.round(regCenter)}px;--dy:${dy}px"><span class="ic">${m[0]}</span><span class="tx">${escapeHtml(m[1])}</span></div>`;
   document.body.appendChild(fx);
   fx.querySelector('.mp-phase-card').addEventListener('animationend', finish, {once:true});
-  setTimeout(finish, 1500);   // bezpiecznik, gdyby animationend nie zaskoczył
+  setTimeout(finish, 2700);   // bezpiecznik, gdyby animationend nie zaskoczył
 }
 function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
   document.getElementById('sStreak').textContent=streak; }
