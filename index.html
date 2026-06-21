@@ -6,6 +6,14 @@
 <meta name="theme-color" content="#58CC02">
 <meta name="robots" content="noindex">
 <title>STACJA — trener pubquizu</title>
+<!-- PWA -->
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icons/icon.svg">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="STACJA">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -906,5 +914,11 @@
   <div class="foot">źródło: iTunes Search API · 30 s zajawki<br>year/album = bonus · ocenia tytuł + wykonawcę</div>
 
 <script type="module" src="app.js"></script>
+<script>
+  /* PWA: rejestracja service workera (offline + instalowalność). Best-effort. */
+  if ('serviceWorker' in navigator) {
+    addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+  }
+</script>
 </body>
 </html>

@@ -1,0 +1,19 @@
+{
+  "name": "STACJA — trener pubquizu",
+  "short_name": "STACJA",
+  "description": "Webowy trener pubquizowy: rozpoznawaj utwory, graj solo i ze znajomymi na żywo.",
+  "lang": "pl",
+  "dir": "ltr",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#58CC02",
+  "categories": ["games", "music", "entertainment"],
+  "icons": [
+    { "src": "icons/icon.svg", "type": "image/svg+xml", "sizes": "any", "purpose": "any maskable" },
+    { "src": "icons/icon-192.png", "type": "image/png", "sizes": "192x192", "purpose": "any" },
+    { "src": "icons/icon-512.png", "type": "image/png", "sizes": "512x512", "purpose": "any" }
+  ]
+}
