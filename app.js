@@ -617,6 +617,18 @@ function confetti(n=90){
     fx.appendChild(p); setTimeout(()=>p.remove(), 3200);
   }
 }
+// intro fazy: duży tytuł na środku → po chwili wylatuje w górę i kurczy się (ku railowi). Raz na wejście w fazę.
+function mpPhaseIntro(key){
+  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+  const lektor = mpGame && mpGame.mode==='lektor';
+  const META={ sluchaj: lektor?['📖','czytaj']:['🎧','słuchaj'], kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
+  const m=META[key]; if(!m) return;
+  let fx=document.getElementById('mpPhaseFx');
+  if(!fx){ fx=document.createElement('div'); fx.id='mpPhaseFx'; document.body.appendChild(fx); }
+  fx.innerHTML=`<div class="mp-phase-card pk-${key}"><span class="ic">${m[0]}</span><span class="tx">${escapeHtml(m[1])}</span></div>`;
+  const card=fx.firstElementChild;
+  if(card) card.addEventListener('animationend', ()=>{ if(fx) fx.innerHTML=''; }, {once:true});
+}
 function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
   document.getElementById('sStreak').textContent=streak; }
 function val(id){ return document.getElementById(id).value.trim(); }
@@ -1249,7 +1261,7 @@ const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumn
 function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
 function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.pause();}catch(e){} } }
-function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); }
+function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpPhaseIntro('kombinuj'); mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 // 06 Lobby — poczekalnia (host: kod + udostępnij + gracze + „ZACZNIJ"; gość: czeka na hosta)
@@ -1296,6 +1308,7 @@ function mpRender(){
   if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
     mpRevealNonce=g.playNonce;
     mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
+    mpPhaseIntro('odslona');                                 // intro fazy odsłona
     if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti (raz)
   }
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
@@ -1531,6 +1544,7 @@ function mpRenderPlay(g, head, st){
   const newRound = mpPlayRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
     mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj';
+    mpPhaseIntro('sluchaj');                     // intro fazy słuchaj/czytaj
     mpListenStart=Date.now(); mpListenDur=mpListenSecs(g)*1000;
     if(mpSubTimer) clearTimeout(mpSubTimer);
     mpSubTimer=setTimeout(()=>{ if(mpSub==='sluchaj' && mpGame && mpGame.phase===MP.PLAY) mpGoKombinuj(); }, mpListenDur);
