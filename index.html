@@ -630,6 +630,25 @@
   .dn-again{flex:2;background:var(--green);border:none;border-radius:18px;padding:16px;font-family:var(--display);font-weight:900;font-size:16px;color:#fff;letter-spacing:.04em;cursor:pointer;box-shadow:0 5px 0 var(--green-d)}
   .dn-again:active{transform:translateY(5px);box-shadow:none}
   .dn-wait{flex:2;text-align:center;font-family:var(--display);font-weight:800;font-size:13px;color:#9a958c;align-self:center}
+
+  /* ===== DESIGN v2 — Fala 5: pokój (stwórz / dołącz) ===== */
+  .lb-name{margin-bottom:16px}
+  .lb-blue{display:flex;align-items:center;gap:14px;width:100%;background:var(--blue);border:none;border-radius:22px;padding:20px 18px;cursor:pointer;text-align:left;box-shadow:0 5px 0 var(--blue-d);margin-bottom:18px}
+  .lb-blue:active{transform:translateY(5px);box-shadow:none}
+  .lb-blue .ic{font-size:32px;flex:0 0 auto}
+  .lb-blue .tx{display:flex;flex-direction:column}
+  .lb-blue .tx b{font-family:var(--display);font-weight:900;font-size:20px;color:#fff}
+  .lb-blue .tx small{font-family:var(--body);font-weight:700;font-size:13px;color:rgba(255,255,255,.92);line-height:1.35}
+  .lb-blue .ar{margin-left:auto;color:#fff;font-size:24px;font-weight:900}
+  .lb-or{display:flex;align-items:center;gap:12px;margin:0 0 16px}
+  .lb-or::before,.lb-or::after{content:"";flex:1;height:2px;background:#EDEDED}
+  .lb-or span{font-family:var(--display);font-weight:800;font-size:13px;color:#bdb8ae}
+  .lb-join{display:grid;grid-template-columns:1fr auto;gap:10px}
+  .lb-join input{background:var(--panel2);border:2px solid var(--blue);border-bottom-width:4px;border-radius:16px;color:var(--ink);
+    font-family:var(--display);font-size:24px;font-weight:900;letter-spacing:.3em;text-align:center;padding:14px;outline:none;width:100%}
+  .lb-join button{font-family:var(--display);font-weight:900;letter-spacing:.04em;font-size:15px;color:#fff;background:var(--green);
+    border:none;border-radius:16px;padding:0 22px;cursor:pointer;box-shadow:0 5px 0 var(--green-d)}
+  .lb-join button:active{transform:translateY(5px);box-shadow:none}
 </style>
 </head>
 <body class="menu">
@@ -674,18 +693,16 @@
     <div id="mpLobby">
       <div class="mp-head">
         <span>graj ze znajomymi</span>
-        <button class="mp-back" id="mpExit">← solo</button>
+        <button class="mp-back" id="mpExit">← menu</button>
       </div>
-      <div class="mp-card">
-        <div class="field"><label for="mpName">Ksywa</label><input id="mpName" autocomplete="off" maxlength="16" placeholder="np. Karol"></div>
-        <button class="check" id="mpCreate">Stwórz pokój</button>
-        <div class="mp-or">albo dołącz</div>
-        <div class="mp-join">
-          <input id="mpCode" autocomplete="off" maxlength="4" placeholder="KOD" style="text-transform:uppercase">
-          <button id="mpJoin">Dołącz</button>
-        </div>
-        <div class="mp-err" id="mpErr"></div>
+      <div class="field lb-name"><label for="mpName">Twoja ksywa</label><input id="mpName" autocomplete="off" maxlength="16" placeholder="np. Karol"></div>
+      <button class="lb-blue" id="mpCreate"><span class="ic">👑</span><span class="tx"><b>Stwórz pokój</b><small>Jesteś hostem — wyślij kod znajomym i zaczynajcie</small></span><span class="ar">→</span></button>
+      <div class="lb-or"><span>albo dołącz kodem</span></div>
+      <div class="lb-join">
+        <input id="mpCode" autocomplete="off" maxlength="4" placeholder="K O D" style="text-transform:uppercase">
+        <button id="mpJoin">DOŁĄCZ</button>
       </div>
+      <div class="mp-err" id="mpErr"></div>
     </div>
 
     <!-- ROOM -->
