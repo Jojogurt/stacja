@@ -617,17 +617,22 @@ function confetti(n=90){
     fx.appendChild(p); setTimeout(()=>p.remove(), 3200);
   }
 }
-// intro fazy: duży tytuł na środku → po chwili wylatuje w górę i kurczy się (ku railowi). Raz na wejście w fazę.
-function mpPhaseIntro(key){
-  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+// intro fazy: pełna zapowiedź — białe tło zakrywa treść, tytuł na środku → wylatuje w górę
+// i kurczy się ku railowi, tło znika (odsłania treść), a na końcu odpala onDone (np. start piosenki).
+function mpPhaseIntro(key, onDone){
+  let fired=false;
+  const finish=()=>{ if(fired) return; fired=true; const el=document.getElementById('mpPhaseFx'); if(el) el.remove(); try{ onDone&&onDone(); }catch(e){} };
   const lektor = mpGame && mpGame.mode==='lektor';
   const META={ sluchaj: lektor?['📖','czytaj']:['🎧','słuchaj'], kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
-  const m=META[key]; if(!m) return;
-  let fx=document.getElementById('mpPhaseFx');
-  if(!fx){ fx=document.createElement('div'); fx.id='mpPhaseFx'; document.body.appendChild(fx); }
-  fx.innerHTML=`<div class="mp-phase-card pk-${key}"><span class="ic">${m[0]}</span><span class="tx">${escapeHtml(m[1])}</span></div>`;
-  const card=fx.firstElementChild;
-  if(card) card.addEventListener('animationend', ()=>{ if(fx) fx.innerHTML=''; }, {once:true});
+  const m=META[key];
+  let reduce=false; try{ reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+  if(!m || reduce){ finish(); return; }   // bez animacji wciąż odpal onDone (audio/confetti muszą ruszyć)
+  const old=document.getElementById('mpPhaseFx'); if(old) old.remove();
+  const fx=document.createElement('div'); fx.id='mpPhaseFx';
+  fx.innerHTML=`<div class="mp-phase-bg"></div><div class="mp-phase-card pk-${key}"><span class="ic">${m[0]}</span><span class="tx">${escapeHtml(m[1])}</span></div>`;
+  document.body.appendChild(fx);
+  fx.querySelector('.mp-phase-card').addEventListener('animationend', finish, {once:true});
+  setTimeout(finish, 1500);   // bezpiecznik, gdyby animationend nie zaskoczył
 }
 function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
   document.getElementById('sStreak').textContent=streak; }
@@ -971,7 +976,8 @@ function mpAfterSync(){
   const startPlay = mpGame && mpGame.phase===MP.PLAY && mpGame.playNonce!==mpLastNonce;
   if(startPlay) mpLastNonce=mpGame.playNonce;
   mpRender();
-  if(startPlay) mpPlayLocal();
+  // intro „słuchaj/czytaj": zakryj treść, pokaż tytuł → po animacji odsłoń, ruszaj okno i piosenkę
+  if(startPlay) mpPhaseIntro('sluchaj', ()=>{ mpStartListenWindow(mpGame); mpPlayLocal(); });
 }
 // czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
 function mpRevealPending(){ return !!mpRevealSnap && mpAck!==mpRevealNonce; }
@@ -1261,7 +1267,7 @@ const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumn
 function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
 function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.pause();}catch(e){} } }
-function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpPhaseIntro('kombinuj'); mpRender(); }
+function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); mpPhaseIntro('kombinuj'); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 // 06 Lobby — poczekalnia (host: kod + udostępnij + gracze + „ZACZNIJ"; gość: czeka na hosta)
@@ -1308,8 +1314,9 @@ function mpRender(){
   if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
     mpRevealNonce=g.playNonce;
     mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
-    mpPhaseIntro('odslona');                                 // intro fazy odsłona
-    if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti (raz)
+    // intro odsłony zakrywa treść; confetti dopiero po odsłonięciu
+    const won=g.reveal.teamOk || g.reveal.pewniakWin;
+    mpPhaseIntro('odslona', ()=>{ if(won) confetti(); });
   }
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
   if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(mpRevealSnap); return; }
@@ -1532,6 +1539,13 @@ function mpRefreshDynamic(g){
   set('mpConf', mpConfHTML());            // odśwież stan „pas" (pewność czyta trwały mpConf)
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
+// start okna fazy słuchania (licznik czasu + auto-przejście do „kombinuj") — po intro
+function mpStartListenWindow(g){
+  mpListenStart=Date.now(); mpListenDur=mpListenSecs(g)*1000;
+  if(mpSubTimer) clearTimeout(mpSubTimer);
+  mpSubTimer=setTimeout(()=>{ if(mpSub==='sluchaj' && mpGame && mpGame.phase===MP.PLAY) mpGoKombinuj(); }, mpListenDur);
+  mpAnimListenBar();
+}
 // animuj pasek czasu fazy słuchania (CSS-transition od pozostałego % do 0)
 function mpAnimListenBar(){
   const bar=$m('mpListenBar'); if(!bar) return; const i=bar.querySelector('i'); if(!i) return;
@@ -1544,10 +1558,7 @@ function mpRenderPlay(g, head, st){
   const newRound = mpPlayRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
     mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj';
-    mpPhaseIntro('sluchaj');                     // intro fazy słuchaj/czytaj
-    mpListenStart=Date.now(); mpListenDur=mpListenSecs(g)*1000;
-    if(mpSubTimer) clearTimeout(mpSubTimer);
-    mpSubTimer=setTimeout(()=>{ if(mpSub==='sluchaj' && mpGame && mpGame.phase===MP.PLAY) mpGoKombinuj(); }, mpListenDur);
+    // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
   if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
     mpPlayRound=g.playNonce; mpPlaySkin=skin; mpPlaySub=mpSub;
