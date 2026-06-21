@@ -543,6 +543,15 @@ function check(){
   }
   const img=document.getElementById('art');
   if(current.art){img.src=current.art;img.style.display='';}else{img.style.display='none';}
+  const rh=document.getElementById('revealHead');   // design: zielony/czerwony nagłówek wyniku
+  if(rh){
+    const both=okTitle&&okArtist, cls=both?'win':((okTitle||okArtist)?'part':'fail');
+    const ic=both?'✓':((okTitle||okArtist)?'≈':'✗');
+    const tt=both?'Dobrze!':((okTitle||okArtist)?'Prawie!':'Pudło');
+    const sub=both?'Tytuł i wykonawca trafione':(okTitle?'Tytuł OK — wykonawca nie':(okArtist?'Wykonawca OK — tytuł nie':'Następnym razem'));
+    rh.className='rv-shead '+cls;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${tt}</b><small>${sub}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+  }
   document.getElementById('reveal').classList.add('show');
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać

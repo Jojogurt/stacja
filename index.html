@@ -668,6 +668,18 @@
   .deck-eq i:nth-child(5){height:12px;animation:mpeq .9s .4s ease-in-out infinite}
   .deck-eq i:nth-child(6){height:22px;animation:mpeq .9s .5s ease-in-out infinite}
   .deck-eq i:nth-child(7){height:16px;animation:mpeq .9s .6s ease-in-out infinite}
+
+  /* ===== DESIGN v2 — Fala 7: odsłona solo (nagłówek wyniku) ===== */
+  .rv-shead{display:none;align-items:center;gap:14px;padding:18px 18px;border-bottom:2px solid var(--line)}
+  .reveal.show .rv-shead{display:flex}
+  .rv-shead .ic{width:46px;height:46px;border-radius:50%;color:#fff;font-size:24px;display:grid;place-items:center;flex:0 0 auto;box-shadow:0 4px 0 rgba(0,0,0,.12)}
+  .rv-shead .tx{display:flex;flex-direction:column;min-width:0}
+  .rv-shead .tx b{font-family:var(--display);font-weight:900;font-size:22px}
+  .rv-shead .tx small{font-family:var(--body);font-weight:700;font-size:13px}
+  .rv-shead .strk{margin-left:auto;font-family:var(--display);font-weight:900;font-size:15px;flex:0 0 auto}
+  .rv-shead.win{background:#F0FBE6} .rv-shead.win .ic{background:var(--green)} .rv-shead.win .tx b{color:var(--green-d)} .rv-shead.win .tx small{color:#5a8a2a} .rv-shead.win .strk{color:#E6A800}
+  .rv-shead.part{background:#FFF8E0} .rv-shead.part .ic{background:var(--gold);color:#7a5a00} .rv-shead.part .tx b{color:#E6A800} .rv-shead.part .tx small{color:#9a8a4a}
+  .rv-shead.fail{background:#FFF1F1} .rv-shead.fail .ic{background:var(--red)} .rv-shead.fail .tx b{color:#E63946} .rv-shead.fail .tx small{color:#c0727a}
 </style>
 </head>
 <body class="menu">
@@ -809,6 +821,7 @@
   </section>
 
   <section class="reveal" id="reveal">
+    <div class="rv-shead" id="revealHead"></div>
     <div class="reveal-top">
       <img class="art" id="art" alt="" referrerpolicy="no-referrer">
       <div class="rmeta" id="rmeta"></div>
