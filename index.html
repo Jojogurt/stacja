@@ -77,7 +77,7 @@
   .pl-panel{display:none;gap:8px;margin-top:10px;grid-template-columns:1fr auto}
   .pl-panel.show{display:grid}
   .pl-panel input{background:var(--panel2);border:2px solid var(--line);border-radius:12px;color:var(--ink);
-    font-family:var(--body);font-weight:700;font-size:14px;padding:11px;outline:none;min-width:0}
+    font-family:var(--body);font-weight:700;font-size:16px;padding:11px;outline:none;min-width:0}
   .pl-panel input:focus{border-color:var(--blue)}
   .pl-panel #plGo{font-family:var(--display);font-weight:800;color:#fff;background:var(--green);
     border:none;border-radius:12px;padding:0 16px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--green-d)}
@@ -323,7 +323,7 @@
   @keyframes mpspin{to{transform:rotate(360deg)}}
   .mp-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px}
   .mp-form input{background:var(--panel2);border:2px solid var(--line);border-radius:12px;color:var(--ink);
-    font-family:var(--body);font-weight:700;font-size:15px;padding:11px;outline:none;min-width:0}
+    font-family:var(--body);font-weight:700;font-size:16px;padding:11px;outline:none;min-width:0}
   .mp-form input:focus{border-color:var(--blue)}
   .mp-form button{font-family:var(--display);font-weight:800;color:#fff;background:var(--green);
     border:none;border-radius:12px;padding:0 16px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--green-d)}
@@ -374,7 +374,7 @@
     15%{opacity:1;transform:translateY(-30px) scale(1.1)}
     100%{opacity:0;transform:translateY(-340px) scale(1)}}
   .mp-saybar{display:flex;gap:8px;margin-top:10px}
-  .mp-saybar input{flex:1;min-width:0;font-family:var(--body);font-size:14px;padding:9px 12px;
+  .mp-saybar input{flex:1;min-width:0;font-family:var(--body);font-size:16px;padding:9px 12px;
     background:var(--panel);border:2px solid var(--line);border-radius:12px;color:var(--ink)}
   .mp-saybar button{font-family:var(--display);font-weight:800;font-size:13px;color:#fff;background:var(--blue);
     border:none;border-bottom:3px solid var(--blue-d);border-radius:12px;padding:9px 14px;cursor:pointer}
@@ -411,7 +411,7 @@
   .mp-vt{font-family:var(--display);font-size:11px;font-weight:800;color:var(--muted);background:var(--panel2);border:2px solid var(--line);
     border-radius:8px;padding:4px 7px;white-space:nowrap;cursor:pointer}
   .mp-vt.on{color:#fff;background:var(--green);border-color:var(--green-d)}
-  .mp-conf{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow-x:auto;margin-bottom:12px;-webkit-overflow-scrolling:touch}
+  .mp-conf{display:flex;align-items:center;gap:5px;flex-wrap:nowrap;overflow-x:auto;margin:12px 0;-webkit-overflow-scrolling:touch}
   .mp-conf::-webkit-scrollbar{display:none}
   .mp-conf .c-lab{flex:0 0 auto;font-family:var(--display);font-size:10px;font-weight:800;text-transform:uppercase;color:var(--muted)}
   .mp-cf{flex:0 0 auto;font-family:var(--display);font-weight:800;font-size:11px;color:var(--muted);background:var(--panel);border:2px solid var(--line);
@@ -454,14 +454,14 @@
   .mp-sys-ic{width:18px;height:18px;fill:var(--blue-d);flex:0 0 auto}
   .mp-sys.loading .mp-sys-ic{animation:mpspin .9s linear infinite;transform-origin:center}
   .mp-composer{display:grid;grid-template-columns:auto 1fr auto;gap:7px;margin-top:4px;align-items:stretch}
-  .mp-typtoggle{white-space:nowrap;align-self:stretch}
+  .mp-typtoggle{align-self:center;padding:8px 9px;font-size:16px;line-height:1}
   .mp-compfield{min-width:0}
   .mp-cwrap{display:flex;align-items:center;gap:5px;flex-wrap:wrap;background:var(--panel2);border:2px solid var(--blue);
     border-radius:12px;padding:6px 9px;min-height:44px}
-  .mp-cwrap input{border:none;background:transparent;outline:none;font-family:var(--body);font-weight:700;font-size:15px;color:var(--ink);min-width:0;flex:1;padding:4px 0}
+  .mp-cwrap input{border:none;background:transparent;outline:none;font-family:var(--body);font-weight:700;font-size:16px;color:var(--ink);min-width:0;flex:1;padding:4px 0}
   .mp-cwrap input.mp-slotchip{flex:0 0 auto}
   .mp-at{font-family:var(--display);font-weight:900;color:var(--blue-d);font-size:15px}
-  .mp-slotchip{background:#fff;border:2px solid var(--line);border-radius:8px;padding:5px 9px;font-size:13px;font-weight:800;width:42%;max-width:140px}
+  .mp-slotchip{background:#fff;border:2px solid var(--line);border-radius:8px;padding:5px 9px;font-size:16px;font-weight:800;width:42%;max-width:140px}
   .mp-slotchip:focus{border-color:var(--green-d)}
   .mp-sep{color:var(--muted);font-weight:900}
   .mp-composer>button{font-family:var(--display);font-weight:800;color:#fff;background:var(--blue);border:none;

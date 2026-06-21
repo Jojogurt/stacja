@@ -1175,7 +1175,7 @@ function mpComposerHTML(g){
   const slots=g.answerSlots||slotsFor();
   const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
-      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ">✍️ typ</button>
+      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
       <div class="mp-compfield">
         <div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="napisz… (albo @ — wrzuć typ)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
         <div class="mp-cwrap" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
@@ -1349,7 +1349,7 @@ function mpSetComposerMode(m){
   const chat=$m('mpCompChat'), typ=$m('mpCompTyp'), tog=$m('mpTypToggle'), btn=$m('mpCompBtn');
   if(chat) chat.style.display = m==='typ'?'none':'flex';
   if(typ)  typ.style.display  = m==='typ'?'flex':'none';
-  if(tog)  tog.textContent    = m==='typ'?'💬 czat':'✍️ typ';
+  if(tog)  tog.textContent    = m==='typ'?'💬':'✍️';
   if(btn)  btn.textContent    = m==='typ'?'wrzuć':'wyślij';
 }
 function mpComposerToggle(){
