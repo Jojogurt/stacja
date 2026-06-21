@@ -468,6 +468,7 @@ function loadSlotQuestion(){
   selectedEra=s.cat; mode=s.mode;
   document.querySelectorAll('#modePick button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
   updateSessUI();
+  animIn(document.querySelector('.deck'));   // one-shot przejście nowego pytania
   newRound();
 }
 function endMatch(){
@@ -592,6 +593,12 @@ function setRing(p){ document.getElementById('ring').style.background=
   `conic-gradient(var(--gold) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`; }
 function setState(t){ const e=document.getElementById('state'); e.classList.remove('err'); e.textContent=t; }
 function flash(t){ const e=document.getElementById('state'); e.classList.add('err'); e.textContent=t; setIcon('play'); }
+// one-shot animacja wejścia pod-ekranu (tylko przy realnej zmianie widoku, nie przy każdym re-renderze)
+function animIn(el){
+  if(!el) return;
+  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
+  el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
+}
 // confetti przy trafieniu (lekkie, czysty DOM/CSS; pomijane przy reduce-motion)
 function confetti(n=90){
   try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
@@ -625,6 +632,7 @@ let mpSb=null, mpCh=null;
 let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
 let mpCode=null, mpHost=false;
 let mpRoomStage='wait';     // przed grą: 'wait' = poczekalnia (06), 'build' = picker „ułóż mecz" (host)
+let mpLastView=null;        // ostatni „duży" widok MP (wait/picker/game) — do one-shot przejść
 let mpGame=null;            // stan współdzielony (host = źródło prawdy)
 let mpHostCurrent=null;     // pełny utwór znany tylko hostowi
 let mpHostSeen=new Set();   // antypowtórki po stronie hosta
@@ -848,7 +856,7 @@ async function mpLeave(){
   if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
   mpReady=new Set(); mpLastArmNonce=null;
   mpAck=mpRevealNonce=mpRevealSnap=null;
-  mpCode=null; mpHost=false; mpRoomStage='wait'; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
+  mpCode=null; mpHost=false; mpRoomStage='wait'; mpLastView=null; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
 
@@ -1273,6 +1281,9 @@ function mpLobbyWaitHTML(){
 }
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
+  // one-shot przejście przy zmianie „dużego" widoku (poczekalnia ↔ picker ↔ gra) — nie przy re-renderze
+  const view = (!mpGame || mpGame.phase==null) ? ((mpHost && mpRoomStage==='build') ? 'picker' : 'wait') : 'game';
+  if(view!==mpLastView){ mpLastView=view; animIn(st); }
   if(!mpGame || mpGame.phase==null){
     // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
     const building = mpHost && mpRoomStage==='build';
