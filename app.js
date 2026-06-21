@@ -1107,28 +1107,36 @@ function mpRosterHTML(g){
     </div>`;
   }).join('');
 }
-// tablica kolumnami: osobne głosowanie na każdy slot (tytuł / wykonawca / …)
+// tablica kolumnami (design): karta kandydata = wartość + ▲głosy + awatary + TOP; klik = głos
+const VOTE_COLORS=['#58CC02','#CE82FF','#FFC800','#FF4B4B','#1CB0F6','#1899D6'];
 function mpSlotsHTML(g){
   const slots=g.answerSlots||slotsFor();
   return `<div class="mp-slots">${slots.map(s=>{
     const cands=candidatesForSlot(g, s.key);
     const myVal=myVoteForSlot(g, s.key, mpMe.id);
-    const rows = cands.length ? cands.map((c,i)=>{
+    const rows = cands.map((c,i)=>{
       const isTop=i===0 && c.votes.length>0;
       const voted = myVal && norm(myVal)===norm(c.value);
-      const tag = c.tag==='sure'?'<span class="mp-ct sure">🍺</span>':(c.tag==='unsure'?'<span class="mp-ct unsure">?</span>':'<span class="mp-ct"></span>');
-      return `<div class="mp-cand${isTop?' top':''}"><span class="cv">${escapeHtml(c.value)}</span>${tag}<button class="mp-vt${voted?' on':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">👍 ${c.votes.length}</button></div>`;
-    }).join('') : `<div class="mp-state" style="opacity:.55;padding:6px 2px">— brak —</div>`;
-    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)} — głosuj</div>${rows}</div>`;
+      const dots = c.votes.slice(0,5).map((v,j)=>`<b class="mp-vdot" style="background:${VOTE_COLORS[j%VOTE_COLORS.length]}"></b>`).join('');
+      const tag = c.tag==='sure'?' <span class="mp-ctag s">🟡</span>':(c.tag==='unsure'?' <span class="mp-ctag u">🟣</span>':'');
+      return `<div class="mp-cand${isTop?' top':''}${voted?' voted':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">
+        <span class="cv">${escapeHtml(c.value)}${tag}</span>
+        <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
+      </div>`;
+    }).join('');
+    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}<div class="mp-addtyp" onclick="mpFocusTyp('${s.key}')">+ dorzuć typ…</div></div>`;
   }).join('')}</div>`;
 }
-// „odpowiedź drużyny" = górka głosów w każdym slocie (miks najlepszych pól)
+function mpFocusTyp(key){ const el=$m('mpProp_'+key)||$m('mpChatIn'); if(el) el.focus(); }
+// „odpowiedź drużyny" (design): ciemna karta (kolumny) / zielona przypięta (czat) + ×2 gdy pewniak
 function mpTeamHTML(g){
   const ta=teamAnswer(g), slots=g.answerSlots||slotsFor();
   const any=slots.some(s=>ta[s.key]);
-  const parts=slots.map(s=> ta[s.key] ? escapeHtml(ta[s.key]) : '—');
-  return `<div class="lab">odpowiedź drużyny</div>
-    <div class="ans">${any?parts.join(' · '):'— wrzućcie i przegłosujcie —'}</div>`;
+  const val = any ? slots.map(s=> ta[s.key]?escapeHtml(ta[s.key]):'—').join(' — ') : '— wrzućcie i przegłosujcie —';
+  const sure = (g.proposals||[]).some(p=>p.conf==='sure');
+  const badge = sure ? '<span class="mp-x2">🟡 ×2</span>' : '';
+  const cls = mpSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
+  return `<div class="${cls}"><span class="ic">🎯</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}</div>`;
 }
 // wybór pewności typu (zwykła/niepewny/pewniak) + „pas" — jeden wiersz, bez dubli na dole.
 // pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
@@ -1154,7 +1162,13 @@ function mpListenSecs(g){
 const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpPlayLocal()" aria-label="Odtwórz"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
 const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
-function mpChatFeedHTML(){ return mpChatLog.map(c=>`<div class="mp-cm"><b>${escapeHtml(c.byName||'')}</b>${escapeHtml(c.text)}</div>`).join(''); }
+function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
+function mpChatFeedHTML(){
+  return mpChatLog.map(c=>{
+    const av=escapeHtml((c.byName||'?').slice(0,1).toUpperCase());
+    return `<div class="mp-cmsg"><b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b><div class="mp-cmb"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text)}</div></div></div>`;
+  }).join('');
+}
 // pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
 function mpRailHTML(active){
   const order=['sluchaj','kombinuj','odslona'];
@@ -1193,10 +1207,10 @@ function mpComposerHTML(g){
   return `<div class="mp-composer">
       <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
       <div class="mp-compfield">
-        <div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="napisz… (albo @ — wrzuć typ)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
+        <div class="mp-cwrap" id="mpCompChat"><span class="mp-odp">@odp</span><input id="mpChatIn" maxlength="64" autocomplete="off" placeholder="@ → typ · tekst → czat" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
         <div class="mp-cwrap" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
       </div>
-      <button id="mpCompBtn" onclick="mpComposerSend()">wyślij</button>
+      <button id="mpCompBtn" class="mp-send" onclick="mpComposerSend()">➤</button>
     </div>`;
 }
 // nagłówek gry (design): kolorowy pas — wiersz 1 runda·pokój·timer; wiersz 2 chipy kat/tryb/pyt
@@ -1373,7 +1387,7 @@ function mpSetComposerMode(m){
   if(chat) chat.style.display = m==='typ'?'none':'flex';
   if(typ)  typ.style.display  = m==='typ'?'flex':'none';
   if(tog)  tog.textContent    = m==='typ'?'💬':'✍️';
-  if(btn)  btn.textContent    = m==='typ'?'wrzuć':'wyślij';
+  if(btn)  btn.textContent    = '➤';
 }
 function mpComposerToggle(){
   mpSetComposerMode(mpComposerMode==='typ'?'chat':'typ');
@@ -1446,6 +1460,6 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); $m('mpCo
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
-  mpGoKombinuj, mpComposerToggle, mpChatInput,
+  mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance,
 });
