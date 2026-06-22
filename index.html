@@ -89,23 +89,6 @@
   .pcz-m{animation:scrIn .3s cubic-bezier(.2,.8,.2,1) both}
   /* one-shot przejście pod-ekranu (MP poczekalnia↔picker↔gra, solo nowe pytanie) */
   .view-in{animation:scrIn .3s cubic-bezier(.2,.8,.2,1) both}
-  /* intro fazy: białe tło zakrywa TYLKO zmienną część (pod railem); tytuł na środku obszaru →
-     wylatuje w górę i kurczy się na pozycję raila, tło znika (odsłania treść) */
-  #mpPhaseFx{position:fixed;inset:0;pointer-events:none;z-index:9000}
-  .mp-phase-bg{position:absolute;left:0;right:0;bottom:0;background:var(--bg);pointer-events:auto;animation:phaseBg 2.5s ease forwards}
-  .mp-phase-card{position:absolute;left:50%;display:flex;flex-direction:column;align-items:center;gap:8px;animation:phaseIntro 2.5s cubic-bezier(.2,.7,.2,1) forwards}
-  .mp-phase-card .ic{font-size:62px;line-height:1}
-  .mp-phase-card .tx{font-family:var(--display);font-weight:900;font-size:40px;letter-spacing:.02em;color:var(--ink)}
-  .mp-phase-card.pk-sluchaj .tx{color:var(--blue-d)}
-  .mp-phase-card.pk-kombinuj .tx{color:#9B4DDB}
-  .mp-phase-card.pk-odslona .tx{color:var(--green-d)}
-  @keyframes phaseBg{0%{opacity:1}60%{opacity:1}100%{opacity:0}}
-  @keyframes phaseIntro{
-    0%{opacity:0;transform:translate(-50%,-50%) scale(.7)}
-    8%{opacity:1;transform:translate(-50%,-50%) scale(1.05)}
-    16%{transform:translate(-50%,-50%) scale(1)}
-    60%{opacity:1;transform:translate(-50%,-50%) scale(1)}
-    100%{opacity:0;transform:translate(-50%,calc(-50% + var(--dy,-30vh))) scale(.22)}}
   /* flip karty odsłony (MP) */
   .rv-card{animation:rvflip .42s cubic-bezier(.2,.8,.2,1) both;transform-origin:center top}
   @keyframes rvflip{from{opacity:0;transform:perspective(700px) rotateX(-22deg) translateY(10px)}to{opacity:1;transform:none}}

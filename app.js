@@ -617,34 +617,6 @@ function confetti(n=90){
     fx.appendChild(p); setTimeout(()=>p.remove(), 3200);
   }
 }
-// intro fazy: zakrywa TYLKO zmienną część (pod railem/rosterem), tytuł na środku tego obszaru →
-// wylatuje w górę i kurczy się DOKŁADNIE na pozycję raila, tło znika (odsłania treść), na końcu onDone.
-function mpPhaseIntro(key, onDone){
-  let fired=false;
-  const finish=()=>{ if(fired) return; fired=true; const el=document.getElementById('mpPhaseFx'); if(el) el.remove(); try{ onDone&&onDone(); }catch(e){} };
-  const lektor = mpGame && mpGame.mode==='lektor';
-  const META={ sluchaj: lektor?['📖','czytaj']:['🎧','słuchaj'], kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
-  const m=META[key];
-  let reduce=false; try{ reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
-  if(!m || reduce){ finish(); return; }   // bez animacji wciąż odpal onDone (audio/confetti muszą ruszyć)
-  const old=document.getElementById('mpPhaseFx'); if(old) old.remove();
-  // obszar zmiennej treści = od dołu rostera (lub raila) w dół; cel lotu = środek raila
-  const vh=window.innerHeight;
-  const roster=document.querySelector('#mpStage .mp-roster');
-  const rail=document.querySelector('#mpStage .mp-rail');
-  const rTop = roster ? roster.getBoundingClientRect().bottom : (rail ? rail.getBoundingClientRect().bottom : vh*0.3);
-  const regTop = Math.max(0, rTop);
-  const regCenter = (regTop + vh)/2;
-  const railRect = rail ? rail.getBoundingClientRect() : null;
-  const railY = railRect ? (railRect.top + railRect.height/2) : vh*0.14;
-  const dy = Math.round(railY - regCenter);   // ujemne → w górę, ląduje na railu
-  const fx=document.createElement('div'); fx.id='mpPhaseFx';
-  fx.innerHTML=`<div class="mp-phase-bg" style="top:${Math.round(regTop)}px"></div>`+
-    `<div class="mp-phase-card pk-${key}" style="top:${Math.round(regCenter)}px;--dy:${dy}px"><span class="ic">${m[0]}</span><span class="tx">${escapeHtml(m[1])}</span></div>`;
-  document.body.appendChild(fx);
-  fx.querySelector('.mp-phase-card').addEventListener('animationend', finish, {once:true});
-  setTimeout(finish, 2700);   // bezpiecznik, gdyby animationend nie zaskoczył
-}
 function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
   document.getElementById('sStreak').textContent=streak; }
 function val(id){ return document.getElementById(id).value.trim(); }
@@ -988,7 +960,7 @@ function mpAfterSync(){
   if(startPlay) mpLastNonce=mpGame.playNonce;
   mpRender();
   // intro „słuchaj/czytaj": zakryj treść, pokaż tytuł → po animacji odsłoń, ruszaj okno i piosenkę
-  if(startPlay) mpPhaseIntro('sluchaj', ()=>{ mpStartListenWindow(mpGame); mpPlayLocal(); });
+  if(startPlay){ mpStartListenWindow(mpGame); mpPlayLocal(); }
 }
 // czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
 function mpRevealPending(){ return !!mpRevealSnap && mpAck!==mpRevealNonce; }
@@ -1280,7 +1252,7 @@ const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumn
 function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
 function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.pause();}catch(e){} } }
-function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); mpPhaseIntro('kombinuj'); }
+function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 // 06 Lobby — poczekalnia (host: kod + udostępnij + gracze + „ZACZNIJ"; gość: czeka na hosta)
@@ -1327,9 +1299,7 @@ function mpRender(){
   if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
     mpRevealNonce=g.playNonce;
     mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
-    // intro odsłony zakrywa treść; confetti dopiero po odsłonięciu
-    const won=g.reveal.teamOk || g.reveal.pewniakWin;
-    mpPhaseIntro('odslona', ()=>{ if(won) confetti(); });
+    if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti
   }
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
   if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(mpRevealSnap); return; }
