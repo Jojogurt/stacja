@@ -120,9 +120,38 @@ Gdy TASK 1–4 przechodzą:
 2. Skasuj projekt Supabase `agkarxtjcgklepefurza` (dashboard) — DOPIERO po potwierdzeniu, że nic nie woła supabase.co.
 3. Zaktualizuj `config.js`/README/`server/README.md`/MEMORY.
 
+## TASK 6 — Serwer-autorytet pokoju + hardening (PRZYSZŁOŚĆ, osobny etap)
+Dziś DO to **tylko przekaźnik** (relay): host-authority został na telefonie hosta. To znaczy, że
+nadal mamy SPOF (host pada → mecz pada), buzzer stempluje host (nie serwer), a połączenie WS ufa
+`?id=` z query (klient może podszyć się pod cudze `id` w presence i rozesłać `sync`/`act` jako ktoś inny).
+Wyzwalacz tego etapu: szybkie tryby / sprawiedliwy buzzer / skargi na „host pada".
+
+Zakres (idą RAZEM — autorytet i tożsamość połączenia to ten sam refactor):
+1. **Tożsamość WS z tokenu (S1).** W `server/gameRoom.js` `onConnect` zweryfikować Bearer
+   (`verifyToken` z `lib/auth.js`, sekret w env) i wyprowadzić `id` Z TOKENU, nie z `?id=`.
+   partyserver daje dostęp do `ctx.request` (nagłówki/query) — token można podać w query przy
+   nawiązaniu WS (nagłówków nie ustawisz w przeglądarkowym `WebSocket`). Odrzucać połączenia bez ważnego tokenu.
+2. **Reducer na serwerze.** Wpiąć `core/mpReducer.js` do `gameRoom.js` (dziś go NIE importuje) i
+   doportować z `app.js` orkiestrację hosta: `mpHostNewRound` (losowanie utworu — na serwerze BEZ CORS,
+   wprost iTunes/Deezer, proxy znika dla MP), `mpArm`/`mpGo` (faza gotowości), buzzer „kto pierwszy"
+   (serwer stempluje kolejność), `mpLock`→`evaluateAnswer`, `mpNext`/`mpFinish`, zapis przez `/api/record-match`
+   (albo wewnętrznie z DO). Rdzeń `core/` jest współdzielony web↔serwer — to przenosiny logiki, nie przepisywanie.
+3. **Czysty port transportu zamiast shimu Supabase.** Dziś `adapters-web/cfChannel.js` udaje kanał
+   Supabase (`.on('broadcast').subscribe().track().presenceState()`), a `app.js` jest sprzężony z tym idiomem.
+   Przy serwer-autorytecie warto przejść na neutralny port w stylu `join/send/onState/onEvent` i przerobić
+   warstwę `mp*` w `app.js`. (Stary scaffolding `ports/RealtimeTransport.js` + `adapters-web/partyTransport.js`
+   USUNIĘTY 2026-06-23 jako mylący/martwy — projekt portu odtworzyć tutaj od nowa, już pod autorytet serwera.)
+
+### Backlog hardeningu (drobne, niezależne — można robić wcześniej)
+- **S2** token bez `exp` — dodać wygaśnięcie + re-issue w `/api/session` (dziś token = wieczna tożsamość).
+- **S3** `/tracks` i `/spotify` to otwarte proxy bez rate-limitu — ktoś może palić limit Workera. Rozważyć prosty throttle.
+- **S4** `/audio` podąża za redirectami (allowlista sprawdza tylko URL wejściowy) — dodać `redirect:'manual'` + limit rozmiaru streamu.
+- **S5** ✅ ZROBIONE 2026-06-23 — cap `participants`≤32 / `answers`≤1000 w `record-match` (+ fix N+1: jedno `WHERE id IN (...)`).
+- **S6** `ensureProfile` nie ponawia przy kolizji `friend_code` (UNIQUE) — dać retry jak w `uniqueGroupCode`.
+
 ## Uwagi / pułapki
 - CORS: Worker ma globalny CORS w `index.js` (Allow-Origin *). Dla `/audio` pilnować Range/`content-range`.
 - Token w localStorage = tożsamość. Wyczyszczenie = nowy profil (jak dziś przy anon).
 - D1 SQLite: `ok` jako INTEGER 0/1 (nie boolean). `config` jako TEXT(JSON).
 - `record_match` waliduje: `0 ≤ score ≤ total*2+10` oraz „caller jest hostem albo uczestnikiem".
-- Realtime to TYLKO transport (host-authority zostaje). Pełny autorytet na DO = późniejszy, osobny etap (reducer już jest w `core/mpReducer.js`).
+- Realtime to TYLKO transport (host-authority zostaje). Pełny autorytet na DO = **TASK 6** (reducer już jest w `core/mpReducer.js`, ale DO go nie uruchamia).

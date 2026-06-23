@@ -164,8 +164,9 @@ async function recordMatch(env, caller, p){
   const score  = parseInt(p.score||0,10)||0;
   if(score < 0 || score > qTotal*2 + 10) return err('score_out_of_range');
   const host = p.host_id || null;
-  const parts = Array.isArray(p.participants)?p.participants:[];
-  const answers = Array.isArray(p.answers)?p.answers:[];
+  // cap anty-flood: ogranicz rozmiar tablic, zanim cokolwiek piszemy do D1
+  const parts   = (Array.isArray(p.participants)?p.participants:[]).slice(0, 32);
+  const answers = (Array.isArray(p.answers)?p.answers:[]).slice(0, 1000);
   if(host !== caller && !parts.some(e=>String(e.profile_id)===caller)) return err('caller_not_in_match', 403);
 
   const id = newId();
@@ -175,10 +176,18 @@ async function recordMatch(env, caller, p){
   ).bind(id, p.mode||'solo', p.room_code||null, host, p.group_id||null,
          JSON.stringify(p.config||{}), score, qTotal, p.started_at||null).run();
 
+  // które profile_id uczestników istnieją — JEDNO zapytanie zamiast N+1 SELECT-ów
+  const ids = [...new Set(parts.map(e=>e&&e.profile_id).filter(Boolean).map(String))];
+  let known = new Set();
+  if(ids.length){
+    const ph = ids.map(()=>'?').join(',');
+    const { results } = await env.DB.prepare(`SELECT id FROM profiles WHERE id IN (${ph})`).bind(...ids).all();
+    known = new Set((results||[]).map(r=>String(r.id)));
+  }
+
   const stmts=[];
   for(const e of parts){
-    const exists=await env.DB.prepare(`SELECT 1 FROM profiles WHERE id=?`).bind(e.profile_id).first();
-    if(!exists) continue;                                  // pomiń uczestnika bez profilu (jak w Postgresie)
+    if(!known.has(String(e.profile_id))) continue;         // pomiń uczestnika bez profilu (jak w Postgresie)
     stmts.push(env.DB.prepare(
       `INSERT INTO match_participants (match_id,profile_id,display_name,role,score,correct_count)
        VALUES (?,?,?,?,?,?) ON CONFLICT(match_id,profile_id) DO NOTHING`

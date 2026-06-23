@@ -1,49 +1,35 @@
-# stacja-rooms — autorytet pokoju (Etap 2)
+# stacja-rooms — backend STACJA (Cloudflare Worker)
 
-Cloudflare Worker + Durable Object jako **autorytet pokoju w czasie rzeczywistym**.
-Zdejmuje autorytet z telefonu hosta (koniec z „host pada = mecz pada") i daje
-**sprawiedliwy buzzer** (jeden serwer stempluje kolejność „kto pierwszy").
+Jeden Worker obsługuje **cały** backend, który dawniej stał na Supabase:
+- **REST API danych** (`/api/*`) na **D1** — profile, liga, mecze, drużyny, znajomi.
+- **Proxy zewnętrznych źródeł** (`/tracks`, `/spotify`, `/audio`) — omija blokady CORS/host.
+- **Realtime pokoju** (`/parties/game-room/<kod>`) — **Durable Object jako PRZEKAŹNIK (relay)**.
 
-> **Status: SZKIELET, NIEPODPIĘTY.** Produkcja dalej działa na Supabase Realtime
-> (host-authority). Te pliki nic nie zmieniają w obecnej rozgrywce. Aktywacja to
-> osobny, ostrożny krok — patrz „Migracja" niżej.
+> **Produkcja stoi na tym Workerze** (migracja Supabase→Cloudflare, 2026-06-23). Pełny
+> kontekst, współrzędne i pozostałe taski: **`../MIGRATION.md`**.
 
-## Co już jest
-- `gameRoom.js` — Durable Object; trzyma stan, odpala **ten sam `core/mpReducer.js`** co web,
-  obsługuje akcje gracza (vote/propose/sure/unpropose), przekazuje emotki/czat, liczy obecność.
-- `index.js` — routing Workera do pokoju po kodzie.
+## Pliki
+- `index.js` — router: `/api/*` (CORS) → `lib/api.js`; `/tracks|/spotify|/audio` → `lib/proxies.js`;
+  `/parties/*` → Durable Object; reszta 404.
+- `lib/auth.js` — tożsamość bez kont: device-UUID podpisany tokenem (HS256/HMAC). Worker generuje id.
+- `lib/api.js` — REST API danych (D1) + walidacja zapisu meczu (`record-match`).
+- `lib/proxies.js` — `/tracks` (iTunes→Deezer), `/spotify` (embed `__NEXT_DATA__`), `/audio` (allowlista+Range).
+- `gameRoom.js` — Durable Object **relay**: broadcast (self=true) + presence. **Host-authority zostaje
+  w `app.js`** — DO wozi tylko transport (zamiennik Supabase Realtime).
 - `wrangler.toml` — config deployu (DO na SQLite = darmowy plan).
-- `../adapters-web/partyTransport.js` — klient (partysocket) realizujący `ports/RealtimeTransport.js`.
-
-## Czego brakuje (TODO — orkiestracja hosta, do doportowania z app.js)
-- losowanie utworu na serwerze (na natywie/serwerze **bez CORS** → wprost iTunes/Deezer; proxy znika),
-- faza gotowości (`mpArm`/`mpGo`), buzzer „kto pierwszy",
-- zatwierdzanie odpowiedzi (`evaluateAnswer`), następne pytanie (`matchAdvance`), koniec,
-- zapis wyniku z DO przez `record_match` (service key jako sekret Workera).
-
-## Wymagania
-- Konto **Cloudflare** (darmowe; DO-SQLite na free planie, hibernacja = realnie $0).
-- Nic poza tym. Brak osobnego konta „PartyKit".
+- `_ref-supabase/` — referencyjne Edge Functions (Deno), z których sportowano proxy. Archiwum.
 
 ## Deploy
 ```bash
 cd server
-npm install
-npx wrangler login          # OAuth w przeglądarce
-npx wrangler deploy         # → https://stacja-rooms.<konto>.workers.dev
-# gdy DO będzie pisać do bazy:
-# npx wrangler secret put SUPABASE_SERVICE_KEY
+export CLOUDFLARE_API_TOKEN="$(tr -d '[:space:]' < .cf-token)"   # token gitignored, nie commitować
+node_modules/.bin/wrangler deploy
+# sekret tożsamości (raz):
+# echo '<losowy-sekret>' | node_modules/.bin/wrangler secret put TOKEN_SECRET
 ```
 
-## Migracja (jak aktywować BEZ psucia rozgrywki)
-1. Dodaj `roomsHost` do `config.js` (adres workers.dev).
-2. W `app.js` wymień warstwę transportu MP na `ports/RealtimeTransport`:
-   - dziś: `mpCh.send(...)` / `mpCh.on('broadcast', ...)` rozsiane po `mp*`.
-   - docelowo: jeden `transport` (Supabase albo Party) za portem; `mpSend`→`transport.send`,
-     `mpAfterSync` z `transport.onState`.
-3. Zostaw adapter Supabase jako drugą implementację portu → przełącznik (flaga) pozwala
-   wrócić, gdyby coś nie grało. Migruj jeden pokój testowy, potem reszta.
-4. Dopiero gdy działa — przenoś orkiestrację hosta z `app.js` do `gameRoom.js`
-   (reducer już tam jest; dochodzi losowanie utworu, arming, lock, next).
-
-Rdzeń (`core/`) jest współdzielony web↔serwer, więc to przenosiny logiki, nie przepisywanie.
+## Co NIE jest zrobione — serwer-autorytet (przyszłość)
+DO jest dziś **tylko przekaźnikiem**. Autorytet rozgrywki (losowanie utworu, faza gotowości,
+sprawiedliwy buzzer, ocena odpowiedzi, następna runda, przeżycie rozłączenia hosta) wciąż liczy
+**telefon hosta**. Reducer `core/mpReducer.js` jest gotowy, ale DO go nie uruchamia. Plan przeniesienia
+autorytetu na serwer (+ weryfikacja tożsamości połączenia WS) opisuje **`../MIGRATION.md` → TASK 6**.
