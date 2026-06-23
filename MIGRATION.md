@@ -49,7 +49,7 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 
 > **STATUS 2026-06-23:** TASK 1–5 ZAMKNIĘTE. Live cutover na `main` zrobiony (GitHub Pages, commit `089836b`):
 > jojogurt.github.io w 100% na Cloudflare, supabase-js + `adapters-web/{supabase,captcha}.js` usunięte, zero ruchu
-> do supabase.co. Hardening+sprzątanie: `dbfc8e9`. **TASK 5 (kasowanie Supabase) ODPADA** — projekt zapauzowany.
+> do supabase.co. Hardening+sprzątanie: `dbfc8e9`. **TASK 5 (kasowanie Supabase) ODPADA** — projekt wyłączony (nie zadziała, NIE backup); apka go nie woła.
 > **TASK 6 — serwer-autorytet ZROBIONY (6.1–6.4):** `GameAuthority` DO (osobna trasa) przejął pętlę gry; `config.serverAuthority`
 > **flipnięty na true** — żywe MP idą przez autorytatywny DO (brak SPOF, integralność, zapis D1 z serwera). Rollback: `?authority=0`
 > lub `serverAuthority:false`. Relay (`GameRoom`+`cfChannel`) zostaje żywy do rollbacku.
@@ -120,7 +120,7 @@ Pełna ścieżka na deployu. Potwierdzone zero żądań do supabase.co (Network 
 
 ## TASK 5 — Usunięcie Supabase ❌ ODPADA
 Repo wyczyszczone z Supabase (TASK 3): `adapters-web/{supabase,captcha}.js` + supabase-js usunięte, `config.js`/README/`server/README.md`/MEMORY zaktualizowane.
-**Projektu Supabase `agkarxtjcgklepefurza` NIE kasujemy** — jest **zapauzowany** (zero kosztów, zero ruchu). Zostaje jako bezkosztowy backup. Krok kasowania zdjęty z planu.
+**Projektu Supabase `agkarxtjcgklepefurza` NIE kasujemy ręcznie** — jest **wyłączony** (nieaktywny, NIE zadziała → NIE jest użytecznym backupem). Apka i tak go nie woła (zero ruchu do supabase.co), więc kasowanie zbędne.
 
 ## TASK 6 — Serwer-autorytet pokoju + hardening (PRZYSZŁOŚĆ, osobny etap)
 > **Plan po researchu 2026-06-23 (autor: research nad app.js + core/). Self-sufficient — można działać na zimno.**
