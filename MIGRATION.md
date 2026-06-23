@@ -160,23 +160,29 @@ importu / teksty). DO trzyma sekret odpowiedzi i **strippuje go ze stanu** rozsy
   odtworzyć skasowany `RealtimeTransport`, ale już pod autorytet. Wszystko za **flagą** (rollback).
 
 ### Podfazy (kolejność; każda osobno wdrażalna, za flagą)
-**6.1 — Tożsamość WS z tokenu (S1). MAŁE, niezależne, można shipnąć samo.**
+**6.1 — Tożsamość WS z tokenu (S1). ✅ ZROBIONE 2026-06-23 (commit `29d5937`, INTERIM fallback `?id=`).**
 - `server/gameRoom.js` `onConnect(conn, ctx)`: czytaj token z query (`?t=<token>`), `verifyToken(env.TOKEN_SECRET,…)`
   (env w DO: `this.env`), ustaw `id` Z TOKENU (ignoruj `?id=`). Bez ważnego tokenu — zamknij połączenie.
 - `cfChannel.js` (i przyszły transport): dokładaj `&t=<token z localStorage>` do URL WS.
 - Test: WS z podrobionym `id` nie podszyje się; presence pokazuje id z tokenu. (Relay dalej działa — to tylko zaufanie do id.)
 
-**6.2 — Port rdzenia na Worker + DO trzyma autorytatywny stan (orkiestracja nadal host-triggered).** NAJWIĘKSZA.
-- Wyłuskać selekcję utworu z `adapters-web/itunesRepository.js` do **`core/trackSelect.js`** (czyste:
-  `pickTrack`, filtr coverów, anty-powtórki, normalizacja) — współdzielone web↔DO. Browser zostaje z fetch/JSONP;
-  DO dostaje **`server/lib/resolve.js`** = ta sama selekcja + **bezpośredni fetch iTunes/Deezer** (bez CORS).
-- `gameRoom.js` przejmuje pętlę z app.js (gałąź `if(mpHost)`): `start`(z wgranymi pulami) → resolve →
-  ARMING(+armNonce) → zbieranie `ready` (+ serwerowy timeout MP_BUFFER) → PLAY (serwerowy `endsAt`) →
-  `lock`→`evaluateAnswer` → REVEAL → `next`→`matchAdvance` → … → DONE → **zapis do D1** (reużyć `recordMatch`
-  z `lib/api.js`, wyłuskać do wspólnej funkcji). Importuje `core/{mpReducer,phases,match}.js` (już czyste, Worker je bundluje).
-- Broadcast `{t:'state', game}` ze **strippowanym** `current` (klient dostaje `preview`/`lyric`/`snipStart`/fazę/
-  proposals/votes; pełny utwór tylko w `reveal`). Persist `game` do storage na każdym przejściu.
-- Promote: `hostId` w stanie; na `onClose` jeśli wychodził host i są inni — awansuj najstarsze połączenie, broadcast.
+**6.2 — Port rdzenia na Worker + DO autorytatywny. ✅ ZROBIONE I ZWERYFIKOWANE 2026-06-23.**
+Zrealizowane jako **osobna klasa/trasa** `GameAuthority` (`/parties/game-authority/<kod>`) — żywy relay `GameRoom`
+NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wrangler, binding + migracja v2).
+- `core/trackSelect.js` — wyłuskana czysta selekcja (`pickTrack`/filtr/anty-powtórki/normalizacja, fetcher
+  `itunes(term)` wstrzykiwany). `adapters-web/itunesRepository.js` deleguje (web fetch/JSONP); `server/lib/resolve.js`
+  = ta sama selekcja + bezpośredni fetch iTunes→Deezer (bez CORS).
+- `server/authorityRoom.js` (`GameAuthority`) trzyma pętlę: `start`(host wgrywa pule) → resolve → ARMING(+armNonce)
+  → zbieranie `ready` (+ serwerowy bezpiecznik `armSafety`) → PLAY (serwerowy `endsAt` + `scheduleAutoLock`) →
+  `lock`→`evaluateAnswer` → REVEAL → `next`→`matchAdvance` → … → DONE → **zapis do D1** (`insertMatch`, wspólne z api.js).
+- Sekret: pełny utwór w `this.current` (POZA `game`); do `game.reveal` trafia dopiero przy `lock`. `by` akcji
+  WYMUSZANE z tożsamości połączenia (anty-spoof). Stan persystowany do `ctx.storage` (constructor `blockConcurrencyWhile`).
+- Host: prowizoryczny w `onConnect` (crown w lobby), POTWIERDZANY przy `start` (starter=host, odporne na wyścig
+  verifyToken). Promote: `onClose` hosta → awans najstarszego obecnego.
+- **Zweryfikowane headless multi-WS (preview):** pełny mecz do DONE (15 pytań=3×5), sekret nieobecny w arming/play
+  i obecny w reveal, `proposalBy`=id z tokenu Boba, host potwierdzony, **zapis MP do D1 przez DO** (mode=mp, 2 uczestników,
+  15 odpowiedzi), **promote** (host wychodzi → B awansuje i skutecznie locka). Regresja klienta solo/relay OK.
+- NIE wpięte do żywej apki (to 6.3). Persistence po eviccie DO zaimplementowana, nietestowana wymuszonym restartem.
 
 **6.3 — Transport klienta + refactor `app.js` za flagą.** DUŻA.
 - `adapters-web/roomTransport.js` — czysty port `join(code,me)/send(action)/onState(cb)/onEvent(cb)/leave()`

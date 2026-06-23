@@ -1,6 +1,7 @@
 // api.js — REST API danych (D1), zastępuje Supabase Postgres + RPC + auth.
 // Tożsamość = profile id z podpisanego tokenu (Authorization: Bearer ...).
 import { signToken, verifyToken, newId, friendCode } from './auth.js';
+import { insertMatch } from './recordMatch.js';
 
 const json = (obj, status=200) => new Response(JSON.stringify(obj), { status, headers:{ 'content-type':'application/json' } });
 const err  = (msg, status=400) => json({ error: msg }, status);
@@ -158,49 +159,14 @@ export async function handleApi(req, env, url){
   return err('not_found', 404);
 }
 
-// record_match — port logiki z Postgresa (walidacja + insert match/participants/answers)
+// record_match — walidacja (autoryzacja + zakres score), insert deleguje do wspólnego insertMatch.
 async function recordMatch(env, caller, p){
   const qTotal = parseInt(p.total_questions||0,10)||0;
   const score  = parseInt(p.score||0,10)||0;
   if(score < 0 || score > qTotal*2 + 10) return err('score_out_of_range');
   const host = p.host_id || null;
-  // cap anty-flood: ogranicz rozmiar tablic, zanim cokolwiek piszemy do D1
-  const parts   = (Array.isArray(p.participants)?p.participants:[]).slice(0, 32);
-  const answers = (Array.isArray(p.answers)?p.answers:[]).slice(0, 1000);
+  const parts = (Array.isArray(p.participants)?p.participants:[]).slice(0, 32);
   if(host !== caller && !parts.some(e=>String(e.profile_id)===caller)) return err('caller_not_in_match', 403);
-
-  const id = newId();
-  await env.DB.prepare(
-    `INSERT INTO matches (id,mode,room_code,host_id,group_id,config,score,total_questions,started_at)
-     VALUES (?,?,?,?,?,?,?,?,?)`
-  ).bind(id, p.mode||'solo', p.room_code||null, host, p.group_id||null,
-         JSON.stringify(p.config||{}), score, qTotal, p.started_at||null).run();
-
-  // które profile_id uczestników istnieją — JEDNO zapytanie zamiast N+1 SELECT-ów
-  const ids = [...new Set(parts.map(e=>e&&e.profile_id).filter(Boolean).map(String))];
-  let known = new Set();
-  if(ids.length){
-    const ph = ids.map(()=>'?').join(',');
-    const { results } = await env.DB.prepare(`SELECT id FROM profiles WHERE id IN (${ph})`).bind(...ids).all();
-    known = new Set((results||[]).map(r=>String(r.id)));
-  }
-
-  const stmts=[];
-  for(const e of parts){
-    if(!known.has(String(e.profile_id))) continue;         // pomiń uczestnika bez profilu (jak w Postgresie)
-    stmts.push(env.DB.prepare(
-      `INSERT INTO match_participants (match_id,profile_id,display_name,role,score,correct_count)
-       VALUES (?,?,?,?,?,?) ON CONFLICT(match_id,profile_id) DO NOTHING`
-    ).bind(id, e.profile_id, e.display_name||'gracz', e.role||'player',
-           parseInt(e.score||0,10)||0, parseInt(e.correct_count||0,10)||0));
-  }
-  for(const a of answers){
-    stmts.push(env.DB.prepare(
-      `INSERT INTO match_answers (match_id,profile_id,q_no,cat_key,mode,track,artist,ok)
-       VALUES (?,?,?,?,?,?,?,?)`
-    ).bind(id, a.profile_id||null, parseInt(a.q_no||0,10)||null, a.cat_key||null, a.mode||null,
-           a.track||null, a.artist||null, a.ok?1:0));
-  }
-  if(stmts.length) await env.DB.batch(stmts);
+  const id = await insertMatch(env, p);                    // wspólny zapis (cap + bez N+1)
   return json({ id });
 }

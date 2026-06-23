@@ -8,7 +8,8 @@ import { handleProxy } from './lib/proxies.js';
 
 const PROXY_PATHS = ['/tracks', '/spotify', '/audio'];
 
-export { GameRoom } from './gameRoom.js';
+export { GameRoom } from './gameRoom.js';                  // relay (żywy MP)
+export { GameAuthority } from './authorityRoom.js';        // autorytatywny pokój (TASK 6.2) — trasa /parties/game-authority/<kod>
 
 function cors(res){
   const h = new Headers(res.headers);

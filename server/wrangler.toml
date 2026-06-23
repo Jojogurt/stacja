@@ -10,9 +10,19 @@ compatibility_flags = ["nodejs_compat"]
 name = "GameRoom"
 class_name = "GameRoom"
 
+# Autorytatywny pokój gry (TASK 6.2) — osobna klasa/trasa (/parties/game-authority/<kod>).
+# Żywy relay GameRoom nietknięty; klient wybiera transport flagą.
+[[durable_objects.bindings]]
+name = "GameAuthority"
+class_name = "GameAuthority"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["GameRoom"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["GameAuthority"]
 
 # Baza D1 (profile, mecze, drużyny, znajomi) — zastępuje Postgres z Supabase.
 [[d1_databases]]

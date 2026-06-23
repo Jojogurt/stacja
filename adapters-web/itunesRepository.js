@@ -1,9 +1,8 @@
-/* adapters-web/itunesRepository.js — webowa implementacja TrackRepository.
- * Sieć: proxy Workera (omija blokady) → bezpośredni fetch → JSONP.
- * Centralizuje to, co solo (newRound/newSongRound) i host MP (mpHostNewRound)
- * dotąd duplikowały: zapytania, filtr „śmieci", anty-powtórki, retry. */
-import { shuffle } from '../core/util.js';
-import { norm, textMatch } from '../core/scoring.js';
+/* adapters-web/itunesRepository.js — webowa warstwa SIECI dla wyboru utworu.
+ * Sieć: proxy Workera (omija blokady) → bezpośredni fetch → JSONP. Czystą selekcję
+ * (filtr coverów, anty-powtórki, normalizacja) trzyma `core/trackSelect.js`, wspólna
+ * z serwerem; tu tylko wstrzykujemy webowy `itunes(term)`. */
+import { resolveTrack as coreResolveTrack, pickTrack, BAD } from '../core/trackSelect.js';
 
 /* ---- sieć (iTunes) ---- */
 function itunesFetch(term){
@@ -48,68 +47,10 @@ export function itunes(term, cfg){
     .catch(()=>itunesFetch(term).catch(()=>itunesJsonp(term)));
 }
 
-/* ---- wybór utworu (filtr coverów/karaoke + anty-powtórki) ---- */
-export const BAD=/karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
-export function pickTrack(results, artist, seen){
-  const na=norm(artist);
-  const good=results.filter(r=>{
-    if(!r.previewUrl) return false;
-    if(BAD.test(r.artistName||'')||BAD.test(r.collectionName||'')||BAD.test(r.trackName||'')) return false;
-    const ra=norm(r.artistName||'');
-    if(!(ra.includes(na)||na.includes(ra))) return false;       // ten sam artysta
-    if(seen.has(norm(r.trackName))) return false;               // nie powtarzaj
-    return true;
-  });
-  if(!good.length) return null;
-  return good[Math.floor(Math.random()*good.length)];
-}
+// re-eksport czystej selekcji (zgodność dla ewentualnych importerów)
+export { pickTrack, BAD };
 
-function normalize(t){
-  return { track:t.trackName, artist:t.artistName, year:(t.releaseDate||'').slice(0,4),
-    album:t.collectionName||'', preview:t.previewUrl,
-    art:(t.artworkUrl100||'').replace('100x100','300x300') };
-}
-
-/* ---- playlista konkretnych piosenek (zaimportowana ze Spotify) ---- */
-async function resolveFromSongs(cat, seen, cfg){
-  let pool=(cat.songs||[]).filter(s=>!seen.has(norm(s.title)));
-  if(!pool.length){ (cat.songs||[]).forEach(s=>seen.delete(norm(s.title))); pool=(cat.songs||[]).slice(); }
-  for(const s of shuffle(pool)){
-    let preview=s.preview||'', art='';
-    if(!preview){
-      try{ const res=await itunes(s.artist, cfg); const t=res.find(r=>textMatch(r.trackName,s.title))||res[0]; if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); } }catch(e){}
-    }
-    if(preview){ seen.add(norm(s.title)); return { track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art }; }
-    seen.add(norm(s.title));
-  }
-  return { error:true, reason:'empty' };
-}
-
-/* ---- pula wykonawców → szukaj grywalnej zajawki ---- */
-async function resolveFromArtists(cat, seen, recent, cfg){
-  const pool = recent ? cat.artists.filter(a=>!recent.includes(a)) : cat.artists.slice();
-  const tryOrder = shuffle(pool.length?pool:cat.artists);
-  let anyResponse=false;
-  for(const artist of tryOrder){
-    let res=null;
-    for(let attempt=0; attempt<2 && !res; attempt++){
-      try{ res=await itunes(artist, cfg); anyResponse=true; }catch(e){ /* próbujemy dalej */ }
-    }
-    if(!res) continue;
-    const t=pickTrack(res, artist, seen);
-    if(t){
-      seen.add(norm(t.trackName));
-      if(recent){ recent.push(artist); if(recent.length>6) recent.shift(); }
-      return normalize(t);
-    }
-  }
-  return { error:true, reason: anyResponse?'empty':'offline' };
-}
-
-// jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców)
+// jedno wejście: rozwiąż grywalny utwór dla kategorii (web — sieć wstrzyknięta jako itunes(term)).
 export function resolveTrack({cat, seen, recent, cfg}){
-  if((!cat.artists || !cat.artists.length) && cat.songs && cat.songs.length){
-    return resolveFromSongs(cat, seen, cfg);
-  }
-  return resolveFromArtists(cat, seen, recent, cfg);
+  return coreResolveTrack({ cat, seen, recent, itunes:(term)=>itunes(term, cfg) });
 }
