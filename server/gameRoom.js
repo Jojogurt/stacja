@@ -1,75 +1,63 @@
-/* server/gameRoom.js — autorytet POKOJU jako Durable Object (Cloudflare).
+/* server/gameRoom.js — POKÓJ jako Durable Object w roli PRZEKAŹNIKA (relay).
  *
- * Jeden żywy obiekt na pokój. Trzyma stan gry w pamięci, jest jedynym arbitrem
- * (sprawiedliwy buzzer = serwer stempluje kolejność), rozsyła stan po WebSockecie.
+ * NIE pełny autorytet — host-authority zostaje w app.js (telefon hosta rozsądza
+ * buzzer/orkiestrację). DO zastępuje TYLKO transport Supabase Realtime:
+ *   • broadcast z `self=true`  → każdą wiadomość rozsyłamy do WSZYSTKICH (z nadawcą),
+ *   • presence                 → na connect/track/disconnect rozsyłamy listę {id,name}.
  *
- * KLUCZOWE: odpala TEN SAM czysty reducer co web — `core/mpReducer.js`. Autorytet
- * przenosi się z telefonu hosta na serwer bez przepisywania reguł gry.
+ * Protokół (JSON po WebSockecie), zgodny z shimem `adapters-web/cfChannel.js`:
+ *   klient → DO:  {t:'track', name}              ustaw/zmień nick obecności
+ *                 {t:'b', event, payload}         broadcast (sync/act/react/say/typing)
+ *   DO → klient:  {t:'b', event, payload}         broadcast (też do nadawcy)
+ *                 {t:'presence', members:[{id,name}]}
  *
- * Status: SZKIELET. Akcje gracza (vote/propose/sure/unpropose) + przekazywanie
- * zdarzeń (emotki/czat) + obecność — działają. Orkiestracja hosta (losowanie
- * utworu, faza gotowości, zatwierdzanie, następne pytanie) jest STUBem do
- * doportowania z app.js — patrz TODO niżej. Niepodpięte do produkcji.
+ * Tożsamość połączenia: `?id=` (z presence.key = auth/profile id) + `?name=` (opcjonalny,
+ * pierwszy nick); nick może dojść/zmienić się późniejszym `track`.
+ * (PartyServer ma hibernację WS — pasuje do długo żyjącego, rzadko gadającego pokoju.)
  */
 import { Server } from 'partyserver';
-import { reduceAction, evaluateAnswer } from '../core/mpReducer.js';
-import { MP } from '../core/phases.js';
-
-const fresh = () => ({ phase: null, proposals: [], sure: [], results: [], score: 0 });
 
 export class GameRoom extends Server {
-  // stan współdzielony pokoju (autorytatywny)
-  game = fresh();
-  hostId = null;
-
-  // klient łączy się → wyślij mu bieżący stan
-  onConnect(conn) {
-    conn.send(JSON.stringify({ t: 'state', game: this.game }));
+  // klient się łączy → zapamiętaj tożsamość z query, rozgłoś obecność
+  onConnect(conn, ctx) {
+    let id = null, name = '';
+    try {
+      const q = new URL(ctx.request.url).searchParams;
+      id = q.get('id') || null;
+      name = q.get('name') || '';
+    } catch (_e) { /* brak query — id dojdzie z track albo zostanie null */ }
+    conn.setState({ id, name });
     this.pushPresence();
   }
 
   onClose() { this.pushPresence(); }
+  onError() { this.pushPresence(); }
 
   onMessage(conn, raw) {
     let msg;
     try { msg = JSON.parse(raw); } catch { return; }
 
-    switch (msg.t) {
-      case 'hello':
-        // tożsamość połączenia = auth.uid (przekazany przez klienta)
-        conn.setState({ id: msg.id, name: msg.name });
-        if (!this.hostId) this.hostId = msg.id;           // pierwszy = host (na razie)
-        conn.send(JSON.stringify({ t: 'state', game: this.game }));
-        this.pushPresence();
-        break;
+    if (msg.t === 'track') {
+      const s = conn.state || {};
+      conn.setState({ id: s.id, name: msg.name || s.name || '' });
+      this.pushPresence();
+      return;
+    }
 
-      case 'action': {
-        // akcje gracza w fazie gry — CZYSTY reducer (ten sam plik co web)
-        if (reduceAction(this.game, msg.action)) this.broadcastState();
-        // TODO(orkiestracja hosta): 'buzz' (kto pierwszy — serwer rozsądza),
-        //   'lock' → evaluateAnswer(...), 'next' → matchAdvance + nowa runda.
-        //   Doportować z app.js: mpHostNewRound (losowanie utworu BEZ CORS —
-        //   serwer uderza wprost w iTunes/Deezer), mpArm/mpGo (faza gotowości),
-        //   mpLock (evaluateAnswer), mpNext/mpFinish, zapis przez record_match.
-        break;
-      }
-
-      case 'event':
-        // ulotne (emotki/czat) — przekaż innym, bez zmiany stanu
-        this.broadcast(raw, [conn.id]);
-        break;
+    if (msg.t === 'b') {
+      // relay broadcast do WSZYSTKICH (z nadawcą = self:true). Przekazujemy tylko
+      // event+payload, by klient nie zależał od pól transportowych.
+      this.broadcast(JSON.stringify({ t: 'b', event: msg.event, payload: msg.payload }));
     }
   }
 
-  broadcastState() {
-    this.broadcast(JSON.stringify({ t: 'state', game: this.game }));
-  }
-
+  // lista obecnych {id,name} (dubel po id usuwany — ostatnie połączenie wygrywa)
   pushPresence() {
-    const members = [...this.getConnections()]
-      .map(c => c.state)
-      .filter(s => s && s.id)
-      .map(s => ({ id: s.id, name: s.name }));
-    this.broadcast(JSON.stringify({ t: 'event', kind: 'presence', members, hostId: this.hostId }));
+    const byId = new Map();
+    for (const c of this.getConnections()) {
+      const s = c.state;
+      if (s && s.id) byId.set(s.id, { id: s.id, name: s.name || '' });
+    }
+    this.broadcast(JSON.stringify({ t: 'presence', members: [...byId.values()] }));
   }
 }

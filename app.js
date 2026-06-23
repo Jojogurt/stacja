@@ -11,8 +11,9 @@ import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from './core/mpReducer.js';
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
-import { sb, ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile, myId } from './adapters-web/supabase.js';
-import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo, authInfo, linkOAuth, linkEmail } from './adapters-web/supabase.js';
+import { ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile } from './adapters-web/cf.js';
+import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo } from './adapters-web/cf.js';
+import { cfChannel } from './adapters-web/cfChannel.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
@@ -199,8 +200,8 @@ document.getElementById('plUrl').addEventListener('keydown',e=>{ if(e.key==='Ent
    Zwraca {key,name,count} albo rzuca błędem. Używany przez solo (plImport) i MP (mpPlImport). */
 async function plFetch(url){
   const cfg=window.STACJA_CONFIG||{};
-  if(!cfg.supabaseUrl){ throw new Error('Brak połączenia z serwerem.'); }
-  const r=await fetch(cfg.supabaseUrl+'/functions/v1/spotify?url='+encodeURIComponent(url), {headers:cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}});
+  if(!cfg.roomsBase){ throw new Error('Brak połączenia z serwerem.'); }
+  const r=await fetch(cfg.roomsBase+'/spotify?url='+encodeURIComponent(url));
   const d=await r.json();
   if(!r.ok || d.error){ throw new Error(d.error||('http '+r.status)); }
   const songs=(d.tracks||[]).filter(t=>t.title&&t.artist);
@@ -627,8 +628,8 @@ function showLyric(text){ const b=document.getElementById('lyricBox'); if(!b) re
   b.innerHTML='<span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>'+escapeHtml(text||''); b.hidden=false; }
 function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; } }
 
-/* ================= MULTIPLAYER (Supabase Realtime) ================= */
-let mpSb=null, mpCh=null;
+/* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
+let mpCh=null;
 let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
 let mpCode=null, mpHost=false;
 let mpRoomStage='wait';     // przed grą: 'wait' = poczekalnia (06), 'build' = picker „ułóż mecz" (host)
@@ -660,11 +661,8 @@ const SAY_TTL_MS=4400;          // jak długo wisi dymek wiadomości
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
 
-function mpConnect(){ mpSb=sb(); return mpSb; }   // jeden współdzielony klient (Realtime + Auth)
-
-// Logowanie anonimowe LENIWE — dopiero przy geście, który tego potrzebuje
-// (wejście do pokoju MP, koniec meczu). Dzięki temu CAPTCHA nie odpala się
-// na każdym wejściu na stronę, tylko gdy realnie zapisujemy postęp.
+// Sesja LENIWA — tworzona przy geście, który jej potrzebuje (wejście do pokoju MP,
+// koniec meczu, ekran profilu/drużyny). ensureSession() woła Worker i cache'uje token.
 
 /* ---- wejście / wyjście z trybu ---- */
 const SCR_HEAD={ solo:'Ułóż mecz', liga:'Drużyna i znajomi', profil:'Profil' };
@@ -687,7 +685,6 @@ $m('goLiga').onclick=()=>{ showScreen('liga'); renderDruzyna(); };
 $m('goProfil').onclick=()=>{ showScreen('profil'); renderProfil(); };
 
 let dzMe=null;   // {id, handle, emoji, friend_code}
-const DZ_OAUTH=false;   // Google/Apple ukryte do czasu konfiguracji kluczy w Supabase (zostaje e-mail)
 
 /* ---- ksywa: jedna tożsamość dla profilu i lobby MP ----
    Brak ksywy → generujemy zabawną, „muzyczną" (np. „głuchy suseł”) i zapisujemy.
@@ -720,10 +717,10 @@ async function renderDruzyna(){
   const el=$m('druzynaBody'); if(!el) return;
   el.innerHTML='<div class="liga-empty">ładowanie…</div>';
   try{
-  await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność (np. gdy hCaptcha się wiesza)
-  const [meR, teamsR, friR, penR, auth] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), authInfo()]);
-  const noAuth = (meR.error && !meR.data);   // brak sesji (anon-auth nie ruszył) — pokaż baner, ale NIE chowaj ekranu
-  const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Nie udało się zalogować — drużyny i znajomi wymagają działającego logowania anonimowego (Supabase → Auth → „Allow anonymous sign-ins" + ew. hCaptcha). Akcje poniżej będą zablokowane do czasu naprawy.</div>` : '';
+  await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność
+  const [meR, teamsR, friR, penR] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends()]);
+  const noAuth = (meR.error && !meR.data);   // brak sesji (Worker nieosiągalny) — pokaż baner, ale NIE chowaj ekranu
+  const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Brak połączenia z serwerem — drużyny i znajomi chwilowo niedostępne. Spróbuj odświeżyć.</div>` : '';
   dzMe = (meR.data&&meR.data[0]) || null;
   const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[];
   const av=(n,c)=>`<span class="dz-av" style="background:${mpAvatarColor(n)}">${escapeHtml((n||'?').slice(0,1).toUpperCase())}</span>`;
@@ -767,17 +764,8 @@ async function renderDruzyna(){
     <div class="dz-lbl">Znajomi</div>
     ${friendRows}`;
 
-  // === KONTO (opcjonalne logowanie) ===
-  const oauthRow = DZ_OAUTH ? `<div class="dz-oauth"><button class="dz-prov g" onclick="dzLogin('google')">Google</button><button class="dz-prov a" onclick="dzLogin('apple')">Apple</button></div>` : '';
-  const loginSection = (auth && auth.isAnon) ? `
-    <div class="dz-lbl">Konto</div>
-    <div class="dz-acct">Grasz jako gość — podaj e-mail, żeby drużyny i znajomi działały też na innych urządzeniach.</div>
-    <div class="dz-row2"><input id="dzEmail" type="email" placeholder="twój e-mail"><button class="dz-go" onclick="dzLoginEmail()">Wyślij link</button></div>
-    ${oauthRow}
-    <div class="dz-hint" id="dzMsg">${DZ_OAUTH?'':'Logowanie przez Google / Apple — wkrótce'}</div>`
-    : (auth && auth.email ? `<div class="dz-acct ok">✓ Zalogowano: ${escapeHtml(auth.email)}</div>` : '');
-
-  el.innerHTML = notice + teamSection + friendSection + loginSection;
+  // (Konta/logowanie usunięte — tożsamość to device-UUID + token z Workera, bez OAuth/e-mail.)
+  el.innerHTML = notice + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
   }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
 }
 function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
@@ -788,15 +776,13 @@ async function dzAddFriend(){ const c=$m('dzFriend')?.value; if(!c) return; cons
 async function dzRespond(id,ok){ await friendRespond(id,ok); renderDruzyna(); }
 function dzCopy(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
 function dzPlay(){ showScreen('mp'); }
-async function dzLogin(prov){ const r=await linkOAuth(prov); if(r.error) dzMsg('Logowanie '+prov+': '+r.error,true); }
-async function dzLoginEmail(){ const em=$m('dzEmail')?.value?.trim(); if(!em) return; const r=await linkEmail(em); dzMsg(r.error?('Błąd: '+r.error):'Sprawdź skrzynkę — wysłaliśmy link.',!!r.error); }
-Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzLogin, dzLoginEmail });
+Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay });
 
 async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
   await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
   const p=await fetchProfile();
-  if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Włącz logowanie anonimowe w projekcie Supabase, żeby zapisywać postępy.</div>'; return; }
+  if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Brak połączenia z serwerem — spróbuj odświeżyć.</div>'; return; }
   if(!p.handle || p.handle==='gracz'){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa
   myHandle=p.handle;
   $m('profilHandle').value=p.handle;
@@ -901,12 +887,11 @@ function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu');
 
 async function mpEnterRoom(code, asHost){
   mpErr('');
-  const client=mpConnect();
-  if(!client){ mpErr('Brak połączenia z serwerem (config.js / supabase-js).'); return; }
-  const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = auth.uid PRZED presence
+  if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
+  const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
   mpCode=code; mpHost=asHost; mpRoomStage='wait';
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
-  mpCh=client.channel('stacja-'+code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
+  mpCh=cfChannel(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });

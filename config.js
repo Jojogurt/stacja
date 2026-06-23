@@ -1,16 +1,13 @@
 /* ============================================================
-   config.js — połączenie z Supabase (tryb gry ze znajomymi)
+   config.js — połączenie z backendem STACJA (Cloudflare Worker)
    ------------------------------------------------------------
-   Klucz publishable jest BEZPIECZNY do trzymania w kliencie
-   (do tego służy). Gra używa tylko Realtime (kanały broadcast +
-   presence) — żadnych tabel, żadnych danych w bazie.
+   Cały backend (profile, liga, mecze, drużyny, znajomi, realtime,
+   proxy iTunes/Spotify/audio) stoi na jednym Workerze. Bez kont,
+   bez kluczy w kliencie — tożsamość to device-UUID + podpisany token
+   wydawany przez Worker (trzymany w localStorage).
 
-   Chcesz użyć innego projektu Supabase? Podmień url + key.
+   Inny deploy Workera? Podmień `roomsBase`.
    ============================================================ */
 window.STACJA_CONFIG = {
-  supabaseUrl: 'https://agkarxtjcgklepefurza.supabase.co',
-  supabaseKey: 'sb_publishable_PhmUtO0IGY3kFwuWDuGrsQ_972DSP4B',
-  // hCaptcha SITE KEY (publiczny, format UUID, z dashboardu hCaptcha) — do anonimowego logowania.
-  // UWAGA: tu trafia TYLKO site key. SECRET zostaje WYŁĄCZNIE w Supabase (nigdy w kliencie!).
-  hcaptchaSiteKey: '',
+  roomsBase: 'https://stacja-rooms.kedziora-karol.workers.dev',
 };

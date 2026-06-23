@@ -1,16 +1,16 @@
 /* sw.js — service worker STACJA (PWA).
    Strategia: NETWORK-FIRST dla zasobów własnych (online zawsze świeży deploy,
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
-   Cross-origin (Supabase, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
+   Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v1';
+const CACHE = 'stacja-v2';
 const SHELL = [
   './', './index.html',
   './app.js', './categories.js', './playlists.js', './lyrics.js', './config.js',
   './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
   './core/mpReducer.js', './core/matchRecord.js',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
-  './adapters-web/supabase.js', './adapters-web/captcha.js',
+  './adapters-web/cf.js', './adapters-web/cfChannel.js',
   './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];

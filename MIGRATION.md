@@ -47,7 +47,11 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 
 # POZOSTAŁE TASKI (w kolejności)
 
-## TASK 1 — Proxy na Workerze (NAJPIERW, najmniej ryzykowne)
+> **STATUS 2026-06-23:** TASK 1–4 ZROBIONE i zweryfikowane lokalnie (preview + curl), **niezacommitowane do push**.
+> Worker wdrożony (proxy + DO-relay). Klient przepięty na `cf.js`/`cfChannel.js`; supabase-js i `adapters-web/{supabase,captcha}.js` usunięte; zero ruchu do supabase.co (Network).
+> **POZOSTAŁO:** (a) push na `main` = live cutover GitHub Pages (czeka na decyzję), (b) weryfikacja na żywo na 2 urządzeniach, (c) **TASK 5 — skasować projekt Supabase** (nieodwracalne, po potwierdzeniu).
+
+## TASK 1 — Proxy na Workerze (NAJPIERW, najmniej ryzykowne) ✅ ZROBIONE
 Przenieś 3 edge functions Supabase na trasy Workera. Źródła referencyjne (Deno) w `server/_ref-supabase/`:
 `tracks.ts`, `spotify.ts`, `audio.ts`. Logika ta sama (fetch/Response/URL) — zmienia się tylko opakowanie (Deno.serve → trasa w Workerze).
 
@@ -66,7 +70,7 @@ Kroki:
    - `curl -I ".../audio?u=<https preview itunes>"` → 200 + `access-control-allow-origin: *`.
 - Akceptacja: 3 endpointy działają z poziomu `curl`. (Klient podmienimy w TASK 3.)
 
-## TASK 2 — Realtime: DO-relay + shim klienta
+## TASK 2 — Realtime: DO-relay + shim klienta ✅ ZROBIONE
 Cel: zastąpić Supabase Realtime (broadcast + presence) Durable Objectem jako **przekaźnikiem** (NIE pełny autorytet — host-authority zostaje w `app.js`, zmieniamy tylko transport).
 
 Interfejs kanału, którego używa `app.js` (do odtworzenia 1:1) — w `mpEnterRoom`:
@@ -89,7 +93,7 @@ Kroki:
 - Akceptacja: 2 urządzenia/karty wchodzą do pokoju, widzą się (presence), host startuje mecz, sync/akcje/emotki/czat lecą. Buzzer/orkiestracja zostają host-authority (bez zmian).
 - (Pełny serwer-autorytet = osobny, późniejszy krok — tu tylko transport.)
 
-## TASK 3 — Przepięcie klienta (adapter + config + usunięcie Supabase z frontu)
+## TASK 3 — Przepięcie klienta (adapter + config + usunięcie Supabase z frontu) ✅ ZROBIONE
 1. `adapters-web/cf.js` — ten sam zestaw funkcji co `adapters-web/supabase.js`, ale na `/api/*`:
    - `ensureSession()` → POST `/api/session`; zapisz `{id,token}` w localStorage (`stacjaId`,`stacjaToken`); zwróć `id`. Wszystkie wywołania API dokładają `Authorization: Bearer <token>`.
    - `myId()` → zapisane id. `meInfo()` → GET `/api/me`. `setHandle(h)` → POST `/api/handle`.

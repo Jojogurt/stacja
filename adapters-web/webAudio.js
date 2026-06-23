@@ -2,13 +2,13 @@
  * Centralizuje to, co solo (startReverse) i MP (mpPlayReverse) dotąd duplikowały. */
 
 // pobierz bajty zajawki — najpierw wprost (iTunes daje CORS), a gdy padnie
-// (np. previews Deezer *.dzcdn.net bez ACAO) — przez proxy audio na Supabase (#13)
+// (np. previews Deezer *.dzcdn.net bez ACAO) — przez proxy audio na Workerze (#13)
 export async function fetchAudioBytes(url, cfg={}){
   try{ return await (await fetch(url,{mode:'cors'})).arrayBuffer(); }
   catch(e){
-    if(!cfg.supabaseUrl) throw e;
-    const pu=cfg.supabaseUrl+'/functions/v1/audio?u='+encodeURIComponent(url);
-    return await (await fetch(pu,{headers: cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}})).arrayBuffer();
+    if(!cfg.roomsBase) throw e;
+    const pu=cfg.roomsBase+'/audio?u='+encodeURIComponent(url);
+    return await (await fetch(pu)).arrayBuffer();
   }
 }
 

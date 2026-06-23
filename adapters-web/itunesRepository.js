@@ -1,5 +1,5 @@
 /* adapters-web/itunesRepository.js — webowa implementacja TrackRepository.
- * Sieć: proxy Supabase (omija blokady) → bezpośredni fetch → JSONP.
+ * Sieć: proxy Workera (omija blokady) → bezpośredni fetch → JSONP.
  * Centralizuje to, co solo (newRound/newSongRound) i host MP (mpHostNewRound)
  * dotąd duplikowały: zapytania, filtr „śmieci", anty-powtórki, retry. */
 import { shuffle } from '../core/util.js';
@@ -29,14 +29,14 @@ function itunesJsonp(term){
     document.body.appendChild(s);
   });
 }
-// proxy przez Supabase Edge Function (iTunes -> fallback Deezer); klient gada tylko
-// z supabase.co, co omija blokady itunes.apple.com. Gdy padnie — bezpośredni fetch/JSONP.
+// proxy przez Worker (iTunes -> fallback Deezer); klient gada tylko z Workerem,
+// co omija blokady itunes.apple.com. Gdy padnie — bezpośredni fetch/JSONP.
 function itunesProxy(term, cfg={}){
-  if(!cfg.supabaseUrl) return Promise.reject(new Error('no-proxy'));
+  if(!cfg.roomsBase) return Promise.reject(new Error('no-proxy'));
   const ctrl=new AbortController();
   const to=setTimeout(()=>ctrl.abort(),12000);
-  const u=cfg.supabaseUrl+'/functions/v1/tracks?artist='+encodeURIComponent(term);
-  return fetch(u,{signal:ctrl.signal, headers: cfg.supabaseKey?{apikey:cfg.supabaseKey}:{}})
+  const u=cfg.roomsBase+'/tracks?artist='+encodeURIComponent(term);
+  return fetch(u,{signal:ctrl.signal})
     .then(r=>{ if(!r.ok) throw new Error('fn '+r.status); return r.json(); })
     .then(d=>(d.results||[]))
     .finally(()=>clearTimeout(to));
