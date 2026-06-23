@@ -10,15 +10,22 @@ async function body(req){ try{ return await req.json(); }catch(e){ return {}; } 
 function bearer(req){ const h=req.headers.get('authorization')||''; return h.startsWith('Bearer ')?h.slice(7):null; }
 async function uid(req, env){ const p = await verifyToken(env.TOKEN_SECRET, bearer(req)); return p && p.sub ? p.sub : null; }
 
+// S6: wylosuj friend_code nieużywany jeszcze przez żaden profil (jak uniqueGroupCode)
+async function uniqueFriendCode(env){
+  for(let i=0;i<8;i++){ const c=friendCode(); const hit=await env.DB.prepare(`SELECT 1 FROM profiles WHERE friend_code=?`).bind(c).first(); if(!hit) return c; }
+  return friendCode();
+}
 async function ensureProfile(env, id){
   await env.DB.prepare(
     `INSERT INTO profiles (id, friend_code) VALUES (?, ?) ON CONFLICT(id) DO NOTHING`
-  ).bind(id, friendCode()).run();
+  ).bind(id, await uniqueFriendCode(env)).run();
 }
 async function uniqueGroupCode(env){
   for(let i=0;i<8;i++){ const c=friendCode(); const hit=await env.DB.prepare(`SELECT 1 FROM groups WHERE code=?`).bind(c).first(); if(!hit) return c; }
   return friendCode();
 }
+
+const TOKEN_TTL = 90*24*3600;   // S2: token ważny 90 dni; każde /api/session odświeża
 
 export async function handleApi(req, env, url){
   const path = url.pathname.replace(/\/+$/,'');           // bez końcowego /
@@ -29,7 +36,8 @@ export async function handleApi(req, env, url){
     let id = await uid(req, env);                          // ma ważny token? użyj jego id
     if(!id) id = newId();                                  // inaczej wygeneruj nowe (klient nie wybiera id)
     await ensureProfile(env, id);
-    const token = await signToken(env.TOKEN_SECRET, { sub:id, iat:Math.floor(Date.now()/1000) });
+    const now = Math.floor(Date.now()/1000);
+    const token = await signToken(env.TOKEN_SECRET, { sub:id, iat:now, exp:now+TOKEN_TTL });
     const me = await env.DB.prepare(`SELECT id, handle, emoji, friend_code FROM profiles WHERE id=?`).bind(id).first();
     return json({ ...me, token });
   }

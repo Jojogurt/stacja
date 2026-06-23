@@ -83,6 +83,7 @@ const ALLOW = [
   'mzstatic.com', 'apple.com', 'phobos.apple.com', 'audio-ssl.itunes.apple.com',
   'dzcdn.net', 'deezer.com', 'scdn.co', 'spotifycdn.com',
 ];
+const AUDIO_MAX_BYTES = 12 * 1024 * 1024;   // S4: zajawki to ~0.5–1 MB; 12 MB = generous cap
 function hostOk(u) {
   const h = u.hostname.toLowerCase();
   return ALLOW.some((d) => h === d || h.endsWith('.' + d));
@@ -95,8 +96,11 @@ async function handleAudio(req, url) {
   if (target.protocol !== 'https:' || !hostOk(target)) return new Response('host not allowed', { status: 403 });
   try {
     const range = req.headers.get('range');
-    const up = await fetch(target.toString(), { headers: range ? { range } : {} });
+    // S4: redirect:'manual' → nie podążaj za 302 poza allowlistę (3xx wpadnie w gałąź 502 niżej)
+    const up = await fetch(target.toString(), { headers: range ? { range } : {}, redirect: 'manual' });
     if (!up.ok && up.status !== 206) return new Response('upstream ' + up.status, { status: 502 });
+    const len = parseInt(up.headers.get('content-length') || '0', 10) || 0;
+    if (len > AUDIO_MAX_BYTES) return new Response('too large', { status: 413 });   // S4: limit rozmiaru zajawki
     const h = new Headers();
     h.set('content-type', up.headers.get('content-type') || 'audio/mpeg');
     const cl = up.headers.get('content-length'); if (cl) h.set('content-length', cl);

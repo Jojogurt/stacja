@@ -238,13 +238,13 @@ NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wr
 6.1 małe (~½ dnia) · 6.2 duże (port rdzenia + orkiestracja DO — gros pracy) · 6.3 duże (refactor app.js + transport + flaga)
 · 6.4 średnie. Wieloseyjne. Flaga gwarantuje, że żywa ścieżka host-authority nie pęka, dopóki autorytet nie jest dowiedziony.
 
-### Backlog hardeningu (drobne, niezależne — można robić wcześniej)
-- **S1** ✅ ZROBIONE w 6.5 — hard-require tokenu w obu DO (`close 4001`, koniec fallbacku `?id=`).
-- **S2** token bez `exp` — dodać wygaśnięcie + re-issue w `/api/session` (dziś token = wieczna tożsamość).
-- **S3** `/tracks` i `/spotify` to otwarte proxy bez rate-limitu — ktoś może palić limit Workera. Rozważyć prosty throttle.
-- **S4** `/audio` podąża za redirectami (allowlista sprawdza tylko URL wejściowy) — dodać `redirect:'manual'` + limit rozmiaru streamu.
-- **S5** ✅ ZROBIONE 2026-06-23 — cap `participants`≤32 / `answers`≤1000 w `record-match` (+ fix N+1: jedno `WHERE id IN (...)`).
-- **S6** `ensureProfile` nie ponawia przy kolizji `friend_code` (UNIQUE) — dać retry jak w `uniqueGroupCode`.
+### Backlog hardeningu — WSZYSTKO ✅ ZROBIONE (2026-06-23)
+- **S1** ✅ 6.5 — hard-require tokenu w obu DO (`close 4001`, koniec fallbacku `?id=`).
+- **S2** ✅ — token z `exp` (90 dni) w `signToken`/`/api/session`; `verifyToken` odrzuca wygasłe (stare tokeny bez `exp` przechodzą = kompat). Każde `/api/session` odświeża.
+- **S3** ✅ — natywny rate-limiter Cloudflare (`[[unsafe.bindings]] type=ratelimit`, binding `PROXY_RL`, 120/60 s per-IP) na `/tracks`/`/spotify`/`/audio`. Licznik in-memory na Workers NIE działa (isolate'y) — stąd binding. Zweryfikowane (limit=5 → 429).
+- **S4** ✅ — `/audio` `redirect:'manual'` (302 poza allowlistę → 502) + limit rozmiaru zajawki (12 MB → 413).
+- **S5** ✅ — cap `participants`≤32 / `answers`≤1000 w `record-match` (+ fix N+1).
+- **S6** ✅ — `uniqueFriendCode(env)` w `ensureProfile` (pre-check unikalności jak `uniqueGroupCode`).
 
 ## Uwagi / pułapki
 - CORS: Worker ma globalny CORS w `index.js` (Allow-Origin *). Dla `/audio` pilnować Range/`content-range`.

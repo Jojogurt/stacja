@@ -22,7 +22,7 @@ export async function signToken(secret, payload){
   return data + '.' + b64urlBytes(sig);
 }
 
-// zwraca payload {sub, iat} albo null, gdy podpis nie pasuje
+// zwraca payload {sub, iat, exp?} albo null, gdy podpis nie pasuje LUB token wygasł (S2)
 export async function verifyToken(secret, token){
   if(!token) return null;
   const parts = String(token).split('.');
@@ -31,7 +31,11 @@ export async function verifyToken(secret, token){
   let ok=false;
   try{ ok = await crypto.subtle.verify('HMAC', await key(secret), fromB64url(parts[2]), enc.encode(data)); }catch(e){ return null; }
   if(!ok) return null;
-  try{ return JSON.parse(new TextDecoder().decode(fromB64url(parts[1]))); }catch(e){ return null; }
+  let payload;
+  try{ payload = JSON.parse(new TextDecoder().decode(fromB64url(parts[1]))); }catch(e){ return null; }
+  // S2: odrzuć wygasłe (tokeny bez exp — stare — przechodzą dla kompat wstecz)
+  if(payload && payload.exp && Math.floor(Date.now()/1000) > payload.exp) return null;
+  return payload;
 }
 
 export const newId = () => crypto.randomUUID();
