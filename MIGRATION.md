@@ -121,26 +121,93 @@ Gdy TASK 1–4 przechodzą:
 3. Zaktualizuj `config.js`/README/`server/README.md`/MEMORY.
 
 ## TASK 6 — Serwer-autorytet pokoju + hardening (PRZYSZŁOŚĆ, osobny etap)
-Dziś DO to **tylko przekaźnik** (relay): host-authority został na telefonie hosta. To znaczy, że
-nadal mamy SPOF (host pada → mecz pada), buzzer stempluje host (nie serwer), a połączenie WS ufa
-`?id=` z query (klient może podszyć się pod cudze `id` w presence i rozesłać `sync`/`act` jako ktoś inny).
-Wyzwalacz tego etapu: szybkie tryby / sprawiedliwy buzzer / skargi na „host pada".
+> **Plan po researchu 2026-06-23 (autor: research nad app.js + core/). Self-sufficient — można działać na zimno.**
 
-Zakres (idą RAZEM — autorytet i tożsamość połączenia to ten sam refactor):
-1. **Tożsamość WS z tokenu (S1).** W `server/gameRoom.js` `onConnect` zweryfikować Bearer
-   (`verifyToken` z `lib/auth.js`, sekret w env) i wyprowadzić `id` Z TOKENU, nie z `?id=`.
-   partyserver daje dostęp do `ctx.request` (nagłówki/query) — token można podać w query przy
-   nawiązaniu WS (nagłówków nie ustawisz w przeglądarkowym `WebSocket`). Odrzucać połączenia bez ważnego tokenu.
-2. **Reducer na serwerze.** Wpiąć `core/mpReducer.js` do `gameRoom.js` (dziś go NIE importuje) i
-   doportować z `app.js` orkiestrację hosta: `mpHostNewRound` (losowanie utworu — na serwerze BEZ CORS,
-   wprost iTunes/Deezer, proxy znika dla MP), `mpArm`/`mpGo` (faza gotowości), buzzer „kto pierwszy"
-   (serwer stempluje kolejność), `mpLock`→`evaluateAnswer`, `mpNext`/`mpFinish`, zapis przez `/api/record-match`
-   (albo wewnętrznie z DO). Rdzeń `core/` jest współdzielony web↔serwer — to przenosiny logiki, nie przepisywanie.
-3. **Czysty port transportu zamiast shimu Supabase.** Dziś `adapters-web/cfChannel.js` udaje kanał
-   Supabase (`.on('broadcast').subscribe().track().presenceState()`), a `app.js` jest sprzężony z tym idiomem.
-   Przy serwer-autorytecie warto przejść na neutralny port w stylu `join/send/onState/onEvent` i przerobić
-   warstwę `mp*` w `app.js`. (Stary scaffolding `ports/RealtimeTransport.js` + `adapters-web/partyTransport.js`
-   USUNIĘTY 2026-06-23 jako mylący/martwy — projekt portu odtworzyć tutaj od nowa, już pod autorytet serwera.)
+### Cel (SKORYGOWANY po researchu)
+Gra to **kooperacyjny quiz drużynowy** (NIE ma buzzera „kto pierwszy" — to były aspiracje z notatek,
+nigdy nie powstały). Wszyscy zgłaszają propozycje i głosują na sloty (tytuł/wykonawca); odpowiedź
+drużyny = górka głosów per slot; host **albo timer** ją „zatwierdza" (`evaluateAnswer`). Dlatego realna
+wartość serwer-autorytetu tutaj to:
+1. **Koniec SPOF** — dziś pętlę gry napędza przeglądarka hosta (`mpHostNewRound`/`mpGo`/`mpLock`/`mpNext`);
+   host pada → mecz pada. Po zmianie pętlę napędza DO.
+2. **Integralność stanu** — dziś host = źródło prawdy w przeglądarce, a relay rozsyła `sync`/`act` bez
+   weryfikacji nadawcy; klient może podszyć się i wstrzyknąć fałszywy stan. Po zmianie DO derywuje
+   tożsamość z tokenu i jest jedynym arbitrem.
+3. **Spójny serwerowy timer** (`endsAt`/auto-lock stempluje DO) + autorytatywna sekwencja rund.
+4. **Zaufany zapis ligi** — mecz MP pisze DO wprost do D1 (znika klientowe podawanie wyników, parytet S5).
+
+### WĄSKIE GARDŁO (klucz całego etapu)
+Pełna odpowiedź (`mpHostCurrent`) + pule utworów (kategorie, **zaimportowane playlisty Spotify z
+localStorage hosta**, teksty do lektora z `lyrics.js`/`ALL_CATS`) żyją dziś **tylko w przeglądarce hosta**.
+DO ich nie ma. → **Decyzja właściciela:** DO **rozwiązuje utwory sam** (port `resolveTrack`/`pickTrack` na
+Worker, bez CORS), a host przy `start` **wgrywa pule** tylko wybranych kategorii (artyści / piosenki
+importu / teksty). DO trzyma sekret odpowiedzi i **strippuje go ze stanu** rozsyłanego do reveala.
+
+### Decyzje (ustalone z właścicielem 2026-06-23)
+- **Źródło utworów:** DO rozwiązuje sam (pełny autorytet). Host wgrywa pule przy starcie meczu.
+- **Wyjście hosta:** **promote** — `hostId` to przenoszalna rola w stanie DO; gdy host się rozłączy,
+  DO awansuje kolejnego obecnego gracza (najstarsze połączenie). Ręczne „zatwierdź/dalej" zostają,
+  ale mecz przeżywa wyjście, bo cały stan + pule + rozwiązywanie są już po stronie DO.
+
+### Architektura docelowa
+- **DO = autorytatywny serwer pokoju.** Trzyma `game` w pamięci **i persystuje do `this.ctx.storage`**
+  (przeżyć eviction/restart DO w trakcie meczu). Odpala **ten sam `core/mpReducer.js`** + resolver + scoring.
+  Trzyma sekret odpowiedzi; w broadcastowanym stanie pełny utwór tylko w fazie REVEAL.
+- **Klient = cienki.** Render + lokalne audio (buforowanie zajawki w „arming", `mpPlayLocal`/reverse) +
+  input (propose/vote/sure/pass/ready). Wysyła akcje, dostaje autorytatywny `state` + `presence`.
+- **Tożsamość** z tokenu przy WS (poniżej 6.1). „Host" = rola w stanie DO, nie „pierwszy w pokoju".
+- **Transport:** zastąpić shim Supabase (`cfChannel`) czystym portem `join/send/onState/onEvent` —
+  odtworzyć skasowany `RealtimeTransport`, ale już pod autorytet. Wszystko za **flagą** (rollback).
+
+### Podfazy (kolejność; każda osobno wdrażalna, za flagą)
+**6.1 — Tożsamość WS z tokenu (S1). MAŁE, niezależne, można shipnąć samo.**
+- `server/gameRoom.js` `onConnect(conn, ctx)`: czytaj token z query (`?t=<token>`), `verifyToken(env.TOKEN_SECRET,…)`
+  (env w DO: `this.env`), ustaw `id` Z TOKENU (ignoruj `?id=`). Bez ważnego tokenu — zamknij połączenie.
+- `cfChannel.js` (i przyszły transport): dokładaj `&t=<token z localStorage>` do URL WS.
+- Test: WS z podrobionym `id` nie podszyje się; presence pokazuje id z tokenu. (Relay dalej działa — to tylko zaufanie do id.)
+
+**6.2 — Port rdzenia na Worker + DO trzyma autorytatywny stan (orkiestracja nadal host-triggered).** NAJWIĘKSZA.
+- Wyłuskać selekcję utworu z `adapters-web/itunesRepository.js` do **`core/trackSelect.js`** (czyste:
+  `pickTrack`, filtr coverów, anty-powtórki, normalizacja) — współdzielone web↔DO. Browser zostaje z fetch/JSONP;
+  DO dostaje **`server/lib/resolve.js`** = ta sama selekcja + **bezpośredni fetch iTunes/Deezer** (bez CORS).
+- `gameRoom.js` przejmuje pętlę z app.js (gałąź `if(mpHost)`): `start`(z wgranymi pulami) → resolve →
+  ARMING(+armNonce) → zbieranie `ready` (+ serwerowy timeout MP_BUFFER) → PLAY (serwerowy `endsAt`) →
+  `lock`→`evaluateAnswer` → REVEAL → `next`→`matchAdvance` → … → DONE → **zapis do D1** (reużyć `recordMatch`
+  z `lib/api.js`, wyłuskać do wspólnej funkcji). Importuje `core/{mpReducer,phases,match}.js` (już czyste, Worker je bundluje).
+- Broadcast `{t:'state', game}` ze **strippowanym** `current` (klient dostaje `preview`/`lyric`/`snipStart`/fazę/
+  proposals/votes; pełny utwór tylko w `reveal`). Persist `game` do storage na każdym przejściu.
+- Promote: `hostId` w stanie; na `onClose` jeśli wychodził host i są inni — awansuj najstarsze połączenie, broadcast.
+
+**6.3 — Transport klienta + refactor `app.js` za flagą.** DUŻA.
+- `adapters-web/roomTransport.js` — czysty port `join(code,me)/send(action)/onState(cb)/onEvent(cb)/leave()`
+  po WS do autorytatywnego DO (token w query).
+- `app.js` `mp*`: zwinąć gałąź `if(mpHost){…}` (orkiestracja idzie na DO). Klient zostaje z: renderem,
+  lokalnym audio (`mpArm` buforuje → `send('ready')`; `mpPlayLocal`/`mpPlayReverse`), inputem. `lock/next/advance`
+  to wiadomości; autorytet pilnuje DO wg `hostId`. **Optymistyczne echo** własnej akcji zostaje (snappy UI),
+  ale `state` z DO jest prawdą (reconcile).
+- `mpStart` (host): zebrać pule WYBRANYCH kategorii z `ALL_CATS` (artyści/piosenki importu/teksty) i wysłać w `start`.
+  **Cap rozmiaru** — tylko użyte kategorie (lektor/teksty potrafią być duże).
+- Flaga `STACJA_CONFIG.serverAuthority` (lub `roomsTransport:'relay'|'authority'`): true → `roomTransport`+autorytet;
+  false → `cfChannel` relay (dziś). Staged rollout + natychmiastowy rollback.
+
+**6.4 — Weryfikacja + rollout.**
+- Headless harness wielu-WS: asercje maszyny stanów DO (start→resolve→arming→play→lock→reveal→next→finish;
+  promote po wyjściu hosta; przetrwanie symulowanego restartu DO). 2 urządzenia z flagą on dla testowego pokoju,
+  potem default. Potwierdzić zapis MP do D1 z DO (nie z klienta).
+
+### Ryzyka / pułapki (z researchu)
+- **Rozmiar wgrywanych pul** (import Spotify + teksty) — cap, tylko wybrane kategorie.
+- **Parytet „arming/ready":** klienci buforują i raportują `ready`; DO bramkuje PLAY na „wszyscy gotowi"
+  z serwerowym bezpiecznikiem (jeden zawieszony klient nie może zablokować pokoju — dziś `MP_BUFFER_TIMEOUT_MS`).
+- **Sekret vs optymizm:** dziś klient lokalnie `reduceAction` na własnym głosie (natychmiastowość). Zachować echo,
+  ale DO = prawda; uważać, by reconcile nie „mrugał".
+- **Reveal we własnym tempie:** dziś każdy zamyka odsłonę sam (`mpAdvance`/`mpAck`). Zostawić lokalne tempo renderu
+  reveala; autorytatywne „następne pytanie" idzie od hosta (promote) — nie-host musi móc dalej czytać swój reveal.
+- **Niedeterminizm resolve na DO** (żywy iTunes/Deezer + błędy sieci) — faza NETERR już istnieje; zachować retry/fallback.
+
+### Szacunek
+6.1 małe (~½ dnia) · 6.2 duże (port rdzenia + orkiestracja DO — gros pracy) · 6.3 duże (refactor app.js + transport + flaga)
+· 6.4 średnie. Wieloseyjne. Flaga gwarantuje, że żywa ścieżka host-authority nie pęka, dopóki autorytet nie jest dowiedziony.
 
 ### Backlog hardeningu (drobne, niezależne — można robić wcześniej)
 - **S2** token bez `exp` — dodać wygaśnięcie + re-issue w `/api/session` (dziś token = wieczna tożsamość).
