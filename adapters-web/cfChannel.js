@@ -29,6 +29,10 @@ export function cfChannel(code, cfg = {}) {
   function url() {
     const q = new URLSearchParams({ id: myId });
     if (myName) q.set('name', myName);
+    // TASK 6.1 — dołącz podpisany token; DO wyprowadzi z niego tożsamość zamiast ufać ?id=
+    // (nagłówków nie ustawisz w przeglądarkowym WebSocket, więc token leci w query).
+    let tok = null; try { tok = localStorage.getItem('stacjaToken'); } catch (_e) {}
+    if (tok) q.set('t', tok);
     return `${wss}/parties/game-room/${encodeURIComponent(code)}?${q.toString()}`;
   }
 

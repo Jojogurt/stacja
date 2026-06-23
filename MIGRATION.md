@@ -47,9 +47,11 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 
 # POZOSTAŁE TASKI (w kolejności)
 
-> **STATUS 2026-06-23:** TASK 1–4 ZROBIONE i zweryfikowane lokalnie (preview + curl), **niezacommitowane do push**.
-> Worker wdrożony (proxy + DO-relay). Klient przepięty na `cf.js`/`cfChannel.js`; supabase-js i `adapters-web/{supabase,captcha}.js` usunięte; zero ruchu do supabase.co (Network).
-> **POZOSTAŁO:** (a) push na `main` = live cutover GitHub Pages (czeka na decyzję), (b) weryfikacja na żywo na 2 urządzeniach, (c) **TASK 5 — skasować projekt Supabase** (nieodwracalne, po potwierdzeniu).
+> **STATUS 2026-06-23:** TASK 1–5 ZAMKNIĘTE. Live cutover na `main` zrobiony (GitHub Pages, commit `089836b`):
+> jojogurt.github.io w 100% na Cloudflare, supabase-js + `adapters-web/{supabase,captcha}.js` usunięte, zero ruchu
+> do supabase.co. Hardening+sprzątanie: `dbfc8e9`. **TASK 5 (kasowanie Supabase) ODPADA** — projekt zapauzowany
+> (zero kosztów/ruchu), nie kasujemy. **W TOKU: TASK 6 — serwer-autorytet** (plan niżej), start od podfazy **6.1**.
+> Otwarte mniejsze: test MP na 2 urządzeniach na żywo (gdy będzie okazja).
 
 ## TASK 1 — Proxy na Workerze (NAJPIERW, najmniej ryzykowne) ✅ ZROBIONE
 Przenieś 3 edge functions Supabase na trasy Workera. Źródła referencyjne (Deno) w `server/_ref-supabase/`:
@@ -111,14 +113,12 @@ Kroki:
 5. Deploy Pages (push na main; ew. wymuś build: `gh api -X POST repos/Jojogurt/stacja/pages/builds`).
 - Akceptacja: na jojogurt.github.io — solo gra+zapis (liga/profil), import Spotify, tryb „od tyłu" (audio proxy), MP (pokój, sync), drużyny+znajomi. Wszystko BEZ żadnego ruchu do `*.supabase.co` (sprawdź Network).
 
-## TASK 4 — Weryfikacja na żywo
-Przejść pełną ścieżkę na deployu (najlepiej 2 urządzenia dla MP). Potwierdzić zero żądań do supabase.co.
+## TASK 4 — Weryfikacja na żywo ✅ ZROBIONE (HTTP; live-cutover na main 089836b)
+Pełna ścieżka na deployu. Potwierdzone zero żądań do supabase.co (Network + HTTP). Otwarte: test MP na 2 urządzeniach (gdy okazja).
 
-## TASK 5 — Usunięcie Supabase
-Gdy TASK 1–4 przechodzą:
-1. Usuń z repo: `adapters-web/supabase.js`, `adapters-web/captcha.js`, skrypt supabase-js w `index.html` (jeśli nie w TASK 3).
-2. Skasuj projekt Supabase `agkarxtjcgklepefurza` (dashboard) — DOPIERO po potwierdzeniu, że nic nie woła supabase.co.
-3. Zaktualizuj `config.js`/README/`server/README.md`/MEMORY.
+## TASK 5 — Usunięcie Supabase ❌ ODPADA
+Repo wyczyszczone z Supabase (TASK 3): `adapters-web/{supabase,captcha}.js` + supabase-js usunięte, `config.js`/README/`server/README.md`/MEMORY zaktualizowane.
+**Projektu Supabase `agkarxtjcgklepefurza` NIE kasujemy** — jest **zapauzowany** (zero kosztów, zero ruchu). Zostaje jako bezkosztowy backup. Krok kasowania zdjęty z planu.
 
 ## TASK 6 — Serwer-autorytet pokoju + hardening (PRZYSZŁOŚĆ, osobny etap)
 > **Plan po researchu 2026-06-23 (autor: research nad app.js + core/). Self-sufficient — można działać na zimno.**

@@ -16,17 +16,24 @@
  * (PartyServer ma hibernację WS — pasuje do długo żyjącego, rzadko gadającego pokoju.)
  */
 import { Server } from 'partyserver';
+import { verifyToken } from './lib/auth.js';
 
 export class GameRoom extends Server {
   // klient się łączy → zapamiętaj tożsamość z query, rozgłoś obecność
-  onConnect(conn, ctx) {
-    let id = null, name = '';
+  // TASK 6.1 — tożsamość połączenia z PODPISANEGO TOKENU (nie ufamy klientowemu ?id=).
+  // INTERIM (kompat wstecz, zero zrywania): token ważny → id z tokenu; brak/niepoprawny → ?id=.
+  // Enforcement (odrzucanie połączeń bez ważnego tokenu) flipnie w 6.2, gdy DO przejmie autorytet.
+  async onConnect(conn, ctx) {
+    let id = null, name = '', verified = false;
     try {
       const q = new URL(ctx.request.url).searchParams;
-      id = q.get('id') || null;
       name = q.get('name') || '';
+      const token = q.get('t');
+      const payload = token ? await verifyToken(this.env.TOKEN_SECRET, token) : null;
+      if (payload && payload.sub) { id = payload.sub; verified = true; }   // TOŻSAMOŚĆ Z TOKENU
+      else id = q.get('id') || null;                                       // stary klient / zły token → fallback
     } catch (_e) { /* brak query — id dojdzie z track albo zostanie null */ }
-    conn.setState({ id, name });
+    conn.setState({ id, name, verified });
     this.pushPresence();
   }
 
@@ -39,7 +46,7 @@ export class GameRoom extends Server {
 
     if (msg.t === 'track') {
       const s = conn.state || {};
-      conn.setState({ id: s.id, name: msg.name || s.name || '' });
+      conn.setState({ id: s.id, name: msg.name || s.name || '', verified: s.verified });   // nie gub tożsamości z tokenu
       this.pushPresence();
       return;
     }
