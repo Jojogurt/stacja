@@ -6,5 +6,9 @@ server/node_modules/
 server/.wrangler/
 *.log
 
+# sekrety lokalne (token Cloudflare) — NIGDY do repo
+.cf-token
+server/.cf-token
+
 # lokalny podgląd design-exportu (nie commitować)
 _designref/

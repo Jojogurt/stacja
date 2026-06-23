@@ -14,6 +14,11 @@ class_name = "GameRoom"
 tag = "v1"
 new_sqlite_classes = ["GameRoom"]
 
-# Sekret (NIE tutaj — ustaw poza repo):
-#   npx wrangler secret put SUPABASE_SERVICE_KEY
-# Użyjesz go, gdy DO będzie zapisywać wynik meczu przez record_match (Etap 2 / orkiestracja).
+# Baza D1 (profile, mecze, drużyny, znajomi) — zastępuje Postgres z Supabase.
+[[d1_databases]]
+binding = "DB"
+database_name = "stacja-db"
+database_id = "7a774a82-a7d9-4341-96dc-29cd54635914"
+
+# Sekret HMAC do podpisywania tokenów tożsamości (device-UUID). Ustaw poza repo:
+#   echo '<losowy-sekret>' | npx wrangler secret put TOKEN_SECRET
