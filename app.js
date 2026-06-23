@@ -14,6 +14,7 @@ import { resolveTrack } from './adapters-web/itunesRepository.js';
 import { ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile } from './adapters-web/cf.js';
 import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo } from './adapters-web/cf.js';
 import { cfChannel } from './adapters-web/cfChannel.js';
+import { authorityChannel } from './adapters-web/roomTransport.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
@@ -630,6 +631,13 @@ function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidd
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
 let mpCh=null;
+// TASK 6.3 — flaga serwer-autorytetu. Domyślnie OFF (żywy relay). Włącz: config.serverAuthority,
+// ?authority=1 w URL, albo localStorage 'stacjaAuthority'='1' (do testów bez ruszania defaultu).
+const SERVER_AUTH = (()=>{ try{
+  return (new URLSearchParams(location.search).get('authority')==='1')
+    || !!(window.STACJA_CONFIG && window.STACJA_CONFIG.serverAuthority)
+    || localStorage.getItem('stacjaAuthority')==='1';
+}catch(e){ return false; } })();
 let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
 let mpCode=null, mpHost=false;
 let mpRoomStage='wait';     // przed grą: 'wait' = poczekalnia (06), 'build' = picker „ułóż mecz" (host)
@@ -891,13 +899,19 @@ async function mpEnterRoom(code, asHost){
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
   mpCode=code; mpHost=asHost; mpRoomStage='wait';
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
-  mpCh=cfChannel(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
-  mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(!mpHost){ mpGame=payload; mpAfterSync(); } });
-  mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost) mpHandleAct(payload); });
+  // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
+  mpCh=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
+  // pod autorytetem KAŻDY (też host) bierze stan z DO; w relay tylko nie-host (host jest źródłem).
+  mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(SERVER_AUTH || !mpHost){ mpGame=payload; mpAfterSync(); } });
+  mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost && !SERVER_AUTH) mpHandleAct(payload); });   // relay-only
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpPushChat(payload.byName, payload.text); mpFloatSay(payload.text, payload.byName); } });
   mpCh.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
-  mpCh.on('presence',{event:'sync'},()=>{ mpRenderMembers(); if(!mpGame || mpGame.phase==null) mpRender(); if(mpHost){ mpBroadcast(); mpMaybeGo(); } });
+  mpCh.on('presence',{event:'sync'},()=>{
+    if(SERVER_AUTH && mpCh.hostId) mpHost=(mpCh.hostId===mpMe.id);   // host = autorytatywny hostId z DO
+    mpRenderMembers(); if(!mpGame || mpGame.phase==null) mpRender();
+    if(mpHost && !SERVER_AUTH){ mpBroadcast(); mpMaybeGo(); }        // relay: host pcha stan i liczy gotowość (DO robi to sam)
+  });
   mpCh.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
     else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
@@ -925,11 +939,11 @@ function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',ev
 let mpSeenActs=new Set();   // id zastosowanych akcji — by akcja nie zadziałała dwa razy
 function mpSend(act){
   act.by=mpMe.id; act.byName=mpMe.name; act.aid=mpMe.id+'-'+Math.random().toString(36).slice(2);
-  // host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host,
-  // więc gdy hostem jestem ja, nie ma po co wysyłać — sync i tak roześle stan
-  if(mpHost){ mpHandleAct(act); return; }
-  // KLIENT: zastosuj lokalnie OD RAZU (optymistycznie) — natychmiastowe podświetlenie
-  // (głos/propozycja/pewniak), a właściwy sync od hosta zaraz skoryguje stan.
+  // RELAY: host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host.
+  // AUTORYTET: każdy (też host) wysyła akcję do DO — DO jest źródłem prawdy.
+  if(mpHost && !SERVER_AUTH){ mpHandleAct(act); return; }
+  // KLIENT/AUTORYTET: zastosuj lokalnie OD RAZU (optymistycznie) — natychmiastowe podświetlenie
+  // (głos/propozycja/pewniak), a właściwy sync (od hosta / od DO) zaraz skoryguje stan.
   if(mpGame && reduceAction(mpGame, act)) mpRender();
   if(mpCh){ mpCh.send({type:'broadcast',event:'act',payload:act}); }
 }
@@ -961,7 +975,7 @@ function mpAdvance(){
   if(!mpGame) return;
   mpAck=mpRevealNonce;                                  // zamknij u siebie odsłonę
   if(mpHost){
-    if(mpGame.phase===MP.REVEAL){ mpNext(); }           // host rusza następne pytanie (host też się zbroi)
+    if(mpGame.phase===MP.REVEAL){ if(SERVER_AUTH){ if(mpCh&&mpCh.next) mpCh.next(); mpRender(); } else mpNext(); }  // host: DO advance / lokalnie
     else { mpRender(); }
   } else {
     if(mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce){ mpArm(); }  // host już zbroi → zgłoś gotowość
@@ -1138,6 +1152,14 @@ function mpStart(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   if(r.error||!r.slots){ mpRender(); return; }
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
+  if(SERVER_AUTH){
+    // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
+    mpHost=true; mpTally={}; mpAck=mpRevealNonce=mpRevealSnap=null;
+    const pools={}; for(const k of mpPickCats){ if(ALL_CATS[k]) pools[k]=ALL_CATS[k]; }
+    if(mpCh && mpCh.startMatch) mpCh.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools });
+    mpGame={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
+    return;
+  }
   mpGame={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, passed:[],
@@ -1189,6 +1211,7 @@ async function mpHostNewRound(){
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
   if(!mpHost || !mpGame || mpGame.phase!==MP.PLAY) return;
+  if(SERVER_AUTH){ if(mpCh&&mpCh.lock) mpCh.lock(); return; }   // AUTORYTET: DO ocenia i robi reveal
   mpAutoLocked=true;
   const c=mpHostCurrent;
   const ev=evaluateAnswer(mpGame, c);   // czysta ocena (core) — locked = odpowiedź drużyny (górka głosów per slot)
@@ -1216,7 +1239,11 @@ function mpFinish(){
   (async()=>{ const uid=await ensureSession(); if(uid) recordMatch(buildMpRecord(snap)); })();
   mpGame.phase=MP.DONE; mpBroadcast(); mpRender();
 }
-function mpNewGame(){ mpAck=mpRevealNonce=mpRevealSnap=null; mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender(); }
+function mpNewGame(){
+  mpAck=mpRevealNonce=mpRevealSnap=null;
+  if(SERVER_AUTH){ mpGame=null; mpRoomStage='build'; mpRender(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
+  mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender();
+}
 
 /* ---- render sceny ---- */
 let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykieta: normal/unsure/sure)

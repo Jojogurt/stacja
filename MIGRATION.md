@@ -184,17 +184,21 @@ NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wr
   15 odpowiedzi), **promote** (host wychodzi → B awansuje i skutecznie locka). Regresja klienta solo/relay OK.
 - NIE wpięte do żywej apki (to 6.3). Persistence po eviccie DO zaimplementowana, nietestowana wymuszonym restartem.
 
-**6.3 — Transport klienta + refactor `app.js` za flagą.** DUŻA.
-- `adapters-web/roomTransport.js` — czysty port `join(code,me)/send(action)/onState(cb)/onEvent(cb)/leave()`
-  po WS do autorytatywnego DO (token w query).
-- `app.js` `mp*`: zwinąć gałąź `if(mpHost){…}` (orkiestracja idzie na DO). Klient zostaje z: renderem,
-  lokalnym audio (`mpArm` buforuje → `send('ready')`; `mpPlayLocal`/`mpPlayReverse`), inputem. `lock/next/advance`
-  to wiadomości; autorytet pilnuje DO wg `hostId`. **Optymistyczne echo** własnej akcji zostaje (snappy UI),
-  ale `state` z DO jest prawdą (reconcile).
-- `mpStart` (host): zebrać pule WYBRANYCH kategorii z `ALL_CATS` (artyści/piosenki importu/teksty) i wysłać w `start`.
-  **Cap rozmiaru** — tylko użyte kategorie (lektor/teksty potrafią być duże).
-- Flaga `STACJA_CONFIG.serverAuthority` (lub `roomsTransport:'relay'|'authority'`): true → `roomTransport`+autorytet;
-  false → `cfChannel` relay (dziś). Staged rollout + natychmiastowy rollback.
+**6.3 — Transport klienta + wpięcie `app.js` za flagą. ✅ ZROBIONE I ZWERYFIKOWANE 2026-06-23.**
+- `adapters-web/roomTransport.js` — `authorityChannel(code,cfg)` z TĄ SAMĄ powierzchnią co `cfChannel`
+  (`.on/.subscribe/.track/.send/.presenceState/.unsubscribe`) + komendy hosta `.startMatch/.lock/.next` + `.hostId`.
+  `send` tłumaczy: `sync`→ignor, `act`→`{t:'action'}`, `react/say/typing`→`{t:'event'}`. (Pragmatyczny shim zamiast
+  pełnego portu `join/onState/onEvent` — MINIMALNE diffy w app.js, zero ryzyka dla relay. Czysty port = ew. dług na potem.)
+- `app.js` `mp*`: ~7 bramkowanych rozgałęzień `SERVER_AUTH` (flaga OFF = BAJT-IDENTYCZNY relay): wybór transportu w
+  `mpEnterRoom`; sync dla wszystkich (też host); `mpSend` wysyła akcję do DO (echo optymistyczne zostaje); `mpStart`
+  wgrywa pule wybranych kategorii (`ALL_CATS[k]`) i woła `startMatch`; `mpLock`/`mpAdvance(next)` → komendy do DO;
+  `mpNewGame` → picker; `mpHost` aktualizowany z `presence.hostId`. Emotki/czat działają bez zmian (przez `send`).
+- `authorityRoom.js` dostał relay `{t:'event'}` (emotki/czat/typing) + update nicka `{t:'track'}`.
+- Flaga `STACJA_CONFIG.serverAuthority` (domyślnie false=relay) + override `?authority=1` / localStorage `stacjaAuthority='1'`.
+- **Zweryfikowane przez REALNĄ apkę (preview):** flaga ON — pełny mecz lektor: `mpStart`→DO zbudował i rozwiązał, klient
+  wyrenderował PLAY (pytanie bez odpowiedzi), `mpLock`→reveal z odpowiedzią (Creep/Radiohead), `mpAdvance`→Pyt.2/5;
+  `roomTransport.js` użyty. Flaga OFF — relay wchodzi do pokoju i gra jak dawniej (lock→reveal). Zero błędów konsoli.
+- Cap rozmiaru wgrywanych pul (lektor/teksty) — NIEZROBIONE (ryzyko backlog: na razie cała `ALL_CATS[k]`).
 
 **6.4 — Weryfikacja + rollout.**
 - Headless harness wielu-WS: asercje maszyny stanów DO (start→resolve→arming→play→lock→reveal→next→finish;

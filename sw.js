@@ -3,14 +3,14 @@
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v3';
+const CACHE = 'stacja-v4';
 const SHELL = [
   './', './index.html',
   './app.js', './categories.js', './playlists.js', './lyrics.js', './config.js',
   './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
   './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
-  './adapters-web/cf.js', './adapters-web/cfChannel.js',
+  './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',
   './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
 ];

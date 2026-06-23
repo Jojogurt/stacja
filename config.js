@@ -10,4 +10,7 @@
    ============================================================ */
 window.STACJA_CONFIG = {
   roomsBase: 'https://stacja-rooms.kedziora-karol.workers.dev',
+  // TASK 6 — serwer-autorytet MP. false = relay (host-authority, dzisiejsze). true = DO jest
+  // autorytetem (pętla gry na serwerze, brak SPOF). Testowo też ?authority=1 / localStorage 'stacjaAuthority'='1'.
+  serverAuthority: false,
 };

@@ -103,6 +103,15 @@ export class GameAuthority extends Server {
         this.pushPresence();
         return;
 
+      case 'track':                                   // aktualizacja nicka obecności (jak relay)
+        conn.setState({ id:(conn.state&&conn.state.id)||null, name:msg.name||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
+        this.pushPresence();
+        return;
+
+      case 'event':                                   // ulotne (emotki/czat/typing) — relay do wszystkich (z nadawcą)
+        this.broadcast(JSON.stringify({ t:'event', event:msg.event, payload:msg.payload }));
+        return;
+
       case 'start':                                   // kto startuje mecz, ten zostaje hostem
         // (host w onConnect jest tylko prowizoryczny do crowna w lobby; start go potwierdza —
         //  deterministyczne „twórca = host", odporne na wyścig verifyToken przy łączeniu)
