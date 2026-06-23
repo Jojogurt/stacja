@@ -1,7 +1,10 @@
 .claude/
 .DS_Store
+node_modules/
 server/node_modules/
+.wrangler/
 server/.wrangler/
+*.log
 
 # lokalny podgląd design-exportu (nie commitować)
 _designref/
