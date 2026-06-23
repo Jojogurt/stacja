@@ -1149,6 +1149,29 @@ function mpPickerHTML(){
     <div class="match-info ${bad?'err':''}">${escapeHtml(info)}</div>
     <button class="mp-btn" style="width:100%;margin-top:12px${bad?';opacity:.5':''}" ${bad?'disabled':''} onclick="mpStart()">Start meczu →</button></div>`;
 }
+// AUTORYTET: złóż MINIMALNĄ pulę kategorii do wysłania (cap payloadu `start`).
+// DO potrzebuje: artists; songs {title,artist,preview,year,album}; lyric/tts TYLKO dla lektora.
+// Strip lyric/tts gdy lektor niewybrany (gros rozmiaru) + limit utworów/kategorię.
+const MP_POOL_SONG_CAP=80;
+function mpBuildPools(cats, modes){
+  const wantLektor=modes.includes('lektor');
+  const pools={};
+  for(const k of cats){
+    const c=ALL_CATS[k]; if(!c) continue;
+    const out={ label:c.label, range:c.range, kind:c.kind };
+    if(Array.isArray(c.artists) && c.artists.length) out.artists=c.artists.slice();
+    if(Array.isArray(c.songs) && c.songs.length){
+      out.songs=c.songs.slice(0, MP_POOL_SONG_CAP).map(s=>{
+        const o={ title:s.title, artist:s.artist };
+        if(s.preview) o.preview=s.preview; if(s.year) o.year=s.year; if(s.album) o.album=s.album;
+        if(wantLektor && s.lyric){ o.lyric=s.lyric; if(s.tts) o.tts=s.tts; }   // lyric/tts tylko gdy lektor w grze
+        return o;
+      });
+    }
+    pools[k]=out;
+  }
+  return pools;
+}
 function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
 function mpStart(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
@@ -1157,7 +1180,7 @@ function mpStart(){
   if(SERVER_AUTH){
     // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
     mpHost=true; mpTally={}; mpAck=mpRevealNonce=mpRevealSnap=null;
-    const pools={}; for(const k of mpPickCats){ if(ALL_CATS[k]) pools[k]=ALL_CATS[k]; }
+    const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
     if(mpCh && mpCh.startMatch) mpCh.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools });
     mpGame={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;

@@ -32,6 +32,28 @@ import { insertMatch } from './lib/recordMatch.js';
 
 const MP_BUFFER_TIMEOUT_MS = 6000;   // bezpiecznik gotowości (klient i tak self-reportuje ready)
 const MP_SNIP_WINDOW_S = 16;         // okno losowania startu fragmentu
+const POOL_MAX_CATS = 24;            // defensywne capy pul (DO nie ufa rozmiarowi od klienta)
+const POOL_MAX_SONGS = 120;
+const POOL_LYRIC_MAX = 12000;        // max długość tekstu (lektor) na utwór
+
+// przytnij przychodzące pule: ogranicz liczbę kategorii/utworów i długość tekstów (anty-flood/anty-OOM)
+function clampPools(pools){
+  const out={};
+  if(!pools || typeof pools!=='object') return out;
+  for(const k of Object.keys(pools).slice(0, POOL_MAX_CATS)){
+    const c=pools[k]; if(!c || typeof c!=='object') continue;
+    const o={ label:c.label, range:c.range, kind:c.kind };
+    if(Array.isArray(c.artists)) o.artists=c.artists.slice(0, POOL_MAX_SONGS).map(String);
+    if(Array.isArray(c.songs)) o.songs=c.songs.slice(0, POOL_MAX_SONGS).map(s=>{
+      const r={ title:s&&s.title, artist:s&&s.artist };
+      if(s&&s.preview) r.preview=s.preview; if(s&&s.year) r.year=s.year; if(s&&s.album) r.album=s.album;
+      if(s&&s.lyric) r.lyric=String(s.lyric).slice(0, POOL_LYRIC_MAX); if(s&&s.tts) r.tts=s.tts;
+      return r;
+    });
+    out[k]=o;
+  }
+  return out;
+}
 
 export class GameAuthority extends Server {
   game = null;            // stan ROZSYŁANY (bez sekretu odpowiedzi)
@@ -48,35 +70,42 @@ export class GameAuthority extends Server {
     super(ctx, env);
     // wczytaj stan z trwałego magazynu (po eviccie/restarcie DO) zanim obsłużymy żądania
     ctx.blockConcurrencyWhile(async () => {
-      const s = await ctx.storage.get(['game','current','pools','hostId','hostSeen','recent']);
+      const s = await ctx.storage.get(['game','current','pools','hostId','hostSeen','recent','ready']);
       this.game = s.get('game') || null;
       this.current = s.get('current') || null;
       this.pools = s.get('pools') || null;
       this.hostId = s.get('hostId') || null;
       this.hostSeen = new Set(s.get('hostSeen') || []);
       this.recent = s.get('recent') || [];
+      this.ready = new Set(s.get('ready') || []);
+      // WZNÓW serwerowe timery po restarcie (in-memory setTimeout ginie przy evikcji DO):
+      if(this.game && this.game.phase===MP.PLAY && this.game.timer>0 && this.game.endsAt){
+        this.scheduleAutoLock(Math.max(0, this.game.endsAt - Date.now()));   // auto-lock wg pozostałego czasu
+      } else if(this.game && this.game.phase===MP.ARMING){
+        this.armSafety(this.game.armNonce);                                  // bezpiecznik startu (anty-deadlock)
+      }
     });
   }
 
   async persist(){
     await this.ctx.storage.put({
       game:this.game, current:this.current, pools:this.pools,
-      hostId:this.hostId, hostSeen:[...this.hostSeen], recent:this.recent,
+      hostId:this.hostId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
     });
   }
 
-  /* ---- tożsamość połączenia z tokenu (6.1) ---- */
+  /* ---- tożsamość połączenia z tokenu (HARD-REQUIRE) ---- */
   async onConnect(conn, ctx){
-    let id=null, name='', verified=false;
+    let id=null, name='';
     try{
       const q=new URL(ctx.request.url).searchParams;
       name=q.get('name')||'';
-      const token=q.get('t');
-      const payload=token?await verifyToken(this.env.TOKEN_SECRET, token):null;
-      if(payload && payload.sub){ id=payload.sub; verified=true; } else id=q.get('id')||null;
-    }catch(e){ /* id dojdzie z hello albo zostanie null */ }
-    conn.setState({ id, name, verified });
-    if(!this.hostId && id){ this.hostId=id; await this.persist(); }   // pierwszy obecny = host (przenoszalny)
+      const payload=await verifyToken(this.env.TOKEN_SECRET, q.get('t'));   // bez tokenu → null
+      if(payload && payload.sub) id=payload.sub;
+    }catch(e){ /* zostanie null → odrzut */ }
+    if(!id){ try{ conn.close(4001,'auth'); }catch(_e){} return; }            // brak ważnego tokenu → odrzuć (koniec ?id=)
+    conn.setState({ id, name, verified:true });
+    if(!this.hostId){ this.hostId=id; await this.persist(); }                 // pierwszy obecny = host (przenoszalny)
     conn.send(JSON.stringify({ t:'state', game:this.game }));
     this.pushPresence();
   }
@@ -154,7 +183,8 @@ export class GameAuthority extends Server {
 
   /* ---- start meczu (host wgrywa pule) ---- */
   async startMatch(config){
-    const { rounds=4, timer=0, modes=[], pools={} } = config;
+    const { rounds=4, timer=0, modes=[] } = config;
+    const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
     const catKeys = Object.keys(pools);
     const r = buildMatch(catKeys, modes, rounds, pools);
     if(r.error || !r.slots) return;                 // klient waliduje przed wysłaniem — zignoruj zły config

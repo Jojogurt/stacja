@@ -90,7 +90,11 @@ export function authorityChannel(code, cfg = {}) {
       }
     };
     ws.onerror = () => { if (firstOpen && subCb) subCb('CHANNEL_ERROR'); };
-    ws.onclose = () => { ws = null; if (!closed) scheduleReconnect(); };
+    ws.onclose = (ev) => {
+      ws = null;
+      if (ev && ev.code === 4001) { closed = true; if (subCb) subCb('CHANNEL_ERROR'); return; }   // odrzut auth → nie reconnectuj
+      if (!closed) scheduleReconnect();
+    };
   }
 
   function scheduleReconnect() {

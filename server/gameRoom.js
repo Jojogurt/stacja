@@ -19,21 +19,17 @@ import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
 
 export class GameRoom extends Server {
-  // klient się łączy → zapamiętaj tożsamość z query, rozgłoś obecność
-  // TASK 6.1 — tożsamość połączenia z PODPISANEGO TOKENU (nie ufamy klientowemu ?id=).
-  // INTERIM (kompat wstecz, zero zrywania): token ważny → id z tokenu; brak/niepoprawny → ?id=.
-  // Enforcement (odrzucanie połączeń bez ważnego tokenu) flipnie w 6.2, gdy DO przejmie autorytet.
+  // klient się łączy → tożsamość z PODPISANEGO TOKENU (HARD-REQUIRE: bez ważnego tokenu odrzut)
   async onConnect(conn, ctx) {
-    let id = null, name = '', verified = false;
+    let id = null, name = '';
     try {
       const q = new URL(ctx.request.url).searchParams;
       name = q.get('name') || '';
-      const token = q.get('t');
-      const payload = token ? await verifyToken(this.env.TOKEN_SECRET, token) : null;
-      if (payload && payload.sub) { id = payload.sub; verified = true; }   // TOŻSAMOŚĆ Z TOKENU
-      else id = q.get('id') || null;                                       // stary klient / zły token → fallback
-    } catch (_e) { /* brak query — id dojdzie z track albo zostanie null */ }
-    conn.setState({ id, name, verified });
+      const payload = await verifyToken(this.env.TOKEN_SECRET, q.get('t'));   // bez tokenu → null
+      if (payload && payload.sub) id = payload.sub;
+    } catch (_e) { /* zostanie null → odrzut */ }
+    if (!id) { try { conn.close(4001, 'auth'); } catch (_e) {} return; }       // koniec fallbacku ?id=
+    conn.setState({ id, name, verified: true });
     this.pushPresence();
   }
 

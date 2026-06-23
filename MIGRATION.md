@@ -53,7 +53,8 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 > **TASK 6 — serwer-autorytet ZROBIONY (6.1–6.4):** `GameAuthority` DO (osobna trasa) przejął pętlę gry; `config.serverAuthority`
 > **flipnięty na true** — żywe MP idą przez autorytatywny DO (brak SPOF, integralność, zapis D1 z serwera). Rollback: `?authority=0`
 > lub `serverAuthority:false`. Relay (`GameRoom`+`cfChannel`) zostaje żywy do rollbacku.
-> **Otwarte:** test na 2 fizycznych urządzeniach (UI/emotki/audio/reconnect) + backlog (cap pul, hard-require tokenu, persistence-restart).
+> **Backlog hardeningu (6.5) ZROBIONY:** cap pul (klient strip + serwer clamp), hard-require tokenu (oba DO, close 4001), persistence robust
+> (wznawianie timerów + `ready` → restart bezszwowy). **Otwarte:** test na 2 fizycznych urządzeniach (UI/emotki/audio/reconnect).
 
 ## TASK 1 — Proxy na Workerze (NAJPIERW, najmniej ryzykowne) ✅ ZROBIONE
 Przenieś 3 edge functions Supabase na trasy Workera. Źródła referencyjne (Deno) w `server/_ref-supabase/`:
@@ -200,7 +201,7 @@ NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wr
 - **Zweryfikowane przez REALNĄ apkę (preview):** flaga ON — pełny mecz lektor: `mpStart`→DO zbudował i rozwiązał, klient
   wyrenderował PLAY (pytanie bez odpowiedzi), `mpLock`→reveal z odpowiedzią (Creep/Radiohead), `mpAdvance`→Pyt.2/5;
   `roomTransport.js` użyty. Flaga OFF — relay wchodzi do pokoju i gra jak dawniej (lock→reveal). Zero błędów konsoli.
-- Cap rozmiaru wgrywanych pul (lektor/teksty) — NIEZROBIONE (ryzyko backlog: na razie cała `ALL_CATS[k]`).
+- Cap rozmiaru wgrywanych pul (lektor/teksty) — ✅ ZROBIONE w 6.5 (strip klient + clamp serwer).
 
 **6.4 — Weryfikacja + rollout. ✅ ZROBIONE 2026-06-23 — DEFAULT FLIPNIĘTY NA `serverAuthority:true`.**
 - Headless multi-WS: pełny mecz do DONE, promote, zapis D1 (6.2) **+ 2-klientowe kooperacyjne punktowanie:**
@@ -208,9 +209,20 @@ NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wr
   gość realnie dostaje reveal+odpowiedź. Realna apka (1 klient): start→PLAY→lock→reveal→next przez UI.
 - **ROLLOUT:** `config.serverAuthority` flipnięte na **true** (decyzja właściciela: dogfood). Wszystkie żywe MP idą teraz
   przez autorytatywny DO. Dodano override `?authority=0` / localStorage `stacjaAuthority='0'` = wymuś relay (rollback bez deployu).
-- **NIEZROBIONE (po Twojej stronie / backlog):** test na 2 FIZYCZNYCH urządzeniach przez UI (emotki/tempo reveala/audio/
-  reconnect); cap rozmiaru wgrywanych pul; persistence DO niewymuszona restartem; hard-require tokenu (dziś INTERIM `?id=`).
 - **Rollback gdyby coś:** `config.serverAuthority=false` + push (Pages) — relay (`GameRoom`+`cfChannel`) wciąż żywy, nietknięty.
+
+**6.5 — Backlog hardeningu ✅ ZROBIONE I ZWERYFIKOWANE 2026-06-23.**
+- **Cap pul:** klient (`mpBuildPools` w `mpStart`) wysyła minimalną pulę — strip `lyric`/`tts` gdy lektor niewybrany, ≤80 utw./kat;
+  serwer (`clampPools` w `authorityRoom`) defensywnie clampuje (≤24 kat, ≤120 utw./kat, ≤12k znaków tekstu). Test: pula 300 utw.×50KB
+  tekstu → DO sclampował, mecz doszedł do PLAY.
+- **Hard-require tokenu:** oba DO (`gameRoom`+`authorityRoom`) `onConnect` odrzucają połączenie bez ważnego tokenu (`close 4001`,
+  koniec fallbacku `?id=`); klient (`cfChannel`/`roomTransport`) na close 4001 NIE reconnectuje (status błędu). Test: bez/zły token → 4001 bez stanu;
+  ważny → przyjęty; realna apka wchodzi (token z localStorage). **(S1 domknięty.)**
+- **Persistence robust:** `authorityRoom` persystuje `ready` i przy `blockConcurrencyWhile` wznawia serwerowe timery (auto-lock wg
+  `endsAt`, arm-safety) → restart mid-pytanie bezszwowy, brak deadlocka w ARMING. Test: mecz w PLAY (timer 25s) → wymuszony restart (deploy)
+  → reconnect: stan przetrwał (PLAY/CatX/nonce), timer wznowił → auto-lock → REVEAL (S8/A8).
+- **OTWARTE:** test na 2 FIZYCZNYCH urządzeniach przez UI (po stronie właściciela). Opcja B cap-a (wbudować statyczne kategorie w Worker)
+  zostaje na potem (wymaga refaktoru classic-script→ESM data files).
 
 ### Ryzyka / pułapki (z researchu)
 - **Rozmiar wgrywanych pul** (import Spotify + teksty) — cap, tylko wybrane kategorie.
@@ -227,6 +239,7 @@ NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wr
 · 6.4 średnie. Wieloseyjne. Flaga gwarantuje, że żywa ścieżka host-authority nie pęka, dopóki autorytet nie jest dowiedziony.
 
 ### Backlog hardeningu (drobne, niezależne — można robić wcześniej)
+- **S1** ✅ ZROBIONE w 6.5 — hard-require tokenu w obu DO (`close 4001`, koniec fallbacku `?id=`).
 - **S2** token bez `exp` — dodać wygaśnięcie + re-issue w `/api/session` (dziś token = wieczna tożsamość).
 - **S3** `/tracks` i `/spotify` to otwarte proxy bez rate-limitu — ktoś może palić limit Workera. Rozważyć prosty throttle.
 - **S4** `/audio` podąża za redirectami (allowlista sprawdza tylko URL wejściowy) — dodać `redirect:'manual'` + limit rozmiaru streamu.
