@@ -49,9 +49,11 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 
 > **STATUS 2026-06-23:** TASK 1–5 ZAMKNIĘTE. Live cutover na `main` zrobiony (GitHub Pages, commit `089836b`):
 > jojogurt.github.io w 100% na Cloudflare, supabase-js + `adapters-web/{supabase,captcha}.js` usunięte, zero ruchu
-> do supabase.co. Hardening+sprzątanie: `dbfc8e9`. **TASK 5 (kasowanie Supabase) ODPADA** — projekt zapauzowany
-> (zero kosztów/ruchu), nie kasujemy. **W TOKU: TASK 6 — serwer-autorytet** (plan niżej), start od podfazy **6.1**.
-> Otwarte mniejsze: test MP na 2 urządzeniach na żywo (gdy będzie okazja).
+> do supabase.co. Hardening+sprzątanie: `dbfc8e9`. **TASK 5 (kasowanie Supabase) ODPADA** — projekt zapauzowany.
+> **TASK 6 — serwer-autorytet ZROBIONY (6.1–6.4):** `GameAuthority` DO (osobna trasa) przejął pętlę gry; `config.serverAuthority`
+> **flipnięty na true** — żywe MP idą przez autorytatywny DO (brak SPOF, integralność, zapis D1 z serwera). Rollback: `?authority=0`
+> lub `serverAuthority:false`. Relay (`GameRoom`+`cfChannel`) zostaje żywy do rollbacku.
+> **Otwarte:** test na 2 fizycznych urządzeniach (UI/emotki/audio/reconnect) + backlog (cap pul, hard-require tokenu, persistence-restart).
 
 ## TASK 1 — Proxy na Workerze (NAJPIERW, najmniej ryzykowne) ✅ ZROBIONE
 Przenieś 3 edge functions Supabase na trasy Workera. Źródła referencyjne (Deno) w `server/_ref-supabase/`:
@@ -200,10 +202,15 @@ NIETKNIĘTY (zero ryzyka, klient wybierze transport flagą w 6.3). Wdrożone (wr
   `roomTransport.js` użyty. Flaga OFF — relay wchodzi do pokoju i gra jak dawniej (lock→reveal). Zero błędów konsoli.
 - Cap rozmiaru wgrywanych pul (lektor/teksty) — NIEZROBIONE (ryzyko backlog: na razie cała `ALL_CATS[k]`).
 
-**6.4 — Weryfikacja + rollout.**
-- Headless harness wielu-WS: asercje maszyny stanów DO (start→resolve→arming→play→lock→reveal→next→finish;
-  promote po wyjściu hosta; przetrwanie symulowanego restartu DO). 2 urządzenia z flagą on dla testowego pokoju,
-  potem default. Potwierdzić zapis MP do D1 z DO (nie z klienta).
+**6.4 — Weryfikacja + rollout. ✅ ZROBIONE 2026-06-23 — DEFAULT FLIPNIĘTY NA `serverAuthority:true`.**
+- Headless multi-WS: pełny mecz do DONE, promote, zapis D1 (6.2) **+ 2-klientowe kooperacyjne punktowanie:**
+  gość proponuje poprawnie → `teamOk`, `score` rośnie 1/pyt, tally kredytuje gościa (`firstBy`), `by` z tożsamości,
+  gość realnie dostaje reveal+odpowiedź. Realna apka (1 klient): start→PLAY→lock→reveal→next przez UI.
+- **ROLLOUT:** `config.serverAuthority` flipnięte na **true** (decyzja właściciela: dogfood). Wszystkie żywe MP idą teraz
+  przez autorytatywny DO. Dodano override `?authority=0` / localStorage `stacjaAuthority='0'` = wymuś relay (rollback bez deployu).
+- **NIEZROBIONE (po Twojej stronie / backlog):** test na 2 FIZYCZNYCH urządzeniach przez UI (emotki/tempo reveala/audio/
+  reconnect); cap rozmiaru wgrywanych pul; persistence DO niewymuszona restartem; hard-require tokenu (dziś INTERIM `?id=`).
+- **Rollback gdyby coś:** `config.serverAuthority=false` + push (Pages) — relay (`GameRoom`+`cfChannel`) wciąż żywy, nietknięty.
 
 ### Ryzyka / pułapki (z researchu)
 - **Rozmiar wgrywanych pul** (import Spotify + teksty) — cap, tylko wybrane kategorie.

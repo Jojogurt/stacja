@@ -631,12 +631,14 @@ function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidd
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
 let mpCh=null;
-// TASK 6.3 — flaga serwer-autorytetu. Domyślnie OFF (żywy relay). Włącz: config.serverAuthority,
-// ?authority=1 w URL, albo localStorage 'stacjaAuthority'='1' (do testów bez ruszania defaultu).
+// TASK 6 — flaga serwer-autorytetu. Default z config.serverAuthority. Override (rollback/test):
+// ?authority=1|0 w URL albo localStorage 'stacjaAuthority'='1'|'0' (0 = wymuś relay mimo defaultu true).
 const SERVER_AUTH = (()=>{ try{
-  return (new URLSearchParams(location.search).get('authority')==='1')
-    || !!(window.STACJA_CONFIG && window.STACJA_CONFIG.serverAuthority)
-    || localStorage.getItem('stacjaAuthority')==='1';
+  const q=new URLSearchParams(location.search).get('authority');
+  if(q==='1') return true; if(q==='0') return false;
+  const ls=localStorage.getItem('stacjaAuthority');
+  if(ls==='1') return true; if(ls==='0') return false;
+  return !!(window.STACJA_CONFIG && window.STACJA_CONFIG.serverAuthority);
 }catch(e){ return false; } })();
 let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
 let mpCode=null, mpHost=false;
