@@ -45,7 +45,11 @@ const matchHeader= (m)                    => _matchHeader(m, ALL_CATS);
 /* ===== TEMP DEBUG (#board-vs-team) — usunąć po diagnozie =====
    Włącz: localStorage.setItem('stacjaDebug','1') i odśwież. Po reprodukcji kliknij „💾 log".
    Loguje do bufora w pamięci + localStorage; przycisk zapisuje plik i kopiuje do schowka. */
-const DBG_ON = (()=>{ try{ return localStorage.getItem('stacjaDebug')==='1'; }catch(_e){ return false; } })();
+const DBG_ON = (()=>{ try{
+  if(/[?&]debug=1\b/.test(location.search)){ localStorage.setItem('stacjaDebug','1'); }   // włącznik przez URL (?debug=1) — wygodny na mobile
+  if(/[?&]debug=0\b/.test(location.search)){ localStorage.removeItem('stacjaDebug'); }
+  return localStorage.getItem('stacjaDebug')==='1';
+}catch(_e){ return false; } })();
 const DBG = [];
 let _dbgSeq = 0;
 function dbg(tag, obj){
