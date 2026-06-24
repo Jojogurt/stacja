@@ -802,44 +802,51 @@ function dzPlay(){ showScreen('mp'); }
 function dzLoadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); }); }
 function acMsg(t,err){ const m=$m('acMsg')||$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
 function acAfterLogin(){ if(document.body.classList.contains('profil')) renderProfil(); else if(document.body.classList.contains('liga')) renderDruzyna(); }
-// HTML sekcji Konto (na ekran Profil): zalogowany → status + Wyloguj; niezalogowany → przyciski.
+// HTML sekcji Konto (na ekran Profil): zalogowany → status + Wyloguj; niezalogowany → przyciski (stack, center).
 function acAccountHTML(secured, email){
   const cfg=window.STACJA_CONFIG||{};
   if(secured) return `<div class="pf-acct"><div class="dz-acct ok">✓ Zalogowano${email?': '+escapeHtml(email):''}</div><button class="dz-go" style="width:100%" onclick="acLogout()">Wyloguj</button><div class="dz-hint" id="acMsg"></div></div>`;
-  const g = cfg.googleClientId ? `<div id="acGoogleBtn" class="dz-gbtn"></div>` : '';
-  const a = cfg.appleServicesId ? `<button class="dz-prov a" onclick="dzLoginApple()">Zaloguj przez Apple</button>` : '';
-  const buttons = (g||a) ? `<div class="dz-oauth">${g}${a}</div>` : `<div class="dz-hint">Logowanie Google/Apple — wkrótce.</div>`;
+  const g = cfg.googleClientId ? `<div id="acGoogleBtn"></div>` : '';
+  // natywny czarny przycisk Apple — Apple JS sam go renderuje w #appleid-signin
+  const a = cfg.appleServicesId ? `<div id="appleid-signin" data-color="black" data-border="false" data-type="sign in" data-mode="center-align" data-border-radius="22" style="width:240px;height:44px;cursor:pointer"></div>` : '';
+  const buttons = (g||a) ? `<div class="dz-oauth col">${g}${a}</div>` : `<div class="dz-hint">Logowanie Google/Apple — wkrótce.</div>`;
   return `<div class="pf-acct"><div class="dz-acct">🔒 Zaloguj się, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>${buttons}<div class="dz-hint" id="acMsg"></div></div>`;
 }
-// Google: lazy-load GIS + oficjalny przycisk do #acGoogleBtn (callback = ID-token)
-async function acInitGoogleBtn(){
-  const cfg=window.STACJA_CONFIG||{}; const box=$m('acGoogleBtn');
-  if(!cfg.googleClientId || !box) return;
-  try{
+let _appleListenersAttached=false;
+// lazy-load SDK i wyrenderuj OBA natywne przyciski (Google GIS + Apple #appleid-signin)
+async function acInitAuthButtons(){
+  const cfg=window.STACJA_CONFIG||{};
+  const gbox=$m('acGoogleBtn');
+  if(cfg.googleClientId && gbox){ try{
     await dzLoadScript('https://accounts.google.com/gsi/client');
-    if(!(window.google&&google.accounts&&google.accounts.id)) return;
-    google.accounts.id.initialize({ client_id:cfg.googleClientId, callback: async (resp)=>{
-      const r=await loginOAuth('google', resp.credential);
-      if(r.error) acMsg('Logowanie Google: '+r.error,true); else acAfterLogin();
-    }});
-    google.accounts.id.renderButton(box, { theme:'outline', size:'large', shape:'pill', text:'signin_with', logo_alignment:'center' });
-  }catch(e){ /* sieć/SDK — przycisk po prostu się nie pokaże */ }
-}
-async function dzLoginApple(){
-  const sid=(window.STACJA_CONFIG||{}).appleServicesId;
-  if(!sid){ acMsg('Logowanie Apple nie jest jeszcze skonfigurowane.',true); return; }
-  try{
+    if(window.google&&google.accounts&&google.accounts.id){
+      google.accounts.id.initialize({ client_id:cfg.googleClientId, callback: async (resp)=>{
+        const r=await loginOAuth('google', resp.credential);
+        if(r.error) acMsg('Logowanie Google: '+r.error,true); else acAfterLogin();
+      }});
+      google.accounts.id.renderButton(gbox, { theme:'outline', size:'large', shape:'pill', text:'signin_with', logo_alignment:'center', width:240 });
+    }
+  }catch(e){ /* przycisk się nie pokaże */ } }
+  const abox=document.getElementById('appleid-signin');
+  if(cfg.appleServicesId && abox){ try{
     await dzLoadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js');
-    AppleID.auth.init({ clientId:sid, scope:'email', redirectURI:location.origin+location.pathname, usePopup:true });
-    const data=await AppleID.auth.signIn();   // {authorization:{id_token,...}}
-    const idt=data&&data.authorization&&data.authorization.id_token;
-    if(!idt){ acMsg('Logowanie Apple: brak tokenu.',true); return; }
-    const r=await loginOAuth('apple', idt);
-    if(r.error) acMsg('Logowanie Apple: '+r.error,true); else acAfterLogin();
-  }catch(e){ acMsg('Logowanie Apple anulowane.',true); }
+    if(window.AppleID){
+      AppleID.auth.init({ clientId:cfg.appleServicesId, scope:'email', redirectURI:location.origin+location.pathname, usePopup:true });
+      if(!_appleListenersAttached){            // raz — natywny przycisk zgłasza wynik przez zdarzenia na document
+        _appleListenersAttached=true;
+        document.addEventListener('AppleIDSignInOnSuccess', async (e)=>{
+          const idt=e.detail&&e.detail.authorization&&e.detail.authorization.id_token;
+          if(!idt){ acMsg('Logowanie Apple: brak tokenu.',true); return; }
+          const r=await loginOAuth('apple', idt);
+          if(r.error) acMsg('Logowanie Apple: '+r.error,true); else acAfterLogin();
+        });
+        document.addEventListener('AppleIDSignInOnFailure', ()=>{ acMsg('Logowanie Apple anulowane.',true); });
+      }
+    }
+  }catch(e){ /* przycisk się nie pokaże */ } }
 }
 async function acLogout(){ logout(); myHandle=null; await ensureSession(); acAfterLogin(); }
-Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzLoginApple, acLogout });
+Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, acLogout });
 
 async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
@@ -880,7 +887,7 @@ async function renderProfil(){
     ${catRows}
     <div class="pf-lbl">Odznaki</div>
     <div class="pf-badges">${badges}</div>`;
-  if(!p.secured) acInitGoogleBtn();   // lazy-load GIS + renderButton; Apple ma własny onclick
+  if(!p.secured) acInitAuthButtons();   // lazy-load GIS + Apple JS → natywne przyciski
 }
 $m('profilSave').onclick=async()=>{
   const v=$m('profilHandle').value.trim(); if(!v) return;
