@@ -1034,6 +1034,24 @@ function mpArm(){
 function mpStopRev(){ if(mpRevSrc){ mpRevSrc.stop(); mpRevSrc=null; } }   // uchwyt z playReverse
 // play() zablokowane przez przeglądarkę (autoplay poza gestem) → poproś o stuknięcie
 function mpPlayBlocked(){ mpSetKnob('play'); mpSetPlayStatus('stuknij ▶, by odtworzyć'); }
+// gałka = TOGGLE: gra → pauza; pauza → wznów; koniec/świeże → od nowa (#bug2: dotąd zawsze restart)
+function mpKnobTap(){
+  if(!mpGame) return mpPlayLocal();
+  const mode=mpGame.mode;
+  if(mode==='lektor'){
+    const speaking=(lektorAudio && !lektorAudio.paused) || (window.speechSynthesis && speechSynthesis.speaking);
+    if(speaking){ lektorStop(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }
+    return mpPlayLocal();
+  }
+  if(mode==='reverse'){
+    if(mpRevSrc){ mpStopRev(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }   // od tyłu: stop (replay od nowa)
+    return mpPlayLocal();
+  }
+  const a=mpAudio;                                   // music / snippet — trwały element
+  if(a && !a.paused && !a.ended){ a.pause(); return; }                                   // gra → pauza
+  if(a && a.src && !a.ended && a.currentTime>0){ a.play().catch(mpPlayBlocked); return; } // pauza → wznów (nie od nowa)
+  return mpPlayLocal();                                                                   // koniec/świeże → od nowa
+}
 function mpPlayLocal(){
   lektorStop(); mpStopRev();
   if(mpGame.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, ()=>{}); return; }
@@ -1450,7 +1468,7 @@ function mpListenSecs(g){
   const cat=ALL_CATS[g.catKey], c=cat&&cat.listenSecs;
   return (c>0 ? c : (LISTEN_SECS[g.mode]||15));
 }
-const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpPlayLocal()" aria-label="Odtwórz"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
+const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
 const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
@@ -1694,7 +1712,8 @@ function mpIngestFeed(g){
   const slots=g.answerSlots||slotsFor();
   const label=(k)=>{ const s=slots.find(x=>x.key===k); return s?s.label:k; };
   (g.proposals||[]).forEach(p=>{
-    if(mpSeenProp.has(p.id)) return; mpSeenProp.add(p.id);
+    const key=p.aid||p.id;   // dedup po aid akcji (optymistyczna i autorytatywna kopia mają to samo aid)
+    if(mpSeenProp.has(key)) return; mpSeenProp.add(key);
     const chips=Object.keys(p.values||{}).map(k=>({slot:label(k), val:p.values[k]}));
     mpChatLog.push({kind:'typ', byName:p.byName, chips, mine:p.by===mpMe.id});
     if(p.conf==='sure') mpChatLog.push({kind:'sys', cls:'sure', text:`${p.byName} ustawił(a) 🟡 PEWNIAK`});
@@ -1790,7 +1809,7 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); mpSetCod
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
-  mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing,
+  mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,

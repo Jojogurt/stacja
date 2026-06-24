@@ -41,7 +41,7 @@ export function reduceAction(game, a){
       const clean = {};
       slots.forEach(s=>{ const v=(values[s.key]||'').trim(); if(v) clean[s.key]=v; });
       if(!Object.keys(clean).length) return false;          // pusty typ odrzucony
-      game.proposals.push({ id:rid(), by:a.by, byName:a.byName, conf:a.conf||'normal', values:clean });
+      game.proposals.push({ id:rid(), aid:a.aid, by:a.by, byName:a.byName, conf:a.conf||'normal', values:clean });
       // auto-głos: wrzucając typ głosuję własną wartością w każdym wypełnionym slocie
       game.votes = game.votes || {};
       slots.forEach(s=>{ const v=clean[s.key]; if(v){ (game.votes[s.key]=game.votes[s.key]||{})[a.by]=v; } });

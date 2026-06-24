@@ -30,7 +30,6 @@ import { norm } from '../core/scoring.js';
 import { resolveTrackServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 
-const MP_BUFFER_TIMEOUT_MS = 6000;   // bezpiecznik gotowości (klient i tak self-reportuje ready)
 const MP_SNIP_WINDOW_S = 16;         // okno losowania startu fragmentu
 const POOL_MAX_CATS = 24;            // defensywne capy pul (DO nie ufa rozmiarowi od klienta)
 const POOL_MAX_SONGS = 120;
@@ -64,7 +63,6 @@ export class GameAuthority extends Server {
   hostSeen = new Set();   // anty-powtórki tytułów
   recent = [];            // anty-powtórki artystów
   _autoLock = null;       // serwerowy timer auto-locka (koniec czasu pytania)
-  _armSafety = null;      // serwerowy bezpiecznik startu mimo braku „ready"
 
   constructor(ctx, env){
     super(ctx, env);
@@ -78,11 +76,10 @@ export class GameAuthority extends Server {
       this.hostSeen = new Set(s.get('hostSeen') || []);
       this.recent = s.get('recent') || [];
       this.ready = new Set(s.get('ready') || []);
-      // WZNÓW serwerowe timery po restarcie (in-memory setTimeout ginie przy evikcji DO):
+      // WZNÓW serwerowy auto-lock po restarcie (in-memory setTimeout ginie przy evikcji DO).
+      // ARMING nie potrzebuje timera — gotowość przeliczy onConnect (maybeGoArming) gdy klienci wrócą.
       if(this.game && this.game.phase===MP.PLAY && this.game.timer>0 && this.game.endsAt){
         this.scheduleAutoLock(Math.max(0, this.game.endsAt - Date.now()));   // auto-lock wg pozostałego czasu
-      } else if(this.game && this.game.phase===MP.ARMING){
-        this.armSafety(this.game.armNonce);                                  // bezpiecznik startu (anty-deadlock)
       }
     });
   }
@@ -108,6 +105,7 @@ export class GameAuthority extends Server {
     if(!this.hostId){ this.hostId=id; await this.persist(); }                 // pierwszy obecny = host (przenoszalny)
     conn.send(JSON.stringify({ t:'state', game:this.game }));
     this.pushPresence();
+    await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (anty-deadlock, bez timera)
   }
 
   async onClose(conn){
@@ -119,6 +117,7 @@ export class GameAuthority extends Server {
       await this.persist();
     }
     this.pushPresence();
+    await this.maybeGoArming();   // ktoś wyszedł w ARMING → jeśli reszta gotowa, startuj (nie blokuj na nieobecnym)
   }
   onError(){ this.pushPresence(); }
 
@@ -235,13 +234,21 @@ export class GameAuthority extends Server {
     this.game.endsAt=null; this.game.readyCount=0; this.game.readyTotal=this.members().length;
     this.ready=new Set();
     this.broadcastState(); await this.persist();
-    this.armSafety(this.game.armNonce);            // serwerowy bezpiecznik: nie wieszaj pokoju na zawieszonym kliencie
+    // BRAK timera startu: PLAY rusza dopiero gdy WSZYSCY OBECNI zgłoszą ready. Klient nie zbroi się,
+    // póki nie zamknie u siebie ekranu odpowiedzi (reveal) → czekamy aż każdy sam przejdzie do nowego pytania.
+    // Zawieszony bufor nie blokuje: klient self-reportuje ready w MP_BUFFER_TIMEOUT_MS mimo błędu audio.
   }
 
   async onReady(id, armNonce){
     if(!this.game || this.game.phase!==MP.ARMING) return;
     if(armNonce!==this.game.armNonce) return;       // ready ze starej rundy
     this.ready.add(id);
+    await this.maybeGoArming();
+  }
+
+  // przelicz gotowość i wystartuj, gdy WSZYSCY OBECNI gotowi (woła: onReady, onConnect, onClose)
+  async maybeGoArming(){
+    if(!this.game || this.game.phase!==MP.ARMING) return;
     const r=countReady(this.members().map(m=>m.id), this.ready);
     this.game.readyCount=r.count; this.game.readyTotal=r.total;
     if(r.all){ await this.go(); return; }
@@ -250,7 +257,6 @@ export class GameAuthority extends Server {
 
   async go(){
     if(!this.game || this.game.phase!==MP.ARMING) return;
-    this.clearArmSafety();
     this.game.phase=assertMp(this.game.phase, MP.PLAY, console.warn);
     this.game.playNonce=(this.game.playNonce||0)+1;
     if(this.game.timer>0) this.game.endsAt=Date.now()+this.game.timer*1000;   // serwerowy stempel czasu
@@ -292,14 +298,7 @@ export class GameAuthority extends Server {
     await this.persist();
   }
 
-  /* ---- serwerowe timery (auto-lock + bezpiecznik gotowości) ---- */
+  /* ---- serwerowy auto-lock (koniec czasu pytania) ---- */
   scheduleAutoLock(ms){ this.clearAutoLock(); this._autoLock=setTimeout(()=>{ this.lock().catch(()=>{}); }, ms); }
   clearAutoLock(){ if(this._autoLock){ clearTimeout(this._autoLock); this._autoLock=null; } }
-  armSafety(nonce){
-    this.clearArmSafety();
-    this._armSafety=setTimeout(()=>{
-      if(this.game && this.game.phase===MP.ARMING && this.game.armNonce===nonce) this.go().catch(()=>{});
-    }, MP_BUFFER_TIMEOUT_MS+2000);
-  }
-  clearArmSafety(){ if(this._armSafety){ clearTimeout(this._armSafety); this._armSafety=null; } }
 }
