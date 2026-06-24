@@ -12,7 +12,7 @@ import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
 import { ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile } from './adapters-web/cf.js';
-import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo } from './adapters-web/cf.js';
+import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo, loginOAuth } from './adapters-web/cf.js';
 import { cfChannel } from './adapters-web/cfChannel.js';
 import { authorityChannel } from './adapters-web/roomTransport.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
@@ -732,8 +732,20 @@ async function renderDruzyna(){
   const noAuth = (meR.error && !meR.data);   // brak sesji (Worker nieosiągalny) — pokaż baner, ale NIE chowaj ekranu
   const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Brak połączenia z serwerem — drużyny i znajomi chwilowo niedostępne. Spróbuj odświeżyć.</div>` : '';
   dzMe = (meR.data&&meR.data[0]) || null;
+  const secured = !!(dzMe && dzMe.secured);
   const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[];
   const av=(n,c)=>`<span class="dz-av" style="background:${mpAvatarColor(n)}">${escapeHtml((n||'?').slice(0,1).toUpperCase())}</span>`;
+
+  // === KONTO (Google/Apple) — wymagane do zakładania drużyn / dodawania znajomych ===
+  const cfg=window.STACJA_CONFIG||{};
+  const kontoSection = secured
+    ? `<div class="dz-acct ok">✓ Zalogowano${dzMe.email?': '+escapeHtml(dzMe.email):''} — drużyny i znajomi działają na każdym urządzeniu.</div>`
+    : (()=>{
+        const g = cfg.googleClientId ? `<div id="dzGoogleBtn" class="dz-gbtn"></div>` : '';
+        const a = cfg.appleServicesId ? `<button class="dz-prov a" onclick="dzLoginApple()"> Zaloguj przez Apple</button>` : '';
+        const buttons = (g||a) ? `<div class="dz-oauth">${g}${a}</div>` : `<div class="dz-hint">Logowanie Google/Apple — wkrótce.</div>`;
+        return `<div class="dz-acct">🔒 Zaloguj się, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>${buttons}`;
+      })();
 
   // === DRUŻYNA ===
   const teamCards = teams.map(t=>`
@@ -746,9 +758,7 @@ async function renderDruzyna(){
         <button class="dz-mini" onclick="dzLeave('${t.id}')">wyjdź</button>
       </div>
     </div>`).join('');
-  const teamSection = `
-    <div class="dz-lbl">Twoja drużyna</div>
-    ${teamCards || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
+  const teamForms = secured ? `
     <div class="dz-row2">
       <input id="dzName" maxlength="20" placeholder="nazwa drużyny">
       <input id="dzEmoji" maxlength="2" placeholder="🍺" value="🍺" class="dz-emoji">
@@ -757,7 +767,11 @@ async function renderDruzyna(){
     <div class="dz-row2">
       <input id="dzJoin" maxlength="6" placeholder="KOD DRUŻYNY" style="text-transform:uppercase">
       <button class="dz-go blue" onclick="dzJoin()">Dołącz</button>
-    </div>`;
+    </div>` : '<div class="dz-hint">🔒 zaloguj się powyżej, żeby stworzyć lub dołączyć do drużyny</div>';
+  const teamSection = `
+    <div class="dz-lbl">Twoja drużyna</div>
+    ${teamCards || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
+    ${teamForms}`;
 
   // === ZNAJOMI ===
   const myCode = dzMe?.friend_code || '—';
@@ -766,27 +780,61 @@ async function renderDruzyna(){
       <span class="acts"><button class="dz-yes" onclick="dzRespond(${p.req_id},true)">✓</button><button class="dz-no" onclick="dzRespond(${p.req_id},false)">✗</button></span></div>`).join('');
   const friendRows = friends.map(f=>`<div class="dz-fr"><span class="who">${av(f.handle)}${escapeHtml(f.handle||'gracz')}</span><span class="code">${escapeHtml(f.friend_code||'')}</span></div>`).join('')
     || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie.</div>';
+  const friendAddRow = secured
+    ? `<div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>`
+    : '<div class="dz-hint">🔒 zaloguj się powyżej, żeby dodawać znajomych</div>';
   const friendSection = `
     <div class="dz-lbl">Twój kod znajomego</div>
     <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">📋 kopiuj</button></div>
-    <div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>
+    ${friendAddRow}
     ${pending.length?`<div class="dz-lbl">Zaproszenia (${pending.length})</div>${pendRows}`:''}
     <div class="dz-lbl">Znajomi</div>
     ${friendRows}`;
 
-  // (Konta/logowanie usunięte — tożsamość to device-UUID + token z Workera, bez OAuth/e-mail.)
-  el.innerHTML = notice + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
+  el.innerHTML = notice + kontoSection + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
+  if(!secured) dzInitAuthButtons();   // lazy-load GIS + renderButton (Google); Apple ma własny onclick
   }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
 }
 function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
-async function dzCreate(){ const n=$m('dzName')?.value, e=$m('dzEmoji')?.value; const r=await teamCreate(n,e); if(r.error){ dzMsg('Nie udało się: '+r.error,true); } else renderDruzyna(); }
-async function dzJoin(){ const c=$m('dzJoin')?.value; if(!c) return; const r=await teamJoin(c); if(r.error){ dzMsg(r.error==='group_not_found'?'Nie ma takiej drużyny.':r.error,true); } else renderDruzyna(); }
+const dzErrLabel=(e)=> e==='requires_account' ? 'Najpierw zaloguj się (Google/Apple).' : e;
+async function dzCreate(){ const n=$m('dzName')?.value, e=$m('dzEmoji')?.value; const r=await teamCreate(n,e); if(r.error){ dzMsg('Nie udało się: '+dzErrLabel(r.error),true); } else renderDruzyna(); }
+async function dzJoin(){ const c=$m('dzJoin')?.value; if(!c) return; const r=await teamJoin(c); if(r.error){ dzMsg(r.error==='group_not_found'?'Nie ma takiej drużyny.':dzErrLabel(r.error),true); } else renderDruzyna(); }
 async function dzLeave(id){ await teamLeave(id); renderDruzyna(); }
-async function dzAddFriend(){ const c=$m('dzFriend')?.value; if(!c) return; const r=await friendAdd(c); if(r.error){ dzMsg(r.error==='profile_not_found'?'Nie ma takiego kodu.':(r.error==='self'?'To Twój kod 🙂':r.error),true); } else renderDruzyna(); }
-async function dzRespond(id,ok){ await friendRespond(id,ok); renderDruzyna(); }
+async function dzAddFriend(){ const c=$m('dzFriend')?.value; if(!c) return; const r=await friendAdd(c); if(r.error){ dzMsg(r.error==='profile_not_found'?'Nie ma takiego kodu.':(r.error==='self'?'To Twój kod 🙂':dzErrLabel(r.error)),true); } else renderDruzyna(); }
+async function dzRespond(id,ok){ const r=await friendRespond(id,ok); if(r&&r.error){ dzMsg(dzErrLabel(r.error),true); } else renderDruzyna(); }
 function dzCopy(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
 function dzPlay(){ showScreen('mp'); }
-Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay });
+
+/* ---- logowanie kontem (Google/Apple) — wymagane do drużyn/znajomych ---- */
+function dzLoadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); }); }
+// Google: lazy-load GIS i wyrenderuj oficjalny przycisk do #dzGoogleBtn (callback = ID-token)
+async function dzInitAuthButtons(){
+  const cfg=window.STACJA_CONFIG||{}; const box=$m('dzGoogleBtn');
+  if(!cfg.googleClientId || !box) return;
+  try{
+    await dzLoadScript('https://accounts.google.com/gsi/client');
+    if(!(window.google&&google.accounts&&google.accounts.id)) return;
+    google.accounts.id.initialize({ client_id:cfg.googleClientId, callback: async (resp)=>{
+      const r=await loginOAuth('google', resp.credential);
+      if(r.error) dzMsg('Logowanie Google: '+r.error,true); else renderDruzyna();
+    }});
+    google.accounts.id.renderButton(box, { theme:'outline', size:'large', shape:'pill', text:'signin_with', logo_alignment:'center' });
+  }catch(e){ /* sieć/SDK — przycisk po prostu się nie pokaże */ }
+}
+async function dzLoginApple(){
+  const sid=(window.STACJA_CONFIG||{}).appleServicesId;
+  if(!sid){ dzMsg('Logowanie Apple nie jest jeszcze skonfigurowane.',true); return; }
+  try{
+    await dzLoadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js');
+    AppleID.auth.init({ clientId:sid, scope:'email', redirectURI:location.origin+location.pathname, usePopup:true });
+    const data=await AppleID.auth.signIn();   // {authorization:{id_token,...}}
+    const idt=data&&data.authorization&&data.authorization.id_token;
+    if(!idt){ dzMsg('Logowanie Apple: brak tokenu.',true); return; }
+    const r=await loginOAuth('apple', idt);
+    if(r.error) dzMsg('Logowanie Apple: '+r.error,true); else renderDruzyna();
+  }catch(e){ dzMsg('Logowanie Apple anulowane.',true); }
+}
+Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzLoginApple });
 
 async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';

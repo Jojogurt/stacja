@@ -35,7 +35,19 @@ export async function ensureSession() {
   } catch (e) { console.warn('[stacja] session:', e && e.message || e); return null; }
 }
 export function myId() { return getId(); }
-export const meInfo = () => wrap(call('/api/me').then((row) => [row]));   // parytet: {data:[row]}
+export const meInfo = () => wrap(call('/api/me').then((row) => [row]));   // parytet: {data:[row]} (row ma teraz secured/email)
+
+// logowanie kontem: wyślij ID-token providera → Worker zwraca token nowego/podpiętego profilu.
+// Zapisuje token+id (cross-device), zwraca {data:{secured,email,...}} albo {error}.
+export async function loginOAuth(provider, idToken) {
+  try {
+    const me = await call('/api/auth/oauth', { method: 'POST', body: { provider, idToken } });
+    if (me && me.id) { try { localStorage.setItem(LS_ID, me.id); if (me.token) localStorage.setItem(LS_TOKEN, me.token); } catch (_e) {} }
+    return { data: me };
+  } catch (e) { return { error: String(e && e.message || e) }; }
+}
+// stan konta: czy profil zabezpieczony + email
+export const authInfo = () => wrap(call('/api/me'));
 
 export async function setHandle(handle) {
   if (!handle) return;

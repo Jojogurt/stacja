@@ -13,4 +13,8 @@ window.STACJA_CONFIG = {
   // TASK 6 — serwer-autorytet MP. true = DO jest autorytetem (pętla gry na serwerze, brak SPOF).
   // false = relay (host-authority, stare). Rollback bez deployu: ?authority=0 lub localStorage 'stacjaAuthority'='0'.
   serverAuthority: true,
+  // OAuth (logowanie Google/Apple — wymagane do drużyn/znajomych). Publiczne identyfikatory klienta.
+  // Wpisz po utworzeniu w konsolach. Pusty = przycisk ukryty. (Te same wartości w Worker [vars].)
+  googleClientId: '',      // Google Cloud → OAuth Web Client ID (np. 1234-abc.apps.googleusercontent.com)
+  appleServicesId: '',     // Apple Developer → Services ID (np. com.twojadomena.stacja.web)
 };

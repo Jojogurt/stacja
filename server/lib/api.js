@@ -2,6 +2,7 @@
 // Tożsamość = profile id z podpisanego tokenu (Authorization: Bearer ...).
 import { signToken, verifyToken, newId, friendCode } from './auth.js';
 import { insertMatch } from './recordMatch.js';
+import { verifyIdToken } from './oauth.js';
 
 const json = (obj, status=200) => new Response(JSON.stringify(obj), { status, headers:{ 'content-type':'application/json' } });
 const err  = (msg, status=400) => json({ error: msg }, status);
@@ -26,6 +27,11 @@ async function uniqueGroupCode(env){
 }
 
 const TOKEN_TTL = 90*24*3600;   // S2: token ważny 90 dni; każde /api/session odświeża
+
+// czy profil ma podpięte konto (Google/Apple) — gating drużyn/znajomych
+async function isSecured(env, id){
+  return !!(await env.DB.prepare(`SELECT 1 FROM oauth_identities WHERE profile_id=?`).bind(id).first());
+}
 
 export async function handleApi(req, env, url){
   const path = url.pathname.replace(/\/+$/,'');           // bez końcowego /
@@ -56,13 +62,40 @@ export async function handleApi(req, env, url){
     return json(results||[]);
   }
 
+  // ---- logowanie kontem (Google/Apple): podepnij do profilu albo zaloguj cross-device ----
+  if(path==='/api/auth/oauth' && m==='POST'){
+    const { provider, idToken } = await body(req);
+    const aud = provider==='google' ? env.GOOGLE_CLIENT_ID : provider==='apple' ? env.APPLE_SERVICES_ID : null;
+    if(!aud) return err('provider_unconfigured', 400);
+    const v = await verifyIdToken(provider, idToken, aud);
+    if(!v) return err('invalid_token', 401);
+    const existing = await env.DB.prepare(`SELECT profile_id FROM oauth_identities WHERE provider=? AND sub=?`).bind(provider, v.sub).first();
+    let pid;
+    if(existing){
+      pid = existing.profile_id;                           // konto już znane → ten profil (cross-device)
+      if(v.email) await env.DB.prepare(`UPDATE oauth_identities SET email=? WHERE provider=? AND sub=?`).bind(v.email, provider, v.sub).run();
+    } else {
+      pid = (await uid(req, env)) || newId();              // podepnij do OBECNEGO profilu (zachowaj staty) albo nowy
+      await ensureProfile(env, pid);
+      await env.DB.prepare(
+        `INSERT INTO oauth_identities (provider, sub, profile_id, email) VALUES (?,?,?,?)
+         ON CONFLICT(provider,sub) DO UPDATE SET profile_id=excluded.profile_id, email=excluded.email`
+      ).bind(provider, v.sub, pid, v.email).run();
+    }
+    const now = Math.floor(Date.now()/1000);
+    const token = await signToken(env.TOKEN_SECRET, { sub:pid, iat:now, exp:now+TOKEN_TTL });
+    const me = await env.DB.prepare(`SELECT id, handle, emoji, friend_code FROM profiles WHERE id=?`).bind(pid).first();
+    return json({ ...me, token, secured:true, email:v.email });
+  }
+
   // ---- wszystko poniżej wymaga tożsamości ----
   const me = await uid(req, env);
   if(!me) return err('not_authenticated', 401);
 
   if(path==='/api/me' && m==='GET'){
     const row = await env.DB.prepare(`SELECT id, handle, emoji, friend_code FROM profiles WHERE id=?`).bind(me).first();
-    return json(row||null);
+    const oa = await env.DB.prepare(`SELECT email FROM oauth_identities WHERE profile_id=? LIMIT 1`).bind(me).first();
+    return json(row ? { ...row, secured: !!oa, email: oa?oa.email:null } : null);
   }
 
   if(path==='/api/handle' && m==='POST'){
@@ -86,8 +119,9 @@ export async function handleApi(req, env, url){
     return recordMatch(env, me, await body(req));
   }
 
-  // ===== drużyny =====
+  // ===== drużyny ===== (zakładanie/dołączanie wymaga konta — trwałość cross-device)
   if(path==='/api/group/create' && m==='POST'){
+    if(!(await isSecured(env, me))) return err('requires_account', 403);
     const { name, emoji } = await body(req);
     const id=newId(), code=await uniqueGroupCode(env);
     await env.DB.batch([
@@ -99,6 +133,7 @@ export async function handleApi(req, env, url){
     return json(g);
   }
   if(path==='/api/group/join' && m==='POST'){
+    if(!(await isSecured(env, me))) return err('requires_account', 403);
     const { code } = await body(req);
     const g=await env.DB.prepare(`SELECT id,name,emoji,code,owner_id FROM groups WHERE code=?`).bind(String(code||'').trim().toUpperCase()).first();
     if(!g) return err('group_not_found');
@@ -129,8 +164,9 @@ export async function handleApi(req, env, url){
     return json(results||[]);
   }
 
-  // ===== znajomi =====
+  // ===== znajomi ===== (dodawanie/odpowiadanie wymaga konta)
   if(path==='/api/friend/add' && m==='POST'){
+    if(!(await isSecured(env, me))) return err('requires_account', 403);
     const { code } = await body(req);
     const target=await env.DB.prepare(`SELECT id FROM profiles WHERE friend_code=?`).bind(String(code||'').trim().toUpperCase()).first();
     if(!target) return err('profile_not_found');
@@ -145,6 +181,7 @@ export async function handleApi(req, env, url){
     return json({ ok:true });
   }
   if(path==='/api/friend/respond' && m==='POST'){
+    if(!(await isSecured(env, me))) return err('requires_account', 403);
     const { id, accept } = await body(req);
     await env.DB.prepare(`UPDATE friend_requests SET status=? WHERE id=? AND to_id=? AND status='pending'`)
       .bind(accept?'accepted':'declined', id, me).run();

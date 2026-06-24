@@ -5,6 +5,12 @@ main = "index.js"
 compatibility_date = "2025-06-01"
 compatibility_flags = ["nodejs_compat"]
 
+# OAuth — publiczne identyfikatory klienta (aud weryfikowanego ID-tokenu). NIE sekrety.
+# Wpisz: GOOGLE_CLIENT_ID z Google Cloud (OAuth Web Client), APPLE_SERVICES_ID (Apple Services ID).
+[vars]
+GOOGLE_CLIENT_ID = ""
+APPLE_SERVICES_ID = ""
+
 # Durable Object pokoju gry. SQLite-backed → działa na DARMOWYM planie Workers.
 [[durable_objects.bindings]]
 name = "GameRoom"
