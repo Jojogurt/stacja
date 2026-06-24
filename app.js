@@ -42,6 +42,49 @@ const buildMatch = (catPool,modePool,r)   => _buildMatch(catPool, modePool, r, A
 const randomPools= ()                     => _randomPools(ALL_KEYS, ALL_CATS);
 const matchHeader= (m)                    => _matchHeader(m, ALL_CATS);
 
+/* ===== TEMP DEBUG (#board-vs-team) — usunąć po diagnozie =====
+   Włącz: localStorage.setItem('stacjaDebug','1') i odśwież. Po reprodukcji kliknij „💾 log".
+   Loguje do bufora w pamięci + localStorage; przycisk zapisuje plik i kopiuje do schowka. */
+const DBG_ON = (()=>{ try{ return localStorage.getItem('stacjaDebug')==='1'; }catch(_e){ return false; } })();
+const DBG = [];
+let _dbgSeq = 0;
+function dbg(tag, obj){
+  if(!DBG_ON) return;
+  try{
+    const e = { n:++_dbgSeq, t:Date.now(), tag, ...(obj||{}) };
+    DBG.push(e); if(DBG.length>800) DBG.shift();
+    console.log('[DBG]', tag, obj);
+    localStorage.setItem('stacjaDbg', JSON.stringify(DBG));
+  }catch(_e){}
+}
+function dbgSnap(g){
+  if(!g) return { game:null };
+  const slots=(g.answerSlots||[]).map(s=>s.key);
+  const cands={};
+  slots.forEach(k=>{ try{ cands[k]=candidatesForSlot(g,k).map(c=>c.value+' ▲'+c.votes.length); }catch(e){ cands[k]='ERR:'+e.message; } });
+  let team={}; try{ team=teamAnswer(g); }catch(e){ team={err:e.message}; }
+  return {
+    phase:g.phase, mode:g.mode, playNonce:g.playNonce,
+    proposals:(g.proposals||[]).map(p=>({by:p.by, aid:(p.aid||'').slice(-5), values:p.values})),
+    votes:g.votes, slots, cands, team,
+  };
+}
+window.stacjaDumpLog = function(){
+  const txt=JSON.stringify(DBG,null,2);
+  try{ const blob=new Blob([txt],{type:'application/json'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='stacja-debug.json'; document.body.appendChild(a); a.click(); a.remove(); }catch(_e){}
+  try{ navigator.clipboard.writeText(txt); }catch(_e){}
+  return DBG.length+' wpisów zapisanych';
+};
+if(DBG_ON){
+  window.addEventListener('load', ()=>{
+    const btn=document.createElement('button');
+    btn.textContent='💾 log';
+    btn.style.cssText='position:fixed;bottom:12px;right:12px;z-index:99999;background:#FF4B4B;color:#fff;border:none;border-radius:12px;padding:10px 14px;font-weight:900;box-shadow:0 4px 0 #c43a3a';
+    btn.onclick=()=>{ const n=window.stacjaDumpLog(); btn.textContent='✓ '+n; setTimeout(()=>btn.textContent='💾 log',1800); };
+    document.body.appendChild(btn);
+  });
+}
+
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
 let current = null;         // bieżący utwór
@@ -1112,7 +1155,7 @@ async function mpEnterRoom(code, asHost){
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
   mpCh=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   // pod autorytetem KAŻDY (też host) bierze stan z DO; w relay tylko nie-host (host jest źródłem).
-  mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(SERVER_AUTH || !mpHost){ mpGame=payload; mpAfterSync(); } });
+  mpCh.on('broadcast',{event:'sync'},({payload})=>{ dbg('sync-recv', dbgSnap(payload)); if(SERVER_AUTH || !mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost && !SERVER_AUTH) mpHandleAct(payload); });   // relay-only
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
@@ -1149,12 +1192,15 @@ function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',ev
 let mpSeenActs=new Set();   // id zastosowanych akcji — by akcja nie zadziałała dwa razy
 function mpSend(act){
   act.by=mpMe.id; act.byName=mpMe.name; act.aid=mpMe.id+'-'+Math.random().toString(36).slice(2);
+  dbg('send', { type:act.type, slot:act.slot, value:act.value, values:act.values, set:act.set, host:mpHost, serverAuth:SERVER_AUTH });
   // RELAY: host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host.
   // AUTORYTET: każdy (też host) wysyła akcję do DO — DO jest źródłem prawdy.
   if(mpHost && !SERVER_AUTH){ mpHandleAct(act); return; }
   // KLIENT/AUTORYTET: zastosuj lokalnie OD RAZU (optymistycznie) — natychmiastowe podświetlenie
   // (głos/propozycja/pewniak), a właściwy sync (od hosta / od DO) zaraz skoryguje stan.
-  if(mpGame && reduceAction(mpGame, act)) mpRender();
+  const applied = mpGame && reduceAction(mpGame, act);
+  dbg('send-optimistic', { applied, ...dbgSnap(mpGame) });
+  if(applied) mpRender();
   if(mpCh){ mpCh.send({type:'broadcast',event:'act',payload:act}); }
 }
 function mpAfterSync(){
@@ -1828,10 +1874,13 @@ function mpScaffoldPlay(g, head){
 // odśwież dynamiczne części (wspólne) — bez ruszania pól wpisywanych
 function mpRefreshDynamic(g){
   const set=(id,html)=>{ const el=$m(id); if(el) el.innerHTML=html; };
+  dbg('refresh-enter', { boardEl:!!$m('mpBoard'), teamEl:!!$m('mpTeam'), sub:mpSub, skin:mpSkin(), ...dbgSnap(g) });
   set('mpRoster', mpRosterHTML(g));
   set('mpBoard', mpSlotsHTML(g));
   set('mpTeam', mpTeamHTML(g));
   set('mpConf', mpConfHTML());   // zwykła/niepewny/pewniak/pas w jednej linii (obie skórki)
+  const bEl=$m('mpBoard'), tEl=$m('mpTeam');
+  dbg('refresh-after', { boardLen:bEl?bEl.innerHTML.length:-1, teamLen:tEl?tEl.innerHTML.length:-1, boardHtml:bEl?bEl.innerHTML.slice(0,400):null });
   mpIngestFeed(g);                                  // dopisz nowe typy/pasy do feedu
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
@@ -1856,7 +1905,9 @@ function mpRenderPlay(g, head, st){
     mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
     // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
-  if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
+  const rebuild = (newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster'));
+  dbg('renderPlay', { rebuild, newRound, mpPlaySub, mpSub, mpPlaySkin, skin, hasRoster:!!$m('mpRoster') });
+  if(rebuild){
     mpPlayRound=g.playNonce; mpPlaySkin=skin; mpPlaySub=mpSub;
     st.innerHTML = mpScaffoldPlay(g, head);
     if(mpSub==='sluchaj') mpAnimListenBar();
