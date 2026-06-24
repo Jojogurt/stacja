@@ -14,7 +14,9 @@ const rid = () => Math.random().toString(36).slice(2,8);
 
 /* —— definicja slotów odpowiedzi (jedno źródło prawdy: render + scoring + composer) ——
  * Dziś zawsze tytuł+wykonawca; przyszłe tryby (np. uzupełnij słowa) zwrócą inne sloty. */
-export function slotsFor(/* mode, cat */){
+export function slotsFor(mode, cat, q){
+  // pytanie z własnymi slotami (quiz, wiedza ogólna) → użyj ich; inaczej domyślne tytuł+wykonawca
+  if(q && Array.isArray(q.slots) && q.slots.length) return q.slots;
   return [ {key:'title', label:'tytuł'}, {key:'artist', label:'wykonawca'} ];
 }
 // mapowanie klucza slotu → pole w obiekcie utworu (current) do oceny
@@ -125,9 +127,15 @@ export function rosterState(game, id, typingSet){
 export function evaluateAnswer(game, current, locked, match=textMatch){
   locked = locked || teamAnswer(game);
   const slots = slotsOf(game);
-  const fieldVal = (key)=> current[SLOT_FIELD[key]] || '';
+  // QUIZ (wiedza ogólna): current.answers = {slot:[warianty]} → slot trafiony, gdy guess
+  // pasuje do DOWOLNEGO wariantu. MUZYKA: porównanie z polem utworu (SLOT_FIELD). Ta sama
+  // funkcja match (domyślnie textMatch) i ten sam porządek argumentów (guess, poprawna).
+  const hasAnswers = !!(current && current.answers && typeof current.answers==='object');
+  const slotOk = (key, guess)=> hasAnswers
+    ? (current.answers[key]||[]).some(v=> match(guess||'', v))
+    : match(guess||'', current[SLOT_FIELD[key]] || '');
   const okBySlot = {};
-  slots.forEach(s=>{ okBySlot[s.key] = match(locked[s.key]||'', fieldVal(s.key)); });
+  slots.forEach(s=>{ okBySlot[s.key] = slotOk(s.key, locked[s.key]||''); });
   const teamOk = slots.every(s=>okBySlot[s.key]);
   const okTitle = !!okBySlot.title, okArtist = !!okBySlot.artist;
 
@@ -140,16 +148,23 @@ export function evaluateAnswer(game, current, locked, match=textMatch){
   // kto PIERWSZY zaproponował komplet trafnych slotów (bonus/MVP)
   let firstBy=null, firstById=null;
   for(const p of (game.proposals||[])){
-    if(slots.every(s=> match((p.values&&p.values[s.key])||'', fieldVal(s.key)))){ firstBy=p.byName; firstById=p.by; break; }
+    if(slots.every(s=> slotOk(s.key, (p.values&&p.values[s.key])||''))){ firstBy=p.byName; firstById=p.by; break; }
   }
 
+  // locked per slot (pełna mapa) — muzyka czyta .title/.artist (oba obecne), quiz wszystkie sloty
+  const lockedAll = {};
+  slots.forEach(s=>{ lockedAll[s.key] = locked[s.key]||''; });
   const reveal = {
     track:current.track, artist:current.artist, year:current.year, album:current.album, art:current.art,
-    okTitle, okArtist, okBySlot, teamOk, locked:{ title:locked.title||'', artist:locked.artist||'' }, firstBy,
+    kind: hasAnswers ? 'quiz' : 'music', prompt: current.prompt || '',
+    slots, answers: hasAnswers ? current.answers : null,
+    okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy,
     pewniacy, gained, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
   };
   return {
     reveal, gained, teamOk, anySure, pewniacy, firstBy, firstById,
-    result: { round:game.round, cat:game.catKey, mode:game.mode, track:current.track, artist:current.artist, ok:teamOk },
+    result: { round:game.round, cat:game.catKey, mode:game.mode,
+      track: hasAnswers ? (current.prompt||'') : current.track,
+      artist: hasAnswers ? '' : current.artist, ok:teamOk },
   };
 }

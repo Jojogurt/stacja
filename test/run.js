@@ -48,11 +48,14 @@ const CATS={
   d80:{label:'80s', songs:[{title:'a'},{title:'b'}]},
   rock:{label:'rock', songs:[{title:'c',lyric:'tekst'}]},
   lyr:{label:'teksty', kind:'lyrics', songs:[{title:'d'}]},
+  gk:{label:'wiedza', kind:'quiz', questions:[{prompt:'q',slots:[{key:'a',label:'odp'}],answers:{a:['x']}}]},
 };
 group('match.modesFor', ()=>{
   eq(modesFor('d80',CATS),['music','reverse','snippet'],'audio bez tekstu');
   eq(modesFor('rock',CATS),['music','reverse','snippet','lektor'],'audio + lektor (jest lyric)');
   eq(modesFor('lyr',CATS),['lektor'],'kind=lyrics → tylko lektor');
+  eq(modesFor('gk',CATS),['quiz'],'kind=quiz → tylko quiz');
+  ok(!modesFor('d80',CATS).includes('quiz'),'muzyka nigdy nie ma trybu quiz');
   eq(modesFor('brak',CATS),[],'nieznana kategoria → pusto');
 });
 group('match.buildMatch', ()=>{
@@ -66,6 +69,13 @@ group('match.buildMatch', ()=>{
   ok(r1.length===CPR,'runda 1 ma CPR slotów');
   const bad=buildMatch(['lyr'],['music'],1,CATS);
   ok(bad.error,'niekompatybilne tryby → error');
+  // quiz: czysto quizowy mecz → wszystkie sloty mode=quiz
+  const q=buildMatch(['gk'],['quiz'],1,CATS);
+  ok(!q.error && q.slots.every(s=>s.mode==='quiz'),'czysty quiz → wszystkie sloty quiz');
+  // mieszany quiz+muzyka → oba tryby, bez krzyżowania kind↔mode
+  const mix=buildMatch(['d80','gk'],['music','quiz'],1,CATS);
+  ok(mix.slots.some(s=>s.mode==='music') && mix.slots.some(s=>s.mode==='quiz'),'mieszany → oba tryby');
+  ok(mix.slots.every(s=> (s.cat==='gk')===(s.mode==='quiz')),'quiz tylko dla kat. quizowej i odwrotnie');
 });
 group('match.matchAdvance', ()=>{
   const m={slots:[{round:1},{round:1}], si:0, qi:0, rounds:1};
@@ -156,6 +166,30 @@ group('mpReducer.evaluateAnswer', ()=>{
     votes:{ title:{u1:'Złe'}, artist:{u1:'Złe'} }}, cur);
   eq(bad.gained,0,'pewniak nietrafiony = 0 pkt');
   ok(bad.reveal.pewniakLose,'pewniak przegrany');
+});
+group('mpReducer.evaluateAnswer (quiz)', ()=>{
+  // slotsFor z pytaniem → sloty z pytania; bez → domyślne
+  eq(slotsFor('quiz', null, {slots:[{key:'a',label:'odp'}]}), [{key:'a',label:'odp'}], 'slotsFor: sloty z pytania');
+  eq(slotsFor('music').map(s=>s.key), ['title','artist'], 'slotsFor: domyślne tytuł+wykonawca');
+  // 1-slot, wariant „Kanberra" zalicza
+  const g1={phase:MP.PLAY, round:1, answerSlots:[{key:'a',label:'odp'}],
+    proposals:[{by:'u1',byName:'A',conf:'normal',values:{a:'Kanberra'}}], votes:{ a:{u1:'Kanberra'} }};
+  const q1={prompt:'Stolica Australii?', answers:{a:['Canberra','Kanberra']}};
+  const e1=evaluateAnswer(g1, q1);
+  ok(e1.teamOk,'quiz 1-slot: wariant zalicza');
+  eq(e1.reveal.kind,'quiz','reveal.kind=quiz');
+  eq(e1.reveal.prompt,'Stolica Australii?','reveal.prompt');
+  eq(e1.reveal.answers.a,['Canberra','Kanberra'],'reveal.answers per slot');
+  eq(e1.reveal.locked.a,'Kanberra','reveal.locked per slot');
+  eq(e1.firstBy,'A','firstBy po wariancie');
+  eq(e1.result.track,'Stolica Australii?','result.track = prompt dla quizu');
+  // 2-slot mieszany: jeden dobrze, jeden źle → teamOk false
+  const g2={phase:MP.PLAY, round:1, answerSlots:[{key:'dir',label:'reżyser'},{key:'year',label:'rok'}],
+    proposals:[], votes:{ dir:{u1:'Tarantino'}, year:{u1:'2010'} }};
+  const q2={prompt:'x', answers:{dir:['Tarantino','Quentin Tarantino'], year:['1994']}};
+  const e2=evaluateAnswer(g2, q2);
+  ok(!e2.teamOk,'quiz 2-slot: jeden zły → drużyna nie trafia');
+  ok(e2.reveal.okBySlot.dir && !e2.reveal.okBySlot.year,'okBySlot per slot (dir ok, year zły)');
 });
 group('mpReducer.selektory', ()=>{
   const g={answerSlots:slotsFor(), proposals:[

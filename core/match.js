@@ -3,14 +3,15 @@
 import { shuffle, escapeHtml } from './util.js';
 
 export const QPC=5, CPR=3;   // pytań na kategorię, kategorii na rundę (jak prawdziwy quiz)
-export const ALL_MODES=['music','lektor','reverse','snippet'];
-export const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment'};
-export const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment'};
-export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak', snippet:'2 s'};
+export const ALL_MODES=['music','lektor','reverse','snippet','quiz'];
+export const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment', quiz:'🧠 wiedza'};
+export const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment', quiz:'wiedza'};
+export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak', snippet:'2 s', quiz:'pytanie'};
 
 // jakie tryby obsługuje kategoria (kompatybilność)
 export function modesFor(catKey, cats){
   const c=cats[catKey]; if(!c) return [];
+  if(c.kind==='quiz') return ['quiz'];                // wiedza ogólna — tylko quiz (bez audio)
   if(c.kind==='lyrics') return ['lektor'];            // brak audio
   const m=['music','reverse','snippet'];
   if((c.songs||[]).some(s=>s.lyric)) m.push('lektor'); // tekst do lektora (np. hits-now)
