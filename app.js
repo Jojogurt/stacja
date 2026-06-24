@@ -536,6 +536,7 @@ function renderSoloForm(){
   const form=document.getElementById('form'); if(!form) return;
   const isQuiz = mode==='quiz';
   form.classList.toggle('quiz', isQuiz);
+  document.body.classList.toggle('quiz-mode', isQuiz);   // ukryj gałkę/audio w decku dla quizu
   const qf=document.getElementById('quizForm'); if(!qf) return;
   qf.innerHTML = (isQuiz && current && current.slots) ? current.slots.map(s=>
     `<div class="field"><label for="qf_${s.key}">${escapeHtml(s.label||s.key)}</label><input id="qf_${s.key}" autocomplete="off" autocapitalize="off"></div>`).join('') : '';
@@ -575,7 +576,7 @@ function loadSlotQuestion(){
 function endMatch(){
   session=null;
   document.getElementById('session').classList.remove('live');
-  document.body.classList.remove('playing');
+  document.body.classList.remove('playing','quiz-mode');
   hideSummary(); stopAudio(); setIcon('play');
 }
 function updateSessUI(){

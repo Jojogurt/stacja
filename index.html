@@ -788,6 +788,8 @@
   body.solo.playing .deck .mini button:disabled{opacity:.35}
   .deck-eq{display:none;align-items:flex-end;justify-content:center;gap:4px;height:30px;margin-top:16px}
   body.solo.playing .deck-eq{display:flex}
+  /* QUIZ (wiedza ogólna): brak audio → ukryj gałkę, equalizer, „lepszy głos" i „od nowa" */
+  body.quiz-mode .knob-wrap, body.quiz-mode .deck-eq, body.quiz-mode .voice-toggle, body.quiz-mode #replay, body.quiz-mode .foot{display:none !important}
   .deck-eq i{width:6px;border-radius:3px;background:var(--blue)}
   .deck-eq i:nth-child(1){height:14px;animation:mpeq .9s ease-in-out infinite}
   .deck-eq i:nth-child(2){height:26px;animation:mpeq .9s .1s ease-in-out infinite}
