@@ -16,5 +16,5 @@ window.STACJA_CONFIG = {
   // OAuth (logowanie Google/Apple — wymagane do drużyn/znajomych). Publiczne identyfikatory klienta.
   // Wpisz po utworzeniu w konsolach. Pusty = przycisk ukryty. (Te same wartości w Worker [vars].)
   googleClientId: '457977357449-dfbs62prkpt65m4rv92lm7pqda0ge08t.apps.googleusercontent.com',
-  appleServicesId: '',     // Apple Developer → Services ID (np. com.twojadomena.stacja.web)
+  appleServicesId: 'com.kked.apps.stacja.web',
 };
