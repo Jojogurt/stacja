@@ -42,6 +42,11 @@ const buildMatch = (catPool,modePool,r)   => _buildMatch(catPool, modePool, r, A
 const randomPools= ()                     => _randomPools(ALL_KEYS, ALL_CATS);
 const matchHeader= (m)                    => _matchHeader(m, ALL_CATS);
 
+// wersja apki — pokazywana pod logo (mały napis), żeby wiadomo było co jest wgrane.
+// Bumpuj RAZEM z CACHE w sw.js (np. v10 → v11).
+const APP_VERSION = 'v10';
+try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
+
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
 let current = null;         // bieżący utwór
