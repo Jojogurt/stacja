@@ -112,7 +112,8 @@ export async function handleApi(req, env, url){
        FROM match_participants WHERE profile_id=?`).bind(me).first();
     const { results } = await env.DB.prepare(`SELECT cat_key, ok FROM match_answers WHERE profile_id=?`).bind(me).all();
     const byCat={}; (results||[]).forEach(a=>{ const k=a.cat_key||'?'; (byCat[k]=byCat[k]||{n:0,ok:0}); byCat[k].n++; if(a.ok) byCat[k].ok++; });
-    return json({ id:me, handle:prof?prof.handle:'gracz', standing: standing||{matches:0,correct:0,points:0}, byCat });
+    const oa = await env.DB.prepare(`SELECT email FROM oauth_identities WHERE profile_id=? LIMIT 1`).bind(me).first();
+    return json({ id:me, handle:prof?prof.handle:'gracz', standing: standing||{matches:0,correct:0,points:0}, byCat, secured: !!oa, email: oa?oa.email:null });
   }
 
   if(path==='/api/record-match' && m==='POST'){

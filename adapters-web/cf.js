@@ -48,6 +48,9 @@ export async function loginOAuth(provider, idToken) {
 }
 // stan konta: czy profil zabezpieczony + email
 export const authInfo = () => wrap(call('/api/me'));
+// wyloguj: zapomnij lokalną tożsamość (token+id). Następne ensureSession utworzy nowy profil anon.
+// Konto (Google/Apple) zostaje na serwerze — można się zalogować ponownie i odzyskać drużyny/znajomych.
+export function logout() { try { localStorage.removeItem(LS_TOKEN); localStorage.removeItem(LS_ID); } catch (_e) {} }
 
 export async function setHandle(handle) {
   if (!handle) return;
