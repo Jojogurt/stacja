@@ -1,6 +1,6 @@
 /* ============ czysty rdzeń (core/*) — bez DOM/Web API, dane wstrzykiwane ============ */
 import { shuffle, escapeHtml } from './core/util.js';
-import { norm, evaluateGuess } from './core/scoring.js';
+import { norm, evaluateGuess, textMatch } from './core/scoring.js';
 import {
   QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, MODE_SUB,
   matchSlot, matchAdvance,
@@ -171,6 +171,18 @@ LYRICS_KEYS.forEach(k=>{
   lyricsTicksEl.appendChild(b);
 });
 
+const quizTicksEl = document.getElementById('quizTicks');
+if(QUIZ_KEYS.length){
+  const band=document.getElementById('quizBand'); if(band) band.hidden=false;
+  QUIZ_KEYS.forEach(k=>{
+    const b=document.createElement('button');
+    b.className='tick gen'; b.dataset.era=k;
+    b.innerHTML = escapeHtml(QUIZ[k].label) + '<small>'+(QUIZ[k].questions||[]).length+' pytań</small>';
+    b.onclick=()=>toggleCat(k);
+    quizTicksEl.appendChild(b);
+  });
+}
+
 if(!CATS_OK){ setTimeout(()=>flash('Brak pliku categories.js obok index.html — kategorie się nie wczytały. Trzymaj oba pliki razem.'),0); }
 
 /* ===== playlisty ze Spotify (localStorage) ===== */
@@ -272,8 +284,13 @@ function updateMatchInfo(){
 async function newRound(){
   if(busy) return;
   if(!selectedEra){ flash('najpierw wybierz kategorię na skali'); return; }
+  // wiedza ogólna (bez audio): w meczu decyduje tryb slotu, w wolnej grze — typ kategorii
+  const catNow = (selectedEra!=='rnd' && ALL_CATS[selectedEra]) || null;
+  const isQuiz = session ? (mode==='quiz') : !!(catNow && catNow.kind==='quiz');
+  if(isQuiz){ mode='quiz'; return newQuizRound(); }
+  if(!session && mode==='quiz') mode='music';   // wyjście z quizu w wolnej grze (kategoria nie-quizowa)
   if(mode==='lektor'){ return newLektorRound(); }
-  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric();
+  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
   document.getElementById('check').disabled=true;
@@ -378,6 +395,7 @@ function stopAudio(){
 function toggleAudio(){
   unlockCtx();
   if(!current){ newRound(); return; }
+  if(mode==='quiz'){ return; }   // wiedza ogólna — brak audio do odtworzenia
   if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; }
   if(mode==='reverse'||mode==='snippet'){ stopAudio(); startAudio(); return; }
   if(!audio){ startAudio(); return; }      // też po 'ended' (audio=null) → czysty restart
@@ -441,10 +459,46 @@ async function newLektorRound(){
   document.getElementById('replay').disabled=false;
   document.getElementById('skip').disabled=false;
   document.getElementById('knob').classList.add('live');
+  renderSoloForm();
   showLyric(s.lyric);
   lektorPlay(s.lyric, s.tts, setState);
   document.getElementById('fTitle').focus({preventScroll:true});
 }
+// wiedza ogólna (solo): pytanie z puli kategorii, bez audio — wzorem newLektorRound
+function newQuizRound(){
+  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  if(session) updateSessUI();
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=true;
+  document.getElementById('skip').disabled=true;
+  const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
+  const cat = ALL_CATS[eraKey];
+  let pool=((cat&&cat.questions)||[]).filter(q=>q.prompt && !seenTracks.has(norm(q.prompt)));
+  if(!pool.length){ ((cat&&cat.questions)||[]).forEach(q=>seenTracks.delete(norm(q.prompt))); pool=((cat&&cat.questions)||[]).slice(); }
+  if(!pool.length){ busy=false; flash('Ta kategoria nie ma pytań.'); return; }
+  const q=pool[Math.floor(Math.random()*pool.length)];
+  current={prompt:q.prompt, slots:q.slots, answers:q.answers, era:eraKey, track:q.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:''};
+  seenTracks.add(norm(q.prompt));
+  busy=false;
+  renderSoloForm();
+  showPrompt(q.prompt);
+  setIcon('play'); setState('odpowiedz na pytanie');
+  document.getElementById('check').disabled=false;
+  document.getElementById('skip').disabled=false;
+  const first=document.getElementById('qf_'+(q.slots[0]&&q.slots[0].key));
+  if(first) first.focus({preventScroll:true});
+}
+// przełącz formularz solo między muzyką (statyczne pola) a quizem (sloty pytania)
+function renderSoloForm(){
+  const form=document.getElementById('form'); if(!form) return;
+  const isQuiz = mode==='quiz';
+  form.classList.toggle('quiz', isQuiz);
+  const qf=document.getElementById('quizForm'); if(!qf) return;
+  qf.innerHTML = (isQuiz && current && current.slots) ? current.slots.map(s=>
+    `<div class="field"><label for="qf_${s.key}">${escapeHtml(s.label||s.key)}</label><input id="qf_${s.key}" autocomplete="off" autocapitalize="off"></div>`).join('') : '';
+}
+function showPrompt(text){ const b=document.getElementById('lyricBox'); if(!b) return;
+  b.innerHTML='<span class="lyric-cap">pytanie</span>'+escapeHtml(text||''); b.classList.add('quiz'); b.hidden=false; }
 document.getElementById('skip').onclick=()=>{
   if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
   streak=0; updateScore();
@@ -534,6 +588,7 @@ function hideSummary(){ document.getElementById('summary').classList.remove('sho
 /* ============ sprawdzanie ============ */
 function check(){
   if(!current) return;
+  if(mode==='quiz'){ return checkQuiz(); }
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
   const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
@@ -569,6 +624,32 @@ function check(){
   if(okTitle && okArtist) confetti();   // pełne trafienie → confetti
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać
+  document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+// ocena quizu (solo): per slot dowolny wariant przez textMatch; trafienie = wszystkie sloty
+function checkQuiz(){
+  setIcon('play');
+  const slots=current.slots||[];
+  const okBySlot={};
+  slots.forEach(s=>{ const guess=val('qf_'+s.key); okBySlot[s.key]=(current.answers[s.key]||[]).some(v=>textMatch(guess, v)); });
+  const roundOk=slots.length && slots.every(s=>okBySlot[s.key]);
+  total++; if(roundOk){score++;streak++;} else streak=0;
+  updateScore();
+  if(session){ const s=matchSlot(session.match); session.results.push({track:current.prompt, artist:'', okTitle:roundOk, okArtist:roundOk, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  const r=document.getElementById('rmeta'); r.innerHTML='';
+  slots.forEach(s=>{ const guess=val('qf_'+s.key);
+    const correct=(current.answers[s.key]||[]).join(' / ');
+    r.appendChild(line(okBySlot[s.key], s.label||s.key, correct + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)')));
+  });
+  const img=document.getElementById('art'); if(img) img.style.display='none';
+  const rh=document.getElementById('revealHead');
+  if(rh){ const cls=roundOk?'win':'fail'; const ic=roundOk?'✓':'✗';
+    rh.className='rv-shead '+cls;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':'Pudło'}</b><small>${roundOk?'wszystkie pola trafione':'sprawdź poprawne odpowiedzi'}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+  }
+  document.getElementById('reveal').classList.add('show');
+  if(roundOk) confetti();
+  document.getElementById('check').disabled=true;
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 document.getElementById('check').onclick=check;
@@ -628,8 +709,9 @@ function resetForm(){ ['fTitle','fArtist','fYear','fAlbum'].forEach(id=>document
 function hideReveal(){ document.getElementById('reveal').classList.remove('show'); }
 // #14: tekst piosenki na ekranie (tryb lektor) — czytany ORAZ widoczny
 function showLyric(text){ const b=document.getElementById('lyricBox'); if(!b) return;
+  b.classList.remove('quiz');
   b.innerHTML='<span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>'+escapeHtml(text||''); b.hidden=false; }
-function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; } }
+function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; b.classList.remove('quiz'); } }
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
 let mpCh=null;

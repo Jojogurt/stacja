@@ -183,6 +183,11 @@
   .field input::placeholder{color:#cfcfcf;font-weight:600}
   .row2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .row2 .field{grid-template-columns:64px 1fr}
+  /* QUIZ (wiedza ogólna): dynamiczne pola odpowiedzi zamiast tytuł/wykonawca */
+  #quizForm{display:none;gap:10px}
+  #quizForm .field{grid-template-columns:110px 1fr}
+  .form.quiz .music-only{display:none}
+  .form.quiz #quizForm{display:grid}
 
   .check{width:100%;margin-top:6px;font-family:var(--display);font-weight:800;letter-spacing:.03em;
     font-size:18px;color:#fff;background:var(--green);border:none;border-radius:16px;padding:16px;
@@ -965,6 +970,8 @@
     <div class="ticks" id="readyTicks"></div>
     <div class="band-label">teksty — tłumaczenia 🌐 <small style="font-weight:700;color:var(--muted)">(tryb lektor)</small></div>
     <div class="ticks" id="lyricsTicks"></div>
+    <div class="band-label" id="quizBand" hidden>wiedza ogólna 🧠 <small style="font-weight:700;color:var(--muted)">(tryb quiz)</small></div>
+    <div class="ticks" id="quizTicks"></div>
     <div class="band-label">twoje playlisty <button class="pl-add" id="plImport">+ ze Spotify</button></div>
     <div class="ticks" id="plTicks"></div>
     <div class="pl-panel" id="plPanel">
@@ -1019,12 +1026,13 @@
   </section>
 
   <section class="form" id="form">
-    <div class="field"><label for="fTitle">Tytuł</label><input id="fTitle" autocomplete="off" autocapitalize="off" placeholder="np. Kombinacja"></div>
-    <div class="field"><label for="fArtist">Wykonawca</label><input id="fArtist" autocomplete="off" autocapitalize="off" placeholder="np. Maanam"></div>
-    <div class="row2">
+    <div class="field music-only"><label for="fTitle">Tytuł</label><input id="fTitle" autocomplete="off" autocapitalize="off" placeholder="np. Kombinacja"></div>
+    <div class="field music-only"><label for="fArtist">Wykonawca</label><input id="fArtist" autocomplete="off" autocapitalize="off" placeholder="np. Maanam"></div>
+    <div class="row2 music-only">
       <div class="field"><label for="fYear">Rok</label><input id="fYear" inputmode="numeric" autocomplete="off" placeholder="bonus"></div>
       <div class="field"><label for="fAlbum">Album</label><input id="fAlbum" autocomplete="off" placeholder="bonus"></div>
     </div>
+    <div id="quizForm"></div>
     <button class="check" id="check" disabled>Sprawdź</button>
   </section>
 
