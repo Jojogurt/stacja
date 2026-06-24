@@ -805,7 +805,7 @@ function acAfterLogin(){ if(document.body.classList.contains('profil')) renderPr
 // HTML sekcji Konto (na ekran Profil): zalogowany → status + Wyloguj; niezalogowany → przyciski (stack, center).
 function acAccountHTML(secured, email){
   const cfg=window.STACJA_CONFIG||{};
-  if(secured) return `<div class="pf-acct"><div class="dz-acct ok">✓ Zalogowano${email?': '+escapeHtml(email):''}</div><button class="dz-go" style="width:100%" onclick="acLogout()">Wyloguj</button><div class="dz-hint" id="acMsg"></div></div>`;
+  if(secured) return `<div class="pf-acct"><div class="dz-acct ok">✓ Zalogowano${email?': '+escapeHtml(email):''}</div><button class="dz-go" style="width:100%;padding:13px 16px;font-size:15px" onclick="acLogout()">Wyloguj</button><div class="dz-hint" id="acMsg"></div></div>`;
   const g = cfg.googleClientId ? `<div id="acGoogleBtn"></div>` : '';
   // natywny czarny przycisk Apple — Apple JS sam go renderuje w #appleid-signin
   const a = cfg.appleServicesId ? `<div id="appleid-signin" data-color="black" data-border="false" data-type="sign in" data-mode="center-align" data-border-radius="22" style="width:240px;height:44px;cursor:pointer"></div>` : '';
