@@ -1541,8 +1541,15 @@ function mpChatFeedHTML(){
     const av=escapeHtml((c.byName||'?').slice(0,1).toUpperCase());
     const avb=`<b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b>`;
     if(c.kind==='typ'){
-      const chips=(c.chips||[]).map(ch=>`<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span class="val">${escapeHtml(ch.val||'')}</span></span>`).join('');
-      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')} · typ</span>${chips}</div></div>`;
+      const dataVals = mpHost ? ` data-values="${escapeHtml(JSON.stringify(c.values||{}))}"` : '';
+      const bubbleClick = mpHost ? ' onclick="mpVoteFromBubble(this)" style="cursor:pointer"' : '';
+      const chips=(c.chips||[]).map(ch=>{
+        const valAttrs = (mpHost && ch.key)
+          ? ` class="val mp-val-vote" data-k="${escapeHtml(ch.key)}" data-v="${escapeHtml(ch.val||'')}" onclick="event.stopPropagation();mpVote(this.dataset.k,this.dataset.v)"`
+          : ' class="val"';
+        return `<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span${valAttrs}>${escapeHtml(ch.val||'')}</span></span>`;
+      }).join('');
+      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"${dataVals}${bubbleClick}><span class="nm">${escapeHtml(c.byName||'')} · typ${mpHost?' <span class="mp-host-tip">kliknij = zagłosuj</span>':''}</span>${chips}</div></div>`;
     }
     return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
   }).join('');
@@ -1743,6 +1750,10 @@ function mpPropose(){
   mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML();
 }
 function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
+function mpVoteFromBubble(el){
+  if(!mpHost) return;
+  try{ const v=JSON.parse(el.dataset.values||'{}'); Object.entries(v).forEach(([k,val])=>mpVote(k,val)); }catch(e){}
+}
 function mpSetConf(v){ mpConf=v; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
 
 function mpTickTimer(){
@@ -1778,8 +1789,8 @@ function mpIngestFeed(g){
     const key=p.aid||p.id;   // dedup po aid akcji (optymistyczna i autorytatywna kopia mają to samo aid)
     if(mpSeenProp.has(key)) return; mpSeenProp.add(key);
     mpClearTypingFor(p.by);  // typ od gracza dotarł → przestań pokazywać „pisze" dla niego
-    const chips=Object.keys(p.values||{}).map(k=>({slot:label(k), val:p.values[k]}));
-    mpChatLog.push({kind:'typ', byName:p.byName, chips, mine:p.by===mpMe.id});
+    const chips=Object.keys(p.values||{}).map(k=>({slot:label(k), key:k, val:p.values[k]}));
+    mpChatLog.push({kind:'typ', byName:p.byName, chips, values:p.values, mine:p.by===mpMe.id});
     if(p.conf==='sure') mpChatLog.push({kind:'sys', cls:'sure', text:`${p.byName} ustawił(a) 🟡 PEWNIAK`});
   });
   (g.passed||[]).forEach(pp=>{
@@ -1880,7 +1891,7 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); mpSetCod
 /* ============ most do HTML: app.js to moduł ES (własny scope), więc handlery
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 Object.assign(window, {
-  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpSetConf,
+  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpVoteFromBubble, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
