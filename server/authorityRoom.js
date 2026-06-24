@@ -35,6 +35,28 @@ const ROOM_TTL_MS = 15*60*1000;      // sprzątanie storage pustego pokoju po 15
 const POOL_MAX_CATS = 24;            // defensywne capy pul (DO nie ufa rozmiarowi od klienta)
 const POOL_MAX_SONGS = 120;
 const POOL_LYRIC_MAX = 12000;        // max długość tekstu (lektor) na utwór
+const POOL_MAX_QUESTIONS = 200;      // cap pytań (wiedza ogólna) na kategorię
+const POOL_MAX_SLOTS = 6;            // cap slotów odpowiedzi na pytanie
+const POOL_MAX_VARIANTS = 12;        // cap wariantów poprawnej odpowiedzi na slot
+const POOL_PROMPT_MAX = 600;         // max długość treści pytania
+
+// sanityzacja pytania quizu: prompt/sloty/warianty (anty-flood/anty-OOM, tylko klucze slotów)
+function clampQuestion(q){
+  if(!q || typeof q!=='object') return null;
+  const prompt=String(q.prompt||'').slice(0, POOL_PROMPT_MAX);
+  const slots=(Array.isArray(q.slots)?q.slots:[]).slice(0, POOL_MAX_SLOTS)
+    .map(s=>({ key:String(s&&s.key||''), label:String((s&&s.label)||(s&&s.key)||'') }))
+    .filter(s=>s.key);
+  if(!prompt || !slots.length) return null;
+  const answers={};
+  const src=(q.answers&&typeof q.answers==='object')?q.answers:{};
+  for(const s of slots){
+    const arr=Array.isArray(src[s.key])?src[s.key]:[];
+    answers[s.key]=arr.slice(0, POOL_MAX_VARIANTS).map(v=>String(v).slice(0, POOL_PROMPT_MAX)).filter(Boolean);
+  }
+  if(!slots.every(s=>answers[s.key].length)) return null;   // każdy slot musi mieć ≥1 wariant
+  return { prompt, slots, answers };
+}
 
 // przytnij przychodzące pule: ogranicz liczbę kategorii/utworów i długość tekstów (anty-flood/anty-OOM)
 function clampPools(pools){
@@ -50,6 +72,7 @@ function clampPools(pools){
       if(s&&s.lyric) r.lyric=String(s.lyric).slice(0, POOL_LYRIC_MAX); if(s&&s.tts) r.tts=s.tts;
       return r;
     });
+    if(Array.isArray(c.questions)) o.questions=c.questions.slice(0, POOL_MAX_QUESTIONS).map(clampQuestion).filter(Boolean);
     out[k]=o;
   }
   return out;
@@ -230,18 +253,26 @@ export class GameAuthority extends Server {
     const cat=this.pools[this.game.catKey];
     if(!cat){ this.game.phase=MP.NETERR; this.game.netReason='nocat'; this.broadcastState(); await this.persist(); return; }
 
-    if(this.game.mode==='lektor'){
+    if(this.game.mode==='quiz'){
+      // WIEDZA OGÓLNA: wylosuj pytanie z puli (bez audio). answers = SEKRET (zostaje na serwerze).
+      const qs=(cat.questions||[]).filter(q=>q && q.prompt && !this.hostSeen.has(norm(q.prompt)));
+      if(!qs.length){ this.game.phase=MP.NOLYRIC; this.game.netReason='noquiz'; this.broadcastState(); await this.persist(); return; }
+      const q=qs[Math.floor(Math.random()*qs.length)];
+      this.current={ prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:'' };
+      this.hostSeen.add(norm(q.prompt));
+      this.game.answerSlots=q.slots; this.game.prompt=q.prompt; this.game.preview=''; this.game.lyric=''; this.game.ttsUrl='';
+    } else if(this.game.mode==='lektor'){
       const songs=(cat.songs||[]).filter(x=>x.lyric && !this.hostSeen.has(norm(x.title)));
       if(!songs.length){ this.game.phase=MP.NOLYRIC; this.broadcastState(); await this.persist(); return; }
       const x=songs[Math.floor(Math.random()*songs.length)];
       this.current={ track:x.title, artist:x.artist, year:x.year||'', album:x.album||'', art:'', preview:'', lyric:x.lyric };
       this.hostSeen.add(norm(x.title));
-      this.game.lyric=x.lyric; this.game.preview=''; this.game.ttsUrl=x.tts||'';
+      this.game.lyric=x.lyric; this.game.preview=''; this.game.ttsUrl=x.tts||''; this.game.prompt='';
     } else {
       const t=await resolveTrackServer({ cat, seen:this.hostSeen, recent:this.recent });
       if(t.error){ this.game.phase=MP.NETERR; this.game.netReason=t.reason; this.broadcastState(); await this.persist(); return; }
       this.current={ ...t, lyric:'' };
-      this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl='';
+      this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt='';
     }
     this.game.snipStart = this.game.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
     // FAZA GOTOWOŚCI: roześlij utwór (bez odpowiedzi), czekaj aż wszyscy zbuforują

@@ -23,14 +23,16 @@ const ERAS = CATS.decades || {};
 const STYLES = CATS.styles || {};
 const READY = CATS.playlists || {};           // gotowe playlisty (playlists.js)
 const LYRICS = CATS.lyrics || {};              // przetłumaczone teksty (lyrics.js) — tryb lektor
+const QUIZ = CATS.quiz || {};                  // wiedza ogólna (questions.js) — tryb quiz, bez audio
 const ERA_KEYS = Object.keys(ERAS);
 const STYLE_KEYS = Object.keys(STYLES);
 const READY_KEYS = Object.keys(READY);
 const LYRICS_KEYS = Object.keys(LYRICS);
+const QUIZ_KEYS = Object.keys(QUIZ);
 
 /* wszystkie kategorie w jednej mapie — logika rundy nie rozróżnia dekady/stylu */
-const ALL_CATS = {...ERAS, ...STYLES, ...READY, ...LYRICS};
-const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS, ...LYRICS_KEYS];
+const ALL_CATS = {...ERAS, ...STYLES, ...READY, ...LYRICS, ...QUIZ};
+const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS, ...LYRICS_KEYS, ...QUIZ_KEYS];
 const CATS_OK = (ERA_KEYS.length + STYLE_KEYS.length) > 0;
 
 /* ============ model meczu (rdzeń w core/match.js) — lokalne wrappery wiążą ALL_CATS ============ */
@@ -1265,7 +1267,7 @@ function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
 function mpPickerHTML(){
   const band=(title,keys,cls)=> keys.length? `<div class="band-label">${title}</div><div class="ticks">`+
     keys.map(k=>`<button class="tick ${cls} ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>` : '';
-  const cats=band('dekady',ERA_KEYS,'')+band('style i gatunki',STYLE_KEYS,'gen')+band('gotowe playlisty',READY_KEYS,'pl')+band('teksty — tłumaczenia 🌐',LYRICS_KEYS,'gen');
+  const cats=band('dekady',ERA_KEYS,'')+band('style i gatunki',STYLE_KEYS,'gen')+band('gotowe playlisty',READY_KEYS,'pl')+band('teksty — tłumaczenia 🌐',LYRICS_KEYS,'gen')+band('wiedza ogólna 🧠',QUIZ_KEYS,'gen');
   // twoje playlisty ze Spotify — host rozwiązuje utwory sam, więc wystarczy mieć je w ALL_CATS (plMerge)
   const PL_KEYS=Object.keys(plLoad());
   const plBand=`<div class="band-label">twoje playlisty <button class="pl-add" onclick="mpPlToggle()">+ ze Spotify</button></div>`+
@@ -1310,6 +1312,9 @@ function mpBuildPools(cats, modes){
         return o;
       });
     }
+    if(Array.isArray(c.questions) && c.questions.length){   // wiedza ogólna — pytania lecą do DO (DO re-clampuje)
+      out.questions=c.questions.map(q=>({ prompt:q.prompt, slots:q.slots, answers:q.answers }));
+    }
     pools[k]=out;
   }
   return pools;
@@ -1349,19 +1354,26 @@ async function mpHostNewRound(){
   mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.votes={}; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpAutoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
-  if(mpGame.mode==='lektor'){
+  if(mpGame.mode==='quiz'){
+    const qs=((ALL_CATS[catKey]&&ALL_CATS[catKey].questions)||[]).filter(q=>q.prompt&&!mpHostSeen.has(norm(q.prompt)));
+    if(!qs.length){ mpGame.phase=MP.NOLYRIC; mpGame.netReason='noquiz'; mpBroadcast(); mpRender(); return; }
+    const q=qs[Math.floor(Math.random()*qs.length)];
+    mpHostCurrent={prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
+    mpHostSeen.add(norm(q.prompt));
+    mpGame.answerSlots=q.slots; mpGame.prompt=q.prompt; mpGame.preview=''; mpGame.lyric=''; mpGame.ttsUrl='';
+  } else if(mpGame.mode==='lektor'){
     const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!mpHostSeen.has(norm(s.title)));
     if(!songs.length){ mpGame.phase=MP.NOLYRIC; mpBroadcast(); mpRender(); return; }
     const s=songs[Math.floor(Math.random()*songs.length)];
     mpHostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
     mpHostSeen.add(norm(s.title));
-    mpGame.lyric=s.lyric; mpGame.preview=''; mpGame.ttsUrl=s.tts||'';
+    mpGame.lyric=s.lyric; mpGame.preview=''; mpGame.ttsUrl=s.tts||''; mpGame.prompt='';
   } else {
     // audio (muzyka/od tyłu/fragment) — playlistę i pulę wykonawców rozwiązuje repozytorium
     const t=await resolveTrack({cat:ALL_CATS[catKey], seen:mpHostSeen, cfg:window.STACJA_CONFIG});
     if(t.error){ mpGame.phase=MP.NETERR; mpGame.netReason=t.reason; mpBroadcast(); mpRender(); return; }
     mpHostCurrent={...t, lyric:''};
-    mpGame.preview=t.preview; mpGame.lyric=''; mpGame.ttsUrl='';
+    mpGame.preview=t.preview; mpGame.lyric=''; mpGame.ttsUrl=''; mpGame.prompt='';
   }
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
   mpGame.snipStart = mpGame.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
@@ -1595,6 +1607,8 @@ function mpListenSecs(g){
 const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
 const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
+// wiedza ogólna: treść pytania w tym samym pudełku co tekst lektora
+const mpPromptHTML = (g)=> g.mode==='quiz'&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">pytanie</span>${escapeHtml(g.prompt)}</div>` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
 function mpChatFeedHTML(){
   const rows=mpChatLog.map(c=>{
@@ -1626,7 +1640,8 @@ function mpTypingFeedHTML(){
 // pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
 function mpRailHTML(active){
   const order=['sluchaj','kombinuj','odslona'];
-  const listen = (mpGame&&mpGame.mode==='lektor') ? ['📖','czytaj'] : ['🎧','słuchaj'];   // lektor czyta tekst, reszta słucha
+  const md = mpGame&&mpGame.mode;
+  const listen = md==='quiz' ? ['❓','pytanie'] : (md==='lektor' ? ['📖','czytaj'] : ['🎧','słuchaj']);   // quiz: czytaj pytanie; lektor: tekst; reszta: audio
   const meta={ sluchaj:listen, kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
   const ai=order.indexOf(active);
   let out='<div class="mp-rail">';
@@ -1686,8 +1701,14 @@ function mpHeaderHTML(g){
 }
 const mpReactsOnlyHTML = ()=> `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
 
-// FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna)
+// FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna).
+// QUIZ: bez audio/gałki — pokaż treść pytania i przejdź do odpowiadania.
 function mpSluchajBodyHTML(g){
+  if(g.mode==='quiz'){
+    return `${mpPromptHTML(g)}
+      <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">odpowiadamy →</button>
+      ${mpHr()}${mpReactsBarHTML()}`;
+  }
   return `<div class="mp-deck">${mpKnobHTML()}
       <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć</div>
       <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
@@ -1695,9 +1716,9 @@ function mpSluchajBodyHTML(g){
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
     ${mpHr()}${mpReactsBarHTML()}`;
 }
-// FAZA „kombinuj" — widok KOLUMNOWY (bez audio i bez tekstu — jak dla muzyki zajawka znika)
+// FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze)
 function mpKombinujKolumnyHTML(g){
-  return `${mpFormHTML(g)}
+  return `${mpPromptHTML(g)}${mpFormHTML(g)}
     <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
     ${mpAnswerBlockHTML(g, false)}
     ${mpHr()}${mpReactsBarHTML()}`;
@@ -1705,7 +1726,7 @@ function mpKombinujKolumnyHTML(g){
 // FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
 function mpKombinujCzatHTML(g){
-  return `<div class="mp-team" id="mpTeam"></div>
+  return `${mpPromptHTML(g)}<div class="mp-team" id="mpTeam"></div>
     <div class="mp-chatfeed" id="mpChatFeed"></div>
     <div class="mp-comp">
       ${mpComposerHTML(g)}
@@ -1762,24 +1783,47 @@ function mpRenderPlay(g, head, st){
   mpTickTimer();
 }
 
+// baner wyniku rundy (wspólny: muzyka + quiz) — pewniak/trafienie/pudło
+function mpRevealBanner(r){
+  if(r.pewniakWin) return `<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${r.gained}</span></div>`;
+  if(r.pewniakLose) return `<div class="rv-banner lose"><span class="ic">🍺</span><span class="tx"><b>Pewniak przepalony</b><small>stawia: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} — odbiór na żywo 😏</small></span></div>`;
+  if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+r.gained+' pkt'}</small></span><span class="pts">+${r.gained}</span></div>`;
+  return `<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
+}
 // odsłona rundy (design): rail + zielona karta utworu + baner pewniaka + odpowiedź drużyny
 function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
+  if(r.kind==='quiz') return mpRenderQuizReveal(snap);
   const cover = r.art?`<img class="rv-cover" src="${r.art}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">💿</div>`;
   const meta=[r.album,r.year].filter(Boolean).join(' · ');
   const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span><span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
-  let banner;
-  if(r.pewniakWin) banner=`<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${r.gained}</span></div>`;
-  else if(r.pewniakLose) banner=`<div class="rv-banner lose"><span class="ic">🍺</span><span class="tx"><b>Pewniak przepalony</b><small>stawia: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} — odbiór na żywo 😏</small></span></div>`;
-  else if(r.teamOk) banner=`<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+r.gained+' pkt'}</small></span><span class="pts">+${r.gained}</span></div>`;
-  else banner=`<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
   return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
     <div class="rv-card">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.track)}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
       ${slot(r.okTitle,'TYTUŁ',r.track)}${slot(r.okArtist,'WYK.',r.artist)}
     </div>
-    ${banner}
+    ${mpRevealBanner(r)}
     <div class="rv-locked">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
+    ${mpReactsBarHTML()}
+    <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
+}
+// odsłona QUIZU: pytanie + per slot poprawne warianty (✓/✗) + odpowiedź drużyny (bez okładki/roku)
+function mpRenderQuizReveal(snap){
+  const r=snap.reveal, head=snap.head, last=snap.isLast;
+  const rows=(r.slots||[]).map(s=>{
+    const ok=!!(r.okBySlot&&r.okBySlot[s.key]);
+    const correct=((r.answers&&r.answers[s.key])||[]).map(escapeHtml).join(' / ')||'—';
+    const team=(r.locked&&r.locked[s.key])||'';
+    return `<div class="rv-slot"><span class="k">${escapeHtml((s.label||s.key).toUpperCase())}</span>
+      <span class="v">${correct}${team?`<small class="rv-team">drużyna: „${escapeHtml(team)}"</small>`:''}</span>
+      <span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
+  }).join('');
+  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
+    <div class="rv-card quiz">
+      <div class="rv-prompt">${escapeHtml(r.prompt||'')}</div>
+      ${rows}
+    </div>
+    ${mpRevealBanner(r)}
     ${mpReactsBarHTML()}
     <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
 }

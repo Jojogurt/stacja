@@ -20,6 +20,7 @@
 <script src="categories.js"></script>
 <script src="playlists.js"></script>
 <script src="lyrics.js"></script>
+<script src="questions.js"></script>
 <script src="config.js"></script>
 <style>
   :root{
@@ -724,6 +725,11 @@
   .rv-slot .v{font-family:var(--display);font-weight:800;font-size:13px;color:var(--ink);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
   .rv-slot .mk{margin-left:auto;font-size:16px;font-weight:900}
   .rv-slot .mk.ok{color:var(--green)} .rv-slot .mk.no{color:var(--red)}
+  /* QUIZ: pytanie w karcie odsłony + odpowiedź drużyny pod poprawnym wariantem */
+  .rv-prompt{font-family:var(--display);font-weight:900;font-size:16px;color:var(--ink);line-height:1.3}
+  .rv-card.quiz .rv-slot .v{white-space:normal}
+  .rv-team{display:block;font-family:var(--body);font-weight:700;font-size:11px;color:#9a958c;margin-top:2px}
+  .lyric-box.quiz{font-family:var(--display);font-weight:900;font-size:17px;color:var(--ink)}
   .rv-banner{display:flex;align-items:center;gap:12px;border-radius:16px;padding:13px 15px;margin-bottom:12px}
   .rv-banner .ic{font-size:24px;flex:0 0 auto}
   .rv-banner .tx{display:flex;flex-direction:column;min-width:0}
