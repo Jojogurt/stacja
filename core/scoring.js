@@ -42,7 +42,12 @@ function deLeet(s){
 function nearMatch(g,a){
   if(!g||!a) return false;
   if(g===a) return true;
-  if(g.length>3 && a.length>3 && (a.includes(g)||g.includes(a))) return true;
+  // zawieranie się napisów (np. „bohemian rhapsody" w „bohemian rhapsody live") —
+  // ale TYLKO gdy krótszy pokrywa większość dłuższego, inaczej pojedyncze słowo
+  // („flag") fałszywie zaliczałoby długi tytuł („what's left of the flag").
+  if(g.length>3 && a.length>3 && (a.includes(g)||g.includes(a))){
+    if(Math.min(g.length,a.length) / Math.max(g.length,a.length) >= 0.6) return true;
+  }
   const d=lev(g,a);
   if(d<=1 && Math.min(g.length,a.length)>=4) return true;  // jedna literówka — ale nie w krótkich (≤3 znaki)
   const ratio=1-d/Math.max(g.length,a.length);

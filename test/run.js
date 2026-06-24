@@ -38,6 +38,9 @@ group('scoring.textMatch', ()=>{
   ok(textMatch('PRO8L3M','problem'),'leetspeak: symetrycznie');
   ok(textMatch('pro8l3m','PRO8L3M'),'oryginalny zapis też zalicza');
   ok(!textMatch('problem','Ulica'),'leet nie psuje normalnego odrzucenia');
+  ok(!textMatch('flag','What\'s Left of the Flag'),'pojedyncze słowo nie zalicza długiego tytułu');
+  ok(!textMatch('love','Love Will Tear Us Apart'),'krótkie słowo nie zalicza długiego tytułu');
+  ok(textMatch('Bohemian Rhapsody','Bohemian Rhapsody - Live'),'sufiks live pomijany (containment dużej części)');
 });
 
 /* --- match --- */
@@ -111,6 +114,11 @@ group('mpReducer.reduceAction', ()=>{
   eq(g.votes.title.u2,'Hey Jude','głos zapisany');
   reduceAction(g,{type:'vote',by:'u2',slot:'title',value:'Hey Jude'});  // ten sam = wycofanie
   ok(!('u2' in g.votes.title),'ponowny głos = wycofanie');
+  // host „wybiera odpowiedź": set=true zawsze ustawia (bez przełączania), nawet ponownie
+  reduceAction(g,{type:'vote',by:'u1',slot:'title',value:'Hey Jude',set:true});
+  eq(g.votes.title.u1,'Hey Jude','set: wybór ustawiony (nie wycofany przy ponownym kliknięciu)');
+  reduceAction(g,{type:'vote',by:'u1',slot:'title',value:'Yesterday',set:true});
+  eq(g.votes.title.u1,'Yesterday','set: zmiana wyboru na inną wartość');
   eq(g.proposals[0].conf,'sure','pewniak = typ z conf=sure (bez osobnego zakładu)');
   ok(reduceAction(g,{type:'pass',by:'u2',byName:'B'}),'pas włączony');
   eq(g.passed.length,1,'1 pas');

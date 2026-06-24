@@ -81,3 +81,4 @@ export const friendAdd      = (code)       => wrap(call('/api/friend/add',     {
 export const friendRespond  = (id, accept) => wrap(call('/api/friend/respond', { method: 'POST', body: { id, accept } }));
 export const friendsList    = ()           => wrap(call('/api/friends'));
 export const pendingFriends = ()           => wrap(call('/api/friends/pending'));
+export const sentFriends    = ()           => wrap(call('/api/friends/sent'));

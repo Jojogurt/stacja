@@ -12,7 +12,7 @@ import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
 import { ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile } from './adapters-web/cf.js';
-import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, meInfo, loginOAuth, logout } from './adapters-web/cf.js';
+import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, sentFriends, meInfo, loginOAuth, logout } from './adapters-web/cf.js';
 import { cfChannel } from './adapters-web/cfChannel.js';
 import { authorityChannel } from './adapters-web/roomTransport.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
@@ -728,12 +728,12 @@ async function renderDruzyna(){
   el.innerHTML='<div class="liga-empty">ładowanie…</div>';
   try{
   await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność
-  const [meR, teamsR, friR, penR] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends()]);
+  const [meR, teamsR, friR, penR, sentR] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), sentFriends()]);
   const noAuth = (meR.error && !meR.data);   // brak sesji (Worker nieosiągalny) — pokaż baner, ale NIE chowaj ekranu
   const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Brak połączenia z serwerem — drużyny i znajomi chwilowo niedostępne. Spróbuj odświeżyć.</div>` : '';
   dzMe = (meR.data&&meR.data[0]) || null;
   const secured = !!(dzMe && dzMe.secured);
-  const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[];
+  const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[], sent = sentR.data||[];
   const av=(n,c)=>`<span class="dz-av" style="background:${mpAvatarColor(n)}">${escapeHtml((n||'?').slice(0,1).toUpperCase())}</span>`;
 
   // === KONTO — logowanie żyje w Profilu; tu tylko status/info ===
@@ -742,16 +742,20 @@ async function renderDruzyna(){
     : `<div class="dz-acct">🔒 Zaloguj się w <b>Profilu</b>, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>`;
 
   // === DRUŻYNA ===
-  const teamCards = teams.map(t=>`
+  const team = teams[0] || null;   // jedna „twoja drużyna" w UI (jak makieta)
+  dzTeamSync(team);                // podłącz/odłącz kanał lobby drużyny (#4)
+  const teamCard = team ? `
     <div class="dz-team">
-      <div class="dz-team-top"><span class="em">${escapeHtml(t.emoji||'🍺')}</span>
-        <span class="nm"><b>${escapeHtml(t.name)}</b><small>${t.members} os. · kod <b>${escapeHtml(t.code)}</b></small></span></div>
+      <div class="dz-team-top"><span class="em">${escapeHtml(team.emoji||'🍺')}</span>
+        <span class="nm"><b>${escapeHtml(team.name)}</b><small>${team.members} os. · kod <b>${escapeHtml(team.code)}</b></small></span>
+        <span class="dz-online" id="dzOnline"></span></div>
       <div class="dz-team-btns">
-        <button class="dz-play" onclick="dzPlay()">🎮 Zagraj z drużyną</button>
-        <button class="dz-mini" onclick="dzCopy('${escapeHtml(t.code)}')">📋 kod</button>
-        <button class="dz-mini" onclick="dzLeave('${t.id}')">wyjdź</button>
+        <button class="dz-play" onclick="dzPlay()">🎮 Zagraj</button>
+        <button class="dz-mini" onclick="dzCopy('${escapeHtml(team.code)}')">📋 kod</button>
+        <button class="dz-mini red" onclick="dzLeave('${team.id}')">wyjdź</button>
       </div>
-    </div>`).join('');
+      <div class="dz-gamebanner" id="dzGameBanner" style="display:none"></div>
+    </div>` : '';
   const teamForms = secured ? `
     <div class="dz-row2">
       <input id="dzName" maxlength="20" placeholder="nazwa drużyny">
@@ -764,7 +768,8 @@ async function renderDruzyna(){
     </div>` : '<div class="dz-hint">🔒 zaloguj się w Profilu, żeby stworzyć lub dołączyć do drużyny</div>';
   const teamSection = `
     <div class="dz-lbl">Twoja drużyna</div>
-    ${teamCards || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
+    ${teamCard || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
+    <div class="dz-lbl">${team?'Zmień drużynę':'Stwórz lub dołącz'}</div>
     ${teamForms}`;
 
   // === ZNAJOMI ===
@@ -772,8 +777,11 @@ async function renderDruzyna(){
   const pendRows = pending.map(p=>`
     <div class="dz-fr"><span class="who">${av(p.handle)}${escapeHtml(p.handle||'gracz')}</span>
       <span class="acts"><button class="dz-yes" onclick="dzRespond(${p.req_id},true)">✓</button><button class="dz-no" onclick="dzRespond(${p.req_id},false)">✗</button></span></div>`).join('');
+  const sentRows = sent.map(s=>`
+    <div class="dz-fr"><span class="who">${av(s.handle)}${escapeHtml(s.handle||'gracz')}</span>
+      <span class="pendtag">⏳ wysłano</span></div>`).join('');
   const friendRows = friends.map(f=>`<div class="dz-fr"><span class="who">${av(f.handle)}${escapeHtml(f.handle||'gracz')}</span><span class="code">${escapeHtml(f.friend_code||'')}</span></div>`).join('')
-    || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie.</div>';
+    || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie i zagrajcie razem.</div>';
   const friendAddRow = secured
     ? `<div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>`
     : '<div class="dz-hint">🔒 zaloguj się w Profilu, żeby dodawać znajomych</div>';
@@ -781,22 +789,71 @@ async function renderDruzyna(){
     <div class="dz-lbl">Twój kod znajomego</div>
     <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">📋 kopiuj</button></div>
     ${friendAddRow}
-    ${pending.length?`<div class="dz-lbl">Zaproszenia (${pending.length})</div>${pendRows}`:''}
-    <div class="dz-lbl">Znajomi</div>
+    ${pending.length?`<div class="dz-lbl">Zaproszenia <span class="dz-badge">${pending.length}</span></div>${pendRows}`:''}
+    ${sent.length?`<div class="dz-lbl">Wysłane zaproszenia</div>${sentRows}`:''}
+    <div class="dz-lbl">Lista znajomych</div>
     ${friendRows}`;
 
   el.innerHTML = notice + kontoSection + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
+  dzRenderLobby();   // odśwież wskaźnik online + baner aktywnej gry (jeśli kanał już coś wie)
   }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
 }
-function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
+function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':err===false?' ok':''); } }
 const dzErrLabel=(e)=> e==='requires_account' ? 'Najpierw zaloguj się (Google/Apple).' : e;
 async function dzCreate(){ const n=$m('dzName')?.value, e=$m('dzEmoji')?.value; const r=await teamCreate(n,e); if(r.error){ dzMsg('Nie udało się: '+dzErrLabel(r.error),true); } else renderDruzyna(); }
 async function dzJoin(){ const c=$m('dzJoin')?.value; if(!c) return; const r=await teamJoin(c); if(r.error){ dzMsg(r.error==='group_not_found'?'Nie ma takiej drużyny.':dzErrLabel(r.error),true); } else renderDruzyna(); }
-async function dzLeave(id){ await teamLeave(id); renderDruzyna(); }
-async function dzAddFriend(){ const c=$m('dzFriend')?.value; if(!c) return; const r=await friendAdd(c); if(r.error){ dzMsg(r.error==='profile_not_found'?'Nie ma takiego kodu.':(r.error==='self'?'To Twój kod 🙂':dzErrLabel(r.error)),true); } else renderDruzyna(); }
+async function dzLeave(id){ dzTeamSync(null); await teamLeave(id); renderDruzyna(); }
+async function dzAddFriend(){
+  const c=$m('dzFriend')?.value; if(!c) return;
+  const r=await friendAdd(c);
+  if(r.error){ dzMsg(r.error==='profile_not_found'?'Nie ma takiego kodu.':(r.error==='self'?'To Twój kod 🙂':dzErrLabel(r.error)),true); return; }
+  // sukces: jeśli druga osoba już mnie zaprosiła → od razu znajomi; inaczej zaproszenie wysłane
+  dzMsg(r.data&&r.data.accepted ? '✓ Dodano znajomego!' : '✓ Wysłano zaproszenie — czeka na akceptację.', false);
+  renderDruzyna();
+}
 async function dzRespond(id,ok){ const r=await friendRespond(id,ok); if(r&&r.error){ dzMsg(dzErrLabel(r.error),true); } else renderDruzyna(); }
 function dzCopy(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
-function dzPlay(){ showScreen('mp'); }
+// „Zagraj" → utwórz pokój jako host i ROZGŁOŚ kod na kanale drużyny, by członkowie online
+// dostali zaproszenie „dołącz jednym kliknięciem" (#4 — lobby drużyny w aplikacji).
+async function dzPlay(){
+  const n=await ensureHandle(); mpMe.name=n; setHandle(n);
+  const code=mpRandCode();
+  if(dzTeamCh){ try{ dzTeamCh.send({type:'broadcast',event:'gamestart',payload:{code, byName:n, by:mpMe.id}}); }catch(e){} }
+  showScreen('mp');
+  mpUnlockAudio();
+  mpEnterRoom(code, true);
+}
+
+/* ---- #4: lobby drużyny (kanał realtime per drużyna) ----
+   Reuse cfChannel (relay: presence + broadcast). Po wejściu na ekran Drużyna członkowie
+   subskrybują kanał „team-<kod>": presence = kto online, event „gamestart" = host ruszył grę. */
+let dzTeamCh=null, dzTeamCode=null, dzOnlineCount=0, dzActiveGame=null;
+function dzTeamSync(team){
+  const code = team ? team.code : null;
+  if(code===dzTeamCode) return;          // bez zmian
+  dzTeamDisconnect();
+  if(!code) return;
+  dzTeamCode=code; dzActiveGame=null;
+  dzTeamCh=cfChannel('team-'+code, {config:{broadcast:{self:false}, presence:{key:mpMe.id}}});
+  dzTeamCh.on('presence',{event:'sync'},()=>{ dzOnlineCount=Object.keys(dzTeamCh.presenceState()).length; dzRenderLobby(); });
+  dzTeamCh.on('broadcast',{event:'gamestart'},({payload})=>{ if(payload&&payload.by!==mpMe.id){ dzActiveGame=payload; dzRenderLobby(); } });
+  dzTeamCh.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ await dzTeamCh.track({name:mpMe.name||myHandle||'gracz'}); } });
+}
+function dzTeamDisconnect(){ if(dzTeamCh){ try{ dzTeamCh.unsubscribe(); }catch(e){} } dzTeamCh=null; dzTeamCode=null; dzOnlineCount=0; }
+function dzRenderLobby(){
+  const on=$m('dzOnline'); if(on) on.textContent = dzOnlineCount>1 ? `🟢 ${dzOnlineCount} online` : '';
+  const b=$m('dzGameBanner'); if(!b) return;
+  if(dzActiveGame){
+    b.style.display='';
+    b.innerHTML=`<span>🎮 <b>${escapeHtml(dzActiveGame.byName||'Ktoś')}</b> zaczął grę drużynową!</span>
+      <button class="dz-join-game" onclick="dzJoinGame()">Dołącz →</button>`;
+  } else { b.style.display='none'; b.innerHTML=''; }
+}
+async function dzJoinGame(){
+  if(!dzActiveGame) return;
+  const code=dzActiveGame.code, n=await ensureHandle(); mpMe.name=n; setHandle(n);
+  showScreen('mp'); mpUnlockAudio(); mpEnterRoom(code, false);
+}
 
 /* ---- KONTO (Google/Apple) — sekcja w Profilu; wymagane do drużyn/znajomych ---- */
 function dzLoadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); }); }
@@ -846,7 +903,7 @@ async function acInitAuthButtons(){
   }catch(e){ /* przycisk się nie pokaże */ } }
 }
 async function acLogout(){ logout(); myHandle=null; await ensureSession(); acAfterLogin(); }
-Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, acLogout });
+Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzJoinGame, acLogout });
 
 async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
@@ -862,8 +919,10 @@ async function renderProfil(){
   const hd=$m('profilHead');
   if(hd){
     const av=escapeHtml((p.handle||'?').slice(0,1).toUpperCase());
+    const sub = s.matches>0 ? `${s.matches} ${s.matches===1?'mecz':'meczów'} · ${s.points} pkt` : 'Nowy gracz — jeszcze bez serii';
     hd.innerHTML=`<span class="pf-av" style="background:${mpAvatarColor(p.handle)}">${av}</span>
-      <div class="pf-name">${escapeHtml(p.handle||'gracz')}</div>`;
+      <div class="pf-name">${escapeHtml(p.handle||'gracz')}</div>
+      <div class="pf-sub">${escapeHtml(sub)}</div>`;
   }
   const cats=Object.entries(p.byCat).sort((a,b)=>b[1].n-a[1].n);
   const CATCOL=['var(--green)','var(--blue)','var(--purple)','var(--gold)'];
@@ -874,8 +933,10 @@ async function renderProfil(){
   }).join('') : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>';
   // odznaki: kilka pochodnych ze statystyk + reszta zablokowana (placeholdery — pełny system później)
   const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:'🔒'}</span><small>${on?lab:'—'}</small></div>`;
-  const badges=[ badge(s.matches>0,'🎵','Pierwszy mecz'), badge(s.matches>=10,'🔥','10 meczów'),
-    badge(s.points>=100,'💯','100 pkt'), badge(false,'','') ].join('');
+  const badgeDefs=[ [s.matches>0,'🎵','Pierwszy mecz'], [s.matches>=10,'🔥','10 meczów'],
+    [s.points>=100,'💯','100 pkt'], [false,'','—'] ];
+  const badges=badgeDefs.map(b=>badge(b[0],b[1],b[2])).join('');
+  const badgeOn=badgeDefs.filter(b=>b[0]).length;
   el.innerHTML=`<div class="pf-lbl">Konto</div>
     ${acAccountHTML(!!p.secured, p.email)}
     <div class="pf-stats">
@@ -885,7 +946,7 @@ async function renderProfil(){
     </div>
     <div class="pf-lbl">Najlepsze kategorie</div>
     ${catRows}
-    <div class="pf-lbl">Odznaki</div>
+    <div class="pf-lbl">Odznaki <span class="pf-badgecount">${badgeOn} / 12</span></div>
     <div class="pf-badges">${badges}</div>`;
   if(!p.secured) acInitAuthButtons();   // lazy-load GIS + Apple JS → natywne przyciski
 }
@@ -1545,11 +1606,11 @@ function mpChatFeedHTML(){
       const bubbleClick = mpHost ? ' onclick="mpVoteFromBubble(this)" style="cursor:pointer"' : '';
       const chips=(c.chips||[]).map(ch=>{
         const valAttrs = (mpHost && ch.key)
-          ? ` class="val mp-val-vote" data-k="${escapeHtml(ch.key)}" data-v="${escapeHtml(ch.val||'')}" onclick="event.stopPropagation();mpVote(this.dataset.k,this.dataset.v)"`
+          ? ` class="val mp-val-vote" data-k="${escapeHtml(ch.key)}" data-v="${escapeHtml(ch.val||'')}" onclick="event.stopPropagation();mpPick(this.dataset.k,this.dataset.v)"`
           : ' class="val"';
         return `<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span${valAttrs}>${escapeHtml(ch.val||'')}</span></span>`;
       }).join('');
-      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"${dataVals}${bubbleClick}><span class="nm">${escapeHtml(c.byName||'')} · typ${mpHost?' <span class="mp-host-tip">kliknij = zagłosuj</span>':''}</span>${chips}</div></div>`;
+      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"${dataVals}${bubbleClick}><span class="nm">${escapeHtml(c.byName||'')} · typ${mpHost?' <span class="mp-host-tip">kliknij tytuł/wykonawcę = wybierz</span>':''}</span>${chips}</div></div>`;
     }
     return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
   }).join('');
@@ -1750,9 +1811,11 @@ function mpPropose(){
   mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML();
 }
 function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
+// host „wybiera odpowiedź": jawny WYBÓR slotu (set=true → zawsze ustaw, nie przełączaj)
+function mpPick(slot, value){ mpSend({type:'vote', slot, value, set:true}); }
 function mpVoteFromBubble(el){
   if(!mpHost) return;
-  try{ const v=JSON.parse(el.dataset.values||'{}'); Object.entries(v).forEach(([k,val])=>mpVote(k,val)); }catch(e){}
+  try{ const v=JSON.parse(el.dataset.values||'{}'); Object.entries(v).forEach(([k,val])=>mpPick(k,val)); }catch(e){}
 }
 function mpSetConf(v){ mpConf=v; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
 
@@ -1891,7 +1954,7 @@ if(new URLSearchParams(location.search).get('room')){ showScreen('mp'); mpSetCod
 /* ============ most do HTML: app.js to moduł ES (własny scope), więc handlery
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 Object.assign(window, {
-  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpVoteFromBubble, mpSetConf,
+  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
   mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,

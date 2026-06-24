@@ -201,6 +201,13 @@ export async function handleApi(req, env, url){
        JOIN profiles p ON p.id=f.from_id WHERE f.to_id=? AND f.status='pending' ORDER BY f.created_at DESC`).bind(me).all();
     return json(results||[]);
   }
+  // wysłane (wychodzące) zaproszenia — żeby nadawca widział, że coś się stało
+  if(path==='/api/friends/sent' && m==='GET'){
+    const { results } = await env.DB.prepare(
+      `SELECT f.id AS req_id, p.id AS profile_id, p.handle, p.emoji FROM friend_requests f
+       JOIN profiles p ON p.id=f.to_id WHERE f.from_id=? AND f.status='pending' ORDER BY f.created_at DESC`).bind(me).all();
+    return json(results||[]);
+  }
 
   return err('not_found', 404);
 }

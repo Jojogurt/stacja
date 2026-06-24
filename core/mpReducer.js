@@ -54,7 +54,10 @@ export function reduceAction(game, a){
       if(!a.slot) return false;
       game.votes = game.votes || {};
       const sv = game.votes[a.slot] = game.votes[a.slot] || {};
-      if(sv[a.by] === a.value) delete sv[a.by]; else sv[a.by] = a.value;
+      // a.set = jawny WYBÓR (host „wybiera odpowiedź") → zawsze ustaw, bez przełączania.
+      // Bez a.set → toggle (klik na własny głos = wycofanie), jak dotąd.
+      if(a.set) sv[a.by] = a.value;
+      else if(sv[a.by] === a.value) delete sv[a.by]; else sv[a.by] = a.value;
       return true;
     }
     // „pewniak" nie jest osobnym zakładem — to typ z conf='sure' (pewniacy liczeni z proposals)
