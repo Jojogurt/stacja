@@ -31,6 +31,7 @@ import { resolveTrackServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 
 const MP_SNIP_WINDOW_S = 16;         // okno losowania startu fragmentu
+const ROOM_TTL_MS = 15*60*1000;      // sprzątanie storage pustego pokoju po 15 min (karencja na reconnect)
 const POOL_MAX_CATS = 24;            // defensywne capy pul (DO nie ufa rozmiarowi od klienta)
 const POOL_MAX_SONGS = 120;
 const POOL_LYRIC_MAX = 12000;        // max długość tekstu (lektor) na utwór
@@ -102,6 +103,7 @@ export class GameAuthority extends Server {
     }catch(e){ /* zostanie null → odrzut */ }
     if(!id){ try{ conn.close(4001,'auth'); }catch(_e){} return; }            // brak ważnego tokenu → odrzuć (koniec ?id=)
     conn.setState({ id, name, verified:true });
+    try{ await this.ctx.storage.deleteAlarm(); }catch(_e){}                   // ktoś wrócił → anuluj zaplanowane sprzątanie
     if(!this.hostId){ this.hostId=id; await this.persist(); }                 // pierwszy obecny = host (przenoszalny)
     conn.send(JSON.stringify({ t:'state', game:this.game }));
     this.pushPresence();
@@ -118,8 +120,21 @@ export class GameAuthority extends Server {
     }
     this.pushPresence();
     await this.maybeGoArming();   // ktoś wyszedł w ARMING → jeśli reszta gotowa, startuj (nie blokuj na nieobecnym)
+    // pokój opustoszał → zaplanuj sprzątanie storage (karencja na reconnect; alarm i tak re-sprawdzi przy odpaleniu)
+    if([...this.getConnections()].filter(c => c !== conn).length === 0){
+      try{ await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS); }catch(_e){}
+    }
   }
   onError(){ this.pushPresence(); }
+
+  // sprzątanie: alarm odpala po karencji od opustoszenia — jeśli nadal pusto, skasuj storage pokoju
+  async onAlarm(){
+    if([...this.getConnections()].length > 0) return;          // ktoś wrócił — nie kasuj
+    await this.ctx.storage.deleteAll();                        // kasuje też alarm
+    this.game=null; this.current=null; this.pools=null; this.hostId=null;
+    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[];
+    this.clearAutoLock();
+  }
 
   async onMessage(conn, raw){
     let msg; try{ msg=JSON.parse(raw); }catch{ return; }
