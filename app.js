@@ -907,7 +907,7 @@ async function mpEnterRoom(code, asHost){
   mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(SERVER_AUTH || !mpHost){ mpGame=payload; mpAfterSync(); } });
   mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost && !SERVER_AUTH) mpHandleAct(payload); });   // relay-only
   mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
-  mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpPushChat(payload.byName, payload.text); mpFloatSay(payload.text, payload.byName); } });
+  mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
   mpCh.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
   mpCh.on('presence',{event:'sync'},()=>{
     if(SERVER_AUTH && mpCh.hostId) mpHost=(mpCh.hostId===mpMe.id);   // host = autorytatywny hostId z DO
@@ -1479,9 +1479,9 @@ function mpChatFeedHTML(){
     const avb=`<b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b>`;
     if(c.kind==='typ'){
       const chips=(c.chips||[]).map(ch=>`<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span class="val">${escapeHtml(ch.val||'')}</span></span>`).join('');
-      return `<div class="mp-cmsg">${avb}<div class="mp-cmb typ${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')} · typ</span>${chips}</div></div>`;
+      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')} · typ</span>${chips}</div></div>`;
     }
-    return `<div class="mp-cmsg">${avb}<div class="mp-cmb"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
+    return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
   }).join('');
   return rows + mpTypingFeedHTML();
 }
@@ -1531,7 +1531,7 @@ function mpComposerHTML(g){
   return `<div class="mp-composer">
       <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
       <div class="mp-compfield">
-        <div class="mp-cwrap" id="mpCompChat"><span class="mp-odp">@odp</span><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="@ → typ · tekst → czat" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
+        <div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="napisz… (@ = typ odpowiedzi)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
         <div class="mp-cwrap mp-cwrap-typ" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
       </div>
       <button id="mpCompBtn" class="mp-send" onclick="mpComposerSend()">➤</button>
@@ -1700,8 +1700,8 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
   fx.appendChild(s); setTimeout(()=>s.remove(), EMOJI_TTL_MS);
 }
 // #10: krótka wiadomość — dymek lecący przez ekran + wpis w feed czatu (skórka „czat")
-function mpPushChat(byName, text){
-  mpChatLog.push({kind:'chat', byName, text}); if(mpChatLog.length>60) mpChatLog.shift();
+function mpPushChat(byName, text, mine){
+  mpChatLog.push({kind:'chat', byName, text, mine:!!mine}); if(mpChatLog.length>60) mpChatLog.shift();
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 function mpNameOf(id){ const m=mpMembers().find(x=>x.id===id); return m?m.name:'gracz'; }
@@ -1714,6 +1714,7 @@ function mpIngestFeed(g){
   (g.proposals||[]).forEach(p=>{
     const key=p.aid||p.id;   // dedup po aid akcji (optymistyczna i autorytatywna kopia mają to samo aid)
     if(mpSeenProp.has(key)) return; mpSeenProp.add(key);
+    mpClearTypingFor(p.by);  // typ od gracza dotarł → przestań pokazywać „pisze" dla niego
     const chips=Object.keys(p.values||{}).map(k=>({slot:label(k), val:p.values[k]}));
     mpChatLog.push({kind:'typ', byName:p.byName, chips, mine:p.by===mpMe.id});
     if(p.conf==='sure') mpChatLog.push({kind:'sys', cls:'sure', text:`${p.byName} ustawił(a) 🟡 PEWNIAK`});
@@ -1726,7 +1727,7 @@ function mpIngestFeed(g){
 }
 function mpDoSay(text){
   const t=(text||'').trim().slice(0,64); if(!t) return;
-  mpPushChat(mpMe.name, t);
+  mpPushChat(mpMe.name, t, true);   // moja wiadomość → po prawej
   mpFloatSay(t, mpMe.name);   // pokaż od razu u siebie (bez round-tripu)
   if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
 }
@@ -1796,10 +1797,18 @@ function mpTypingPing(){
 function mpMarkTyping(id){
   mpTypingSet.add(id);
   if(mpTypingTimers[id]) clearTimeout(mpTypingTimers[id]);
-  mpTypingTimers[id]=setTimeout(()=>{ mpTypingSet.delete(id); delete mpTypingTimers[id]; mpRefreshRoster(); }, 3000);
-  mpRefreshRoster();
+  mpTypingTimers[id]=setTimeout(()=>{ mpTypingSet.delete(id); delete mpTypingTimers[id]; mpRefreshTyping(); }, 3000);
+  mpRefreshTyping();
+}
+// natychmiast zdejmij „pisze" dla gracza (gdy jego wiadomość/typ dotrze — nie wisi 3 s)
+function mpClearTypingFor(id){
+  if(!id || !mpTypingSet.has(id)) return;
+  mpTypingSet.delete(id); if(mpTypingTimers[id]){ clearTimeout(mpTypingTimers[id]); delete mpTypingTimers[id]; }
+  mpRefreshTyping();
 }
 function mpRefreshRoster(){ if(mpGame && mpGame.phase===MP.PLAY){ const el=$m('mpRoster'); if(el) el.innerHTML=mpRosterHTML(mpGame); } }
+// odśwież OBA miejsca z „pisze": roster (pip) ORAZ feed czatu (linia „X pisze…") — feed nie znikał (#bug)
+function mpRefreshTyping(){ mpRefreshRoster(); const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; } }
 function mpClearTyping(){ mpTypingSet.clear(); Object.values(mpTypingTimers).forEach(clearTimeout); mpTypingTimers={}; }
 
 /* autostart lobby gdy w URL jest ?room= */

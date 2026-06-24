@@ -652,6 +652,11 @@
   .mp-cmb{background:#F4F4F2;border-radius:4px 14px 14px 14px;padding:8px 12px;min-width:0}
   .mp-cmb .nm{font-family:var(--display);font-weight:900;font-size:11px;color:#9a958c}
   .mp-cmb .tx{font-family:var(--body);font-weight:700;font-size:14px;color:var(--ink);word-break:break-word}
+  /* MOJE wpisy po prawej (awatar+dymek), cudze po lewej — czat i typy */
+  .mp-cmsg.me{flex-direction:row-reverse}
+  .mp-cmsg.me .mp-cmb{border-radius:14px 4px 14px 14px}
+  .mp-cmsg.me .mp-cmb:not(.typ){background:#F0FBE6}
+  .mp-cmsg.me .nm{text-align:right}
   /* typ w strumieniu (dymek z chipem @slot) */
   .mp-cmb.typ{background:#EAF7FF;border:2px solid var(--blue)}
   .mp-cmb.typ .nm{color:var(--blue-d)}
