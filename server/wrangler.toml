@@ -24,6 +24,16 @@ new_sqlite_classes = ["GameRoom"]
 tag = "v2"
 new_sqlite_classes = ["GameAuthority"]
 
+# v3+v4 — jednorazowy PURGE osieroconego storage pokoi sprzed sprzątania: v3 skasowała klasę,
+# v4 odtwarza ją czystą. Bezpieczne: w storage DO nie ma ważnych danych (mecze w D1, gry ulotne).
+[[migrations]]
+tag = "v3"
+deleted_classes = ["GameAuthority"]
+
+[[migrations]]
+tag = "v4"
+new_sqlite_classes = ["GameAuthority"]
+
 # Baza D1 (profile, mecze, drużyny, znajomi) — zastępuje Postgres z Supabase.
 [[d1_databases]]
 binding = "DB"
