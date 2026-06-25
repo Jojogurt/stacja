@@ -20,16 +20,25 @@ Webowy trener do nauki tytułów i wykonawców piosenek przed muzycznym pubquize
 - `app.js` — warstwa aplikacji: UI, DOM, audio-element, Supabase Realtime.
 - `core/` — **czysty rdzeń bez DOM/Web API** (przenośny 1:1 na inną platformę):
   `match.js` (model meczu), `scoring.js` (dopasowanie odpowiedzi),
-  `mpReducer.js` (logika multiplayera), `phases.js` (maszyny stanów), `util.js`.
+  `mpReducer.js` (logika multiplayera), `phases.js` (maszyny stanów),
+  `picker.js` (wybór kategorii/trybów „ułóż mecz", wspólny solo+MP),
+  `chatFeed.js` (feed czatu MP + dedup), `timing.js` (stałe i obliczenia czasowe), `util.js`.
+- `app/` — moduły warstwy app wyłuskane z `app.js` (DOM, ale skupione):
+  `dom.js` (bezstanowe prymitywy DOM/FX), `lektor.js` (synteza mowy Piper/Web Speech),
+  `audioCtx.js` + `audio.js` (odtwarzanie solo: element, „od tyłu", fragment),
+  `social.js` (router ekranów + Drużyna/Znajomi/Profil/OAuth).
 - `ports/` — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu,
   nie od konkretu — na natywie podmieniasz tylko adapter.
 - `adapters-web/` — webowe implementacje portów (`webAudio.js`, `itunesRepository.js`).
 - `categories.js` — dane kategorii (`window.CATEGORIES`); regenerowalny osobno.
 - `config.js` — URL + publishable key Supabase (bezpieczny w kliencie; Realtime-only, bez tabel).
-- `test/run.js` — testy jednostkowe rdzenia (`node test/run.js`, bez zależności).
+- `test/run.js` — testy jednostkowe rdzenia (`node test/run.js` lub `npm test`, bez zależności).
+- `test/integration.js` — siatka testów DOM (`npm run test:dom`, jsdom): ładuje `app.js`
+  w realnym `index.html` i klika kluczowe ścieżki (load, picker, audio, lektor, ekrany, liga/profil).
 
-Granica zależności: `core` nie wie o DOM/`fetch`/Supabase. `app.js`, `ports`
-i `adapters-web` zależą od `core`, nigdy odwrotnie.
+Granica zależności: `core` nie wie o DOM/`fetch`/Supabase. `app.js`, `app/`, `ports`
+i `adapters-web` zależą od `core`, nigdy odwrotnie. `app/` zależy od `core`, nie od `app.js`
+(powiązania z warstwą MP wstrzykiwane przez `init*` — bez cykli importów).
 
 ## Uruchomienie
 

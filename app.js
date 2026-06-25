@@ -11,11 +11,21 @@ import { MP, assertMp } from './core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from './core/mpReducer.js';
 import { playReverse, unlockAudioElement } from './adapters-web/webAudio.js';
 import { resolveTrack } from './adapters-web/itunesRepository.js';
-import { ensureSession, setHandle, recordMatch, fetchLeague, fetchProfile } from './adapters-web/cf.js';
-import { teamCreate, teamJoin, teamLeave, myTeams, teamMembers, friendAdd, friendRespond, friendsList, pendingFriends, sentFriends, meInfo, loginOAuth, logout } from './adapters-web/cf.js';
+import { ensureSession, setHandle, recordMatch } from './adapters-web/cf.js';
+// pozostałe cf (profile/drużyny/znajomi/oauth) używa już app/social.js
 import { cfChannel } from './adapters-web/cfChannel.js';
 import { authorityChannel } from './adapters-web/roomTransport.js';
 import { buildSoloRecord, buildMpRecord } from './core/matchRecord.js';
+import { listenSecs as _listenSecs, mpSnipStart, shouldPing,
+  SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from './core/timing.js';
+import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
+  syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from './core/picker.js';
+import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from './core/chatFeed.js';
+import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric } from './app/dom.js';
+import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './app/lektor.js';
+import { unlockCtx, ensureCtxResumed } from './app/audioCtx.js';
+import { startAudio, stopAudio, toggleAudio, replay, initAudio } from './app/audio.js';
+import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './app/social.js';
 
 /* ============ kategorie: dane z categories.js (window.CATEGORIES) ============ */
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
@@ -61,8 +71,7 @@ try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appV
 
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
-let current = null;         // bieżący utwór
-let audio = null;
+let current = null;         // bieżący utwór (czytany przez app/audio.js przez getter)
 let recentArtists = [];     // ostatnio użyci, by nie powtarzać
 let seenTracks = new Set(); // już zagrane tytuły
 let score = 0, total = 0, streak = 0;
@@ -72,79 +81,8 @@ let soloCats = new Set();    // pula kategorii (multi-select)
 let soloModes = new Set(['music']); // pula trybów (multi-select)
 let soloRounds = 4;         // liczba rund meczu
 let mode = 'music';         // bieżący tryb pytania (ustawiany ze slotu meczu)
-let plVoice = null;         // głos pl-PL do lektora
 
-/* ============ lektor: synteza mowy ============ */
-function loadVoice(){
-  if(!('speechSynthesis' in window)) return;
-  const vs=speechSynthesis.getVoices();
-  plVoice = vs.find(v=>/pl(-|_)?/i.test(v.lang)) || vs.find(v=>/pol/i.test(v.name)) || null;
-}
-if('speechSynthesis' in window){ loadVoice(); speechSynthesis.onvoiceschanged=loadVoice; }
-
-function speak(text){
-  if(!('speechSynthesis' in window)){ flash('Ta przeglądarka nie ma syntezatora mowy (lektor niedostępny).'); return; }
-  speechSynthesis.cancel();
-  const u=new SpeechSynthesisUtterance(text);
-  if(plVoice){ u.voice=plVoice; u.lang=plVoice.lang; } else { u.lang='pl-PL'; }
-  u.rate=0.96; u.pitch=0.9;
-  u.onend=()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); };
-  setIcon('pause'); setRing(0); setState('lektor czyta…');
-  document.getElementById('knob').classList.add('live');
-  speechSynthesis.speak(u);
-}
-function stopSpeech(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
-
-/* ===== Lektor: kolejność jakości — pre-gen audio > Piper (opcjonalny) > głos systemowy ===== */
-let piperOn = localStorage.getItem('stacjaPiper')==='1';
-const PIPER_VOICE = 'pl_PL-gosia-medium';
-let piperMod=null, piperReady=false, lektorAudio=null;
-// token „pokolenia": każde nowe odtworzenie/stop unieważnia poprzednie. Bez tego
-// wolna synteza Piper z poprzedniego pytania kończyła się PO zmianie rundy i czytała
-// stary tekst (oraz nakładała się = brzmiało jak zapętlenie).
-let lektorGen=0;
-
-function lektorStop(){ lektorGen++; if(lektorAudio){ lektorAudio.pause(); lektorAudio=null; } stopSpeech(); }
-
-async function piperEnsure(onPct){
-  if(!piperMod) piperMod = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
-  if(!piperReady){ await piperMod.download(PIPER_VOICE, p=>{ if(onPct&&p.total) onPct(Math.round(p.loaded/p.total*100)); }); piperReady=true; }
-  return piperMod;
-}
-
-// odtwarza lektora RAZ; callback onStatus(tekst) do pokazania postępu w UI.
-// Powtórka tylko ręcznie (gałka / przycisk ↻) — tu nie ma żadnej pętli.
-async function lektorPlay(text, ttsUrl, onStatus){
-  lektorStop();
-  const gen=lektorGen;                          // to odtworzenie; jeśli zmieni się — przerwij
-  if(ttsUrl){ const a=new Audio(ttsUrl); if(gen!==lektorGen) return; lektorAudio=a; a.play().catch(()=>{}); return; }
-  if(piperOn){
-    try{
-      onStatus && onStatus('przygotowuję lepszy głos…');
-      const mod = await Promise.race([ piperEnsure(p=>{ if(gen===lektorGen) onStatus&&onStatus('pobieram głos… '+p+'%'); }),
-        new Promise((_,r)=>setTimeout(()=>r(new Error('load')),120000)) ]);
-      if(gen!==lektorGen) return;                // runda się zmieniła w trakcie pobierania
-      onStatus && onStatus('lektor czyta (Piper)…');
-      const wav = await Promise.race([ mod.predict({text, voiceId:PIPER_VOICE}),
-        new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),60000)) ]);
-      if(gen!==lektorGen) return;                // synteza skończyła się po zmianie pytania → NIE graj starego
-      const url=URL.createObjectURL(wav);
-      const a=new Audio(url); a.onended=()=>URL.revokeObjectURL(url);
-      lektorAudio=a; await a.play(); return;
-    }catch(e){ if(gen!==lektorGen) return; onStatus && onStatus('Piper niedostępny — głos systemowy'); }
-  }
-  if(gen!==lektorGen) return;
-  onStatus && onStatus('lektor czyta…');
-  speak(text);
-}
-const piperToggleBtn=document.getElementById('piperToggle');
-function piperLabel(){ piperToggleBtn.textContent='🎙 lepszy głos: '+(piperOn?'wł. (Piper)':'wył.'); piperToggleBtn.classList.toggle('on',piperOn); }
-piperLabel();
-piperToggleBtn.onclick=()=>{
-  piperOn=!piperOn; localStorage.setItem('stacjaPiper', piperOn?'1':'0'); piperLabel();
-  if(piperOn){ setState('lepszy głos wł. — pierwsze użycie pobierze ~60 MB (raz)'); piperEnsure(p=>setState('pobieram głos… '+p+'%')).then(()=>setState('lepszy głos gotowy ✓')).catch(()=>{}); }
-  else setState('głos systemowy');
-};
+/* ============ lektor: synteza mowy (Piper / Web Speech) → app/lektor.js ============ */
 
 /* ============ tuner: render epok ============ */
 const ticksEl = document.getElementById('ticks');
@@ -269,28 +207,19 @@ document.getElementById('matchRandom').onclick=randomPick;
 updateMatchInfo();
 
 /* ====== wybór puli kategorii/trybów do meczu (multi-select) ====== */
-function toggleCat(k){ if(soloCats.has(k)) soloCats.delete(k); else soloCats.add(k); syncCatTicks(); updateMatchInfo(); }
-function selectAllCats(){
-  if(ALL_KEYS.length && ALL_KEYS.every(k=>soloCats.has(k))) soloCats.clear();
-  else ALL_KEYS.forEach(k=>soloCats.add(k));
-  syncCatTicks(); updateMatchInfo();
-}
+function toggleCat(k){ _togglePick(soloCats,k); syncCatTicks(); updateMatchInfo(); }
+function selectAllCats(){ _toggleAll(ALL_KEYS, soloCats); syncCatTicks(); updateMatchInfo(); }
 function syncCatTicks(){
   document.querySelectorAll('.tick').forEach(t=>{ const k=t.dataset.era; if(k&&k!=='rnd') t.classList.toggle('on', soloCats.has(k)); });
-  const rb=document.querySelector('.tick.rnd'); if(rb) rb.classList.toggle('on', ALL_KEYS.length>0 && ALL_KEYS.every(k=>soloCats.has(k)));
+  const rb=document.querySelector('.tick.rnd'); if(rb) rb.classList.toggle('on', _allSelected(ALL_KEYS, soloCats));
   syncQuizMode(); updateGrpChips();
 }
-/* tryb „quiz" jest wymagany przez buildMatch dla kategorii kind:'quiz' — trzymamy go w soloModes
-   automatycznie (chip ukryty), więc wybór grupy Wiedza wystarcza, bez ręcznego trybu. */
-function syncQuizMode(){
-  const hasQuiz=[...soloCats].some(k=>ALL_CATS[k] && ALL_CATS[k].kind==='quiz');
-  if(hasQuiz) soloModes.add('quiz'); else soloModes.delete('quiz');
-}
+/* tryb „quiz" wymagany przez buildMatch dla kategorii kind:'quiz' — trzymany automatycznie (core/picker.js) */
+function syncQuizMode(){ _syncQuizMode(soloCats, soloModes, ALL_CATS); }
 /* ---- chipy-grup (Ułóż mecz, kompakt): grupa = ✓ gdy choć jedna kategoria z grupy wybrana ---- */
 const GRP_KEYS={ dekady:()=>ERA_KEYS, style:()=>STYLE_KEYS, playlisty:()=>READY_KEYS,
   teksty:()=>LYRICS_KEYS, wiedza:()=>QUIZ_KEYS, twoje:()=>Object.keys(plLoad()) };
-function grpActive(g){ const f=GRP_KEYS[g]; return !!f && f().some(k=>soloCats.has(k)); }
-function plPick(n,one,few,many){ if(n===1) return one; const t=n%10, h=n%100; return (t>=2&&t<=4&&!(h>=12&&h<=14))?few:many; }
+function grpActive(g){ const f=GRP_KEYS[g]; return !!f && _grpActive(f(), soloCats); }
 function updateGrpChips(){
   let n=0;
   document.querySelectorAll('.grp-chip[data-grp]').forEach(ch=>{
@@ -312,7 +241,7 @@ function updateGrpChips(){
   if(gw){ if(QUIZ_KEYS.length) gw.hidden=false; else gw.remove(); }
   updateGrpChips();
 })();
-function toggleMode(m){ if(soloModes.has(m)) soloModes.delete(m); else soloModes.add(m); renderModeChips(); updateMatchInfo(); }
+function toggleMode(m){ _togglePick(soloModes,m); renderModeChips(); updateMatchInfo(); }
 function randomPick(){ const {cats,modes}=randomPools(); soloCats=new Set(cats); soloModes=new Set(modes); syncCatTicks(); renderModeChips(); updateMatchInfo(); }
 function renderModeChips(){
   const el=document.getElementById('modeTicks'); if(!el) return; el.innerHTML='';
@@ -325,11 +254,10 @@ function renderModeChips(){
 }
 function updateMatchInfo(){
   const el=document.getElementById('matchInfo'); if(!el) return;
-  if(!soloCats.size || !soloModes.size){ el.className='um-summary'; el.textContent='zaznacz kategorie i tryby'; return; }
-  const r=buildMatch([...soloCats],[...soloModes],soloRounds);
-  if(r.error){ el.className='um-summary err'; el.textContent=r.error; return; }
+  const s=pickSummary(soloCats, soloModes, soloRounds, ALL_CATS);
+  if(s.error){ el.className= (!soloCats.size||!soloModes.size) ? 'um-summary' : 'um-summary err'; el.textContent=s.error; return; }
   el.className='um-summary';
-  el.innerHTML=`${soloRounds} ${plPick(soloRounds,'runda','rundy','rund')} × ${CPR} kategorie × ${QPC} pytań = <b>${soloRounds*CPR*QPC} utworów</b>`;
+  el.innerHTML=`${s.rounds} ${s.label} × ${CPR} kategorie × ${QPC} pytań = <b>${s.count} utworów</b>`;
 }
 
 /* ============ losowanie rundy (źródło utworów → TrackRepository) ============ */
@@ -363,110 +291,9 @@ async function newRound(){
   startAudio();
 }
 
-/* ============ audio ============ */
-let revCtx=null, revSrc=null;   // tryb „od tyłu" (Web Audio) — revSrc to uchwyt z playReverse
-const SNIP=2;                                   // długość fragmentu (s)
-// iOS: AudioContext trzeba odblokować w geście (synchronicznie), zanim użyjemy go po await
-function unlockCtx(){ try{ if(!revCtx) revCtx=new (window.AudioContext||window.webkitAudioContext)(); if(revCtx.state==='suspended') revCtx.resume(); }catch(e){} }
-
-function armControls(){
-  document.getElementById('knob').classList.add('live');
-  document.getElementById('check').disabled=false;
-  document.getElementById('replay').disabled=false;
-  document.getElementById('skip').disabled=false;
-  document.getElementById('fTitle').focus({preventScroll:true});
-}
-
-// ikona gałki STEROWANA REALNYM stanem odtwarzacza (nie optymistycznie) —
-// inaczej ikona „pauza" pokazywała się mimo ciszy/buforowania (#1/#3)
-function bindAudioUI(el){
-  el.addEventListener('playing',()=>setIcon('pause'));
-  el.addEventListener('play',   ()=>setIcon('pause'));
-  el.addEventListener('pause',  ()=>{ if(!el.ended) setIcon('play'); });
-  el.addEventListener('waiting',()=>setIcon('wait'));
-}
-
-// dyspozytor — wybiera sposób odtwarzania wg trybu
-function startAudio(){
-  if(mode==='reverse'){ return startReverse(); }
-  if(mode==='snippet'){ return startSnippet(); }
-  audio=new Audio(current.preview); audio.preload='auto';
-  bindAudioUI(audio);
-  setIcon('wait'); setState('ładowanie…');
-  audio.addEventListener('timeupdate',()=>{
-    const p=audio.duration?audio.currentTime/audio.duration:0;
-    setRing(p);
-  });
-  // tekst stanu dopiero gdy dźwięk RZECZYWIŚCIE leci (#5: nie udawaj, że gra)
-  audio.addEventListener('playing',()=>setState('słuchaj uważnie…'),{once:true});
-  audio.addEventListener('ended',()=>{ audio=null; setIcon('play'); setRing(1); setState('koniec zajawki · ↻ od nowa'); });
-  audio.play().then(()=>{ armControls(); })
-    .catch(()=>{ setIcon('play'); setState('naciśnij ▶, by odtworzyć'); armControls(); });
-}
-
-// ✂️ fragment — krótkie okno z losowego miejsca zajawki
-function startSnippet(){
-  audio=new Audio(current.preview); audio.preload='auto';
-  bindAudioUI(audio);
-  setIcon('wait'); setState('ładowanie…');
-  audio.addEventListener('loadedmetadata',()=>{
-    const dur=audio.duration||25;
-    if(current.snipStart==null) current.snipStart=Math.max(0.3, Math.random()*(Math.min(dur,28)-SNIP-1));
-    audio.currentTime=current.snipStart;
-    audio.play().then(()=>{ setState('słuchaj — krótki fragment!'); armControls(); }).catch(()=>{ setIcon('play'); setState('naciśnij ▶'); armControls(); });
-  });
-  audio.addEventListener('timeupdate',()=>{
-    if(current.snipStart==null) return;
-    const el=audio.currentTime-current.snipStart;
-    setRing(Math.min(1, el/SNIP));
-    if(el>=SNIP){ audio.pause(); setIcon('play'); setRing(1); setState('fragment '+SNIP+'s · ↻ jeszcze raz'); }
-  });
-}
-
-// 🔄 od tyłu — dekoduje zajawkę i odtwarza odwróconą (Web Audio, przez AudioPort)
-async function startReverse(){
-  setIcon('wait'); setState('odwracam…');
-  revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
-  if(revCtx.state==='suspended'){ try{ await revCtx.resume(); }catch(e){} }
-  const r=await playReverse(revCtx, current.preview, {
-    cfg: window.STACJA_CONFIG,
-    onProgress: f=>setRing(f),
-    onEnded: ()=>{ revSrc=null; setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); },
-  });
-  if(r.ok){ revSrc=r; setIcon('pause'); setState('słuchaj — od tyłu!'); armControls(); return; }
-  // i proxy i dekodowanie padło → zagraj normalnie, żeby runda działała
-  audio=new Audio(current.preview); bindAudioUI(audio);
-  audio.play().then(()=>{ setState('„od tyłu" niedostępne tutaj — gram normalnie'); armControls(); }).catch(()=>{ setState('nie udało się odtworzyć'); armControls(); });
-}
-
-function stopAudio(){
-  if(audio){audio.pause();audio=null;}
-  if(revSrc){ revSrc.stop(); revSrc=null; }   // uchwyt z playReverse sam czyści timer
-  lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live');
-}
-function toggleAudio(){
-  unlockCtx();
-  if(!current){ newRound(); return; }
-  if(mode==='quiz'){ return; }   // wiedza ogólna — brak audio do odtworzenia
-  if(mode==='lektor'){
-    const speaking=(lektorAudio && !lektorAudio.paused) || (window.speechSynthesis && speechSynthesis.speaking);
-    if(speaking){ lektorStop(); setIcon('play'); setState('pauza · ▶ wznów'); return; }   // czyta → stop
-    lektorPlay(current.lyric, current.tts, setState); return;
-  }
-  if(mode==='reverse'){
-    if(revSrc){ stopAudio(); setIcon('play'); setState('pauza · ↻ od nowa'); return; }     // od tyłu: stop (replay od nowa)
-    startReverse(); return;
-  }
-  // music / snippet — trwały element HTMLAudio z eventami: pauza/wznów BEZ restartu (jak w multi)
-  if(audio && !audio.paused && !audio.ended){ audio.pause(); return; }                       // gra → pauza
-  const snipDone = mode==='snippet' && audio && current.snipStart!=null && (audio.currentTime-current.snipStart)>=SNIP;
-  if(audio && audio.src && !audio.ended && audio.currentTime>0 && !snipDone){
-    audio.play().catch(()=>{}); return;                                                      // pauza → wznów (od miejsca)
-  }
-  startAudio();   // świeże / po 'ended' (audio=null) / fragment dograł → od nowa
-}
-function replay(){ if(!current) return; if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; } stopAudio(); startAudio(); }
-
+/* ============ audio (solo) → app/audio.js + app/audioCtx.js ============ */
+// stan gry (current/mode) i wznowienie rundy wstrzykiwane; uchwyty odtwarzacza żyją w module
+initAudio({ current: ()=>current, mode: ()=>mode, newRound });
 document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
 
@@ -732,50 +559,10 @@ function line(ok,k,v){
 /* matching (norm/lev/textMatch/deLatin) → core/scoring.js */
 
 /* ============ pomocnicze UI ============ */
-function setIcon(mode){
-  const i=document.getElementById('knobIcon');
-  if(mode==='pause') i.innerHTML='<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
-  else if(mode==='wait') i.innerHTML='<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>';
-  else i.innerHTML='<path d="M8 5v14l11-7z"/>';
-}
-function setRing(p){ document.getElementById('ring').style.background=
-  `conic-gradient(var(--gold) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`; }
-function setState(t){ const e=document.getElementById('state'); e.classList.remove('err'); e.textContent=t; }
-function flash(t){ const e=document.getElementById('state'); e.classList.add('err'); e.textContent=t; setIcon('play'); }
-// one-shot animacja wejścia pod-ekranu (tylko przy realnej zmianie widoku, nie przy każdym re-renderze)
-function animIn(el){
-  if(!el) return;
-  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
-  el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
-}
-// confetti przy trafieniu (lekkie, czysty DOM/CSS; pomijane przy reduce-motion)
-function confetti(n=90){
-  try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
-  let fx=document.getElementById('confettiFx');
-  if(!fx){ fx=document.createElement('div'); fx.id='confettiFx'; document.body.appendChild(fx); }
-  const colors=['#58CC02','#1CB0F6','#FFC800','#FF4B4B','#CE82FF'];
-  for(let i=0;i<n;i++){
-    const p=document.createElement('i'); p.className='cf';
-    p.style.left=Math.random()*100+'%';
-    p.style.background=colors[i%colors.length];
-    p.style.setProperty('--x',(Math.random()*220-110)+'px');
-    p.style.setProperty('--r',(Math.random()*720-360)+'deg');
-    p.style.animationDelay=(Math.random()*0.2).toFixed(2)+'s';
-    p.style.animationDuration=(1.6+Math.random()*1.2).toFixed(2)+'s';
-    if(i%3===0) p.style.borderRadius='50%';
-    fx.appendChild(p); setTimeout(()=>p.remove(), 3200);
-  }
-}
+// prymitywy DOM/FX (setIcon/setRing/setState/flash/animIn/confetti/val/resetForm/
+// hideReveal/showLyric/hideLyric) → app/dom.js (import na górze pliku)
 function updateScore(){ document.getElementById('sScore').textContent=score+' / '+total;
   document.getElementById('sStreak').textContent=streak; }
-function val(id){ return document.getElementById(id).value.trim(); }
-function resetForm(){ ['fTitle','fArtist','fYear','fAlbum'].forEach(id=>document.getElementById(id).value=''); }
-function hideReveal(){ document.getElementById('reveal').classList.remove('show'); }
-// #14: tekst piosenki na ekranie (tryb lektor) — czytany ORAZ widoczny
-function showLyric(text){ const b=document.getElementById('lyricBox'); if(!b) return;
-  b.classList.remove('quiz');
-  b.innerHTML='<span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>'+escapeHtml(text||''); b.hidden=false; }
-function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; b.classList.remove('quiz'); } }
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
 let mpCh=null;
@@ -810,11 +597,7 @@ let mpPlayRound=null;       // dla której rundy jest już zbudowany formularz (
 let mpTimerInt=null;        // interwał odliczania
 const $m=id=>document.getElementById(id);
 const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
-/* nazwane stałe (zamiast magic numbers rozsianych po kodzie) */
-const MP_BUFFER_TIMEOUT_MS=6000;// klient: bezpiecznik — zgłoś „ready" mimo zawieszonego buforowania
-const MP_SNIP_WINDOW_S=16;      // okno losowania startu fragmentu (s)
-const EMOJI_TTL_MS=2400;        // jak długo leci emotka po ekranie
-const SAY_TTL_MS=4400;          // jak długo wisi dymek wiadomości
+/* nazwane stałe czasowe: core/timing.js (MP_BUFFER_TIMEOUT_MS, MP_SNIP_WINDOW_S, EMOJI_TTL_MS, SAY_TTL_MS) */
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
@@ -822,13 +605,9 @@ function mpErr(t){ $m('mpErr').textContent=t||''; }
 // Sesja LENIWA — tworzona przy geście, który jej potrzebuje (wejście do pokoju MP,
 // koniec meczu, ekran profilu/drużyny). ensureSession() woła Worker i cache'uje token.
 
-/* ---- wejście / wyjście z trybu ---- */
-const SCR_HEAD={ solo:'Ułóż mecz', liga:'Drużyna i znajomi', profil:'Profil' };
-function showScreen(s){
-  document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s);
-  if(s==='mp') mpPrefillName();
-  const tt=$m('scrTitle'); if(tt) tt.textContent=SCR_HEAD[s]||'';
-}
+/* ---- wejście / wyjście z trybu (router ekranów + social) → app/social.js ---- */
+// wstrzyknij powiązania z warstwą MP + etykiety kategorii (mpMe to współdzielony obiekt)
+initSocial({ mpMe, mpEnterRoom, mpRandCode, mpUnlockAudio, mpAvatarColor, catLabel });
 $m('goSolo').onclick=()=>{ showScreen('solo'); };
 // przełącznik układu gry MP (kolumny/czat) — przeniesiony na ekran główny (ustawienie)
 (function wireSkinSeg(){
@@ -842,266 +621,10 @@ $m('goSolo').onclick=()=>{ showScreen('solo'); };
 $m('goLiga').onclick=()=>{ showScreen('liga'); renderDruzyna(); };
 $m('goProfil').onclick=()=>{ showScreen('profil'); renderProfil(); };
 
-let dzMe=null;   // {id, handle, emoji, friend_code}
-
-/* ---- ksywa: jedna tożsamość dla profilu i lobby MP ----
-   Brak ksywy → generujemy zabawną, „muzyczną" (np. „głuchy suseł”) i zapisujemy.
-   Pary dobrane tak, by przymiotnik (rodzaj męski) zgadzał się ze zwierzęciem i mieścił w maxlength=16. */
-let myHandle=null;
-const HANDLE_ADJ=['głuchy','basowy','zgrany','niemy','dęty','funkowy','jazzowy','punkowy','technowy','discowy','rapowy','fałszywy','kręcony','bujający','skoczny','rzewny','gitarowy','winylowy','chórowy','rytmiczny'];
-const HANDLE_ANIM=['suseł','borsuk','kojot','łoś','jeż','bóbr','kret','chomik','tapir','lemur','manat','żuraw','dudek','narwal','mors','ryś','karp','bażant','gawron','słowik','szpak','kos','paw'];
-function funnyHandle(){
-  const a=HANDLE_ADJ[Math.floor(Math.random()*HANDLE_ADJ.length)];
-  const n=HANDLE_ANIM[Math.floor(Math.random()*HANDLE_ANIM.length)];
-  const h=a+' '+n;
-  return h.length<=16 ? h : n;   // bezpiecznik na maxlength
-}
-// zwróć stabilną ksywę: z profilu, a jak brak — wygeneruj i zapisz (idempotentne, cache w myHandle)
-async function ensureHandle(){
-  if(myHandle) return myHandle;
-  await ensureSession();
-  const p=await fetchProfile();
-  let h=p&&p.handle;
-  if(!h || h==='gracz'){ h=funnyHandle(); setHandle(h); }
-  myHandle=h; return h;
-}
-// lobby MP: wstaw ksywę do pola, jeśli puste (nie nadpisuje tego, co gracz wpisał)
-async function mpPrefillName(){
-  const inp=$m('mpName'); if(!inp || inp.value.trim()) return;
-  const h=await ensureHandle();
-  if(h && !inp.value.trim()){ inp.value=h; mpMe.name=mpMe.name||h; }
-}
-async function renderDruzyna(){
-  const el=$m('druzynaBody'); if(!el) return;
-  el.innerHTML='<div class="liga-empty">ładowanie…</div>';
-  try{
-  await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność
-  const [meR, teamsR, friR, penR, sentR] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), sentFriends()]);
-  const noAuth = (meR.error && !meR.data);   // brak sesji (Worker nieosiągalny) — pokaż baner, ale NIE chowaj ekranu
-  const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Brak połączenia z serwerem — drużyny i znajomi chwilowo niedostępne. Spróbuj odświeżyć.</div>` : '';
-  dzMe = (meR.data&&meR.data[0]) || null;
-  const secured = !!(dzMe && dzMe.secured);
-  const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[], sent = sentR.data||[];
-  const av=(n,c)=>`<span class="dz-av" style="background:${mpAvatarColor(n)}">${escapeHtml((n||'?').slice(0,1).toUpperCase())}</span>`;
-
-  // === KONTO — logowanie żyje w Profilu; tu tylko status/info ===
-  const kontoSection = secured
-    ? `<div class="dz-acct ok">✓ Zalogowano${dzMe.email?': '+escapeHtml(dzMe.email):''}</div>`
-    : `<div class="dz-acct">🔒 Zaloguj się w <b>Profilu</b>, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>`;
-
-  // === DRUŻYNA ===
-  const team = teams[0] || null;   // jedna „twoja drużyna" w UI (jak makieta)
-  dzTeamSync(team);                // podłącz/odłącz kanał lobby drużyny (#4)
-  const teamCard = team ? `
-    <div class="dz-team">
-      <div class="dz-team-top"><span class="em">${escapeHtml(team.emoji||'🍺')}</span>
-        <span class="nm"><b>${escapeHtml(team.name)}</b><small>${team.members} os. · kod <b>${escapeHtml(team.code)}</b></small></span>
-        <span class="dz-online" id="dzOnline"></span></div>
-      <div class="dz-team-btns">
-        <button class="dz-play" onclick="dzPlay()">🎮 Zagraj</button>
-        <button class="dz-mini" onclick="dzCopy('${escapeHtml(team.code)}')">📋 kod</button>
-        <button class="dz-mini red" onclick="dzLeave('${team.id}')">wyjdź</button>
-      </div>
-      <div class="dz-gamebanner" id="dzGameBanner" style="display:none"></div>
-    </div>` : '';
-  const teamForms = secured ? `
-    <div class="dz-row2">
-      <input id="dzName" maxlength="20" placeholder="nazwa drużyny">
-      <input id="dzEmoji" maxlength="2" placeholder="🍺" value="🍺" class="dz-emoji">
-      <button class="dz-go" onclick="dzCreate()">Stwórz</button>
-    </div>
-    <div class="dz-row2">
-      <input id="dzJoin" maxlength="6" placeholder="KOD DRUŻYNY" style="text-transform:uppercase">
-      <button class="dz-go blue" onclick="dzJoin()">Dołącz</button>
-    </div>` : '<div class="dz-hint">🔒 zaloguj się w Profilu, żeby stworzyć lub dołączyć do drużyny</div>';
-  const teamSection = `
-    <div class="dz-lbl">Twoja drużyna</div>
-    ${teamCard || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
-    <div class="dz-lbl">${team?'Zmień drużynę':'Stwórz lub dołącz'}</div>
-    ${teamForms}`;
-
-  // === ZNAJOMI ===
-  const myCode = dzMe?.friend_code || '—';
-  const pendRows = pending.map(p=>`
-    <div class="dz-fr"><span class="who">${av(p.handle)}${escapeHtml(p.handle||'gracz')}</span>
-      <span class="acts"><button class="dz-yes" onclick="dzRespond(${p.req_id},true)">✓</button><button class="dz-no" onclick="dzRespond(${p.req_id},false)">✗</button></span></div>`).join('');
-  const sentRows = sent.map(s=>`
-    <div class="dz-fr"><span class="who">${av(s.handle)}${escapeHtml(s.handle||'gracz')}</span>
-      <span class="pendtag">⏳ wysłano</span></div>`).join('');
-  const friendRows = friends.map(f=>`<div class="dz-fr"><span class="who">${av(f.handle)}${escapeHtml(f.handle||'gracz')}</span><span class="code">${escapeHtml(f.friend_code||'')}</span></div>`).join('')
-    || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie i zagrajcie razem.</div>';
-  const friendAddRow = secured
-    ? `<div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>`
-    : '<div class="dz-hint">🔒 zaloguj się w Profilu, żeby dodawać znajomych</div>';
-  const friendSection = `
-    <div class="dz-lbl">Twój kod znajomego</div>
-    <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">📋 kopiuj</button></div>
-    ${friendAddRow}
-    ${pending.length?`<div class="dz-lbl">Zaproszenia <span class="dz-badge">${pending.length}</span></div>${pendRows}`:''}
-    ${sent.length?`<div class="dz-lbl">Wysłane zaproszenia</div>${sentRows}`:''}
-    <div class="dz-lbl">Lista znajomych</div>
-    ${friendRows}`;
-
-  el.innerHTML = notice + kontoSection + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
-  dzRenderLobby();   // odśwież wskaźnik online + baner aktywnej gry (jeśli kanał już coś wie)
-  }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
-}
-function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':err===false?' ok':''); } }
-const dzErrLabel=(e)=> e==='requires_account' ? 'Najpierw zaloguj się (Google/Apple).' : e;
-async function dzCreate(){ const n=$m('dzName')?.value, e=$m('dzEmoji')?.value; const r=await teamCreate(n,e); if(r.error){ dzMsg('Nie udało się: '+dzErrLabel(r.error),true); } else renderDruzyna(); }
-async function dzJoin(){ const c=$m('dzJoin')?.value; if(!c) return; const r=await teamJoin(c); if(r.error){ dzMsg(r.error==='group_not_found'?'Nie ma takiej drużyny.':dzErrLabel(r.error),true); } else renderDruzyna(); }
-async function dzLeave(id){ dzTeamSync(null); await teamLeave(id); renderDruzyna(); }
-async function dzAddFriend(){
-  const c=$m('dzFriend')?.value; if(!c) return;
-  const r=await friendAdd(c);
-  if(r.error){ dzMsg(r.error==='profile_not_found'?'Nie ma takiego kodu.':(r.error==='self'?'To Twój kod 🙂':dzErrLabel(r.error)),true); return; }
-  // sukces: jeśli druga osoba już mnie zaprosiła → od razu znajomi; inaczej zaproszenie wysłane
-  dzMsg(r.data&&r.data.accepted ? '✓ Dodano znajomego!' : '✓ Wysłano zaproszenie — czeka na akceptację.', false);
-  renderDruzyna();
-}
-async function dzRespond(id,ok){ const r=await friendRespond(id,ok); if(r&&r.error){ dzMsg(dzErrLabel(r.error),true); } else renderDruzyna(); }
-function dzCopy(t){ try{ navigator.clipboard.writeText(t); }catch(e){} }
-// „Zagraj" → utwórz pokój jako host i ROZGŁOŚ kod na kanale drużyny, by członkowie online
-// dostali zaproszenie „dołącz jednym kliknięciem" (#4 — lobby drużyny w aplikacji).
-async function dzPlay(){
-  const n=await ensureHandle(); mpMe.name=n; setHandle(n);
-  const code=mpRandCode();
-  if(dzTeamCh){ try{ dzTeamCh.send({type:'broadcast',event:'gamestart',payload:{code, byName:n, by:mpMe.id}}); }catch(e){} }
-  showScreen('mp');
-  mpUnlockAudio();
-  mpEnterRoom(code, true);
-}
-
-/* ---- #4: lobby drużyny (kanał realtime per drużyna) ----
-   Reuse cfChannel (relay: presence + broadcast). Po wejściu na ekran Drużyna członkowie
-   subskrybują kanał „team-<kod>": presence = kto online, event „gamestart" = host ruszył grę. */
-let dzTeamCh=null, dzTeamCode=null, dzOnlineCount=0, dzActiveGame=null;
-function dzTeamSync(team){
-  const code = team ? team.code : null;
-  if(code===dzTeamCode) return;          // bez zmian
-  dzTeamDisconnect();
-  if(!code) return;
-  dzTeamCode=code; dzActiveGame=null;
-  dzTeamCh=cfChannel('team-'+code, {config:{broadcast:{self:false}, presence:{key:mpMe.id}}});
-  dzTeamCh.on('presence',{event:'sync'},()=>{ dzOnlineCount=Object.keys(dzTeamCh.presenceState()).length; dzRenderLobby(); });
-  dzTeamCh.on('broadcast',{event:'gamestart'},({payload})=>{ if(payload&&payload.by!==mpMe.id){ dzActiveGame=payload; dzRenderLobby(); } });
-  dzTeamCh.subscribe(async(st)=>{ if(st==='SUBSCRIBED'){ await dzTeamCh.track({name:mpMe.name||myHandle||'gracz'}); } });
-}
-function dzTeamDisconnect(){ if(dzTeamCh){ try{ dzTeamCh.unsubscribe(); }catch(e){} } dzTeamCh=null; dzTeamCode=null; dzOnlineCount=0; }
-function dzRenderLobby(){
-  const on=$m('dzOnline'); if(on) on.textContent = dzOnlineCount>1 ? `🟢 ${dzOnlineCount} online` : '';
-  const b=$m('dzGameBanner'); if(!b) return;
-  if(dzActiveGame){
-    b.style.display='';
-    b.innerHTML=`<span>🎮 <b>${escapeHtml(dzActiveGame.byName||'Ktoś')}</b> zaczął grę drużynową!</span>
-      <button class="dz-join-game" onclick="dzJoinGame()">Dołącz →</button>`;
-  } else { b.style.display='none'; b.innerHTML=''; }
-}
-async function dzJoinGame(){
-  if(!dzActiveGame) return;
-  const code=dzActiveGame.code, n=await ensureHandle(); mpMe.name=n; setHandle(n);
-  showScreen('mp'); mpUnlockAudio(); mpEnterRoom(code, false);
-}
-
-/* ---- KONTO (Google/Apple) — sekcja w Profilu; wymagane do drużyn/znajomych ---- */
-function dzLoadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); }); }
-function acMsg(t,err){ const m=$m('acMsg')||$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':''); } }
-function acAfterLogin(){ if(document.body.classList.contains('profil')) renderProfil(); else if(document.body.classList.contains('liga')) renderDruzyna(); }
-// HTML sekcji Konto (na ekran Profil): zalogowany → status + Wyloguj; niezalogowany → przyciski (stack, center).
-function acAccountHTML(secured, email){
-  const cfg=window.STACJA_CONFIG||{};
-  if(secured) return `<div class="pf-acct"><div class="dz-acct ok">✓ Zalogowano${email?': '+escapeHtml(email):''}</div><button class="dz-go" style="width:100%;padding:13px 16px;font-size:15px" onclick="acLogout()">Wyloguj</button><div class="dz-hint" id="acMsg"></div></div>`;
-  const g = cfg.googleClientId ? `<div id="acGoogleBtn"></div>` : '';
-  // natywny czarny przycisk Apple — Apple JS sam go renderuje w #appleid-signin
-  const a = cfg.appleServicesId ? `<div id="appleid-signin" data-color="black" data-border="false" data-type="sign in" data-mode="center-align" data-border-radius="22" style="width:240px;height:44px;cursor:pointer"></div>` : '';
-  const buttons = (g||a) ? `<div class="dz-oauth col">${g}${a}</div>` : `<div class="dz-hint">Logowanie Google/Apple — wkrótce.</div>`;
-  return `<div class="pf-acct"><div class="dz-acct">🔒 Zaloguj się, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>${buttons}<div class="dz-hint" id="acMsg"></div></div>`;
-}
-let _appleListenersAttached=false;
-// lazy-load SDK i wyrenderuj OBA natywne przyciski (Google GIS + Apple #appleid-signin)
-async function acInitAuthButtons(){
-  const cfg=window.STACJA_CONFIG||{};
-  const gbox=$m('acGoogleBtn');
-  if(cfg.googleClientId && gbox){ try{
-    await dzLoadScript('https://accounts.google.com/gsi/client');
-    if(window.google&&google.accounts&&google.accounts.id){
-      google.accounts.id.initialize({ client_id:cfg.googleClientId, callback: async (resp)=>{
-        const r=await loginOAuth('google', resp.credential);
-        if(r.error) acMsg('Logowanie Google: '+r.error,true); else acAfterLogin();
-      }});
-      google.accounts.id.renderButton(gbox, { theme:'outline', size:'large', shape:'pill', text:'signin_with', logo_alignment:'center', width:240 });
-    }
-  }catch(e){ /* przycisk się nie pokaże */ } }
-  const abox=document.getElementById('appleid-signin');
-  if(cfg.appleServicesId && abox){ try{
-    await dzLoadScript('https://appleid.cdn-apple.com/appleauth/static/jsapi/appleid/1/en_US/appleid.auth.js');
-    if(window.AppleID){
-      AppleID.auth.init({ clientId:cfg.appleServicesId, scope:'email', redirectURI:location.origin+location.pathname, usePopup:true });
-      if(!_appleListenersAttached){            // raz — natywny przycisk zgłasza wynik przez zdarzenia na document
-        _appleListenersAttached=true;
-        document.addEventListener('AppleIDSignInOnSuccess', async (e)=>{
-          const idt=e.detail&&e.detail.authorization&&e.detail.authorization.id_token;
-          if(!idt){ acMsg('Logowanie Apple: brak tokenu.',true); return; }
-          const r=await loginOAuth('apple', idt);
-          if(r.error) acMsg('Logowanie Apple: '+r.error,true); else acAfterLogin();
-        });
-        document.addEventListener('AppleIDSignInOnFailure', ()=>{ acMsg('Logowanie Apple anulowane.',true); });
-      }
-    }
-  }catch(e){ /* przycisk się nie pokaże */ } }
-}
-async function acLogout(){ logout(); myHandle=null; await ensureSession(); acAfterLogin(); }
-Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzJoinGame, acLogout });
-
-async function renderProfil(){
-  const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
-  await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
-  const p=await fetchProfile();
-  if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Brak połączenia z serwerem — spróbuj odświeżyć.</div>'; return; }
-  if(!p.handle || p.handle==='gracz'){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa
-  myHandle=p.handle;
-  $m('profilHandle').value=p.handle;
-  const s=p.standing;
-  const acc = s.correct&&s.matches ? Math.round(s.correct/(s.matches||1)) : null;
-  // nagłówek: awatar + ksywa (design)
-  const hd=$m('profilHead');
-  if(hd){
-    const av=escapeHtml((p.handle||'?').slice(0,1).toUpperCase());
-    const sub = s.matches>0 ? `${s.matches} ${s.matches===1?'mecz':'meczów'} · ${s.points} pkt` : 'Nowy gracz — jeszcze bez serii';
-    hd.innerHTML=`<span class="pf-av" style="background:${mpAvatarColor(p.handle)}">${av}</span>
-      <div class="pf-name">${escapeHtml(p.handle||'gracz')}</div>
-      <div class="pf-sub">${escapeHtml(sub)}</div>`;
-  }
-  const cats=Object.entries(p.byCat).sort((a,b)=>b[1].n-a[1].n);
-  const CATCOL=['var(--green)','var(--blue)','var(--purple)','var(--gold)'];
-  const catRows=cats.length? cats.map(([k,v],i)=>{
-    const pct=Math.round(v.ok/v.n*100), col=CATCOL[i%CATCOL.length];
-    return `<div class="pf-cat"><span class="lbl">${escapeHtml(catLabel(k))}</span>
-      <span class="bar"><i style="width:${pct}%;background:${col}"></i></span><span class="pct" style="color:${col}">${pct}%</span></div>`;
-  }).join('') : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>';
-  // odznaki: kilka pochodnych ze statystyk + reszta zablokowana (placeholdery — pełny system później)
-  const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:'🔒'}</span><small>${on?lab:'—'}</small></div>`;
-  const badgeDefs=[ [s.matches>0,'🎵','Pierwszy mecz'], [s.matches>=10,'🔥','10 meczów'],
-    [s.points>=100,'💯','100 pkt'], [false,'','—'] ];
-  const badges=badgeDefs.map(b=>badge(b[0],b[1],b[2])).join('');
-  const badgeOn=badgeDefs.filter(b=>b[0]).length;
-  el.innerHTML=`<div class="pf-lbl">Konto</div>
-    ${acAccountHTML(!!p.secured, p.email)}
-    <div class="pf-stats">
-      <div class="pf-st g"><b>${s.matches}</b><small>MECZE</small></div>
-      <div class="pf-st b"><b>${s.correct}</b><small>TRAFNE</small></div>
-      <div class="pf-st y"><b>${s.points}</b><small>PUNKTY</small></div>
-    </div>
-    <div class="pf-lbl">Najlepsze kategorie</div>
-    ${catRows}
-    <div class="pf-lbl">Odznaki <span class="pf-badgecount">${badgeOn} / 12</span></div>
-    <div class="pf-badges">${badges}</div>`;
-  if(!p.secured) acInitAuthButtons();   // lazy-load GIS + Apple JS → natywne przyciski
-}
 $m('profilSave').onclick=async()=>{
   const v=$m('profilHandle').value.trim(); if(!v) return;
   const btn=$m('profilSave'); btn.textContent='…';
-  await setHandle(v); myHandle=v; mpMe.name=mpMe.name||v;
+  await saveHandle(v);
   btn.textContent='✓'; setTimeout(()=>btn.textContent='Zapisz',1200);
 };
 $m('goMp').onclick=()=>{
@@ -1311,7 +834,7 @@ function mpKnobTap(){
   if(!mpGame) return mpPlayLocal();
   const mode=mpGame.mode;
   if(mode==='lektor'){
-    const speaking=(lektorAudio && !lektorAudio.paused) || (window.speechSynthesis && speechSynthesis.speaking);
+    const speaking=isSpeaking();
     if(speaking){ lektorStop(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }
     return mpPlayLocal();
   }
@@ -1337,7 +860,7 @@ function mpPlayLocal(){
     const start=mpGame.snipStart||0.5;
     const seek=()=>{ try{ a.currentTime=start; }catch(e){} };
     if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
-    const stop=()=>{ if((a.currentTime-start)>=SNIP){ a.pause(); mpClearSnip(a); } };
+    const stop=()=>{ if((a.currentTime-start)>=SNIP_SECS){ a.pause(); mpClearSnip(a); } };
     a._snipStop=stop; a.addEventListener('timeupdate', stop);
     a.play().catch(mpPlayBlocked); return;
   }
@@ -1348,10 +871,9 @@ function mpPlayLocal(){
 async function mpPlayReverse(){
   if(mpAudio){ try{mpAudio.pause();}catch(e){} }
   mpSetKnob('wait'); mpSetPlayStatus('odwracam…');
-  revCtx = revCtx || new (window.AudioContext||window.webkitAudioContext)();
-  if(revCtx.state==='suspended'){ try{ revCtx.resume(); }catch(e){} }
+  const ctx=await ensureCtxResumed();          // wspólny AudioContext (app/audioCtx.js)
   const url=mpGame.preview;
-  const r=await playReverse(revCtx, url, {
+  const r=await playReverse(ctx, url, {
     cfg: window.STACJA_CONFIG,
     shouldPlay: ()=>mpGame.preview===url,    // runda mogła się zmienić w trakcie dekodowania
     onEnded: ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); },
@@ -1406,8 +928,8 @@ async function mpPlImport(){
     mpRender();
   }catch(e){ setSt('err','Nie udało się: '+(e.message||e)); }
 }
-function mpToggleCat(k){ if(mpPickCats.has(k)) mpPickCats.delete(k); else mpPickCats.add(k); mpRender(); }
-function mpToggleMode(m){ if(mpPickModes.has(m)) mpPickModes.delete(m); else mpPickModes.add(m); mpRender(); }
+function mpToggleCat(k){ _togglePick(mpPickCats,k); mpRender(); }
+function mpToggleMode(m){ _togglePick(mpPickModes,m); mpRender(); }
 function mpSetRounds(r){ mpPickRounds=r; mpRender(); }
 function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
 // chipy-grup (host-picker MP) — analogicznie do solo (ekran 02). Stan rozwinięcia trwa między re-renderami.
@@ -1422,14 +944,13 @@ const MP_GRP=[
 ];
 const MP_GRP_SUB={teksty:'tłumaczenia 🌐 (tryb lektor)', wiedza:'wiedza ogólna 🧠 (tryb quiz)'};
 function mpToggleGrp(g){ if(mpPickOpenGrp.has(g)) mpPickOpenGrp.delete(g); else mpPickOpenGrp.add(g); mpRender(); }
-function mpSyncQuizMode(){ const hasQuiz=[...mpPickCats].some(k=>ALL_CATS[k]&&ALL_CATS[k].kind==='quiz');
-  if(hasQuiz) mpPickModes.add('quiz'); else mpPickModes.delete('quiz'); }
+function mpSyncQuizMode(){ _syncQuizMode(mpPickCats, mpPickModes, ALL_CATS); }
 function mpPickerHTML(){
   mpSyncQuizMode();
   let grpChips='', grpBands='', nSel=0;
   MP_GRP.forEach(d=>{
     const keys=d.keys(); if(!keys.length && d.g!=='twoje') return;
-    const active=keys.some(k=>mpPickCats.has(k)); if(active) nSel++;
+    const active=_grpActive(keys, mpPickCats); if(active) nSel++;
     const open=mpPickOpenGrp.has(d.g);
     grpChips+=`<button class="grp-chip${active?' on':''}${open?' open':''}" onclick="mpToggleGrp('${d.g}')">${d.lab}</button>`;
     if(!open) return;
@@ -1448,10 +969,10 @@ function mpPickerHTML(){
   const modeChips=ALL_MODES.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
   const roundsBtns=[1,2,3,4].map(r=>`<button class="${mpPickRounds===r?'on':''}" onclick="mpSetRounds(${r})">${r}</button>`).join('');
   const timerBtns=[[0,'bez'],[30,'30s'],[60,'60s'],[90,'90s']].map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
-  const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
-  const bad=(!mpPickCats.size||!mpPickModes.size||r.error);
-  const info=bad ? escapeHtml(r.error||'zaznacz kategorie i tryby')
-    : `${mpPickRounds} ${plPick(mpPickRounds,'runda','rundy','rund')} × ${CPR} kategorie × ${QPC} pytań = <b>${mpPickRounds*CPR*QPC} utworów</b>`;
+  const s=pickSummary(mpPickCats, mpPickModes, mpPickRounds, ALL_CATS);
+  const bad=!!s.error;
+  const info=bad ? escapeHtml(s.error)
+    : `${s.rounds} ${s.label} × ${CPR} kategorie × ${QPC} pytań = <b>${s.count} utworów</b>`;
   const catCount=nSel+' '+plPick(nSel,'wybrana','wybrane','wybranych');
   return `<div class="mpnav">
       <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">←</button>
@@ -1557,7 +1078,7 @@ async function mpHostNewRound(){
     mpGame.preview=t.preview; mpGame.lyric=''; mpGame.ttsUrl=''; mpGame.prompt='';
   }
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
-  mpGame.snipStart = mpGame.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
+  mpGame.snipStart = mpGame.mode==='snippet' ? mpSnipStart() : 0;
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
   mpGame.phase=MP.ARMING; mpGame.armNonce=(mpGame.armNonce||0)+1;
   mpGame.endsAt=null; mpGame.readyCount=0; mpGame.readyTotal=mpMembers().length;
@@ -1610,9 +1131,7 @@ let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykie
 let mpTypingSet=new Set();      // PR3: kto „pisze…" (zasilane ulotnym broadcastem „typing")
 let mpTypingTimers={};          // id → timeout wygaszający stan „pisze" po ~3 s
 let mpLastTyping=0;             // throttle wysyłki własnego „typing" (max raz / 1.5 s)
-let mpChatLog=[];               // feed czatu (klient-side): {kind:'chat'|'typ'|'sys', ...} — ring buffer
-let mpSeenProp=new Set();        // id już zaksięgowanych typów (anty-dubel w feedzie)
-let mpSeenPass=new Set();        // id graczy, których pas już zaksięgowano
+let mpFeed=createFeed();        // feed czatu (klient-side) — core/chatFeed.js: {log, seenProp, seenPass}
 let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
 let mpPlaySub=null;             // dla którego pod-stanu fazy zbudowany scaffold (sluchaj/kombinuj)
 let mpSub='sluchaj';            // klient-lokalny pod-stan fazy PLAY (obie skórki mają fazy)
@@ -1779,11 +1298,10 @@ function mpConfHTML(withPass=true){
 }
 // przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
 const mpHr = ()=> `<div class="mp-hr"></div>`;
-// czas fazy „słuchaj" — z kategorii (cat.listenSecs) albo domyślnie wg trybu
-const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12 };
+// czas fazy „słuchaj" — z kategorii (cat.listenSecs) albo domyślnie wg trybu (core/timing.js)
 function mpListenSecs(g){
-  const cat=ALL_CATS[g.catKey], c=cat&&cat.listenSecs;
-  return (c>0 ? c : (LISTEN_SECS[g.mode]||15));
+  const cat=ALL_CATS[g.catKey];
+  return _listenSecs(g.mode, cat && cat.listenSecs);
 }
 const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
 const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
@@ -1792,7 +1310,7 @@ const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><
 const mpPromptHTML = (g)=> g.mode==='quiz'&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">pytanie</span>${escapeHtml(g.prompt)}</div>` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
 function mpChatFeedHTML(){
-  const rows=mpChatLog.map(c=>{
+  const rows=mpFeed.log.map(c=>{
     if(c.kind==='sys') return `<div class="mp-csys ${c.cls||''}">${escapeHtml(c.text)}</div>`;
     const av=escapeHtml((c.byName||'?').slice(0,1).toUpperCase());
     const avb=`<b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b>`;
@@ -2063,29 +1581,15 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
 }
 // #10: krótka wiadomość — dymek lecący przez ekran + wpis w feed czatu (skórka „czat")
 function mpPushChat(byName, text, mine){
-  mpChatLog.push({kind:'chat', byName, text, mine:!!mine}); if(mpChatLog.length>60) mpChatLog.shift();
+  _pushChat(mpFeed, byName, text, mine);   // core/chatFeed.js (stan + ring-buffer)
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 function mpNameOf(id){ const m=mpMembers().find(x=>x.id===id); return m?m.name:'gracz'; }
-function mpFeedReset(){ mpChatLog=[]; mpSeenProp=new Set(); mpSeenPass=new Set(); }
-// zaksięguj NOWE typy i pasy do feedu czatu (w kolejności napływu) — typy jako dymki, pas jako linia systemowa
+function mpFeedReset(){ resetFeed(mpFeed); }
+// zaksięguj NOWE typy/pasy do feedu (core/chatFeed.js) i zdejmij „pisze" dla autorów typów
 function mpIngestFeed(g){
-  if(!g) return;
-  const slots=g.answerSlots||slotsFor();
-  const label=(k)=>{ const s=slots.find(x=>x.key===k); return s?s.label:k; };
-  (g.proposals||[]).forEach(p=>{
-    const key=p.aid||p.id;   // dedup po aid akcji (optymistyczna i autorytatywna kopia mają to samo aid)
-    if(mpSeenProp.has(key)) return; mpSeenProp.add(key);
-    mpClearTypingFor(p.by);  // typ od gracza dotarł → przestań pokazywać „pisze" dla niego
-    const chips=Object.keys(p.values||{}).map(k=>({slot:label(k), key:k, val:p.values[k]}));
-    mpChatLog.push({kind:'typ', byName:p.byName, chips, values:p.values, mine:p.by===mpMe.id});
-    if(p.conf==='sure') mpChatLog.push({kind:'sys', cls:'sure', text:`${p.byName} ustawił(a) 🟡 PEWNIAK`});
-  });
-  (g.passed||[]).forEach(pp=>{
-    if(mpSeenPass.has(pp.id)) return; mpSeenPass.add(pp.id);
-    mpChatLog.push({kind:'sys', cls:'pass', text:`${pp.name||'gracz'} spasował(a) ✋`});
-  });
-  if(mpChatLog.length>60) mpChatLog.splice(0, mpChatLog.length-60);
+  const { clearTyping } = _ingestFeed(mpFeed, g, mpMe.id);
+  clearTyping.forEach(mpClearTypingFor);
 }
 function mpDoSay(text){
   const t=(text||'').trim().slice(0,64); if(!t) return;
@@ -2152,7 +1656,7 @@ function mpFloatSay(text, byName){
 /* PR3: sygnał „pisze…" — ulotny broadcast (poza host-authority), throttle + wygaszanie */
 function mpTypingPing(){
   const now=Date.now();
-  if(now-mpLastTyping < 1500) return;          // max raz na 1.5 s
+  if(!shouldPing(mpLastTyping, now)) return;   // throttle: max raz na 1.5 s (core/timing.js)
   mpLastTyping=now;
   if(mpCh && mpGame && mpGame.phase===MP.PLAY) mpCh.send({type:'broadcast',event:'typing',payload:{by:mpMe.id, byName:mpMe.name}});
 }
