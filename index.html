@@ -718,7 +718,8 @@
   .mh-card.solo{background:var(--green);box-shadow:0 5px 0 var(--green-d)}
   .mh-card.mp{background:var(--blue);box-shadow:0 5px 0 var(--blue-d)}
   .mh-card:active{transform:translateY(5px);box-shadow:none}
-  .mh-card .ic{font-size:30px;width:54px;height:54px;background:rgba(255,255,255,.22);border-radius:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto}
+  .mh-card .ic{font-size:30px;width:54px;height:54px;background:rgba(255,255,255,.22);border-radius:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#fff}
+  .mh-card .ic svg,.mh-mini svg{display:block}
   .mh-card .tx{display:flex;flex-direction:column}
   .mh-card .tx b{font-family:var(--display);font-weight:900;font-size:20px;color:#fff;letter-spacing:.02em}
   .mh-card .tx small{font-family:var(--body);font-weight:700;font-size:13px;color:rgba(255,255,255,.9)}
@@ -1039,6 +1040,44 @@
   #mpStage.salon .rv-track .t{font-size:24px} #mpStage.salon .rv-track .a{font-size:18px}
   #mpStage.salon .mp-next{font-size:18px;padding:15px}
   #mpStage.salon .mp-rail{transform:scale(1.08);transform-origin:center;margin:6px 0 14px}
+
+  /* ===== JUICE — soczystość w momentach-nagrodach (transform/opacity, nasza krzywa).
+     Cała sekcja pod prefers-reduced-motion: no-preference → wyłączona przy ograniczonym ruchu. ===== */
+  @media (prefers-reduced-motion: no-preference){
+    /* odsłona: slam karty → pop banera → stempel ✓/✗ → „+N pkt" wyskakuje → przycisk dalej wjeżdża */
+    .rv-card{animation:jSlam .34s cubic-bezier(.2,.8,.2,1) both}
+    .rv-card.quiz{animation:jSlam .34s cubic-bezier(.2,.8,.2,1) both}
+    .rv-slot .mk{animation:jStamp .32s cubic-bezier(.2,.8,.2,1) both .16s}
+    .rv-banner{animation:jPop .32s cubic-bezier(.2,.8,.2,1) both .12s}
+    .rv-banner .pts{display:inline-block;animation:jPts .44s cubic-bezier(.2,.8,.2,1) both .26s}
+    .mp-next{animation:jRise .3s cubic-bezier(.2,.8,.2,1) both .3s}
+    /* wynik meczu: hero pop, paski rosną od zera (scaleX), nagłówki sekcji wjeżdżają */
+    .dn-hero{animation:jPop .42s cubic-bezier(.2,.8,.2,1) both}
+    .dn-wk .bar i{transform-origin:left;animation:jGrow .6s cubic-bezier(.2,.8,.2,1) both .12s}
+    .dn-mvp,.dn-stawia{animation:jRise .36s cubic-bezier(.2,.8,.2,1) both .1s}
+    /* klik: sprężysty „klik" na kartach/typach/przyciskach (czucie dotyku) */
+    .mp-cand:active{transform:scale(.96)}
+    .mh-card:active{transform:translateY(4px) scale(.995)}
+  }
+  .mp-cand{transition:transform .09s ease}
+  @keyframes jSlam{0%{opacity:0;transform:scale(.92) translateY(10px)}60%{transform:scale(1.015) translateY(0)}100%{opacity:1;transform:scale(1)}}
+  @keyframes jPop{0%{opacity:0;transform:scale(.82)}68%{transform:scale(1.05)}100%{opacity:1;transform:scale(1)}}
+  @keyframes jStamp{0%{opacity:0;transform:scale(1.8) rotate(-14deg)}70%{transform:scale(.94) rotate(2deg)}100%{opacity:1;transform:scale(1) rotate(0)}}
+  @keyframes jPts{0%{opacity:0;transform:scale(.4)}62%{transform:scale(1.28)}100%{opacity:1;transform:scale(1)}}
+  @keyframes jGrow{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
+  @keyframes jRise{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
+
+  /* LOADER „Beat & Beka": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
+  .bb-loader{display:flex;gap:8px;justify-content:center;align-items:flex-end;height:20px;margin:4px 0 10px}
+  .bb-loader i{width:12px;height:12px;border-radius:50%;background:var(--green)}
+  .bb-loader i:nth-child(2){background:var(--blue)}
+  .bb-loader i:nth-child(3){background:var(--gold)}
+  @media (prefers-reduced-motion: no-preference){
+    .bb-loader i{animation:bbBounce .9s cubic-bezier(.2,.8,.2,1) infinite}
+    .bb-loader i:nth-child(2){animation-delay:.15s}
+    .bb-loader i:nth-child(3){animation-delay:.3s}
+  }
+  @keyframes bbBounce{0%,80%,100%{transform:translateY(0);opacity:.55}40%{transform:translateY(-10px);opacity:1}}
 </style>
 <script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>
@@ -1055,11 +1094,11 @@
       <div class="mh-sub">Sprawdź czy masz uszy i muzg</div>
       <div class="mh-ver" id="appVer"></div>
     </div>
-    <button class="mh-card solo" id="goSolo"><span class="ic">🎧</span><span class="tx"><b>SOLO</b><small>Trening, własne tempo</small></span><span class="ar">›</span></button>
-    <button class="mh-card mp" id="goMp"><span class="ic">👥</span><span class="tx"><b>ZE ZNAJOMYMI</b><small>Mecz w pokoju, na żywo</small></span><span class="ar">›</span></button>
+    <button class="mh-card solo" id="goSolo"><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M204.73 51.85A108.07 108.07 0 0 0 20 128v56a28 28 0 0 0 28 28h16a28 28 0 0 0 28-28v-40a28 28 0 0 0-28-28H44.84A84.05 84.05 0 0 1 128 44h.64a83.7 83.7 0 0 1 82.52 72H192a28 28 0 0 0-28 28v40a28 28 0 0 0 28 28h16a28 28 0 0 0 28-28v-56a107.34 107.34 0 0 0-31.27-76.15M64 140a4 4 0 0 1 4 4v40a4 4 0 0 1-4 4H48a4 4 0 0 1-4-4v-44Zm148 44a4 4 0 0 1-4 4h-16a4 4 0 0 1-4-4v-40a4 4 0 0 1 4-4h20Z"/></svg></span><span class="tx"><b>SOLO</b><small>Trening, własne tempo</small></span><span class="ar">›</span></button>
+    <button class="mh-card mp" id="goMp"><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M164.38 181.1a52 52 0 1 0-72.76 0a75.9 75.9 0 0 0-30 28.89a12 12 0 0 0 20.78 12a53 53 0 0 1 91.22 0a12 12 0 1 0 20.78-12a75.9 75.9 0 0 0-30.02-28.89M100 144a28 28 0 1 1 28 28a28 28 0 0 1-28-28m147.21 9.59a12 12 0 0 1-16.81-2.39c-8.33-11.09-19.85-19.59-29.33-21.64a12 12 0 0 1-1.82-22.91a20 20 0 1 0-24.78-28.3a12 12 0 1 1-21-11.6a44 44 0 1 1 73.28 48.35a92.2 92.2 0 0 1 22.85 21.69a12 12 0 0 1-2.39 16.8m-192.28-24c-9.48 2.05-21 10.55-29.33 21.65a12 12 0 0 1-19.19-14.45a92.4 92.4 0 0 1 22.85-21.69a44 44 0 1 1 73.28-48.35a12 12 0 1 1-21 11.6a20 20 0 1 0-24.78 28.3a12 12 0 0 1-1.82 22.91Z"/></svg></span><span class="tx"><b>ZE ZNAJOMYMI</b><small>Mecz w pokoju, na żywo</small></span><span class="ar">›</span></button>
     <div class="mh-row">
-      <button class="mh-mini" id="goLiga"><span>👥</span>Drużyna</button>
-      <button class="mh-mini" id="goProfil"><span>👤</span>Profil</button>
+      <button class="mh-mini" id="goLiga"><span><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M164.38 181.1a52 52 0 1 0-72.76 0a75.9 75.9 0 0 0-30 28.89a12 12 0 0 0 20.78 12a53 53 0 0 1 91.22 0a12 12 0 1 0 20.78-12a75.9 75.9 0 0 0-30.02-28.89M100 144a28 28 0 1 1 28 28a28 28 0 0 1-28-28m147.21 9.59a12 12 0 0 1-16.81-2.39c-8.33-11.09-19.85-19.59-29.33-21.64a12 12 0 0 1-1.82-22.91a20 20 0 1 0-24.78-28.3a12 12 0 1 1-21-11.6a44 44 0 1 1 73.28 48.35a92.2 92.2 0 0 1 22.85 21.69a12 12 0 0 1-2.39 16.8m-192.28-24c-9.48 2.05-21 10.55-29.33 21.65a12 12 0 0 1-19.19-14.45a92.4 92.4 0 0 1 22.85-21.69a44 44 0 1 1 73.28-48.35a12 12 0 1 1-21 11.6a20 20 0 1 0-24.78 28.3a12 12 0 0 1-1.82 22.91Z"/></svg></span>Drużyna</button>
+      <button class="mh-mini" id="goProfil"><span><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M234.38 210a123.36 123.36 0 0 0-60.78-53.23a76 76 0 1 0-91.2 0A123.36 123.36 0 0 0 21.62 210a12 12 0 1 0 20.77 12c18.12-31.32 50.12-50 85.61-50s67.49 18.69 85.61 50a12 12 0 0 0 20.77-12M76 96a52 52 0 1 1 52 52a52.06 52.06 0 0 1-52-52"/></svg></span>Profil</button>
     </div>
     <div class="mh-setting">
       <span>Układ gry ze znajomymi</span>

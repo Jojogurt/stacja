@@ -11,6 +11,7 @@ import { listenSecs as _listenSecs } from '../core/timing.js';   // mpListenSecs
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState } from '../core/mpReducer.js';
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn } from './dom.js';
+import { playClap } from './sfx.js';
 import { mpPickerHTML } from './mp-picker.js';
 
 const $m = id => document.getElementById(id);
@@ -58,10 +59,11 @@ function mpRender(){
   const salonHost=mpIsSalonHost();
   st.classList.toggle('salon', salonHost);            // duży ekran-monitor TV (CSS w index.html)
   document.body.classList.toggle('salon', salonHost); // wyłom z mobilnej powłoki 520px (szeroki TV)
-  // one-shot przejście przy zmianie „dużego" widoku (poczekalnia ↔ picker ↔ gra) — nie przy re-renderze
-  const view = (!S.game || S.game.phase==null) ? ((S.host && S.roomStage==='build') ? 'picker' : 'wait') : 'game';
-  if(view!==S.lastView){ S.lastView=view; animIn(st); }
+  // PŁYNNE WEJŚCIE SCENY: animIn (fade+slide, reduced-motion-safe) przy ZMIANIE sceny —
+  // faza/pod-faza/odsłona/widok — a NIE przy każdym re-renderze (głos/typ). Klucz sceny = S.lastView.
   if(!S.game || S.game.phase==null){
+    const pre = (S.host && S.roomStage==='build') ? 'picker' : 'wait';
+    if(pre!==S.lastView){ S.lastView=pre; animIn(st); }
     // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
     const building = S.host && S.roomStage==='build';
     st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
@@ -73,7 +75,13 @@ function mpRender(){
   if(g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce){
     S.revealNonce=g.playNonce;
     S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
-    if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti
+    if(g.reveal.teamOk || g.reveal.pewniakWin){ confetti(); playClap(); }   // drużyna trafiła → confetti + oklaski
+  }
+  // wejście sceny gry — animIn na zmianę fazy/pod-fazy; odsłona i wynik mają własny „juice", więc bez animIn
+  const gScene = mpRevealPending() ? 'reveal:'+S.revealNonce
+    : (g.phase===MP.PLAY ? 'play:'+g.playNonce+':'+S.sub : 'ph:'+g.phase);
+  if(gScene!==S.lastView){ S.lastView=gScene;
+    if(!(mpRevealPending() || g.phase===MP.DONE)) animIn(st);
   }
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
   if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(S.revealSnap); return; }
@@ -84,7 +92,7 @@ function mpRender(){
     case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
     case MP.PLAY:    mpRenderPlay(g, head, st); return;   // salon: te same fazy, tylko większe (CSS) + ukryte kontrolki gracza
     case MP.REVEAL:  st.innerHTML=mpRenderWaitNext(head); return;   // już kliknąłem „dalej" — czekam na resztę
-    case MP.DONE:    st.innerHTML=mpRenderDone(g, head); return;
+    case MP.DONE:    st.innerHTML=mpRenderDone(g, head); mpJuiceScore(g); return;
   }
 }
 // pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania.
@@ -95,11 +103,13 @@ function mpReactsBarHTML(){
     <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
-const mpRenderLoading = (head)=> `${head}<div class="mp-deck"><div class="mp-state">host losuje utwór…</div></div>`;
+// loader „Beat & Beka": trzy odbijające się kropki (zielona/niebieska/złota) — wspólny wskaźnik „dzieje się"
+const bbLoader = `<div class="bb-loader"><i></i><i></i><i></i></div>`;
+const mpRenderLoading = (head)=> `${head}<div class="mp-deck">${bbLoader}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
 const mpRenderArming = (g, head)=>{
   const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
-  return `${head}${mpRosterStrip(g)}<div class="mp-deck"><div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
+  return `${head}${mpRosterStrip(g)}<div class="mp-deck">${bbLoader}<div class="mp-state">czekamy aż wszyscy będą gotowi… <b>${rc}/${rt}</b></div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
@@ -426,6 +436,21 @@ function mpRenderQuizReveal(snap){
     <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
 }
 
+// JUICE: licznik punktów bije od 0 do wyniku (ease-out). Jednorazowo per wynik — dataset na #mpStage
+// przeżywa re-render (innerHTML się zmienia, element nie), więc nie restartuje przy każdym mpRender.
+function mpJuiceScore(g){
+  const stage=$m('mpStage'); const el=stage&&stage.querySelector('.dn-hero .sc'); if(!el) return;
+  const target=String(g.score||0);
+  if(stage.dataset.jscore===target){ el.textContent=target; return; }
+  stage.dataset.jscore=target;
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  if(reduce || typeof requestAnimationFrame!=='function'){ el.textContent=target; return; }
+  const n=Number(target)||0, dur=700, t0=Date.now();
+  el.textContent='0';
+  const tick=()=>{ const k=Math.min(1,(Date.now()-t0)/dur), e=1-Math.pow(1-k,3);
+    el.textContent=Math.round(n*e); if(k<1) requestAnimationFrame(tick); else el.textContent=target; };
+  requestAnimationFrame(tick);
+}
 // wynik meczu (design): złoty hero + MVP + kto stawia + paski wkładu
 function mpRenderDone(g, head){
   const tally=(g.tallyList||[]);

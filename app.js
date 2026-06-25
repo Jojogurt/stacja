@@ -4,11 +4,12 @@
  *   app/audio·audioCtx·lektor·dom — odtwarzanie i prymitywy · app/catalog.js — dane kategorii.
  * Granica zależności: app/ zależy od core/, nigdy od app.js. */
 import './app/solo.js';                              // tryb SOLO (self-wiring; ciągnie catalog/audio/lektor/mp)
+import './app/sfx.js';                               // UI-dźwięki (klik na buttonach, oklaski przy trafieniu)
 import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v19';   // rebrand „Beat & Beka" + podtytuł; przełącznik motywu jako segment w ustawieniach (Jasny/Ciemny)
+const APP_VERSION = 'v20';   // juice (odsłona/wynik/klik) + przejścia faz + loadery + ikony Phosphor (menu) + dźwięki (klik, oklaski)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

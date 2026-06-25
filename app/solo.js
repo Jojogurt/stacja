@@ -11,6 +11,7 @@ import { resolveTrack } from '../adapters-web/itunesRepository.js';
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric } from './dom.js';
 import { lektorPlay } from './lektor.js';
+import { playClap } from './sfx.js';
 import { unlockCtx } from './audioCtx.js';
 import { startAudio, stopAudio, toggleAudio, replay, initAudio } from './audio.js';
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
@@ -443,7 +444,7 @@ function check(){
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${tt}</b><small>${sub}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
   document.getElementById('reveal').classList.add('show');
-  if(okTitle && okArtist) confetti();   // pełne trafienie → confetti
+  if(okTitle && okArtist){ confetti(); playClap(); }   // pełne trafienie → confetti + oklaski
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -470,7 +471,7 @@ function checkQuiz(){
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':'Pudło'}</b><small>${roundOk?'wszystkie pola trafione':'sprawdź poprawne odpowiedzi'}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
   document.getElementById('reveal').classList.add('show');
-  if(roundOk) confetti();
+  if(roundOk){ confetti(); playClap(); }
   document.getElementById('check').disabled=true;
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
