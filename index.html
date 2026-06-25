@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#58CC02">
 <meta name="robots" content="noindex">
-<title>STACJA — trener pubquizu</title>
+<title>Beat & Beka — trener pubquizu</title>
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="STACJA">
+<meta name="apple-mobile-web-app-title" content="Beat & Beka">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -709,10 +709,10 @@
 
   /* ===== DESIGN v2 — Fala 3: menu ===== */
   body.menu .top{display:none}
-  .mh-hero{text-align:center;margin:24px 0 24px;padding:0}
+  .mh-hero{text-align:center;margin:32px 0 24px;padding:0}
   @keyframes mpeq{0%,100%{height:7px}50%{height:20px}}
-  .mh-logo{font-family:var(--display);font-weight:900;font-size:52px;letter-spacing:.02em;color:var(--green);line-height:1}
-  .mh-logo b{color:#FF8A00}   /* pomarańczowa kropka */
+  .mh-logo{font-family:var(--display);font-weight:900;font-size:clamp(44px,14.6vw,56px);letter-spacing:.01em;color:var(--green);line-height:1.04;white-space:nowrap}
+  .mh-logo b{color:#FF8A00}   /* pomarańczowy akcent na „&" */
   .mh-sub{font-family:var(--body);font-weight:700;font-size:16px;color:var(--muted);margin-top:8px}
   .mh-card{display:flex;align-items:center;gap:15px;width:100%;border:none;border-radius:20px;padding:18px;cursor:pointer;text-align:left;margin-bottom:15px}
   .mh-card.solo{background:var(--green);box-shadow:0 5px 0 var(--green-d)}
@@ -938,18 +938,12 @@
     font-family:var(--display);font-weight:900;font-size:17px;letter-spacing:.05em;color:#fff;cursor:pointer;text-transform:uppercase}
   .um-start:active{transform:translateY(5px);box-shadow:none}
 
-  /* ===== DARK MODE ===== */
-  .theme-toggle{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:14px;z-index:60;
-    width:42px;height:42px;border-radius:50%;border:2px solid var(--line);background:var(--panel);
-    font-size:18px;line-height:1;cursor:pointer;display:none;box-shadow:0 2px 0 var(--line)}
-  body.menu .theme-toggle{display:grid;place-items:center}
-  .theme-toggle:active{transform:translateY(2px);box-shadow:none}
+  /* ===== DARK MODE (przełącznik motywu = segment w ustawieniach menu, #themeSeg) ===== */
   html.dark{
     --bg:#15121E; --panel:#221C33; --panel2:#2C2540;
     --ink:#ECE9F4; --muted:#8C84A1; --line:#39314F;
   }
   html.dark body{background:var(--bg);color:var(--ink)}
-  html.dark .theme-toggle{box-shadow:none}
   /* powierzchnie z hardcodowanym #fff / jasnym tłem → panel/muted */
   html.dark .grp-chip,
   html.dark .um-rounds button,
@@ -1049,7 +1043,6 @@
 <script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>
 <body class="menu">
-  <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw (jasny/ciemny)">🌙</button>
   <div class="top">
     <button class="nav-back" id="toMenu" aria-label="wstecz">←</button>
     <span class="nav-title" id="scrTitle"></span>
@@ -1058,8 +1051,8 @@
 
   <section id="menu">
     <div class="mh-hero">
-      <div class="mh-logo">STA<b>·</b>CJA</div>
-      <div class="mh-sub">grupowy quiz muzyczny</div>
+      <div class="mh-logo">Beat <b>&amp;</b> Beka</div>
+      <div class="mh-sub">Sprawdź czy masz uszy i muzg</div>
       <div class="mh-ver" id="appVer"></div>
     </div>
     <button class="mh-card solo" id="goSolo"><span class="ic">🎧</span><span class="tx"><b>SOLO</b><small>Trening, własne tempo</small></span><span class="ar">›</span></button>
@@ -1073,6 +1066,13 @@
       <div class="seg" id="skinSeg">
         <button data-skin="kolumny">kolumny</button>
         <button data-skin="czat">czat</button>
+      </div>
+    </div>
+    <div class="mh-setting">
+      <span>Ustawienie motywu</span>
+      <div class="seg" id="themeSeg">
+        <button data-theme="light">Jasny</button>
+        <button data-theme="dark">Ciemny</button>
       </div>
     </div>
   </section>

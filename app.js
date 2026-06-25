@@ -8,18 +8,22 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v18';   // MP salon: normalne fazy większe + host nadpisuje board; nicki, emotki (🖕, dark podpis), layout faz, sticky dół
+const APP_VERSION = 'v19';   // rebrand „Beat & Beka" + podtytuł; przełącznik motywu jako segment w ustawieniach (Jasny/Ciemny)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
-/* ---- motyw jasny/ciemny (klasa html.dark; wczesny skrypt w <head> ustawia ją przed renderem) ---- */
+/* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
+   klasa html.dark, wczesny skrypt w <head> ustawia ją przed renderem ---- */
 (function wireTheme(){
-  const btn=document.getElementById('themeToggle'); if(!btn) return;
+  const seg=document.getElementById('themeSeg'); if(!seg) return;
   const sync=()=>{ const dark=document.documentElement.classList.contains('dark');
-    btn.textContent=dark?'☀️':'🌙';
+    seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.theme===(dark?'dark':'light')));
     const m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content', dark?'#15121E':'#58CC02');
   };
-  btn.onclick=()=>{ const dark=document.documentElement.classList.toggle('dark');
-    try{ localStorage.setItem('stacjaTheme', dark?'dark':'light'); }catch(e){} sync(); };
+  seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    const dark=b.dataset.theme==='dark';
+    document.documentElement.classList.toggle('dark', dark);
+    try{ localStorage.setItem('stacjaTheme', dark?'dark':'light'); }catch(e){} sync();
+  });
   sync();
 })();
 

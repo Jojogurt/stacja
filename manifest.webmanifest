@@ -1,7 +1,7 @@
 {
-  "name": "STACJA — trener pubquizu",
-  "short_name": "STACJA",
-  "description": "Webowy trener pubquizowy: rozpoznawaj utwory, graj solo i ze znajomymi na żywo.",
+  "name": "Beat & Beka — trener pubquizu",
+  "short_name": "Beat & Beka",
+  "description": "Sprawdź czy masz uszy i muzg: rozpoznawaj utwory, graj solo i ze znajomymi na żywo.",
   "lang": "pl",
   "dir": "ltr",
   "start_url": "./index.html",
