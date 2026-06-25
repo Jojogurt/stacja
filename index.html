@@ -889,13 +889,105 @@
   /* badge liczby zaproszeń + tag „wysłano" */
   .dz-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--red);color:#fff;font-family:var(--display);font-weight:900;font-size:11px;margin-left:4px;vertical-align:middle}
   .pendtag{font-family:var(--display);font-weight:800;font-size:11px;color:#caa200}
+
+  /* ===== DESIGN v2 — Fala 9: Ułóż mecz (kompakt — chipy-grupy) ===== */
+  .nav-badge{justify-self:end;display:none;background:#F0FBE6;color:#46A302;font-family:var(--display);font-weight:900;font-size:12px;padding:7px 11px;border-radius:11px;line-height:1}
+  body.solo:not(.playing) .nav-badge{display:inline-block}
+  body.solo.playing .dial{display:none}
+  .um-sec{margin-top:20px}
+  .um-sec:first-child{margin-top:2px}
+  .um-h{display:flex;align-items:center;gap:8px;margin-bottom:11px}
+  .um-h>span:first-child{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink)}
+  .um-h .note{margin-left:auto;font-family:var(--display);font-weight:800;font-size:12px;color:#9a958c}
+  .um-h .note.val{font-weight:900;font-size:15px;color:var(--green)}
+  .um-chips{display:flex;flex-wrap:wrap;gap:10px}
+  .grp-chip{font-family:var(--display);font-weight:800;font-size:14px;color:#b3aea4;background:#fff;border:2px solid var(--line);
+    border-bottom-width:4px;border-radius:14px;padding:9px 13px;cursor:pointer;transition:transform .08s,border-bottom-width .08s;white-space:nowrap}
+  .grp-chip:active{transform:translateY(2px);border-bottom-width:2px}
+  .grp-chip.on{color:#46A302;background:#F0FBE6;border-color:var(--green)}
+  .grp-chip.on::after{content:' ✓'}
+  .grp-chip.open{box-shadow:0 0 0 3px rgba(88,204,2,.16)}
+  .grp-chip.mode.on{color:var(--blue-d);background:#EAF7FF;border-color:var(--blue)}
+  .grp-chip.mode.open{box-shadow:none}
+  .grp-band{display:none;margin-top:11px}
+  .grp-band.open{display:block;animation:scrIn .25s cubic-bezier(.2,.8,.2,1) both}
+  .grp-band .ticks{overflow-x:auto}
+  .band-sub{font-family:var(--display);font-weight:800;font-size:11px;letter-spacing:.03em;color:var(--muted);text-transform:uppercase;margin:0 2px 8px}
+  .um-rounds{display:flex;gap:8px}
+  .um-rounds button{flex:1;text-align:center;font-family:var(--display);font-weight:900;font-size:17px;color:#b3aea4;
+    background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 0;cursor:pointer;transition:transform .08s}
+  .um-rounds button:active{transform:translateY(2px);border-bottom-width:2px}
+  .um-rounds button.on{color:#46A302;background:#F0FBE6;border-color:var(--green)}
+  .um-summary{font-family:var(--display);font-weight:700;font-size:13px;color:#9a958c;margin-top:14px;min-height:16px}
+  .um-summary b{font-weight:900;color:var(--ink)}
+  .um-summary.err{color:var(--red)}
+  .um-foot{display:flex;gap:12px;margin-top:14px}
+  .um-dice{width:56px;flex:0 0 auto;background:var(--purple);border:none;border-radius:18px;font-size:24px;cursor:pointer;box-shadow:0 5px 0 #A568CC}
+  .um-dice:active{transform:translateY(5px);box-shadow:none}
+  .um-start{flex:1;background:var(--green);border:none;border-radius:18px;padding:16px;box-shadow:0 5px 0 var(--green-d);
+    font-family:var(--display);font-weight:900;font-size:17px;letter-spacing:.05em;color:#fff;cursor:pointer;text-transform:uppercase}
+  .um-start:active{transform:translateY(5px);box-shadow:none}
+
+  /* ===== DARK MODE ===== */
+  .theme-toggle{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:14px;z-index:60;
+    width:42px;height:42px;border-radius:50%;border:2px solid var(--line);background:var(--panel);
+    font-size:18px;line-height:1;cursor:pointer;display:none;box-shadow:0 2px 0 var(--line)}
+  body.menu .theme-toggle{display:grid;place-items:center}
+  .theme-toggle:active{transform:translateY(2px);box-shadow:none}
+  html.dark{
+    --bg:#15121E; --panel:#221C33; --panel2:#2C2540;
+    --ink:#ECE9F4; --muted:#8C84A1; --line:#39314F;
+  }
+  html.dark body{background:var(--bg);color:var(--ink)}
+  html.dark .theme-toggle{box-shadow:none}
+  /* powierzchnie z hardcodowanym #fff / jasnym tłem → panel/muted */
+  html.dark .grp-chip,
+  html.dark .um-rounds button,
+  html.dark .mh-mini,
+  html.dark .lenpick button,
+  html.dark .mini button,
+  html.dark .modepick button{background:var(--panel);color:var(--muted);border-color:var(--line)}
+  html.dark .seg{background:var(--panel2)}
+  html.dark .grp-chip.on,
+  html.dark .um-rounds button.on{background:rgba(88,204,2,.16);color:#7BD957;border-color:var(--green)}
+  html.dark .grp-chip.mode.on{background:rgba(28,176,246,.16);color:#5CC5FF;border-color:var(--blue)}
+  html.dark .nav-badge{background:rgba(88,204,2,.18);color:#7BD957}
+  html.dark .um-summary b{color:var(--ink)}
+  /* formularz / inputy */
+  html.dark .field input{color:var(--ink)}
+  html.dark .field input::placeholder{color:#5b5470}
+  html.dark .pl-panel input,
+  html.dark .mp-join input,
+  html.dark .mp-form input,
+  html.dark .dz-row2 input,
+  html.dark .pf-edit input,
+  html.dark .lb-cell{background:var(--panel2);color:var(--ink)}
+  /* profil */
+  html.dark .pf-st.g{background:rgba(88,204,2,.12);border-color:rgba(88,204,2,.32)}
+  html.dark .pf-st.b{background:rgba(28,176,246,.12);border-color:rgba(28,176,246,.32)}
+  html.dark .pf-st.y{background:rgba(255,200,0,.12);border-color:rgba(255,200,0,.32)}
+  html.dark .pf-cat .bar,
+  html.dark .stat-cat .bar,
+  html.dark .wk-row .bar{background:var(--panel2)}
+  html.dark .pf-edit{background:var(--panel2)}
+  html.dark .pf-badge{background:rgba(255,200,0,.1);border-color:rgba(255,200,0,.26)}
+  html.dark .pf-badge.lock{background:var(--panel2);border-color:var(--line)}
+  /* drużyna / lobby — najczęstsze jasne karty */
+  html.dark .dz-mini,
+  html.dark .dz-fr,
+  html.dark .pcz-m{background:var(--panel);border-color:var(--line)}
+  html.dark .dz-empty,
+  html.dark .dz-acct{background:var(--panel2);border-color:var(--line)}
+  html.dark .rv-banner.no{background:var(--panel2);border-color:var(--line)}
 </style>
+<script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>
 <body class="menu">
+  <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw (jasny/ciemny)">🌙</button>
   <div class="top">
     <button class="nav-back" id="toMenu" aria-label="wstecz">←</button>
     <span class="nav-title" id="scrTitle"></span>
-    <span class="nav-menu" style="visibility:hidden">☰</span>
+    <span class="nav-badge" id="navBadge">SOLO</span>
   </div>
 
   <section id="menu">
@@ -965,36 +1057,60 @@
   </section>
 
   <section class="dial">
-    <div class="dial-head"><span id="dialNote">wybierz kategorie i tryby</span></div>
-    <div class="band-label">dekady</div>
-    <div class="ticks" id="ticks"></div>
-    <div class="band-label">style i gatunki</div>
-    <div class="ticks" id="styleTicks"></div>
-    <div class="band-label">gotowe playlisty</div>
-    <div class="ticks" id="readyTicks"></div>
-    <div class="band-label">teksty — tłumaczenia 🌐 <small style="font-weight:700;color:var(--muted)">(tryb lektor)</small></div>
-    <div class="ticks" id="lyricsTicks"></div>
-    <div class="band-label" id="quizBand" hidden>wiedza ogólna 🧠 <small style="font-weight:700;color:var(--muted)">(tryb quiz)</small></div>
-    <div class="ticks" id="quizTicks"></div>
-    <div class="band-label">twoje playlisty <button class="pl-add" id="plImport">+ ze Spotify</button></div>
-    <div class="ticks" id="plTicks"></div>
-    <div class="pl-panel" id="plPanel">
-      <input id="plUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify">
-      <button id="plGo">Importuj</button>
-      <div class="pl-status" id="plStatus"></div>
+    <span id="dialNote" hidden></span>
+
+    <div class="um-sec">
+      <div class="um-h"><span>Kategorie</span><span class="note" id="catCount">0 wybranych</span></div>
+      <div class="um-chips" id="grpChips">
+        <button class="grp-chip" data-grp="dekady">📅 Dekady</button>
+        <button class="grp-chip" data-grp="style">🎸 Style</button>
+        <button class="grp-chip" data-grp="playlisty">📋 Playlisty</button>
+        <button class="grp-chip" data-grp="teksty">🗣 Teksty</button>
+        <button class="grp-chip" data-grp="wiedza" id="grpWiedza" hidden>🧠 Wiedza</button>
+        <button class="grp-chip" data-grp="twoje">⭐ Twoje</button>
+      </div>
+      <div class="grp-band" data-band="dekady"><div class="ticks" id="ticks"></div></div>
+      <div class="grp-band" data-band="style"><div class="ticks" id="styleTicks"></div></div>
+      <div class="grp-band" data-band="playlisty"><div class="ticks" id="readyTicks"></div></div>
+      <div class="grp-band" data-band="teksty">
+        <div class="band-sub">tłumaczenia 🌐 (tryb lektor)</div>
+        <div class="ticks" id="lyricsTicks"></div>
+      </div>
+      <div class="grp-band" data-band="wiedza">
+        <div class="band-sub" id="quizBand">wiedza ogólna 🧠 (tryb quiz)</div>
+        <div class="ticks" id="quizTicks"></div>
+      </div>
+      <div class="grp-band" data-band="twoje">
+        <div class="band-sub">twoje playlisty <button class="pl-add" id="plImport">+ ze Spotify</button></div>
+        <div class="ticks" id="plTicks"></div>
+        <div class="pl-panel" id="plPanel">
+          <input id="plUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify">
+          <button id="plGo">Importuj</button>
+          <div class="pl-status" id="plStatus"></div>
+        </div>
+      </div>
     </div>
-    <div class="band-label">tryby <small style="font-weight:700;color:var(--muted)">(można kilka)</small></div>
-    <div class="ticks" id="modeTicks"></div>
-    <div class="band-label">rundy <small style="font-weight:700;color:var(--muted)">(× 3 kategorie × 5 pytań)</small></div>
-    <div class="lenpick" id="roundPick">
-      <button data-r="1">1</button>
-      <button data-r="2">2</button>
-      <button data-r="3">3</button>
-      <button data-r="4" class="on">4</button>
+
+    <div class="um-sec">
+      <div class="um-h"><span>Tryby pytań</span><span class="note">jak słyszysz utwór</span></div>
+      <div class="um-chips" id="modeTicks"></div>
     </div>
-    <button class="match-rand" id="matchRandom">🎲 Losuj kategorie i tryby</button>
-    <div class="match-info" id="matchInfo"></div>
-    <button class="sess-start" id="matchStart" style="width:100%;margin-top:14px">Start meczu →</button>
+
+    <div class="um-sec">
+      <div class="um-h"><span>Liczba rund</span><span class="note val" id="roundVal">4</span></div>
+      <div class="um-rounds" id="roundPick">
+        <button data-r="1">1</button>
+        <button data-r="2">2</button>
+        <button data-r="3">3</button>
+        <button data-r="4" class="on">4</button>
+      </div>
+    </div>
+
+    <div class="um-summary" id="matchInfo"></div>
+    <div class="um-foot">
+      <button class="um-dice" id="matchRandom" aria-label="Losuj kategorie i tryby">🎲</button>
+      <button class="um-start" id="matchStart">Zacznij mecz</button>
+    </div>
   </section>
 
   <section class="session" id="session">
