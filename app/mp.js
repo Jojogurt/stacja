@@ -23,6 +23,7 @@ import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, save
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer } from './mp-picker.js';
+import { S } from './mp-state.js';   // współdzielony stan MP (S.game→S.game, S.host→S.host, …)
 
 initMpPicker(mpRender);   // picker re-renderuje widok pokoju (mpRender hoisted)
 
@@ -37,7 +38,9 @@ export function mpBootDeepLink(){
 }
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
-let mpCh=null;
+// Cały współdzielony, mutowalny stan MP → app/mp-state.js (obiekt S; ten sam w mp.js i mp-render.js).
+// mpMe (tożsamość gracza) zostaje tutaj — eksportowana, używana też przez solo i social.
+let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
 // TASK 6 — flaga serwer-autorytetu. Default z config.serverAuthority. Override (rollback/test):
 // ?authority=1|0 w URL albo localStorage 'stacjaAuthority'='1'|'0' (0 = wymuś relay mimo defaultu true).
 const SERVER_AUTH = (()=>{ try{
@@ -47,26 +50,6 @@ const SERVER_AUTH = (()=>{ try{
   if(ls==='1') return true; if(ls==='0') return false;
   return !!(window.STACJA_CONFIG && window.STACJA_CONFIG.serverAuthority);
 }catch(e){ return false; } })();
-let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
-let mpCode=null, mpHost=false;
-let mpRoomStage='wait';     // przed grą: 'wait' = poczekalnia (06), 'build' = picker „ułóż mecz" (host)
-let mpLastView=null;        // ostatni „duży" widok MP (wait/picker/game) — do one-shot przejść
-let mpGame=null;            // stan współdzielony (host = źródło prawdy)
-let mpHostCurrent=null;     // pełny utwór znany tylko hostowi
-let mpHostSeen=new Set();   // antypowtórki po stronie hosta
-let mpLastNonce=null;       // ostatnio odtworzony nonce
-let mpLastArmNonce=null;    // ostatnio zbuforowana runda (faza gotowości)
-let mpReady=new Set();      // host: id graczy, którzy zbuforowali audio
-let mpArmTimer=null;        // host: bezpiecznik startu mimo braku gotowości
-let mpAck=null;             // playNonce odsłony, którą TEN klient już zamknął („dalej")
-let mpRevealNonce=null;     // playNonce ostatnio pokazanej odsłony
-let mpRevealSnap=null;      // migawka odsłony do renderu we własnym tempie
-let mpAudio=null;           // jeden trwały, odblokowany gestem element audio (MP)
-let mpRevSrc=null;          // BufferSource trybu „od tyłu" w MP
-let mpTally={};             // id -> {name, correct}  (do MVP)
-let mpAutoLocked=false;     // czy timer/host już zatwierdził rundę
-let mpPlayRound=null;       // dla której rundy jest już zbudowany formularz (by nie czyścić pól)
-let mpTimerInt=null;        // interwał odliczania
 const $m=id=>document.getElementById(id);
 const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
 /* nazwane stałe czasowe: core/timing.js (MP_BUFFER_TIMEOUT_MS, MP_SNIP_WINDOW_S, EMOJI_TTL_MS, SAY_TTL_MS) */
@@ -112,13 +95,13 @@ $m('toMenu').onclick=()=>{
 $m('mpExit').onclick=()=>{ showScreen('menu'); };
 
 async function mpLeave(){
-  if(mpCh){ try{ await mpCh.unsubscribe(); }catch(e){} mpCh=null; }
-  if(mpAudio){ try{mpAudio.pause();}catch(e){} }   // element trwały — pauza, nie zeruj
+  if(S.ch){ try{ await S.ch.unsubscribe(); }catch(e){} S.ch=null; }
+  if(S.audio){ try{S.audio.pause();}catch(e){} }   // element trwały — pauza, nie zeruj
   stopSpeech(); mpStopRev();
-  if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
-  mpReady=new Set(); mpLastArmNonce=null;
-  mpAck=mpRevealNonce=mpRevealSnap=null;
-  mpCode=null; mpHost=false; mpRoomStage='wait'; mpLastView=null; mpGame=null; mpHostCurrent=null; mpTally={}; mpLastNonce=null;
+  if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
+  S.ready=new Set(); S.lastArmNonce=null;
+  S.ack=S.revealNonce=S.revealSnap=null;
+  S.code=null; S.host=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
 
@@ -151,13 +134,13 @@ async function mpJoinFromCode(){
 })();
 // udostępnij pokój (natywne share na mobile, fallback: kopiuj link)
 function mpShare(btn){
-  const url=location.origin+location.pathname+'?room='+(mpCode||'');
-  if(navigator.share){ navigator.share({title:'STACJA — dołącz do pokoju', text:'Kod pokoju: '+(mpCode||''), url}).catch(()=>{}); return; }
+  const url=location.origin+location.pathname+'?room='+(S.code||'');
+  if(navigator.share){ navigator.share({title:'STACJA — dołącz do pokoju', text:'Kod pokoju: '+(S.code||''), url}).catch(()=>{}); return; }
   navigator.clipboard?.writeText(url);
   if(btn){ const t=btn.textContent; btn.textContent='✓ skopiowano'; setTimeout(()=>btn.textContent=t,1500); }
 }
-function mpLobbyStart(){ mpRoomStage='build'; mpRender(); }   // host: poczekalnia → „ułóż mecz"
-function mpLobbyBack(){ mpRoomStage='wait'; mpRender(); }     // picker → poczekalnia (wstecz)
+function mpLobbyStart(){ S.roomStage='build'; mpRender(); }   // host: poczekalnia → „ułóż mecz"
+function mpLobbyBack(){ S.roomStage='wait'; mpRender(); }     // picker → poczekalnia (wstecz)
 function mpRoomBack(){ mpLeave(); }                           // wyjdź z pokoju → ekran wejścia
 function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu'); }   // ☰ → menu
 
@@ -165,31 +148,31 @@ async function mpEnterRoom(code, asHost){
   mpErr('');
   if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
-  mpCode=code; mpHost=asHost; mpRoomStage='wait';
+  S.code=code; S.host=asHost; S.roomStage='wait';
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
-  mpCh=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
+  S.ch=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   // pod autorytetem KAŻDY (też host) bierze stan z DO; w relay tylko nie-host (host jest źródłem).
-  mpCh.on('broadcast',{event:'sync'},({payload})=>{ if(SERVER_AUTH || !mpHost){ mpGame=payload; mpAfterSync(); } });
-  mpCh.on('broadcast',{event:'act'},({payload})=>{ if(mpHost && !SERVER_AUTH) mpHandleAct(payload); });   // relay-only
-  mpCh.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
-  mpCh.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
-  mpCh.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
-  mpCh.on('presence',{event:'sync'},()=>{
-    if(SERVER_AUTH && mpCh.hostId) mpHost=(mpCh.hostId===mpMe.id);   // host = autorytatywny hostId z DO
-    mpRenderMembers(); if(!mpGame || mpGame.phase==null) mpRender();
-    if(mpHost && !SERVER_AUTH){ mpBroadcast(); mpMaybeGo(); }        // relay: host pcha stan i liczy gotowość (DO robi to sam)
+  S.ch.on('broadcast',{event:'sync'},({payload})=>{ if(SERVER_AUTH || !S.host){ S.game=payload; mpAfterSync(); } });
+  S.ch.on('broadcast',{event:'act'},({payload})=>{ if(S.host && !SERVER_AUTH) mpHandleAct(payload); });   // relay-only
+  S.ch.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
+  S.ch.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
+  S.ch.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
+  S.ch.on('presence',{event:'sync'},()=>{
+    if(SERVER_AUTH && S.ch.hostId) S.host=(S.ch.hostId===mpMe.id);   // host = autorytatywny hostId z DO
+    mpRenderMembers(); if(!S.game || S.game.phase==null) mpRender();
+    if(S.host && !SERVER_AUTH){ mpBroadcast(); mpMaybeGo(); }        // relay: host pcha stan i liczy gotowość (DO robi to sam)
   });
-  mpCh.subscribe(async(status)=>{
-    if(status==='SUBSCRIBED'){ await mpCh.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
+  S.ch.subscribe(async(status)=>{
+    if(status==='SUBSCRIBED'){ await S.ch.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
     else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
   });
-  if(!mpTimerInt) mpTimerInt=setInterval(mpTickTimer, 500);
+  if(!S.timerInt) S.timerInt=setInterval(mpTickTimer, 500);
 }
 
 function mpMembers(){
-  if(!mpCh) return [];
-  const st=mpCh.presenceState(); const out=[];
+  if(!S.ch) return [];
+  const st=S.ch.presenceState(); const out=[];
   Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||'?'}); });
   return out;
 }
@@ -197,56 +180,55 @@ function mpRenderMembers(){
   const el=$m('mpMembers'); if(!el) return;   // pasek członków usunięty — lista jest w poczekalni
   const ms=mpMembers();
   el.innerHTML=ms.map(m=>{
-    const host = mpGame? (m.id===mpGame.hostId) : (m.id===mpMe.id && mpHost);
+    const host = S.game? (m.id===S.game.hostId) : (m.id===mpMe.id && S.host);
     return `<span class="mp-chip${host?' host':''}${m.id===mpMe.id?' you':''}">${escapeHtml(m.name)}</span>`;
   }).join('');
 }
 
 /* ---- broadcast / sync ---- */
-function mpBroadcast(){ if(mpHost&&mpCh&&mpGame){ mpCh.send({type:'broadcast',event:'sync',payload:mpGame}); } }
-let mpSeenActs=new Set();   // id zastosowanych akcji — by akcja nie zadziałała dwa razy
+function mpBroadcast(){ if(S.host&&S.ch&&S.game){ S.ch.send({type:'broadcast',event:'sync',payload:S.game}); } }
 function mpSend(act){
   act.by=mpMe.id; act.byName=mpMe.name; act.aid=mpMe.id+'-'+Math.random().toString(36).slice(2);
   // RELAY: host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host.
   // AUTORYTET: każdy (też host) wysyła akcję do DO — DO jest źródłem prawdy.
-  if(mpHost && !SERVER_AUTH){ mpHandleAct(act); return; }
+  if(S.host && !SERVER_AUTH){ mpHandleAct(act); return; }
   // KLIENT/AUTORYTET: zastosuj lokalnie OD RAZU (optymistycznie) — natychmiastowe podświetlenie
   // (głos/propozycja/pewniak), a właściwy sync (od hosta / od DO) zaraz skoryguje stan.
-  if(mpGame && reduceAction(mpGame, act)) mpRender();
-  if(mpCh){ mpCh.send({type:'broadcast',event:'act',payload:act}); }
+  if(S.game && reduceAction(S.game, act)) mpRender();
+  if(S.ch){ S.ch.send({type:'broadcast',event:'act',payload:act}); }
 }
 function mpAfterSync(){
   // faza gotowości: zbuforuj utwór i zgłoś „ready" — ale TYLKO gdy nie ma odsłony do
   // zamknięcia. Z zaległą odsłoną klient zbroi się dopiero po kliknięciu „dalej".
-  if(mpGame && mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce && !mpRevealPending()){
+  if(S.game && S.game.phase===MP.ARMING && S.game.armNonce!==S.lastArmNonce && !mpRevealPending()){
     mpArm();
   }
   // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start).
   // Render NAJPIERW, żeby gałka/status już istniały, gdy mpPlayLocal ustawia „ładowanie…".
-  const startPlay = mpGame && mpGame.phase===MP.PLAY && mpGame.playNonce!==mpLastNonce;
-  if(startPlay) mpLastNonce=mpGame.playNonce;
+  const startPlay = S.game && S.game.phase===MP.PLAY && S.game.playNonce!==S.lastNonce;
+  if(startPlay) S.lastNonce=S.game.playNonce;
   mpRender();
   // intro „słuchaj/czytaj": zakryj treść, pokaż tytuł → po animacji odsłoń, ruszaj okno i piosenkę
-  if(startPlay){ mpStartListenWindow(mpGame); mpPlayLocal(); }
+  if(startPlay){ mpStartListenWindow(S.game); mpPlayLocal(); }
 }
 // czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
-function mpRevealPending(){ return !!mpRevealSnap && mpAck!==mpRevealNonce; }
+function mpRevealPending(){ return !!S.revealSnap && S.ack!==S.revealNonce; }
 // host: sprawdź, czy można już wystartować pytanie (wszyscy obecni gotowi)
 function mpMaybeGo(){
-  if(!mpHost || !mpGame || mpGame.phase!==MP.ARMING) return;
-  const r=countReady(mpMembers().map(m=>m.id), mpReady);
-  mpGame.readyCount=r.count; mpGame.readyTotal=r.total;
+  if(!S.host || !S.game || S.game.phase!==MP.ARMING) return;
+  const r=countReady(mpMembers().map(m=>m.id), S.ready);
+  S.game.readyCount=r.count; S.game.readyTotal=r.total;
   if(r.all){ mpGo(); } else { mpBroadcast(); mpRender(); }
 }
 // „dalej" na ekranie wyniku — KAŻDY klika sam, we własnym tempie
 function mpAdvance(){
-  if(!mpGame) return;
-  mpAck=mpRevealNonce;                                  // zamknij u siebie odsłonę
-  if(mpHost){
-    if(mpGame.phase===MP.REVEAL){ if(SERVER_AUTH){ if(mpCh&&mpCh.next) mpCh.next(); mpRender(); } else mpNext(); }  // host: DO advance / lokalnie
+  if(!S.game) return;
+  S.ack=S.revealNonce;                                  // zamknij u siebie odsłonę
+  if(S.host){
+    if(S.game.phase===MP.REVEAL){ if(SERVER_AUTH){ if(S.ch&&S.ch.next) S.ch.next(); mpRender(); } else mpNext(); }  // host: DO advance / lokalnie
     else { mpRender(); }
   } else {
-    if(mpGame.phase===MP.ARMING && mpGame.armNonce!==mpLastArmNonce){ mpArm(); }  // host już zbroi → zgłoś gotowość
+    if(S.game.phase===MP.ARMING && S.game.armNonce!==S.lastArmNonce){ mpArm(); }  // host już zbroi → zgłoś gotowość
     mpRender();
   }
 }
@@ -264,15 +246,15 @@ function mpSetPlayStatus(t){ const e=$m('mpPlayStatus'); if(e) e.textContent=t; 
 // reużywany co rundę przez podmianę .src. Zdarzenia gałki wpinane raz — gałka i status
 // JADĄ ZA REALNYMI zdarzeniami odtwarzacza (koniec rozjazdu ikona vs dźwięk).
 function mpEnsureAudio(){
-  if(!mpAudio){
-    mpAudio=new Audio(); mpAudio.preload='auto';
-    mpAudio.addEventListener('playing',()=>{ mpSetKnob('pause'); mpSetPlayStatus(mpGame&&mpGame.mode==='snippet'?'gra fragment…':'gra…'); });
-    mpAudio.addEventListener('waiting',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
-    mpAudio.addEventListener('stalled',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
-    mpAudio.addEventListener('pause',  ()=>{ if(!mpAudio.ended){ mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
-    mpAudio.addEventListener('ended',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); });
+  if(!S.audio){
+    S.audio=new Audio(); S.audio.preload='auto';
+    S.audio.addEventListener('playing',()=>{ mpSetKnob('pause'); mpSetPlayStatus(S.game&&S.game.mode==='snippet'?'gra fragment…':'gra…'); });
+    S.audio.addEventListener('waiting',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
+    S.audio.addEventListener('stalled',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
+    S.audio.addEventListener('pause',  ()=>{ if(!S.audio.ended){ mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
+    S.audio.addEventListener('ended',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); });
   }
-  return mpAudio;
+  return S.audio;
 }
 // odblokuj audio w geście (tworzenie/dołączanie/start/stuknięcie gałki) — bez tego
 // host nie usłyszy muzyki, bo play() leci poza gestem (po fazie gotowości)
@@ -283,12 +265,12 @@ function mpClearSnip(a){ if(a._snipStop){ a.removeEventListener('timeupdate', a.
 // faza gotowości — preload zajawki na trwałym elemencie, potem zgłoś hostowi „ready" (#4)
 function mpArm(){
   mpSetKnob(false);
-  const armNonce=mpGame.armNonce;
-  mpLastArmNonce=armNonce;   // ta runda już zbrojona przez tego klienta (anty-dublowanie)
+  const armNonce=S.game.armNonce;
+  S.lastArmNonce=armNonce;   // ta runda już zbrojona przez tego klienta (anty-dublowanie)
   // lektor / brak zajawki — nic do buforowania, gotów od razu
-  if(mpGame.mode==='lektor' || !mpGame.preview){ mpSend({type:'ready', armNonce}); return; }
+  if(S.game.mode==='lektor' || !S.game.preview){ mpSend({type:'ready', armNonce}); return; }
   const a=mpEnsureAudio(); mpClearSnip(a);
-  if(a.src!==mpGame.preview) a.src=mpGame.preview;
+  if(a.src!==S.game.preview) a.src=S.game.preview;
   let done=false;
   const ready=()=>{ if(done) return; done=true; mpSend({type:'ready', armNonce}); };
   a.addEventListener('canplaythrough', ready, {once:true});
@@ -297,38 +279,38 @@ function mpArm(){
   setTimeout(ready, MP_BUFFER_TIMEOUT_MS);                  // bezpiecznik
   a.load();
 }
-function mpStopRev(){ if(mpRevSrc){ mpRevSrc.stop(); mpRevSrc=null; } }   // uchwyt z playReverse
+function mpStopRev(){ if(S.revSrc){ S.revSrc.stop(); S.revSrc=null; } }   // uchwyt z playReverse
 // play() zablokowane przez przeglądarkę (autoplay poza gestem) → poproś o stuknięcie
 function mpPlayBlocked(){ mpSetKnob('play'); mpSetPlayStatus('stuknij ▶, by odtworzyć'); }
 // gałka = TOGGLE: gra → pauza; pauza → wznów; koniec/świeże → od nowa (#bug2: dotąd zawsze restart)
 function mpKnobTap(){
-  if(!mpGame) return mpPlayLocal();
-  const mode=mpGame.mode;
+  if(!S.game) return mpPlayLocal();
+  const mode=S.game.mode;
   if(mode==='lektor'){
     const speaking=isSpeaking();
     if(speaking){ lektorStop(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }
     return mpPlayLocal();
   }
   if(mode==='reverse'){
-    if(mpRevSrc){ mpStopRev(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }   // od tyłu: stop (replay od nowa)
+    if(S.revSrc){ mpStopRev(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }   // od tyłu: stop (replay od nowa)
     return mpPlayLocal();
   }
-  const a=mpAudio;                                   // music / snippet — trwały element
+  const a=S.audio;                                   // music / snippet — trwały element
   if(a && !a.paused && !a.ended){ a.pause(); return; }                                   // gra → pauza
   if(a && a.src && !a.ended && a.currentTime>0){ a.play().catch(mpPlayBlocked); return; } // pauza → wznów (nie od nowa)
   return mpPlayLocal();                                                                   // koniec/świeże → od nowa
 }
 function mpPlayLocal(){
   lektorStop(); mpStopRev();
-  if(mpGame.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(mpGame.lyric) lektorPlay(mpGame.lyric, mpGame.ttsUrl, ()=>{}); return; }
-  if(!mpGame.preview){ mpSetPlayStatus('brak zajawki'); return; }
-  if(mpGame.mode==='reverse'){ return mpPlayReverse(); }
+  if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}); return; }
+  if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
+  if(S.game.mode==='reverse'){ return mpPlayReverse(); }
   // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
   const a=mpEnsureAudio(); mpClearSnip(a);
-  if(a.src!==mpGame.preview) a.src=mpGame.preview;
+  if(a.src!==S.game.preview) a.src=S.game.preview;
   mpSetKnob('wait'); mpSetPlayStatus('ładowanie…');   // od razu pokaż, że się wczytuje
-  if(mpGame.mode==='snippet'){
-    const start=mpGame.snipStart||0.5;
+  if(S.game.mode==='snippet'){
+    const start=S.game.snipStart||0.5;
     const seek=()=>{ try{ a.currentTime=start; }catch(e){} };
     if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
     const stop=()=>{ if((a.currentTime-start)>=SNIP_SECS){ a.pause(); mpClearSnip(a); } };
@@ -340,45 +322,45 @@ function mpPlayLocal(){
 }
 // „od tyłu" w MP — każdy klient dekoduje+odwraca lokalnie (wspólny AudioPort.playReverse)
 async function mpPlayReverse(){
-  if(mpAudio){ try{mpAudio.pause();}catch(e){} }
+  if(S.audio){ try{S.audio.pause();}catch(e){} }
   mpSetKnob('wait'); mpSetPlayStatus('odwracam…');
   const ctx=await ensureCtxResumed();          // wspólny AudioContext (app/audioCtx.js)
-  const url=mpGame.preview;
+  const url=S.game.preview;
   const r=await playReverse(ctx, url, {
     cfg: window.STACJA_CONFIG,
-    shouldPlay: ()=>mpGame.preview===url,    // runda mogła się zmienić w trakcie dekodowania
+    shouldPlay: ()=>S.game.preview===url,    // runda mogła się zmienić w trakcie dekodowania
     onEnded: ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); },
   });
-  if(r.ok){ mpRevSrc=r; mpSetKnob('pause'); mpSetPlayStatus('gra od tyłu…'); return; }
+  if(r.ok){ S.revSrc=r; mpSetKnob('pause'); mpSetPlayStatus('gra od tyłu…'); return; }
   if(r.aborted) return;                       // cisza — runda już inna
   // CORS/dekodowanie padło → zagraj normalnie (ten sam trwały element z eventami)
   const a=mpEnsureAudio(); a.src=url; a.play().catch(mpPlayBlocked);
 }
 // host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
 function mpGo(){
-  if(!mpHost || !mpGame || mpGame.phase!==MP.ARMING) return;
-  if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
-  mpGame.phase=assertMp(mpGame.phase, MP.PLAY, console.warn); mpGame.playNonce=(mpGame.playNonce||0)+1;
-  if(mpGame.timer>0) mpGame.endsAt=Date.now()+mpGame.timer*1000;
+  if(!S.host || !S.game || S.game.phase!==MP.ARMING) return;
+  if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
+  S.game.phase=assertMp(S.game.phase, MP.PLAY, console.warn); S.game.playNonce=(S.game.playNonce||0)+1;
+  if(S.game.timer>0) S.game.endsAt=Date.now()+S.game.timer*1000;
   mpBroadcast(); mpAfterSync();   // host gra lokalnie
 }
 
 /* ---- host: akcje od graczy ---- */
 function mpHandleAct(a){
-  if(!mpGame) return;
-  if(a.aid){ if(mpSeenActs.has(a.aid)) return; mpSeenActs.add(a.aid); }   // pomiń echo własnej akcji
+  if(!S.game) return;
+  if(a.aid){ if(S.seenActs.has(a.aid)) return; S.seenActs.add(a.aid); }   // pomiń echo własnej akcji
   // faza gotowości — host orkiestruje (presence + bezpiecznik), zliczanie w core
-  if(a.type==='ready' && mpGame.phase===MP.ARMING){
-    if(a.armNonce!==mpGame.armNonce) return;       // ready ze starej rundy — ignoruj
-    mpReady.add(a.by);
-    const r=countReady(mpMembers().map(m=>m.id), mpReady);
-    mpGame.readyCount=r.count; mpGame.readyTotal=r.total;
+  if(a.type==='ready' && S.game.phase===MP.ARMING){
+    if(a.armNonce!==S.game.armNonce) return;       // ready ze starej rundy — ignoruj
+    S.ready.add(a.by);
+    const r=countReady(mpMembers().map(m=>m.id), S.ready);
+    S.game.readyCount=r.count; S.game.readyTotal=r.total;
     if(r.all){ mpGo(); return; }                   // wszyscy gotowi → start
     mpBroadcast(); mpRender();
     return;
   }
   // pozostałe akcje gry: czysty reducer (propose/unpropose/vote/sure)
-  if(reduceAction(mpGame, a)){ mpBroadcast(); mpRender(); }
+  if(reduceAction(S.game, a)){ mpBroadcast(); mpRender(); }
 }
 
 /* ---- host: start gry / runda ---- */
@@ -389,128 +371,117 @@ function mpStart(){
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   if(SERVER_AUTH){
     // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
-    mpHost=true; mpTally={}; mpAck=mpRevealNonce=mpRevealSnap=null;
+    S.host=true; S.tally={}; S.ack=S.revealNonce=S.revealSnap=null;
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
-    if(mpCh && mpCh.startMatch) mpCh.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools });
-    mpGame={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools });
+    S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }
-  mpGame={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
+  S.game={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, passed:[],
     reveal:null, results:[], preview:'', lyric:'', playNonce:0,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
-  mpTally={};
-  mpHostSeen.clear();
-  mpAck=mpRevealNonce=mpRevealSnap=null;   // świeży mecz → brak zaległej odsłony
+  S.tally={};
+  S.hostSeen.clear();
+  S.ack=S.revealNonce=S.revealSnap=null;   // świeży mecz → brak zaległej odsłony
   mpHostNextQuestion();
 }
 // ustaw kategorię/tryb/rundę z bieżącego slotu i rozwiąż pytanie
 function mpHostNextQuestion(){
-  const s=mpGame.slots[mpGame.si]; if(!s){ mpFinish(); return; }
-  mpGame.catKey=s.cat; mpGame.mode=s.mode; mpGame.round=s.round; mpGame.catLabel=catLabel(s.cat);
-  mpGame.answerSlots=slotsFor(s.mode, s.cat);
+  const s=S.game.slots[S.game.si]; if(!s){ mpFinish(); return; }
+  S.game.catKey=s.cat; S.game.mode=s.mode; S.game.round=s.round; S.game.catLabel=catLabel(s.cat);
+  S.game.answerSlots=slotsFor(s.mode, s.cat);
   mpHostNewRound();
 }
 async function mpHostNewRound(){
-  mpSeenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
-  mpGame.phase=MP.LOADING; mpGame.proposals=[]; mpGame.votes={}; mpGame.passed=[]; mpGame.reveal=null; mpGame.locked=null; mpGame.endsAt=null; mpAutoLocked=false;
+  S.seenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
+  S.game.phase=MP.LOADING; S.game.proposals=[]; S.game.votes={}; S.game.passed=[]; S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.autoLocked=false;
   mpBroadcast(); mpRender();
-  const catKey = mpGame.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : mpGame.catKey;
-  if(mpGame.mode==='quiz'){
-    const qs=((ALL_CATS[catKey]&&ALL_CATS[catKey].questions)||[]).filter(q=>q.prompt&&!mpHostSeen.has(norm(q.prompt)));
-    if(!qs.length){ mpGame.phase=MP.NOLYRIC; mpGame.netReason='noquiz'; mpBroadcast(); mpRender(); return; }
+  const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
+  if(S.game.mode==='quiz'){
+    const qs=((ALL_CATS[catKey]&&ALL_CATS[catKey].questions)||[]).filter(q=>q.prompt&&!S.hostSeen.has(norm(q.prompt)));
+    if(!qs.length){ S.game.phase=MP.NOLYRIC; S.game.netReason='noquiz'; mpBroadcast(); mpRender(); return; }
     const q=qs[Math.floor(Math.random()*qs.length)];
-    mpHostCurrent={prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
-    mpHostSeen.add(norm(q.prompt));
-    mpGame.answerSlots=q.slots; mpGame.prompt=q.prompt; mpGame.preview=''; mpGame.lyric=''; mpGame.ttsUrl='';
-  } else if(mpGame.mode==='lektor'){
-    const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!mpHostSeen.has(norm(s.title)));
-    if(!songs.length){ mpGame.phase=MP.NOLYRIC; mpBroadcast(); mpRender(); return; }
+    S.hostCurrent={prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
+    S.hostSeen.add(norm(q.prompt));
+    S.game.answerSlots=q.slots; S.game.prompt=q.prompt; S.game.preview=''; S.game.lyric=''; S.game.ttsUrl='';
+  } else if(S.game.mode==='lektor'){
+    const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!S.hostSeen.has(norm(s.title)));
+    if(!songs.length){ S.game.phase=MP.NOLYRIC; mpBroadcast(); mpRender(); return; }
     const s=songs[Math.floor(Math.random()*songs.length)];
-    mpHostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
-    mpHostSeen.add(norm(s.title));
-    mpGame.lyric=s.lyric; mpGame.preview=''; mpGame.ttsUrl=s.tts||''; mpGame.prompt='';
+    S.hostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
+    S.hostSeen.add(norm(s.title));
+    S.game.lyric=s.lyric; S.game.preview=''; S.game.ttsUrl=s.tts||''; S.game.prompt='';
   } else {
     // audio (muzyka/od tyłu/fragment) — playlistę i pulę wykonawców rozwiązuje repozytorium
-    const t=await resolveTrack({cat:ALL_CATS[catKey], seen:mpHostSeen, cfg:window.STACJA_CONFIG});
-    if(t.error){ mpGame.phase=MP.NETERR; mpGame.netReason=t.reason; mpBroadcast(); mpRender(); return; }
-    mpHostCurrent={...t, lyric:''};
-    mpGame.preview=t.preview; mpGame.lyric=''; mpGame.ttsUrl=''; mpGame.prompt='';
+    const t=await resolveTrack({cat:ALL_CATS[catKey], seen:S.hostSeen, cfg:window.STACJA_CONFIG});
+    if(t.error){ S.game.phase=MP.NETERR; S.game.netReason=t.reason; mpBroadcast(); mpRender(); return; }
+    S.hostCurrent={...t, lyric:''};
+    S.game.preview=t.preview; S.game.lyric=''; S.game.ttsUrl=''; S.game.prompt='';
   }
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
-  mpGame.snipStart = mpGame.mode==='snippet' ? mpSnipStart() : 0;
+  S.game.snipStart = S.game.mode==='snippet' ? mpSnipStart() : 0;
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
-  mpGame.phase=MP.ARMING; mpGame.armNonce=(mpGame.armNonce||0)+1;
-  mpGame.endsAt=null; mpGame.readyCount=0; mpGame.readyTotal=mpMembers().length;
-  mpReady=new Set();
+  S.game.phase=MP.ARMING; S.game.armNonce=(S.game.armNonce||0)+1;
+  S.game.endsAt=null; S.game.readyCount=0; S.game.readyTotal=mpMembers().length;
+  S.ready=new Set();
   mpBroadcast(); mpRender();
   mpArm();                                   // host też buforuje i zgłasza swoją gotowość
   // brak twardego timeoutu: pytanie rusza dopiero, gdy WSZYSCY klikną „dalej" (gotowość).
   // Jeśli ktoś wyjdzie, presence-sync przeliczy gotowość (mpMaybeGo) i odblokuje start.
-  if(mpArmTimer){ clearTimeout(mpArmTimer); mpArmTimer=null; }
+  if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
 }
 /* ---- host: zatwierdzenie odpowiedzi (pisarz) ---- */
 function mpLock(){
-  if(!mpHost || !mpGame || mpGame.phase!==MP.PLAY) return;
-  if(SERVER_AUTH){ if(mpCh&&mpCh.lock) mpCh.lock(); return; }   // AUTORYTET: DO ocenia i robi reveal
-  mpAutoLocked=true;
-  const c=mpHostCurrent;
-  const ev=evaluateAnswer(mpGame, c);   // czysta ocena (core) — locked = odpowiedź drużyny (górka głosów per slot)
+  if(!S.host || !S.game || S.game.phase!==MP.PLAY) return;
+  if(SERVER_AUTH){ if(S.ch&&S.ch.lock) S.ch.lock(); return; }   // AUTORYTET: DO ocenia i robi reveal
+  S.autoLocked=true;
+  const c=S.hostCurrent;
+  const ev=evaluateAnswer(S.game, c);   // czysta ocena (core) — locked = odpowiedź drużyny (górka głosów per slot)
   // nałóż wyliczenia na stan/tally (efekty zostają w app.js)
-  mpGame.score += ev.gained;
-  if(ev.firstById){ mpTally[ev.firstById]=mpTally[ev.firstById]||{name:ev.firstBy,correct:0}; mpTally[ev.firstById].correct++; }
-  mpGame.results.push(ev.result);
+  S.game.score += ev.gained;
+  if(ev.firstById){ S.tally[ev.firstById]=S.tally[ev.firstById]||{name:ev.firstBy,correct:0}; S.tally[ev.firstById].correct++; }
+  S.game.results.push(ev.result);
   // #12: zlicz przegrane pewniaki per osoba (kto stawia i ile)
-  if(!ev.teamOk && ev.anySure){ mpGame.beerTally=mpGame.beerTally||{}; ev.pewniacy.forEach(n=>{ mpGame.beerTally[n]=(mpGame.beerTally[n]||0)+1; }); }
-  mpGame.reveal=ev.reveal;
-  mpGame.phase=assertMp(mpGame.phase, MP.REVEAL, console.warn); mpGame.endsAt=null;
+  if(!ev.teamOk && ev.anySure){ S.game.beerTally=S.game.beerTally||{}; ev.pewniacy.forEach(n=>{ S.game.beerTally[n]=(S.game.beerTally[n]||0)+1; }); }
+  S.game.reveal=ev.reveal;
+  S.game.phase=assertMp(S.game.phase, MP.REVEAL, console.warn); S.game.endsAt=null;
   mpBroadcast(); mpRender();
 }
 function mpNext(){
-  const more=matchAdvance(mpGame);   // qi++ / si++ po 5 pytaniach
+  const more=matchAdvance(S.game);   // qi++ / si++ po 5 pytaniach
   if(!more){ mpFinish(); return; }
   mpHostNextQuestion();
 }
 function mpFinish(){
-  const arr=Object.values(mpTally).sort((a,b)=>b.correct-a.correct);
-  mpGame.mvp = arr.length&&arr[0].correct>0 ? arr[0] : null;
-  mpGame.tallyList = arr;
+  const arr=Object.values(S.tally).sort((a,b)=>b.correct-a.correct);
+  S.game.mvp = arr.length&&arr[0].correct>0 ? arr[0] : null;
+  S.game.tallyList = arr;
   // host zapisuje cały mecz (drużyna + tally per gracz) — best-effort, gated na auth.uid
-  const snap={ game:mpGame, tally:{...mpTally}, members:mpMembers(), hostId:mpMe.id, roomCode:mpCode };
+  const snap={ game:S.game, tally:{...S.tally}, members:mpMembers(), hostId:mpMe.id, roomCode:S.code };
   (async()=>{ const uid=await ensureSession(); if(uid) recordMatch(buildMpRecord(snap)); })();
-  mpGame.phase=MP.DONE; mpBroadcast(); mpRender();
+  S.game.phase=MP.DONE; mpBroadcast(); mpRender();
 }
 function mpNewGame(){
-  mpAck=mpRevealNonce=mpRevealSnap=null;
-  if(SERVER_AUTH){ mpGame=null; mpRoomStage='build'; mpRender(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
-  mpGame={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender();
+  S.ack=S.revealNonce=S.revealSnap=null;
+  if(SERVER_AUTH){ S.game=null; S.roomStage='build'; mpRender(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
+  S.game={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender();
 }
 
 /* ---- render sceny ---- */
-let mpConf='normal';            // wybrana pewność przy wrzucaniu typu (etykieta: normal/unsure/sure)
-let mpTypingSet=new Set();      // PR3: kto „pisze…" (zasilane ulotnym broadcastem „typing")
-let mpTypingTimers={};          // id → timeout wygaszający stan „pisze" po ~3 s
-let mpLastTyping=0;             // throttle wysyłki własnego „typing" (max raz / 1.5 s)
-let mpFeed=createFeed();        // feed czatu (klient-side) — core/chatFeed.js: {log, seenProp, seenPass}
-let mpPlaySkin=null;            // dla której skórki zbudowany scaffold gry (kolumny/czat)
-let mpPlaySub=null;             // dla którego pod-stanu fazy zbudowany scaffold (sluchaj/kombinuj)
-let mpSub='sluchaj';            // klient-lokalny pod-stan fazy PLAY (obie skórki mają fazy)
-let mpComposerMode='chat';     // composer @odp: 'chat' (pisanie) / 'typ' (pola slotów)
-let mpSubTimer=null;            // auto-przejście słuchaj → kombinuj po czasie fazy słuchania
-let mpListenStart=0, mpListenDur=0;   // okno fazy „słuchaj" (pasek czasu)
 // skórka = preferencja klienta (czysty render); obie mają fazy, różnią się fazą „kombinuj"
 const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
-function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); mpPlaySkin=null; mpPlayRound=null; mpRender(); }
+function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); S.playSkin=null; S.playRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
-function mpStopAudio(){ lektorStop(); mpStopRev(); if(mpAudio){ try{mpAudio.pause();}catch(e){} } }
-function mpGoKombinuj(){ if(mpSubTimer){ clearTimeout(mpSubTimer); mpSubTimer=null; } mpStopAudio(); mpSub='kombinuj'; mpRender(); }
+function mpStopAudio(){ lektorStop(); mpStopRev(); if(S.audio){ try{S.audio.pause();}catch(e){} } }
+function mpGoKombinuj(){ if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; } mpStopAudio(); S.sub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 // 06 Lobby — poczekalnia (host: kod + udostępnij + gracze + „ZACZNIJ"; gość: czeka na hosta)
 function mpLobbyWaitHTML(){
   const ms=mpMembers();
-  const hostId = mpGame ? mpGame.hostId : (mpHost ? mpMe.id : null);
+  const hostId = S.game ? S.game.hostId : (S.host ? mpMe.id : null);
   const cards = ms.map(m=>{
     const isHost = m.id===hostId, you = m.id===mpMe.id;
     const av = escapeHtml((m.name||'?').slice(0,1).toUpperCase());
@@ -521,13 +492,13 @@ function mpLobbyWaitHTML(){
     </div>`;
   }).join('') || `<div class="pcz-waitmsg">czekamy na graczy…</div>`;
   const n=ms.length, word = n===1?'osoba' : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? 'osoby' : 'osób';
-  const foot = mpHost
+  const foot = S.host
     ? `<button class="pcz-start" onclick="mpLobbyStart()">ZACZNIJ →</button>`
     : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
   return `<div class="pcz">
     <div class="pcz-hd">
       <div class="pcz-hd-r1"><span class="pcz-exit" onclick="mpRoomBack()">← wyjdź</span><span class="pcz-lbl">KOD POKOJU</span></div>
-      <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(mpCode||'····')}</span><button class="pcz-share" onclick="mpShare(this)">🔗 Udostępnij</button></div>
+      <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(S.code||'····')}</span><button class="pcz-share" onclick="mpShare(this)">🔗 Udostępnij</button></div>
     </div>
     <div class="pcz-team"><span>Drużyna</span><span class="pcz-count">${n} ${word}</span></div>
     <div class="pcz-list">${cards}</div>
@@ -537,24 +508,24 @@ function mpLobbyWaitHTML(){
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
   // one-shot przejście przy zmianie „dużego" widoku (poczekalnia ↔ picker ↔ gra) — nie przy re-renderze
-  const view = (!mpGame || mpGame.phase==null) ? ((mpHost && mpRoomStage==='build') ? 'picker' : 'wait') : 'game';
-  if(view!==mpLastView){ mpLastView=view; animIn(st); }
-  if(!mpGame || mpGame.phase==null){
+  const view = (!S.game || S.game.phase==null) ? ((S.host && S.roomStage==='build') ? 'picker' : 'wait') : 'game';
+  if(view!==S.lastView){ S.lastView=view; animIn(st); }
+  if(!S.game || S.game.phase==null){
     // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
-    const building = mpHost && mpRoomStage==='build';
+    const building = S.host && S.roomStage==='build';
     st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
     return;
   }
-  const g=mpGame;
+  const g=S.game;
   const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
   // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
-  if(g.phase===MP.REVEAL && g.reveal && mpRevealNonce!==g.playNonce){
-    mpRevealNonce=g.playNonce;
-    mpRevealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
+  if(g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce){
+    S.revealNonce=g.playNonce;
+    S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
     if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti
   }
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
-  if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(mpRevealSnap); return; }
+  if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(S.revealSnap); return; }
   switch(g.phase){
     case MP.LOADING: st.innerHTML=mpRenderLoading(head); return;
     case MP.ARMING:  st.innerHTML=mpRenderArming(g, head); return;
@@ -572,19 +543,19 @@ function mpReactsBarHTML(){
 }
 
 const mpRenderLoading = (head)=> `${head}<div class="mp-deck"><div class="mp-state">host losuje utwór…</div></div>`;
-const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||mpGame||{})}</div>`;
+const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
 const mpRenderArming = (g, head)=>{
   const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
   return `${head}${mpRosterStrip(g)}<div class="mp-deck"><div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
-  const rc=(mpGame&&mpGame.readyCount)||0, rt=(mpGame&&mpGame.readyTotal)||mpMembers().length;
+  const rc=(S.game&&S.game.readyCount)||0, rt=(S.game&&S.game.readyTotal)||mpMembers().length;
   return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${mpReactsBarHTML()}`;
 };
 const mpRenderNetErr = (g, head)=>{
   const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
-  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">${msg} ${mpHost?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
+  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">${msg} ${S.host?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
 };
 const mpRenderNoLyric = (head)=> `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
 
@@ -601,13 +572,13 @@ const ROSTER_META={
 function mpRosterHTML(g){
   if(mpSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
     return `<span class="mp-stol">stół:</span>`+mpMembers().map(m=>{
-      const st=rosterState(g,m.id,mpTypingSet), me=ROSTER_META[st]||ROSTER_META.idle;
+      const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
       const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
       return `<span class="mp-rchip${me.dim?' dim':''}${m.id===mpMe.id?' you':''}"><b style="background:${me.bg};color:${me.fg}">${av}</b><span style="color:${me.lc}">${me.lab}</span></span>`;
     }).join('');
   }
   return mpMembers().map(m=>{
-    const st=rosterState(g,m.id,mpTypingSet), me=ROSTER_META[st]||ROSTER_META.idle;
+    const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
     const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
     const ring=me.ring?`box-shadow:0 0 0 3px ${me.ring};`:'';
     return `<div class="mp-rz${me.dim?' dim':''}${m.id===mpMe.id?' you':''}">
@@ -644,7 +615,7 @@ function mpTeamHTML(g){
   const val = any ? slots.map(s=> ta[s.key]?escapeHtml(ta[s.key]):'—').join(' — ') : '— wrzućcie i przegłosujcie —';
   const sure = (g.proposals||[]).some(p=>p.conf==='sure');
   const badge = sure ? '<span class="mp-x2">🟡 ×2</span>' : '';
-  const lock = mpHost ? `<button class="mp-lockmini" onclick="mpLock()" title="Zatwierdź odpowiedź drużyny" aria-label="Zatwierdź odpowiedź drużyny">✓</button>` : '';
+  const lock = S.host ? `<button class="mp-lockmini" onclick="mpLock()" title="Zatwierdź odpowiedź drużyny" aria-label="Zatwierdź odpowiedź drużyny">✓</button>` : '';
   const cls = mpSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
   return `<div class="${cls}"><span class="ic">🎯</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}${lock}</div>`;
 }
@@ -652,8 +623,8 @@ function mpTeamHTML(g){
 // pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
 // Stan kto pewniakuje / spasował widać na pasku osób (roster), więc tu bez list imion.
 function mpConfHTML(withPass=true){
-  const seg=(v,label,cls,flex)=>`<button class="mp-seg ${cls}${mpConf===v?' on':''}" style="flex:${flex}" onclick="mpSetConf('${v}')">${label}</button>`;
-  const iPassed = mpGame && (mpGame.passed||[]).some(p=>p.id===mpMe.id);
+  const seg=(v,label,cls,flex)=>`<button class="mp-seg ${cls}${S.conf===v?' on':''}" style="flex:${flex}" onclick="mpSetConf('${v}')">${label}</button>`;
+  const iPassed = S.game && (S.game.passed||[]).some(p=>p.id===mpMe.id);
   const pass = withPass ? `<button class="mp-seg p${iPassed?' on':''}" style="flex:.9" onclick="mpSend({type:'pass'})">✋ pas</button>` : '';
   return `${seg('normal','zwykła','',1)}${seg('unsure','🟣 niepewny','u',1.2)}${seg('sure','🟡 PEWNIAK ×2','s',1.5)}${pass}`;
 }
@@ -665,33 +636,33 @@ function mpListenSecs(g){
   return _listenSecs(g.mode, cat && cat.listenSecs);
 }
 const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
-const mpLockBtnHTML = (ghost)=> mpHost ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
+const mpLockBtnHTML = (ghost)=> S.host ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 // wiedza ogólna: treść pytania w tym samym pudełku co tekst lektora
 const mpPromptHTML = (g)=> g.mode==='quiz'&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">pytanie</span>${escapeHtml(g.prompt)}</div>` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
 function mpChatFeedHTML(){
-  const rows=mpFeed.log.map(c=>{
+  const rows=S.feed.log.map(c=>{
     if(c.kind==='sys') return `<div class="mp-csys ${c.cls||''}">${escapeHtml(c.text)}</div>`;
     const av=escapeHtml((c.byName||'?').slice(0,1).toUpperCase());
     const avb=`<b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b>`;
     if(c.kind==='typ'){
-      const dataVals = mpHost ? ` data-values="${escapeHtml(JSON.stringify(c.values||{}))}"` : '';
-      const bubbleClick = mpHost ? ' onclick="mpVoteFromBubble(this)" style="cursor:pointer"' : '';
+      const dataVals = S.host ? ` data-values="${escapeHtml(JSON.stringify(c.values||{}))}"` : '';
+      const bubbleClick = S.host ? ' onclick="mpVoteFromBubble(this)" style="cursor:pointer"' : '';
       const chips=(c.chips||[]).map(ch=>{
-        const valAttrs = (mpHost && ch.key)
+        const valAttrs = (S.host && ch.key)
           ? ` class="val mp-val-vote" data-k="${escapeHtml(ch.key)}" data-v="${escapeHtml(ch.val||'')}" onclick="event.stopPropagation();mpPick(this.dataset.k,this.dataset.v)"`
           : ' class="val"';
         return `<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span${valAttrs}>${escapeHtml(ch.val||'')}</span></span>`;
       }).join('');
-      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"${dataVals}${bubbleClick}><span class="nm">${escapeHtml(c.byName||'')} · typ${mpHost?' <span class="mp-host-tip">kliknij tytuł/wykonawcę = wybierz</span>':''}</span>${chips}</div></div>`;
+      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"${dataVals}${bubbleClick}><span class="nm">${escapeHtml(c.byName||'')} · typ${S.host?' <span class="mp-host-tip">kliknij tytuł/wykonawcę = wybierz</span>':''}</span>${chips}</div></div>`;
     }
     return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
   }).join('');
   return rows + mpTypingFeedHTML();
 }
 function mpTypingFeedHTML(){
-  const ids=[...(mpTypingSet||[])].filter(id=>id && id!==mpMe.id);
+  const ids=[...(S.typingSet||[])].filter(id=>id && id!==mpMe.id);
   if(!ids.length) return '';
   const names=ids.map(mpNameOf), first=names[0]||'?';
   return `<div class="mp-cmsg mp-ctyping"><b class="mp-cmav" style="background:${mpAvatarColor(first)}">${escapeHtml(first.slice(0,1).toUpperCase())}</b>`+
@@ -700,7 +671,7 @@ function mpTypingFeedHTML(){
 // pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
 function mpRailHTML(active){
   const order=['sluchaj','kombinuj','odslona'];
-  const md = mpGame&&mpGame.mode;
+  const md = S.game&&S.game.mode;
   const listen = md==='quiz' ? ['❓','pytanie'] : (md==='lektor' ? ['📖','czytaj'] : ['🎧','słuchaj']);   // quiz: czytaj pytanie; lektor: tekst; reszta: audio
   const meta={ sluchaj:listen, kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
   const ai=order.indexOf(active);
@@ -749,7 +720,7 @@ function mpHeaderHTML(g){
   return `<div class="mp-hd">
     <div class="mp-hd-r1">
       <span class="mp-hd-back" onclick="mpRoomBack()">←</span>
-      <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(mpCode||'')}</span>
+      <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(S.code||'')}</span>
       <span class="mp-hd-timer" id="mpCountdown"></span>
     </div>
     <div class="mp-hd-chips">
@@ -798,9 +769,9 @@ function mpKombinujCzatHTML(g){
 function mpScaffoldPlay(g, head){
   const skin=mpSkin();
   const top=`${head}
-    ${mpRailHTML(mpSub==='sluchaj'?'sluchaj':'kombinuj')}
+    ${mpRailHTML(S.sub==='sluchaj'?'sluchaj':'kombinuj')}
     <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>`;
-  if(mpSub==='sluchaj') return top+mpSluchajBodyHTML(g);
+  if(S.sub==='sluchaj') return top+mpSluchajBodyHTML(g);
   return top+(skin==='czat'?mpKombinujCzatHTML(g):mpKombinujKolumnyHTML(g));
 }
 // odśwież dynamiczne części (wspólne) — bez ruszania pól wpisywanych
@@ -815,29 +786,29 @@ function mpRefreshDynamic(g){
 }
 // start okna fazy słuchania (licznik czasu + auto-przejście do „kombinuj") — po intro
 function mpStartListenWindow(g){
-  mpListenStart=Date.now(); mpListenDur=mpListenSecs(g)*1000;
-  if(mpSubTimer) clearTimeout(mpSubTimer);
-  mpSubTimer=setTimeout(()=>{ if(mpSub==='sluchaj' && mpGame && mpGame.phase===MP.PLAY) mpGoKombinuj(); }, mpListenDur);
+  S.listenStart=Date.now(); S.listenDur=mpListenSecs(g)*1000;
+  if(S.subTimer) clearTimeout(S.subTimer);
+  S.subTimer=setTimeout(()=>{ if(S.sub==='sluchaj' && S.game && S.game.phase===MP.PLAY) mpGoKombinuj(); }, S.listenDur);
   mpAnimListenBar();
 }
 // animuj pasek czasu fazy słuchania (CSS-transition od pozostałego % do 0)
 function mpAnimListenBar(){
   const bar=$m('mpListenBar'); if(!bar) return; const i=bar.querySelector('i'); if(!i) return;
-  const remMs=Math.max(0, mpListenDur-(Date.now()-mpListenStart));
-  i.style.transition='none'; i.style.width=(mpListenDur?remMs/mpListenDur*100:0)+'%';
+  const remMs=Math.max(0, S.listenDur-(Date.now()-S.listenStart));
+  i.style.transition='none'; i.style.width=(S.listenDur?remMs/S.listenDur*100:0)+'%';
   requestAnimationFrame(()=>{ i.style.transition=`width ${remMs}ms linear`; i.style.width='0%'; });
 }
 function mpRenderPlay(g, head, st){
   const skin=mpSkin();
-  const newRound = mpPlayRound!==g.playNonce;
+  const newRound = S.playRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
-    mpClearTyping(); mpComposerMode='chat'; mpSub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
+    mpClearTyping(); S.composerMode='chat'; S.sub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
     // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
-  if(newRound || mpPlaySkin!==skin || mpPlaySub!==mpSub || !$m('mpRoster')){
-    mpPlayRound=g.playNonce; mpPlaySkin=skin; mpPlaySub=mpSub;
+  if(newRound || S.playSkin!==skin || S.playSub!==S.sub || !$m('mpRoster')){
+    S.playRound=g.playNonce; S.playSkin=skin; S.playSub=S.sub;
     st.innerHTML = mpScaffoldPlay(g, head);
-    if(mpSub==='sluchaj') mpAnimListenBar();
+    if(S.sub==='sluchaj') mpAnimListenBar();
   }
   mpRefreshDynamic(g);
   mpTickTimer();
@@ -903,35 +874,35 @@ function mpRenderDone(g, head){
     ${mvp}${stawia}
     <div class="dn-lbl">Wkład drużyny</div>
     <div class="dn-wk">${rows}</div>
-    <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">← menu</button>${mpHost?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
+    <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">← menu</button>${S.host?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
 }
 function mpPropose(){
-  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+  const slots=(S.game&&S.game.answerSlots)||slotsFor();
   const values={}; let any=false;
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); const v=el?el.value.trim():''; if(v){ values[s.key]=v; any=true; } });
   if(!any) return;
-  mpSend({type:'propose', conf:mpConf, values});
+  mpSend({type:'propose', conf:S.conf, values});
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); if(el) el.value=''; });
-  mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML();
+  S.conf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML();
 }
 function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
 // host „wybiera odpowiedź": jawny WYBÓR slotu (set=true → zawsze ustaw, nie przełączaj)
 function mpPick(slot, value){ mpSend({type:'vote', slot, value, set:true}); }
 function mpVoteFromBubble(el){
-  if(!mpHost) return;
+  if(!S.host) return;
   try{ const v=JSON.parse(el.dataset.values||'{}'); Object.entries(v).forEach(([k,val])=>mpPick(k,val)); }catch(e){}
 }
-function mpSetConf(v){ mpConf=v; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+function mpSetConf(v){ S.conf=v; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
 
 function mpTickTimer(){
   const el=$m('mpCountdown');
-  if(!mpGame || mpGame.phase!==MP.PLAY || !mpGame.endsAt){ if(el) el.textContent=''; return; }
-  const rem=Math.max(0, mpGame.endsAt - Date.now());
+  if(!S.game || S.game.phase!==MP.PLAY || !S.game.endsAt){ if(el) el.textContent=''; return; }
+  const rem=Math.max(0, S.game.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
   if(el){ const m=Math.floor(s/60); el.textContent='⏱ '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
-  if(rem<=0 && mpHost && !mpAutoLocked && mpGame.phase===MP.PLAY){ mpLock(); }
+  if(rem<=0 && S.host && !S.autoLocked && S.game.phase===MP.PLAY){ mpLock(); }
 }
-function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(mpCh) mpCh.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
+function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(S.ch) S.ch.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
 function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
   let fx=$m('mpFx');
   if(!fx){ fx=document.createElement('div'); fx.id='mpFx'; document.body.appendChild(fx); }
@@ -942,42 +913,42 @@ function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
 }
 // #10: krótka wiadomość — dymek lecący przez ekran + wpis w feed czatu (skórka „czat")
 function mpPushChat(byName, text, mine){
-  _pushChat(mpFeed, byName, text, mine);   // core/chatFeed.js (stan + ring-buffer)
+  _pushChat(S.feed, byName, text, mine);   // core/chatFeed.js (stan + ring-buffer)
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 function mpNameOf(id){ const m=mpMembers().find(x=>x.id===id); return m?m.name:'gracz'; }
-function mpFeedReset(){ resetFeed(mpFeed); }
+function mpFeedReset(){ resetFeed(S.feed); }
 // zaksięguj NOWE typy/pasy do feedu (core/chatFeed.js) i zdejmij „pisze" dla autorów typów
 function mpIngestFeed(g){
-  const { clearTyping } = _ingestFeed(mpFeed, g, mpMe.id);
+  const { clearTyping } = _ingestFeed(S.feed, g, mpMe.id);
   clearTyping.forEach(mpClearTypingFor);
 }
 function mpDoSay(text){
   const t=(text||'').trim().slice(0,64); if(!t) return;
   mpPushChat(mpMe.name, t, true);   // moja wiadomość → po prawej
   mpFloatSay(t, mpMe.name);   // pokaż od razu u siebie (bez round-tripu)
-  if(mpCh) mpCh.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
+  if(S.ch) S.ch.send({type:'broadcast',event:'say',payload:{text:t, byName:mpMe.name, by:mpMe.id}});
 }
 function mpSay(){ const el=$m('mpSayIn'); if(!el) return; mpDoSay(el.value); el.value=''; }
 // composer „@odp" (skórka czat): „@" → pola slotów (tytuł/wykonawca), inaczej → czat
 function mpSetComposerMode(m){
-  mpComposerMode=m;
+  S.composerMode=m;
   const chat=$m('mpCompChat'), typ=$m('mpCompTyp'), tog=$m('mpTypToggle');
   if(chat) chat.style.display = m==='typ'?'none':'flex';
   if(typ)  typ.style.display  = m==='typ'?'flex':'none';
   if(tog)  tog.textContent    = m==='typ'?'💬':'✍️';
 }
 function mpComposerToggle(){
-  mpSetComposerMode(mpComposerMode==='typ'?'chat':'typ');
-  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
-  const focusEl = mpComposerMode==='typ' ? $m('mpTyp_'+slots[0].key) : $m('mpChatIn');
+  mpSetComposerMode(S.composerMode==='typ'?'chat':'typ');
+  const slots=(S.game&&S.game.answerSlots)||slotsFor();
+  const focusEl = S.composerMode==='typ' ? $m('mpTyp_'+slots[0].key) : $m('mpChatIn');
   if(focusEl) focusEl.focus();
 }
 // wpisanie „@" w polu czatu morfuje w pola slotów (treść po @ rozbita po przecinku trafia do pól)
 function mpChatInput(){
   mpTypingPing();
   const el=$m('mpChatIn'); if(!el || el.value[0]!=='@') return;
-  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
+  const slots=(S.game&&S.game.answerSlots)||slotsFor();
   const parts=el.value.slice(1).split(',');
   mpSetComposerMode('typ');
   slots.forEach((s,i)=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=(parts[i]||'').trim(); });
@@ -985,11 +956,11 @@ function mpChatInput(){
   const first=$m('mpTyp_'+slots[0].key); if(first) first.focus();
 }
 function mpComposerSend(){
-  const slots=(mpGame&&mpGame.answerSlots)||slotsFor();
-  if(mpComposerMode==='typ'){              // pola slotów → typ
+  const slots=(S.game&&S.game.answerSlots)||slotsFor();
+  if(S.composerMode==='typ'){              // pola slotów → typ
     const values={}; let any=false;
     slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); const v=c?c.value.trim():''; if(v){ values[s.key]=v; any=true; } });
-    if(any){ mpSend({type:'propose', conf:mpConf, values}); mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+    if(any){ mpSend({type:'propose', conf:S.conf, values}); S.conf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
     slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=''; });
     mpSetComposerMode('chat');
     return;
@@ -1000,7 +971,7 @@ function mpComposerSend(){
     const parts=raw.slice(1).split(',').map(x=>x.trim());
     const values={}; let any=false;
     slots.forEach((s,i)=>{ if(parts[i]){ values[s.key]=parts[i]; any=true; } });
-    if(any){ mpSend({type:'propose', conf:mpConf, values}); mpConf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+    if(any){ mpSend({type:'propose', conf:S.conf, values}); S.conf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
   } else {
     mpDoSay(raw);
   }
@@ -1017,26 +988,26 @@ function mpFloatSay(text, byName){
 /* PR3: sygnał „pisze…" — ulotny broadcast (poza host-authority), throttle + wygaszanie */
 function mpTypingPing(){
   const now=Date.now();
-  if(!shouldPing(mpLastTyping, now)) return;   // throttle: max raz na 1.5 s (core/timing.js)
-  mpLastTyping=now;
-  if(mpCh && mpGame && mpGame.phase===MP.PLAY) mpCh.send({type:'broadcast',event:'typing',payload:{by:mpMe.id, byName:mpMe.name}});
+  if(!shouldPing(S.lastTyping, now)) return;   // throttle: max raz na 1.5 s (core/timing.js)
+  S.lastTyping=now;
+  if(S.ch && S.game && S.game.phase===MP.PLAY) S.ch.send({type:'broadcast',event:'typing',payload:{by:mpMe.id, byName:mpMe.name}});
 }
 function mpMarkTyping(id){
-  mpTypingSet.add(id);
-  if(mpTypingTimers[id]) clearTimeout(mpTypingTimers[id]);
-  mpTypingTimers[id]=setTimeout(()=>{ mpTypingSet.delete(id); delete mpTypingTimers[id]; mpRefreshTyping(); }, 3000);
+  S.typingSet.add(id);
+  if(S.typingTimers[id]) clearTimeout(S.typingTimers[id]);
+  S.typingTimers[id]=setTimeout(()=>{ S.typingSet.delete(id); delete S.typingTimers[id]; mpRefreshTyping(); }, 3000);
   mpRefreshTyping();
 }
 // natychmiast zdejmij „pisze" dla gracza (gdy jego wiadomość/typ dotrze — nie wisi 3 s)
 function mpClearTypingFor(id){
-  if(!id || !mpTypingSet.has(id)) return;
-  mpTypingSet.delete(id); if(mpTypingTimers[id]){ clearTimeout(mpTypingTimers[id]); delete mpTypingTimers[id]; }
+  if(!id || !S.typingSet.has(id)) return;
+  S.typingSet.delete(id); if(S.typingTimers[id]){ clearTimeout(S.typingTimers[id]); delete S.typingTimers[id]; }
   mpRefreshTyping();
 }
-function mpRefreshRoster(){ if(mpGame && mpGame.phase===MP.PLAY){ const el=$m('mpRoster'); if(el) el.innerHTML=mpRosterHTML(mpGame); } }
+function mpRefreshRoster(){ if(S.game && S.game.phase===MP.PLAY){ const el=$m('mpRoster'); if(el) el.innerHTML=mpRosterHTML(S.game); } }
 // odśwież OBA miejsca z „pisze": roster (pip) ORAZ feed czatu (linia „X pisze…") — feed nie znikał (#bug)
 function mpRefreshTyping(){ mpRefreshRoster(); const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; } }
-function mpClearTyping(){ mpTypingSet.clear(); Object.values(mpTypingTimers).forEach(clearTimeout); mpTypingTimers={}; }
+function mpClearTyping(){ S.typingSet.clear(); Object.values(S.typingTimers).forEach(clearTimeout); S.typingTimers={}; }
 
 /* autostart lobby gdy w URL jest ?room= */
 

@@ -151,6 +151,25 @@ await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)'
   ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'render z propozycją bez wyjątku');
 });
 
+await group('MP: akcje gracza (react/say/propose/typing) nie rzucają', async ()=>{
+  const w = window;
+  // reakcja (emotka) — float + broadcast
+  let threw=false;
+  try{ w.mpReact && w.mpReact('🔥'); }catch(_e){ threw=true; }
+  ok(!threw, 'mpReact bez wyjątku');
+  // wiadomość czatu (pole + wyślij)
+  const sayIn=$(w,'mpSayIn'); if(sayIn){ sayIn.value='hej'; try{ w.mpSay && w.mpSay(); }catch(_e){ threw=true; } }
+  ok(!threw, 'mpSay bez wyjątku');
+  // composer typ → propose (wypełnij sloty, wyślij)
+  w.mpGoKombinuj && w.mpGoKombinuj(); await settle(3);
+  const t0=$(w,'mpProp_title')||$(w,'mpTyp_title'); if(t0) t0.value='Yesterday';
+  try{ w.mpComposerSend && w.mpComposerSend(); }catch(_e){ threw=true; }
+  ok(!threw, 'mpComposerSend (propose) bez wyjątku');
+  // sygnał „pisze…" (throttle/timer)
+  try{ w.mpTypingPing && w.mpTypingPing(); }catch(_e){ threw=true; }
+  ok(!threw, 'mpTypingPing bez wyjątku');
+});
+
 await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
   const w = window;
   const ws = wsInstances[wsInstances.length-1];
