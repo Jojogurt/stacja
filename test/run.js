@@ -216,6 +216,18 @@ group('mpReducer.selektory', ()=>{
   eq(rosterState({...g,passed:[{id:'u1'}]},'u1'),'pass','pas ma priorytet');
 });
 
+group('mpReducer.teamAnswer — nadpisanie hosta (salon)', ()=>{
+  // gracze: większość na „Help", ale host (TV) wskazał „Hey Jude" → nadpisuje górkę
+  const base={answerSlots:slotsFor(), proposals:[], hostId:'tv',
+    votes:{ title:{u1:'Help',u2:'Help',tv:'Hey Jude'}, artist:{u1:'Beatles'} }};
+  eq(teamAnswer({...base, salon:false}).title,'Help','bez salonu: górka głosów wygrywa (Help)');
+  eq(teamAnswer({...base, salon:true}).title,'Hey Jude','salon: pick hosta nadpisuje większość');
+  eq(teamAnswer({...base, salon:true}).artist,'Beatles','salon: slot bez picku hosta → górka głosów');
+  const noPick={answerSlots:slotsFor(), proposals:[], salon:true, hostId:'tv',
+    votes:{ title:{u1:'Help',u2:'Help'} }};
+  eq(teamAnswer(noPick).title,'Help','salon: host nic nie wskazał → auto górka głosów');
+});
+
 /* --- phases (FSM) --- */
 group('phases.transitions', ()=>{
   ok(canTransitionMp(MP.ARMING,MP.PLAY),'arming→play dozwolone');

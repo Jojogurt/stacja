@@ -28,17 +28,20 @@ export function showScreen(s){
 let dzMe=null;   // {id, handle, emoji, friend_code}
 
 /* ---- ksywa: jedna tożsamość dla profilu i lobby MP ----
-   Brak ksywy → generujemy zabawną, „muzyczną" (np. „głuchy suseł”) i zapisujemy.
-   Pary dobrane tak, by przymiotnik (rodzaj męski) zgadzał się ze zwierzęciem i mieścił w maxlength=16. */
+   Brak ksywy → losujemy zabawny nick z listy i zapisujemy (maxlength 32 — input i serwer). */
 let myHandle=null;
-const HANDLE_ADJ=['głuchy','basowy','zgrany','niemy','dęty','funkowy','jazzowy','punkowy','technowy','discowy','rapowy','fałszywy','kręcony','bujający','skoczny','rzewny','gitarowy','winylowy','chórowy','rytmiczny'];
-const HANDLE_ANIM=['suseł','borsuk','kojot','łoś','jeż','bóbr','kret','chomik','tapir','lemur','manat','żuraw','dudek','narwal','mors','ryś','karp','bażant','gawron','słowik','szpak','kos','paw'];
-function funnyHandle(){
-  const a=HANDLE_ADJ[Math.floor(Math.random()*HANDLE_ADJ.length)];
-  const n=HANDLE_ANIM[Math.floor(Math.random()*HANDLE_ANIM.length)];
-  const h=a+' '+n;
-  return h.length<=16 ? h : n;   // bezpiecznik na maxlength
-}
+const FUNNY_HANDLES=['Michał Dżemson','Darth Wiesław','Obi-Wan Kebabi','James Bonczur','Analny Korsarz',
+  'Indiana Janusz','James Bondżur','Bruce Wilgotny','Gandalf Biały Ser','Spider-Chłop','Batman z Biedry',
+  'Hulk po Kompocie','Rocky Balbochen','John Wycisk','Robert Lewa Noga','Krzysztof Kieślina','Pudzilla',
+  'Jan Router II','Pan Kleksik','Wiesław Wszechmogący','Pirat z Karaibiedronki','Ojciec Chrzestny Karpia',
+  'Cristiano Rolando','Lionel Messiasty','Kanye Westchnienie','Snoop Pies','Post Malonez','Dua Cipa',
+  'Temu Batman','Taco z Paczkomatu','Betonowy Mnich','Kulturalny Chuligan','Szybki Proboszcz','Młody Janusz',
+  'Szczur z otwarcia kanału','Książę Pasztetu','Szef Parówek','Mokra Włoszka','Drugi Peja','Mądrzejszy Einstein',
+  'Łóżkowy Sprinter','Tłusty Ninja','Zimny Kaloryfer','Zaginiony Teść','Wujek Chaos','Pół Człowiek Pół Główek',
+  'Grzybiarz Olek','Emerytka','Shrek po Krecie','Messi z Temu','Hari Pota','Geralt z Niedrzwicy',
+  'Kapitan Oczywisty','Minionek Alfa','Naczelny Słoik','Mistrz Ceraty','Głuchy Pień','Mała Ale Ja Już',
+  'Bober z Grzywką'];
+function funnyHandle(){ return FUNNY_HANDLES[Math.floor(Math.random()*FUNNY_HANDLES.length)]; }
 // zwróć stabilną ksywę: z profilu, a jak brak — wygeneruj i zapisz (idempotentne, cache w myHandle)
 export async function ensureHandle(){
   if(myHandle) return myHandle;

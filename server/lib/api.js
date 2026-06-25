@@ -100,7 +100,7 @@ export async function handleApi(req, env, url){
 
   if(path==='/api/handle' && m==='POST'){
     const { handle } = await body(req);
-    const h = String(handle||'').trim().slice(0,16);
+    const h = String(handle||'').trim().slice(0,32);
     if(h) await env.DB.prepare(`UPDATE profiles SET handle=? WHERE id=?`).bind(h, me).run();
     return json({ ok:true });
   }

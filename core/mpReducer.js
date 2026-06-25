@@ -98,10 +98,16 @@ export function candidatesForSlot(game, slotKey){
     tag: e.sawSure ? 'sure' : (e.sawUnsure && !e.sawNormal ? 'unsure' : null),
   })).sort((a,b)=>b.votes.length-a.votes.length);
 }
-// odpowiedź drużyny = górka głosów w każdym slocie (''-jeśli nikt nie zagłosował)
+// odpowiedź drużyny = górka głosów w każdym slocie (''-jeśli nikt nie zagłosował).
+// SALON: host (TV-sędzia) może nadpisać górkę — jego głos w slocie wygrywa z większością.
 export function teamAnswer(game){
   const out={};
-  slotsOf(game).forEach(s=>{ const c=candidatesForSlot(game, s.key); out[s.key] = (c.length && c[0].votes.length) ? c[0].value : ''; });
+  const hostId = game && game.salon ? game.hostId : null;
+  slotsOf(game).forEach(s=>{
+    const c=candidatesForSlot(game, s.key);
+    const pick = hostId && game.votes && game.votes[s.key] && game.votes[s.key][hostId];
+    out[s.key] = pick || ((c.length && c[0].votes.length) ? c[0].value : '');
+  });
   return out;
 }
 // na co zagłosowałem w danym slocie (wartość) — do podświetlenia

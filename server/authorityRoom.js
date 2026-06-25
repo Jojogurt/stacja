@@ -83,6 +83,7 @@ export class GameAuthority extends Server {
   current = null;         // pełny utwór — SEKRET, tylko serwer
   pools = null;           // wgrane pule kategorii (cats dla buildMatch/resolve)
   hostId = null;          // rola hosta (przenoszalna — promote)
+  starterId = null;       // kto wystartował mecz — odzyskuje hosta po reconnect (nie zostaje przy promote)
   ready = new Set();      // id graczy zgłaszających gotowość w bieżącym armNonce
   hostSeen = new Set();   // anty-powtórki tytułów
   recent = [];            // anty-powtórki artystów
@@ -92,11 +93,12 @@ export class GameAuthority extends Server {
     super(ctx, env);
     // wczytaj stan z trwałego magazynu (po eviccie/restarcie DO) zanim obsłużymy żądania
     ctx.blockConcurrencyWhile(async () => {
-      const s = await ctx.storage.get(['game','current','pools','hostId','hostSeen','recent','ready']);
+      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready']);
       this.game = s.get('game') || null;
       this.current = s.get('current') || null;
       this.pools = s.get('pools') || null;
       this.hostId = s.get('hostId') || null;
+      this.starterId = s.get('starterId') || null;
       this.hostSeen = new Set(s.get('hostSeen') || []);
       this.recent = s.get('recent') || [];
       this.ready = new Set(s.get('ready') || []);
@@ -111,7 +113,7 @@ export class GameAuthority extends Server {
   async persist(){
     await this.ctx.storage.put({
       game:this.game, current:this.current, pools:this.pools,
-      hostId:this.hostId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
+      hostId:this.hostId, starterId:this.starterId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
     });
   }
 
@@ -128,6 +130,11 @@ export class GameAuthority extends Server {
     conn.setState({ id, name, verified:true });
     try{ await this.ctx.storage.deleteAlarm(); }catch(_e){}                   // ktoś wrócił → anuluj zaplanowane sprzątanie
     if(!this.hostId){ this.hostId=id; await this.persist(); }                 // pierwszy obecny = host (przenoszalny)
+    // STABILNOŚĆ HOSTA: starter meczu wraca po reconnect → odzyskuje hosta (a nie zostaje przy
+    // tym, kto został awansowany promote'em w jego nieobecności). Działa w trakcie aktywnego meczu.
+    else if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && this.game.phase!==MP.DONE){
+      this.hostId=id; this.game.hostId=id; await this.persist();
+    }
     conn.send(JSON.stringify({ t:'state', game:this.game }));
     this.pushPresence();
     await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (anty-deadlock, bez timera)
@@ -182,7 +189,7 @@ export class GameAuthority extends Server {
         // (host w onConnect jest tylko prowizoryczny do crowna w lobby; start go potwierdza —
         //  deterministyczne „twórca = host", odporne na wyścig verifyToken przy łączeniu)
         if(me && (!this.game || this.game.phase==null || this.game.phase===MP.DONE)){
-          this.hostId=me; this.pushPresence();          // potwierdź hosta (crown) przed startem rundy
+          this.hostId=me; this.starterId=me; this.pushPresence();   // twórca = host; zapamiętany do reclaim po reconnect
           await this.startMatch(msg.config||{});
         }
         return;

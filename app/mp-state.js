@@ -11,6 +11,7 @@ export const S = {
   ch: null,               // kanał transportu (cfChannel/authorityChannel) lub null
   code: null,             // kod pokoju
   host: false,            // czy ten klient jest hostem
+  salon: false,           // host-lokalny fallback trybu salonowego (działa, nim serwer odeśle game.salon)
   roomStage: 'wait',      // przed grą: 'wait' = poczekalnia, 'build' = picker „ułóż mecz" (host)
   lastView: null,         // ostatni „duży" widok (wait/picker/game) — do one-shot przejść
   game: null,             // stan gry (host/DO = źródło prawdy)
