@@ -17,19 +17,33 @@ Webowy trener do nauki tytułów i wykonawców piosenek przed muzycznym pubquize
 ## Pliki
 
 - `index.html` — HTML + CSS + montaż (`<script type="module" src="app.js">`).
-- `app.js` — warstwa aplikacji: UI, DOM, audio-element, Supabase Realtime.
+- `app.js` — entry point (~27 linii): montaż modułów + bootstrap (wersja, motyw).
 - `core/` — **czysty rdzeń bez DOM/Web API** (przenośny 1:1 na inną platformę):
   `match.js` (model meczu), `scoring.js` (dopasowanie odpowiedzi),
-  `mpReducer.js` (logika multiplayera), `phases.js` (maszyny stanów), `util.js`.
+  `mpReducer.js` (logika multiplayera), `phases.js` (maszyny stanów),
+  `picker.js` (wybór kategorii/trybów „ułóż mecz", wspólny solo+MP),
+  `chatFeed.js` (feed czatu MP + dedup), `timing.js` (stałe i obliczenia czasowe), `util.js`.
+- `app/` — warstwa app (DOM/sieć) wyłuskana z dawnego god-objectu:
+  `catalog.js` (dane kategorii + wrappery `ALL_CATS` + playlisty; wspólny dla solo i mp),
+  `dom.js` (bezstanowe prymitywy DOM/FX), `lektor.js` (synteza mowy Piper/Web Speech),
+  `audioCtx.js` + `audio.js` (odtwarzanie solo: element, „od tyłu", fragment),
+  `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie),
+  `social.js` (router ekranów + Drużyna/Znajomi/Profil/OAuth),
+  `mp.js` (multiplayer: transport, host, audio, czat) + `mp-state.js` (współdzielony stan `S`)
+  + `mp-render.js` (warstwa widoku: dyspozytor + buildery HTML) + `mp-picker.js` (host-picker „ułóż mecz").
 - `ports/` — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu,
   nie od konkretu — na natywie podmieniasz tylko adapter.
 - `adapters-web/` — webowe implementacje portów (`webAudio.js`, `itunesRepository.js`).
 - `categories.js` — dane kategorii (`window.CATEGORIES`); regenerowalny osobno.
 - `config.js` — URL + publishable key Supabase (bezpieczny w kliencie; Realtime-only, bez tabel).
-- `test/run.js` — testy jednostkowe rdzenia (`node test/run.js`, bez zależności).
+- `test/run.js` — testy jednostkowe rdzenia (`node test/run.js` lub `npm test`, bez zależności).
+- `test/integration.js` — siatka testów DOM (`npm run test:dom`, jsdom): ładuje `app.js`
+  w realnym `index.html` i klika kluczowe ścieżki (load, picker, audio, lektor, ekrany, liga/profil,
+  oraz lobby i picker MP przez fake WebSocket).
 
-Granica zależności: `core` nie wie o DOM/`fetch`/Supabase. `app.js`, `ports`
-i `adapters-web` zależą od `core`, nigdy odwrotnie.
+Granica zależności: `core` nie wie o DOM/`fetch`/Supabase. `app.js`, `app/`, `ports`
+i `adapters-web` zależą od `core`, nigdy odwrotnie. `app/` zależy od `core`, nie od `app.js`
+(powiązania z warstwą MP wstrzykiwane przez `init*` — bez cykli importów).
 
 ## Uruchomienie
 

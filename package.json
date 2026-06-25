@@ -1,0 +1,15 @@
+{
+  "name": "stacja",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "STACJA — webowy trener pubquizu muzycznego (vanilla, bez budowania).",
+  "scripts": {
+    "test": "node test/run.js",
+    "test:dom": "node test/integration.js",
+    "test:all": "node test/run.js && node test/integration.js"
+  },
+  "devDependencies": {
+    "jsdom": "^29.1.1"
+  }
+}
