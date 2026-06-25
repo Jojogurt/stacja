@@ -153,12 +153,15 @@ await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)'
   const h=$(w,'mpRoom').innerHTML;
   ok(h.length>200, 'kombinuj: niepusty render');
   ok(/mpProp_|mp-slot|mpChatIn|mpComposer|odpowied/i.test(h), 'kombinuj: pola odpowiedzi / composer');
-  // KOLEJNOŚĆ sekcji (design): odpowiedź drużyny → profile → kolumny → [foot: input+pewność+emotki]
+  // KOLEJNOŚĆ sekcji (design): profile → odpowiedź drużyny → kolumny → [foot: input+pewność+emotki]
   const ix=s=>h.indexOf(s);
-  ok(ix('id="mpTeam"')<ix('id="mpRoster"') && ix('id="mpRoster"')<ix('id="mpBoard"')
+  ok(ix('id="mpRoster"')<ix('id="mpTeam"') && ix('id="mpTeam"')<ix('id="mpBoard"')
      && ix('id="mpBoard"')<ix('mp-foot') && ix('mp-form')>ix('mp-foot') && ix('mp-reacts')>ix('mp-form'),
-     'kolumny: kolejność team→profile→kolumny→[foot:input→emotki]');
+     'kolumny: kolejność profile→team→kolumny→[foot:input→emotki]');
   ok((h.match(/mp-hr/g)||[]).length>=3, 'kolumny: sekcje oddzielone kreskami (mp-hr)');
+  // #5: brak kreski MIĘDZY kolumnami a polem wpisywania (board styka się z foot bez mp-hr)
+  ok(ix('id="mpBoard"')<ix('mp-foot') && h.slice(ix('id="mpBoard"'), ix('mp-form')).indexOf('mp-hr')===-1,
+     'kolumny: brak kreski board↔input (#5)');
   ok(/class="mp-foot"/.test(h), 'kolumny: pasek emotek/input w sticky foot');
   // STAN Z GŁOSAMI → mpSlotsHTML porównuje przez norm (regresja: norm nieimportowane → throw, render zamarza).
   const g2 = { ...game, playNonce:1,
@@ -240,24 +243,28 @@ await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
   ok(!/undefined is not|Cannot read/.test(dn), 'done render bez wyjątku');
 });
 
-await group('MP: tryb salonowy — host renderuje monitor (read-only board, TV poza rosterem)', async ()=>{
+await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emotek; board nadpisywalny', async ()=>{
   const w = window;
   const ws = wsInstances[wsInstances.length-1];
-  // host=TV: salon:true → mpRender powinien dać monitor (board+gałka), bez pól typowania,
-  // board read-only (host nie głosuje), a host poza paskiem graczy.
+  // host=TV (salon:true): te same fazy co normalnie, ale host nie wpisuje/nie reaguje (latające emotki zostają),
+  // może KLIKNĄĆ propozycję (nadpisanie), a TV jest poza paskiem graczy.
   ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s', salon:true,
     answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
     proposals:[{id:'p1',aid:'a1',by:'ktos',byName:'Ala',conf:'normal',values:{title:'Hey Jude',artist:'Beatles'}}],
     votes:{ title:{ktos:'Hey Jude'}, artist:{ktos:'Beatles'} },
     passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:50, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] });
   await settle(8);
-  const stage=$(w,'mpStage'); const h=stage.innerHTML;
-  ok(stage.classList.contains('salon'), 'salon: #mpStage ma klasę .salon');
-  ok(/mp-salon/.test(h) && /id="mpBoard"/.test(h) && /id="mpKnob"/.test(h), 'salon: monitor (board + gałka audio)');
-  ok(h.includes('Hey Jude'), 'salon: typy z telefonów widoczne na board');
-  ok(!/onclick="mpVote/.test(h), 'salon: board read-only (host nie głosuje)');
-  ok(!/mpProp_|mp-composer/.test(h), 'salon: brak pól typowania na TV');
-  ok(/mp-lockmini/.test(h), 'salon: host ma przycisk „Zatwierdź ✓"');
+  ok($(w,'mpStage').classList.contains('salon'), 'salon: #mpStage ma klasę .salon (powiększenie CSS)');
+  ok(/id="mpKnob"/.test($(w,'mpRoom').innerHTML), 'salon słuchaj: gałka audio (host gra na TV)');
+  ok(!/mp-reacts/.test($(w,'mpRoom').innerHTML), 'salon: brak paska wysyłania emotek u hosta');
+  // pod-faza kombinuj → board nadpisywalny przez hosta, bez pól/pewności/emotek
+  w.mpGoKombinuj && w.mpGoKombinuj(); await settle(4);
+  const h=$(w,'mpRoom').innerHTML;
+  ok(/id="mpBoard"/.test(h) && h.includes('Hey Jude'), 'salon kombinuj: kolumny z typami telefonów');
+  ok(/onclick="mpVote/.test(h), 'salon: board KLIKALNY (host nadpisuje odpowiedź)');
+  ok(!/mpProp_|mp-composer|id="mpConf"/.test(h), 'salon: brak pól typowania/pewności na TV');
+  ok(!/mp-reacts/.test(h), 'salon kombinuj: brak paska emotek u hosta');
+  ok(/mp-lockmini/.test(h), 'salon: host ma „Zatwierdź ✓"');
   ok(!/mp-rz[^>]*\byou\b/.test(h), 'salon: TV (host) poza paskiem graczy');
   ok(!/undefined is not|Cannot read/.test(h), 'salon render bez wyjątku');
 });

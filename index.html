@@ -582,7 +582,12 @@
   /* ekran gry: kolumna na pełną wysokość, pasek emotek (+ w kolumnach input/pewność) PRZYPIĘTY do dołu */
   .mp-play{display:flex;flex-direction:column;min-height:calc(100dvh - 96px)}
   .mp-play>.mp-board{flex:0 0 auto}
-  .mp-foot{margin-top:auto;position:sticky;bottom:0;background:var(--bg);padding-bottom:calc(env(safe-area-inset-bottom))}
+  /* sticky dół: dociągnij DO SAMEGO dołu ekranu. UJEMNY bottom w sticky przesuwa próg
+     przyklejenia poniżej krawędzi body (które ma padding safe-area+18px), więc pasek lgnie do
+     realnego dołu; własny padding trzyma emotki nad home-indicatorem. (Ujemny margines NIE
+     działa — padding jest na body=przodku, nie na sąsiedzie.) */
+  .mp-foot{margin-top:auto;position:sticky;bottom:calc(-1 * (env(safe-area-inset-bottom) + 18px));
+    background:var(--bg);padding-bottom:calc(env(safe-area-inset-bottom) + 14px)}
   .mp-foot .mp-reacts{margin-top:8px} .mp-foot .mp-hr{margin-top:8px}
   /* nagłówek kompaktowy (2 wiersze) + pasek czasu fazy słuchania */
   .mp-bar{display:flex;align-items:center;gap:8px;padding:2px 2px 5px;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.02em;text-transform:uppercase}
@@ -614,7 +619,7 @@
   .mp-rnode.on .mp-rlab{color:var(--blue-d);font-weight:900}
   .mp-rseg{flex:0 0 16px;height:3px;border-radius:2px;background:var(--line);margin-bottom:18px}
   .mp-rseg.done{background:var(--green)}
-  .mp-roster{display:flex;gap:8px;justify-content:center;padding:0;margin:0;border-bottom:none!important}
+  .mp-roster{display:flex;gap:8px;justify-content:center;align-items:flex-start;padding:10px 0;margin:0;border-bottom:none!important}
   .mp-rz{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
   .mp-rz.dim{opacity:.55}
   .mp-rz-av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:900;font-size:13px}
@@ -1000,6 +1005,10 @@
   html.dark .rv-banner.lose{background:rgba(255,75,75,.12)}
   html.dark .rv-banner.ok{background:rgba(88,204,2,.14)} html.dark .rv-banner.ok small{color:#7BD957}
   html.dark .mp-teamc{background:rgba(88,204,2,.14)}
+  /* latająca emotka: podpis nicku — w dark hardkodowane #fff tło dawało biały-na-białym (nieczytelne) */
+  html.dark .mp-float .nm{color:#fff;background:#2B2440;border-color:#4a4368}
+  html.dark .mp-say{background:#2B2440;border-color:#4a4368;color:#fff}
+  html.dark .mp-say b{color:#5CC5FF}
 
   /* ===== TRYB SALONOWY (TV) — toggle w pickerze + duży ekran-monitor hosta ===== */
   .um-salon{padding-top:2px}
@@ -1014,22 +1023,28 @@
   .um-salon-sw i{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
   .um-salon-toggle.on .um-salon-sw i{left:22px}
 
-  /* ekran-monitor: wyłom z mobilnej powłoki 520px → szeroki TV; layout MP skalowany */
-  body.salon{max-width:1180px}
+  /* ekran-monitor (TV): TE SAME fazy co normalnie, tylko POWIĘKSZONE i czytelne z dystansu.
+     Wyłom z mobilnej powłoki 520px → szersza, wyśrodkowana kolumna; komponenty skalowane. */
+  body.salon{max-width:880px}
   #mpStage.salon{margin:0 auto}
-  .mp-salon .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start;margin-top:8px}
-  .mp-salon .sl-clue{display:flex;flex-direction:column;gap:14px}
-  .mp-salon .sl-deck .mp-knob{width:124px;height:124px} .mp-salon .sl-deck .mp-knob svg{width:46px;height:46px}
-  .mp-salon .sl-deck .mp-state{font-size:16px}
-  .mp-salon .sl-roster{justify-content:flex-start;flex-wrap:wrap}
-  .mp-salon .mp-slots{grid-template-columns:1fr 1fr;gap:14px}
-  .mp-salon .mp-slot-h{font-size:14px}
-  .mp-salon .mp-cand .cv{font-size:18px} .mp-salon .mp-cand .crow{font-size:13px}
-  .mp-salon .mp-cand.empty{opacity:.7}
-  .mp-salon .mp-teamd .v,.mp-salon .mp-teamc .v{font-size:20px}
-  .mp-salon .mp-lockmini{width:34px;height:34px;font-size:18px}
-  .mp-salon .lyric-box{font-size:18px;line-height:1.5}
-  @media(max-width:720px){ .mp-salon .sl-grid{grid-template-columns:1fr} }
+  #mpStage.salon .mp-hd-title{font-size:20px}
+  #mpStage.salon .mp-hd-chips span{font-size:14px}
+  #mpStage.salon .mp-knob{width:128px;height:128px} #mpStage.salon .mp-knob svg{width:48px;height:48px}
+  #mpStage.salon .mp-state{font-size:18px}
+  #mpStage.salon .mp-rz-av{width:48px;height:48px;font-size:19px}
+  #mpStage.salon .mp-rz-lab{font-size:12px}
+  #mpStage.salon .mp-slots{gap:14px}
+  #mpStage.salon .mp-slot-h{font-size:16px}
+  #mpStage.salon .mp-cand{padding:14px 16px}
+  #mpStage.salon .mp-cand .cv{font-size:20px} #mpStage.salon .mp-cand .crow{font-size:14px}
+  #mpStage.salon .mp-cand.empty{opacity:.7}
+  #mpStage.salon .mp-teamd .v,#mpStage.salon .mp-teamc .v{font-size:22px}
+  #mpStage.salon .mp-teamd .l,#mpStage.salon .mp-teamc .l{font-size:12px}
+  #mpStage.salon .mp-lockmini{width:40px;height:40px;font-size:20px}
+  #mpStage.salon .lyric-box{font-size:20px;line-height:1.55}
+  #mpStage.salon .rv-track .t{font-size:24px} #mpStage.salon .rv-track .a{font-size:18px}
+  #mpStage.salon .mp-next{font-size:18px;padding:15px}
+  #mpStage.salon .mp-rail{transform:scale(1.08);transform-origin:center;margin:6px 0 14px}
 </style>
 <script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>
@@ -1069,7 +1084,7 @@
   <section id="profil">
     <div class="pf-head" id="profilHead"></div>
     <div class="pf-edit"><label for="profilHandle">Ksywa</label>
-      <div class="profil-handle"><input id="profilHandle" autocomplete="off" maxlength="16" placeholder="gracz"><button id="profilSave">Zapisz</button></div>
+      <div class="profil-handle"><input id="profilHandle" autocomplete="off" maxlength="32" placeholder="gracz"><button id="profilSave">Zapisz</button></div>
       <small class="pf-edit-hint">Tak widzą Cię znajomi i drużyna.</small>
     </div>
     <div class="profil-stats" id="profilStats"></div>

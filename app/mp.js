@@ -100,7 +100,7 @@ async function mpLeave(){
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
   S.ready=new Set(); S.lastArmNonce=null;
   S.ack=S.revealNonce=S.revealSnap=null;
-  S.code=null; S.host=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null;
+  S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
 
@@ -179,7 +179,9 @@ function mpMembers(){
 // Filtr działa od startu meczu (flaga salon żyje w stanie gry); przed meczem nie znamy roli.
 function mpPlayers(){
   const ms=mpMembers(), g=S.game;
-  return (g && g.salon && g.hostId) ? ms.filter(m=>m.id!==g.hostId) : ms;
+  const salon=(g&&g.salon)||S.salon;                 // S.salon = host-lokalny fallback (przed game.salon z serwera)
+  const hostId=g?g.hostId:(S.host?mpMe.id:null);
+  return (salon && hostId) ? ms.filter(m=>m.id!==hostId) : ms;
 }
 function mpRenderMembers(){
   const el=$m('mpMembers'); if(!el) return;   // pasek członków usunięty — lista jest w poczekalni
@@ -203,6 +205,9 @@ function mpSend(act){
   if(S.ch){ S.ch.send({type:'broadcast',event:'act',payload:act}); }
 }
 function mpAfterSync(){
+  // host-lokalny fallback salonu: serwer (jeszcze) nie odsyła game.salon → wstrzyknij, by
+  // teamAnswer (nadpisanie) i widok-monitor działały u hosta bez deployu DO.
+  if(S.salon && S.game && !S.game.salon) S.game.salon=true;
   // faza gotowości: zbuforuj utwór i zgłoś „ready" — ale TYLKO gdy nie ma odsłony do
   // zamknięcia. Z zaległą odsłoną klient zbroi się dopiero po kliknięciu „dalej".
   if(S.game && S.game.phase===MP.ARMING && S.game.armNonce!==S.lastArmNonce && !mpRevealPending()){
@@ -381,6 +386,7 @@ function mpStart(){
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   if(r.error||!r.slots){ mpRender(); return; }
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
+  S.salon=!!mpPickSalon;   // host-lokalny fallback — działa nim serwer odeśle game.salon (i bez deployu DO)
   if(SERVER_AUTH){
     // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
     S.host=true; S.tally={}; S.ack=S.revealNonce=S.revealSnap=null;

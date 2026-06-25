@@ -14,15 +14,18 @@ import { confetti, animIn } from './dom.js';
 import { mpPickerHTML } from './mp-picker.js';
 
 const $m = id => document.getElementById(id);
-const REACTIONS = ['😂','🔥','🎉','🤔','😱','🍺'];
+const REACTIONS = ['😂','🔥','🎉','🤔','😱','🖕'];
 
 /* wstrzykiwane z mp.js (logika sterująca, której potrzebuje render) */
 let mpMembers, mpPlayers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf;
 export function initMpRender(deps){
   ({ mpMembers, mpPlayers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf } = deps);
 }
-// czy TEN klient jest ekranem salonowym (host w trybie salon) — render-monitor zamiast widoku gracza
-const mpIsSalonHost = ()=> !!(S.game && S.game.salon && S.host);
+// czy TEN klient jest ekranem salonowym (host w trybie salon). Fallback S.salon = nim serwer
+// odeśle game.salon (działa bez deployu DO). Wymaga aktywnej gry (przed grą: lobby/picker normalnie).
+const mpIsSalonHost = ()=> !!(S.host && S.game && S.game.phase!=null && (S.game.salon || S.salon));
+// salon wymusza skórkę KOLUMNY (host nadpisuje przez klik w board; czat nie pokazuje kolumn)
+const curSkin = ()=> mpIsSalonHost() ? 'kolumny' : mpSkin();
 
 function mpLobbyWaitHTML(){
   const ms=mpMembers();
@@ -79,13 +82,15 @@ function mpRender(){
     case MP.ARMING:  st.innerHTML=mpRenderArming(g, head); return;
     case MP.NETERR:  st.innerHTML=mpRenderNetErr(g, head); return;
     case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
-    case MP.PLAY:    mpIsSalonHost() ? mpRenderSalonPlay(g, head, st) : mpRenderPlay(g, head, st); return;
+    case MP.PLAY:    mpRenderPlay(g, head, st); return;   // salon: te same fazy, tylko większe (CSS) + ukryte kontrolki gracza
     case MP.REVEAL:  st.innerHTML=mpRenderWaitNext(head); return;   // już kliknąłem „dalej" — czekam na resztę
     case MP.DONE:    st.innerHTML=mpRenderDone(g, head); return;
   }
 }
-// pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania
+// pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania.
+// SALON (TV): host nie wysyła (latające emotki nadal widzi) → cały pasek znika.
 function mpReactsBarHTML(){
+  if(mpIsSalonHost()) return '';
   return `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
     <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
@@ -118,7 +123,7 @@ const ROSTER_META={
   pass:  {bg:'#E5E5E5',fg:'#9a958c',lab:'✋ pas',lc:'#9a958c',dim:1},
 };
 function mpRosterHTML(g){
-  if(mpSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
+  if(curSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
     return `<span class="mp-stol">stół:</span>`+mpPlayers().map(m=>{
       const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
       const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
@@ -166,7 +171,7 @@ function mpTeamHTML(g){
   const sure = (g.proposals||[]).some(p=>p.conf==='sure');
   const badge = sure ? '<span class="mp-x2">🟡 ×2</span>' : '';
   const lock = S.host ? `<button class="mp-lockmini" onclick="mpLock()" title="Zatwierdź odpowiedź drużyny" aria-label="Zatwierdź odpowiedź drużyny">✓</button>` : '';
-  const cls = mpSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
+  const cls = curSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
   return `<div class="${cls}"><span class="ic">🎯</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}${lock}</div>`;
 }
 // wybór pewności typu (zwykła/niepewny/pewniak) + „pas" — jeden wiersz, bez dubli na dole.
@@ -297,18 +302,22 @@ function mpSluchajBodyHTML(g){
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
     <div class="mp-foot">${mpHr()}${mpReactsBarHTML()}</div>`;
 }
-// FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze)
+// FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze).
+// Kolejność: profile ─ odpowiedź drużyny ─ kolumny ─ [dół: input+wrzuć ─ pewność ─ emotki].
+// SALON (TV): bez pól wpisywania/pewności/emotek — host nadpisuje odpowiedź klikiem w kolumny.
 function mpKombinujKolumnyHTML(g){
-  // odpowiedź drużyny (góra) ─ profile ─ kolumny ─ [sticky dół: input+wrzuć ─ pewność ─ emotki]
-  return `<div class="mp-team" id="mpTeam"></div>
+  const foot = mpIsSalonHost()
+    ? (g.mode==='quiz' ? `<div class="mp-foot">${mpHr()}${mpPromptHTML(g)}</div>` : '')
+    : `<div class="mp-foot">
+        ${mpPromptHTML(g)}${mpFormHTML(g)}
+        <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
+        ${mpHr()}${mpReactsBarHTML()}</div>`;
+  return `<div class="mp-roster" id="mpRoster"></div>
     ${mpHr()}
-    <div class="mp-roster" id="mpRoster"></div>
+    <div class="mp-team" id="mpTeam"></div>
     ${mpHr()}
     <div class="mp-board" id="mpBoard"></div>
-    <div class="mp-foot">${mpHr()}
-      ${mpPromptHTML(g)}${mpFormHTML(g)}
-      <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-      ${mpHr()}${mpReactsBarHTML()}</div>`;
+    ${foot}`;
 }
 // FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
@@ -323,7 +332,7 @@ function mpKombinujCzatHTML(g){
 }
 // scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
 function mpScaffoldPlay(g, head){
-  const skin=mpSkin();
+  const skin=curSkin();
   const rail=mpRailHTML(S.sub==='sluchaj'?'sluchaj':'kombinuj');
   // skórka KOLUMNOWA, faza „kombinuj": własna kolejność (odpowiedź drużyny → profile → kolumny → input);
   // roster jest WEWNĄTRZ ciała, nie w „top" — dlatego osobna gałąź.
@@ -357,7 +366,7 @@ function mpAnimListenBar(){
   requestAnimationFrame(()=>{ i.style.transition=`width ${remMs}ms linear`; i.style.width='0%'; });
 }
 function mpRenderPlay(g, head, st){
-  const skin=mpSkin();
+  const skin=curSkin();
   const newRound = S.playRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
     mpClearTyping(); S.composerMode='chat'; S.sub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
@@ -369,34 +378,6 @@ function mpRenderPlay(g, head, st){
     if(S.sub==='sluchaj') mpAnimListenBar();
   }
   mpRefreshDynamic(g);
-  mpTickTimer();
-}
-
-/* —— EKRAN SALONOWY (TV) — monitor stołu w fazie PLAY ——
- * Host (TV) gra audio i pokazuje duży podgląd: gałka + tekst/pytanie, pasek osób (gracze bez TV),
- * kolumny typów (read-only) i odpowiedź drużyny z przyciskiem „Zatwierdź ✓" (mpTeamHTML, tylko host).
- * Zachowuje te same id (#mpKnob/#mpPlayStatus/#mpListenBar/#mpRoster/#mpBoard/#mpTeam/#mpCountdown),
- * więc istniejące mpRefreshDynamic + obsługa audio działają bez zmian. */
-function mpSalonScaffold(g, head){
-  const clue = g.mode==='quiz' ? mpPromptHTML(g)
-    : `<div class="sl-deck"><div class="mp-deck">${mpKnobHTML('mpKnob','mp-knob')}
-        <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'}</div>
-        <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>${mpLyricHTML(g)}</div>`;
-  return `<div class="mp-play mp-salon">${head}
-    <div class="sl-grid">
-      <div class="sl-clue">${clue}<div class="sl-roster mp-roster" id="mpRoster"></div></div>
-      <div class="sl-answers"><div class="mp-board" id="mpBoard"></div><div class="mp-team" id="mpTeam"></div></div>
-    </div></div>`;
-}
-function mpRenderSalonPlay(g, head, st){
-  const newRound = S.playRound!==g.playNonce;
-  if(newRound){ mpClearTyping(); S.composerMode='chat'; S.sub='sluchaj'; mpFeedReset(); }
-  if(newRound || S.playSkin!=='salon' || !$m('mpBoard')){
-    S.playRound=g.playNonce; S.playSkin='salon'; S.playSub='salon';
-    st.innerHTML = mpSalonScaffold(g, head);
-    mpAnimListenBar();
-  }
-  mpRefreshDynamic(g);   // #mpRoster/#mpBoard/#mpTeam (#mpConf/#mpChatFeed nie istnieją → pomijane)
   mpTickTimer();
 }
 
@@ -414,7 +395,7 @@ function mpRenderRevealCard(snap){
   const cover = r.art?`<img class="rv-cover" src="${r.art}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">💿</div>`;
   const meta=[r.album,r.year].filter(Boolean).join(' · ');
   const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span><span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
-  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
+  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}${mpHr()}
     <div class="rv-card">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.track)}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
       ${slot(r.okTitle,'TYTUŁ',r.track)}${slot(r.okArtist,'WYK.',r.artist)}
@@ -435,7 +416,7 @@ function mpRenderQuizReveal(snap){
       <span class="v">${correct}${team?`<small class="rv-team">drużyna: „${escapeHtml(team)}"</small>`:''}</span>
       <span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
   }).join('');
-  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
+  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}${mpHr()}
     <div class="rv-card quiz">
       <div class="rv-prompt">${escapeHtml(r.prompt||'')}</div>
       ${rows}
