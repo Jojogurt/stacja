@@ -4,8 +4,10 @@
  * w app/mp.js i jest wstrzykiwana przez initMpRender — bez statycznego cyklu render↔logika. */
 import { S, mpMe } from './mp-state.js';
 import { escapeHtml } from '../core/util.js';
+import { norm } from '../core/scoring.js';   // mpSlotsHTML: porównanie głosów (mój głos == kandydat)
 import { QPC } from '../core/match.js';
 import { MP } from '../core/phases.js';
+import { listenSecs as _listenSecs } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState } from '../core/mpReducer.js';
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn } from './dom.js';

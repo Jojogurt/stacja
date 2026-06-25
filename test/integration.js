@@ -136,19 +136,30 @@ await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)'
     answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
     proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'',
     playNonce:1, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] };
-  ws.pushState(game); await settle(8);                 // {t:'state'} → mpAfterSync → mpRender(play)
+  ws.pushState(game); await settle(8);                 // {t:'state'} → mpAfterSync → mpRender(play) + mpStartListenWindow + mpPlayLocal
   ok(/id="mpKnob"/.test($(w,'mpRoom').innerHTML), 'faza słuchaj: gałka odtwarzania');
   ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'play render bez wyjątku');
+  // EFEKT (nie tylko render): mpStartListenWindow + mpPlayLocal MUSZĄ zadziałać, inaczej audio nie
+  // startuje i faza nie przechodzi (regresja: brak importu w mp-render rzuca, transport łyka po cichu).
+  ok($(w,'mpListenBar') && $(w,'mpListenBar').querySelector('i'), 'listen-bar wyrenderowany (auto-przejście)');
+  ok(/ładowanie|gra/.test(($(w,'mpPlayStatus')||{}).textContent||''), 'audio auto-start: mpPlayLocal ustawił status (nie zawisł na „posłuchaj")');
   // pod-faza „kombinuj" → composer/sloty odpowiedzi
   w.mpGoKombinuj && w.mpGoKombinuj(); await settle(4);
   const h=$(w,'mpRoom').innerHTML;
   ok(h.length>200, 'kombinuj: niepusty render');
   ok(/mpProp_|mp-slot|mpChatIn|mpComposer|odpowied/i.test(h), 'kombinuj: pola odpowiedzi / composer');
-  // typ od gracza w stanie → roster/feed bez wyjątku
-  const g2 = { ...game, playNonce:1, proposals:[{id:'p1',aid:'a1',by:'u2',byName:'Bob',conf:'normal',values:{title:'Hey Jude'}}],
-    votes:{ title:{u2:'Hey Jude'} } };
+  // STAN Z GŁOSAMI → mpSlotsHTML porównuje przez norm (regresja: norm nieimportowane → throw, render zamarza).
+  const g2 = { ...game, playNonce:1,
+    proposals:[{id:'p1',aid:'a1',by:ws._id,byName:'Ja',conf:'normal',values:{title:'Hey Jude',artist:'Beatles'}}],
+    votes:{ title:{[ws._id]:'Hey Jude'}, artist:{[ws._id]:'Beatles'} } };
   ws.pushState(g2); await settle(4);
-  ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'render z propozycją bez wyjątku');
+  ok($(w,'mpRoom').innerHTML.includes('Hey Jude'), 'render ze stanem+głosami pokazuje typ (mpSlotsHTML/norm OK)');
+  // propose przez UI: optymistyczny apply + mpRender NIE może rzucać
+  w.mpGoKombinuj && w.mpGoKombinuj(); await settle(3);
+  const ti=$(w,'mpProp_title'), ar=$(w,'mpProp_artist');
+  if(ti) ti.value='Yesterday'; if(ar) ar.value='Beatles';
+  w.mpPropose && w.mpPropose(); await settle(4);
+  ok($(w,'mpRoom').innerHTML.includes('Yesterday'), 'mpPropose: typ pojawia się w odpowiedzi drużyny');
 });
 
 await group('MP: akcje gracza (react/say/propose/typing) nie rzucają', async ()=>{

@@ -8,7 +8,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v13';   // refaktor: app.js → moduły app/* (split god-objectu)
+const APP_VERSION = 'v14';   // refaktor app/* + hotfix MP (brakujące importy w mp-render: norm, listenSecs)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny (klasa html.dark; wczesny skrypt w <head> ustawia ją przed renderem) ---- */

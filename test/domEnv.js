@@ -67,6 +67,9 @@ function installGlobals(window){
     try{ Object.defineProperty(globalThis, k, { value: window[k], configurable:true, writable:true }); }
     catch(_e){ try{ globalThis[k]=window[k]; }catch(_e2){} }
   }
+  // rAF: app/mp-render.js używa go gołego (animacja paska słuchania); w jsdom jest na window
+  globalThis.requestAnimationFrame = window.requestAnimationFrame || ((cb)=>setTimeout(()=>cb(Date.now()),16));
+  globalThis.cancelAnimationFrame = window.cancelAnimationFrame || ((id)=>clearTimeout(id));
 }
 
 export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='' } = {}){
