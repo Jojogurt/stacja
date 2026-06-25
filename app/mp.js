@@ -189,6 +189,13 @@ function mpPlayers(){
   const hostId=g?g.hostId:(S.host?mpMe.id:null);
   return (salon && hostId) ? ms.filter(m=>m.id!==hostId) : ms;
 }
+// id-ki, na które czeka faza gotowości. SALON: tylko gracze (TV nie gra; buforuje audio sam).
+// Brak graczy → fallback na wszystkich (anty-deadlock, gdy host sam w pokoju).
+function mpExpectedReady(){
+  const ids=mpMembers().map(m=>m.id);
+  if(S.game && S.game.salon){ const ps=ids.filter(id=>id!==S.game.hostId); return ps.length?ps:ids; }
+  return ids;
+}
 function mpRenderMembers(){
   const el=$m('mpMembers'); if(!el) return;   // pasek członków usunięty — lista jest w poczekalni
   const ms=mpPlayers();   // w salonie TV (host) nie jest graczem → poza listą
@@ -232,7 +239,7 @@ function mpRevealPending(){ return !!S.revealSnap && S.ack!==S.revealNonce; }
 // host: sprawdź, czy można już wystartować pytanie (wszyscy obecni gotowi)
 function mpMaybeGo(){
   if(!S.host || !S.game || S.game.phase!==MP.ARMING) return;
-  const r=countReady(mpMembers().map(m=>m.id), S.ready);
+  const r=countReady(mpExpectedReady(), S.ready);
   S.game.readyCount=r.count; S.game.readyTotal=r.total;
   if(r.all){ mpGo(); } else { mpBroadcast(); mpRender(); }
 }
@@ -400,7 +407,7 @@ function mpHandleAct(a){
   if(a.type==='ready' && S.game.phase===MP.ARMING){
     if(a.armNonce!==S.game.armNonce) return;       // ready ze starej rundy — ignoruj
     S.ready.add(a.by);
-    const r=countReady(mpMembers().map(m=>m.id), S.ready);
+    const r=countReady(mpExpectedReady(), S.ready);
     S.game.readyCount=r.count; S.game.readyTotal=r.total;
     if(r.all){ mpGo(); return; }                   // wszyscy gotowi → start
     mpBroadcast(); mpRender();
@@ -472,7 +479,7 @@ async function mpHostNewRound(){
   S.game.snipStart = S.game.mode==='snippet' ? mpSnipStart() : 0;
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
   S.game.phase=MP.ARMING; S.game.armNonce=(S.game.armNonce||0)+1;
-  S.game.endsAt=null; S.game.readyCount=0; S.game.readyTotal=mpMembers().length;
+  S.game.endsAt=null; S.game.readyCount=0; S.game.readyTotal=mpExpectedReady().length;
   S.ready=new Set();
   mpBroadcast(); mpRender();
   mpArm();                                   // host też buforuje i zgłasza swoją gotowość

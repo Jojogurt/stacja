@@ -285,7 +285,7 @@ export class GameAuthority extends Server {
     this.game.snipStart = this.game.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
     // FAZA GOTOWOŚCI: roześlij utwór (bez odpowiedzi), czekaj aż wszyscy zbuforują
     this.game.phase=MP.ARMING; this.game.armNonce=(this.game.armNonce||0)+1;
-    this.game.endsAt=null; this.game.readyCount=0; this.game.readyTotal=this.members().length;
+    this.game.endsAt=null; this.game.readyCount=0; this.game.readyTotal=this.expectedReady().length;
     this.ready=new Set();
     this.broadcastState(); await this.persist();
     // BRAK timera startu: PLAY rusza dopiero gdy WSZYSCY OBECNI zgłoszą ready. Klient nie zbroi się,
@@ -300,10 +300,17 @@ export class GameAuthority extends Server {
     await this.maybeGoArming();
   }
 
-  // przelicz gotowość i wystartuj, gdy WSZYSCY OBECNI gotowi (woła: onReady, onConnect, onClose)
+  // id-ki, na które czekamy w fazie gotowości. SALON: TV (host) nie gra → czekamy TYLKO na graczy
+  // (TV i tak buforuje audio niezależnie). Brak graczy → fallback na wszystkich (anty-deadlock).
+  expectedReady(){
+    const ids=this.members().map(m=>m.id);
+    if(this.game && this.game.salon){ const ps=ids.filter(id=>id!==this.hostId); return ps.length?ps:ids; }
+    return ids;
+  }
+  // przelicz gotowość i wystartuj, gdy wszyscy OCZEKIWANI gotowi (woła: onReady, onConnect, onClose)
   async maybeGoArming(){
     if(!this.game || this.game.phase!==MP.ARMING) return;
-    const r=countReady(this.members().map(m=>m.id), this.ready);
+    const r=countReady(this.expectedReady(), this.ready);
     this.game.readyCount=r.count; this.game.readyTotal=r.total;
     if(r.all){ await this.go(); return; }
     this.broadcastState(); await this.persist();
