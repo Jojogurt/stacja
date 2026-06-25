@@ -17,15 +17,17 @@ Webowy trener do nauki tytułów i wykonawców piosenek przed muzycznym pubquize
 ## Pliki
 
 - `index.html` — HTML + CSS + montaż (`<script type="module" src="app.js">`).
-- `app.js` — bootstrap + tryb SOLO (tuner, picker, rundy, audio) + wstrzyknięcia do modułów `app/`.
+- `app.js` — entry point (~27 linii): montaż modułów + bootstrap (wersja, motyw).
 - `core/` — **czysty rdzeń bez DOM/Web API** (przenośny 1:1 na inną platformę):
   `match.js` (model meczu), `scoring.js` (dopasowanie odpowiedzi),
   `mpReducer.js` (logika multiplayera), `phases.js` (maszyny stanów),
   `picker.js` (wybór kategorii/trybów „ułóż mecz", wspólny solo+MP),
   `chatFeed.js` (feed czatu MP + dedup), `timing.js` (stałe i obliczenia czasowe), `util.js`.
-- `app/` — moduły warstwy app wyłuskane z `app.js` (DOM, ale skupione):
+- `app/` — warstwa app (DOM/sieć) wyłuskana z dawnego god-objectu:
+  `catalog.js` (dane kategorii + wrappery `ALL_CATS` + playlisty; wspólny dla solo i mp),
   `dom.js` (bezstanowe prymitywy DOM/FX), `lektor.js` (synteza mowy Piper/Web Speech),
   `audioCtx.js` + `audio.js` (odtwarzanie solo: element, „od tyłu", fragment),
+  `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie),
   `social.js` (router ekranów + Drużyna/Znajomi/Profil/OAuth),
   `mp.js` (cały multiplayer: pokój, picker, gra, transport, czat).
 - `ports/` — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu,

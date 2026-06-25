@@ -20,12 +20,11 @@ import { ensureSession, setHandle, recordMatch } from '../adapters-web/cf.js';
 import { stopAudio } from './audio.js';
 import { stopSpeech, lektorStop, lektorPlay } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
+import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
+  catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
 
-/* wstrzykiwane z app.js: dane kategorii (window.CATEGORIES) + wrappery związane z ALL_CATS */
-let ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, catLabel, buildMatch, randomPools, plLoad, plFetch;
-export function initMp(deps){
-  ({ ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, catLabel, buildMatch, randomPools, plLoad, plFetch } = deps);
-  // social potrzebuje powiązań z MP + etykiet kategorii (mpMe to współdzielony obiekt)
+// wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
+export function initMp(){
   initSocial({ mpMe, mpEnterRoom, mpRandCode, mpUnlockAudio, mpAvatarColor, catLabel });
 }
 // deep-link ?room= — wołane przez app.js PO initMp (showScreen sięga mpMe wstrzykniętego do social)

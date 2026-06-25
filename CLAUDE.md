@@ -33,13 +33,13 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   wspólny solo+MP), `chatFeed.js` (feed czatu MP), `timing.js` (stałe/obliczenia czasowe), `util.js`.
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
 - **`adapters-web/`** — webowe implementacje portów + transport (iTunes, Cloudflare, Realtime).
-- **`app.js`** — warstwa aplikacji: ~570 linii. Bootstrap + tryb SOLO (tuner, picker, rundy,
-  audio-element, mecz) + wstrzyknięcia do modułów `app/` (`init*`). Już NIE god object.
-- **`app/`** — moduły wyłuskane z `app.js` (zależą od `core/`, **nie** od `app.js`; powiązania
-  między sobą i z danymi kategorii przez `init*` — bez cykli importów):
-  `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js` (audio solo),
-  `social.js` (router ekranów `showScreen` + Drużyna/Znajomi/Profil/OAuth),
-  `mp.js` (CAŁY multiplayer: pokój, picker, gra, transport, czat — DOM+sieć; logika w `core/mpReducer`).
+- **`app.js`** — **entry point (~27 linii)**: montaż modułów + bootstrap (wersja, motyw). Bez logiki.
+- **`app/`** — warstwa DOM/sieć, wyłuskana z dawnego god-objectu (zależy od `core/`, **nie** od `app.js`):
+  `catalog.js` (dane kategorii z `window.CATEGORIES` + wrappery `ALL_CATS` + playlisty — importowany
+  przez solo i mp), `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js`
+  (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `social.js` (router ekranów
+  `showScreen` + Drużyna/Znajomi/Profil/OAuth), `mp.js` (CAŁY multiplayer — DOM+transport; logika w `core/mpReducer`).
+  Powiązania zwrotne (np. MP↔social) przez `init*`, nie importy — bez cykli.
 - **`server/`** — Worker + Durable Object (`authorityRoom.js`); importuje `core/` (DRY z klientem).
 
 **Reguła:** nowa logika gry (czysta, testowalna) → `core/` + test w `test/run.js`. DOM/sieć → `app.js`/`app/`/`adapters-web/`.
@@ -66,7 +66,7 @@ core/  ←  server/                                   (serwer reużywa ten sam r
 
 ## Status refaktoru
 
-**Zrobione.** app.js 2187 → **572** linii (−74%). God object rozbity na `core/timing|picker|chatFeed`
-+ `app/dom|lektor|audioCtx|audio|social|mp`, każdy z init-injection (bez cykli). CI + siatka jsdom
-(z fake WebSocket pod MP). **387 rdzeń + 26 integracyjnych** zielone; MP zweryfikowane też w przeglądarce
-(pokój/lobby/picker przeciw realnemu workerowi). Historia i ewentualne dalsze kroki: pamięć `refaktor-app-js`.
+**Zrobione.** app.js 2187 → **27 linii** (czysty entry point). God object w pełni rozpuszczony:
+`core/timing|picker|chatFeed` + `app/catalog|dom|lektor|audioCtx|audio|solo|social|mp`. Największy plik
+to `app/mp.js` (~1160, spójny — cały multiplayer). CI + siatka jsdom (z fake WebSocket pod MP);
+**387 rdzeń + 26 integracyjnych** zielone; solo i MP zweryfikowane też w przeglądarce. Historia: pamięć `refaktor-app-js`.
