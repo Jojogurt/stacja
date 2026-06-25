@@ -32,7 +32,7 @@ const catsByKind=(window)=>{
 // JEDEN boot dla całej siatki: moduły app/ to singletony (cache ESM) — drugi boot nie
 // re-wiązałby DOM/window. serverAuthority czytane przy ładowaniu; roomsBase ustawiamy runtime
 // dopiero w grupie MP (reszta testów działa jak dotąd z pustym base → wariant „bez backendu").
-const { window, fetchCalls } = await bootApp({ serverAuthority:true });
+const { window, fetchCalls, wsInstances } = await bootApp({ serverAuthority:true });
 
 await group('load: app.js montuje się bez wyjątku', async ()=>{
   ok(window.STACJA_VERSION, 'STACJA_VERSION ustawione: '+window.STACJA_VERSION);
@@ -126,6 +126,54 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   const before=html.length;
   w.mpToggleGrp && w.mpToggleGrp('dekady'); await settle(2);
   ok($(w,'mpRoom').innerHTML.length>0, 'mpToggleGrp → re-render pickera bez wyjątku');
+});
+
+await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  ok(ws && ws._id, 'aktywny kanał (fake WS)');
+  const game = { phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'',
+    playNonce:1, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] };
+  ws.pushState(game); await settle(8);                 // {t:'state'} → mpAfterSync → mpRender(play)
+  ok(/id="mpKnob"/.test($(w,'mpRoom').innerHTML), 'faza słuchaj: gałka odtwarzania');
+  ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'play render bez wyjątku');
+  // pod-faza „kombinuj" → composer/sloty odpowiedzi
+  w.mpGoKombinuj && w.mpGoKombinuj(); await settle(4);
+  const h=$(w,'mpRoom').innerHTML;
+  ok(h.length>200, 'kombinuj: niepusty render');
+  ok(/mpProp_|mp-slot|mpChatIn|mpComposer|odpowied/i.test(h), 'kombinuj: pola odpowiedzi / composer');
+  // typ od gracza w stanie → roster/feed bez wyjątku
+  const g2 = { ...game, playNonce:1, proposals:[{id:'p1',aid:'a1',by:'u2',byName:'Bob',conf:'normal',values:{title:'Hey Jude'}}],
+    votes:{ title:{u2:'Hey Jude'} } };
+  ws.pushState(g2); await settle(4);
+  ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'render z propozycją bez wyjątku');
+});
+
+await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  // ODSŁONA (muzyka): karta utworu + baner + odpowiedź drużyny
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'d80',mode:'music'}],
+    mode:'music', catKey:'d80', catLabel:'80s', answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:'',
+      okTitle:true, okArtist:true, teamOk:true, gained:2, firstBy:'Bob', pewniacy:[], pewniakWin:false, pewniakLose:false,
+      locked:{title:'Hey Jude',artist:'Beatles'} },
+    proposals:[], votes:{}, passed:[], playNonce:2, timer:0 });
+  await settle(6);
+  const rv=$(w,'mpRoom').innerHTML;
+  ok(/rv-card/.test(rv) && /Hey Jude/.test(rv), 'reveal: karta utworu z tytułem');
+  ok(/rv-banner/.test(rv) && /mp-next/.test(rv), 'reveal: baner wyniku + przycisk dalej');
+  ok(!/undefined is not|Cannot read/.test(rv), 'reveal render bez wyjątku');
+  // WYNIK KOŃCOWY
+  w.mpAdvance && w.mpAdvance();   // zamknij odsłonę u siebie
+  ws.pushState({ phase:'done', score:5, tallyList:[{name:'Host',correct:3},{name:'Bob',correct:1}],
+    mvp:{name:'Host',correct:3}, beerTally:{}, playNonce:2 });
+  await settle(6);
+  const dn=$(w,'mpRoom').innerHTML;
+  ok(/dn-hero/.test(dn) && /dn-wk/.test(dn), 'done: hero wyniku + wkład drużyny');
+  ok(!/undefined is not|Cannot read/.test(dn), 'done render bez wyjątku');
 });
 
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

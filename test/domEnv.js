@@ -36,12 +36,14 @@ class FakeAudioContext {
 
 /* Fake WebSocket — emuluje minimum protokołu DO (authority/relay), by mpEnterRoom dojechał
  * do renderu lobby: po otwarciu na 'hello'/'track' odsyła presence z hostId = ten klient.
- * Stan gry (arming/play) NIE jest symulowany — testujemy render lobby + picker, nie pętlę gry. */
+ * Pętli gry NIE symuluje — testy wstrzykują stan ręcznie przez instancję (`pushState`). */
+const wsInstances = [];   // rejestr utworzonych kanałów (test pobiera aktywny i emituje stan)
 class FakeWebSocket {
   constructor(url){
     this.url=String(url); this.readyState=0;
     let id='', name=''; try{ const q=new URL(this.url.replace(/^ws/,'http')).searchParams; id=q.get('id')||''; name=q.get('name')||''; }catch(_e){}
     this._id=id; this._name=name;
+    wsInstances.push(this);
     setTimeout(()=>{ this.readyState=1; this.onopen && this.onopen({}); }, 0);
   }
   send(data){
@@ -53,6 +55,7 @@ class FakeWebSocket {
     }
   }
   _emit(obj){ this.onmessage && this.onmessage({ data: JSON.stringify(obj) }); }
+  pushState(game){ this._emit({ t:'state', game }); }   // wstrzyknij autorytatywny stan gry (faza play/reveal)
   close(){ this.readyState=3; this.onclose && this.onclose({}); }
 }
 FakeWebSocket.OPEN=1; FakeWebSocket.CLOSED=3;
@@ -99,7 +102,7 @@ export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='' }
   // —— załaduj aplikację (świeży moduł co boot dzięki cache-busterowi) ——
   const mod = await import('../app.js?boot=' + Math.random().toString(36).slice(2));
 
-  return { dom, window, document: window.document, mod, fetchCalls: calls };
+  return { dom, window, document: window.document, mod, fetchCalls: calls, wsInstances };
 }
 
 // helpery asercji DOM
