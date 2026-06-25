@@ -32,7 +32,7 @@ const catsByKind=(window)=>{
 // JEDEN boot dla całej siatki: moduły app/ to singletony (cache ESM) — drugi boot nie
 // re-wiązałby DOM/window. serverAuthority czytane przy ładowaniu; roomsBase ustawiamy runtime
 // dopiero w grupie MP (reszta testów działa jak dotąd z pustym base → wariant „bez backendu").
-const { window, fetchCalls, wsInstances } = await bootApp({ serverAuthority:true });
+const { window, fetchCalls, wsInstances, audioInstances } = await bootApp({ serverAuthority:true });
 
 await group('load: app.js montuje się bez wyjątku', async ()=>{
   ok(window.STACJA_VERSION, 'STACJA_VERSION ustawione: '+window.STACJA_VERSION);
@@ -160,6 +160,28 @@ await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)'
   if(ti) ti.value='Yesterday'; if(ar) ar.value='Beatles';
   w.mpPropose && w.mpPropose(); await settle(4);
   ok($(w,'mpRoom').innerHTML.includes('Yesterday'), 'mpPropose: typ pojawia się w odpowiedzi drużyny');
+});
+
+await group('MP: tryb fragment — po dograniu klik gra fragment OD NOWA (nie resztę utworu)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const SNIP=2, START=5;
+  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'snippet', catKey:'d80', catLabel:'80s', snipStart:START,
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'',
+    playNonce:7, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] });   // nonce≠wcześniejsze → startPlay
+  await settle(6);
+  const a = audioInstances.find(x=>x.src && x.src.includes('p.m4a')) || audioInstances[audioInstances.length-1];
+  ok(a && !a.paused && Math.abs(a.currentTime-START)<0.01, 'fragment startuje od snipStart');
+  const playsBefore = a.plays;
+  // symuluj dograny CAŁY fragment (nie piosenkę)
+  a.currentTime = START + SNIP + 0.1; a.emit('timeupdate'); await settle(2);
+  ok(a.paused && a._snipEnd, 'po fragmencie: pauza + flaga _snipEnd');
+  ok(/↻ jeszcze raz/.test(($(w,'mpPlayStatus')||{}).textContent||''), 'status: „fragment · ↻ jeszcze raz"');
+  ok(/M17\.65/.test(($(w,'mpKnobIcon')||{}).innerHTML||''), 'ikona gałki = replay (↻)');
+  // klik gałki → REPLAY fragmentu (seek do startu), NIE wznowienie reszty utworu
+  w.mpKnobTap(); await settle(3);
+  ok(Math.abs(a.currentTime-START)<0.5 && !a.paused && a.plays>playsBefore, 'klik → fragment od nowa (currentTime≈start, nowe play)');
 });
 
 await group('MP: akcje gracza (react/say/propose/typing) nie rzucają', async ()=>{

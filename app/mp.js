@@ -237,6 +237,7 @@ function mpSetKnob(state){
   const i=$m('mpKnobIcon');
   if(i) i.innerHTML = state==='pause' ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
     : state==='wait' ? '<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>'
+    : state==='replay' ? '<path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08A6 6 0 1 1 16.24 7.76L13 11h7V4z"/>'   // ↻ fragment od nowa
     : '<path d="M8 5v14l11-7z"/>';
   const k=$m('mpKnob'); if(k) k.classList.toggle('loading', state==='wait');
 }
@@ -250,7 +251,9 @@ function mpEnsureAudio(){
     S.audio.addEventListener('playing',()=>{ mpSetKnob('pause'); mpSetPlayStatus(S.game&&S.game.mode==='snippet'?'gra fragment…':'gra…'); });
     S.audio.addEventListener('waiting',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
     S.audio.addEventListener('stalled',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
-    S.audio.addEventListener('pause',  ()=>{ if(!S.audio.ended){ mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
+    S.audio.addEventListener('pause',  ()=>{ if(S.audio.ended) return;
+      if(S.audio._snipEnd){ mpSetKnob('replay'); mpSetPlayStatus('fragment '+SNIP_SECS+'s · ↻ jeszcze raz'); }   // fragment dograł → replay
+      else { mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
     S.audio.addEventListener('ended',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); });
   }
   return S.audio;
@@ -295,9 +298,11 @@ function mpKnobTap(){
     return mpPlayLocal();
   }
   const a=S.audio;                                   // music / snippet — trwały element
+  // fragment dograł cały (nie piosenka) → klik ODTWARZA FRAGMENT OD NOWA, nie wznawia reszty utworu
+  const snipDone = mode==='snippet' && a && S.game.snipStart!=null && (a.currentTime-(S.game.snipStart||0))>=SNIP_SECS;
   if(a && !a.paused && !a.ended){ a.pause(); return; }                                   // gra → pauza
-  if(a && a.src && !a.ended && a.currentTime>0){ a.play().catch(mpPlayBlocked); return; } // pauza → wznów (nie od nowa)
-  return mpPlayLocal();                                                                   // koniec/świeże → od nowa
+  if(a && a.src && !a.ended && a.currentTime>0 && !snipDone){ a.play().catch(mpPlayBlocked); return; } // pauza → wznów (nie od nowa)
+  return mpPlayLocal();                                                                   // koniec/świeże/fragment-dograł → od nowa
 }
 function mpPlayLocal(){
   lektorStop(); mpStopRev();
@@ -310,9 +315,11 @@ function mpPlayLocal(){
   mpSetKnob('wait'); mpSetPlayStatus('ładowanie…');   // od razu pokaż, że się wczytuje
   if(S.game.mode==='snippet'){
     const start=S.game.snipStart||0.5;
+    a._snipEnd=false;                              // świeży start fragmentu (replay-status czyta to w 'pause')
     const seek=()=>{ try{ a.currentTime=start; }catch(e){} };
     if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
-    const stop=()=>{ if((a.currentTime-start)>=SNIP_SECS){ a.pause(); mpClearSnip(a); } };
+    // fragment dograł cały → STOP (nie cała piosenka); flaga → gałka pokaże ↻ „fragment od nowa"
+    const stop=()=>{ if((a.currentTime-start)>=SNIP_SECS){ a._snipEnd=true; a.pause(); mpClearSnip(a); } };
     a._snipStop=stop; a.addEventListener('timeupdate', stop);
     a.play().catch(mpPlayBlocked); return;
   }

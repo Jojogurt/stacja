@@ -20,14 +20,16 @@ export function itunesResults(url=''){
   ]};
 }
 
+const audioInstances = [];   // rejestr elementów audio (testy fragmentu/odtwarzania)
 class FakeAudio {
   constructor(src){ this.src=src||''; this.paused=true; this.ended=false; this.currentTime=0;
-    this.duration=30; this.preload=''; this._ev={}; }
+    this.duration=30; this.preload=''; this.readyState=1; this._ev={}; this.plays=0; audioInstances.push(this); }
   addEventListener(t,fn){ (this._ev[t]=this._ev[t]||[]).push(fn); }
   removeEventListener(t,fn){ this._ev[t]=(this._ev[t]||[]).filter(f=>f!==fn); }
   emit(t){ (this._ev[t]||[]).forEach(f=>f({})); }
-  play(){ this.paused=false; return Promise.resolve(); }
-  pause(){ this.paused=true; }
+  load(){ this.emit('canplay'); this.emit('canplaythrough'); }
+  play(){ this.paused=false; this.plays++; Promise.resolve().then(()=>this.emit('playing')); return Promise.resolve(); }
+  pause(){ if(!this.paused){ this.paused=true; this.emit('pause'); } }
 }
 class FakeAudioContext {
   constructor(){ this.state='running'; }
@@ -105,7 +107,7 @@ export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='' }
   // —— załaduj aplikację (świeży moduł co boot dzięki cache-busterowi) ——
   const mod = await import('../app.js?boot=' + Math.random().toString(36).slice(2));
 
-  return { dom, window, document: window.document, mod, fetchCalls: calls, wsInstances };
+  return { dom, window, document: window.document, mod, fetchCalls: calls, wsInstances, audioInstances };
 }
 
 // helpery asercji DOM
