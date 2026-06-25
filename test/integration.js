@@ -29,7 +29,10 @@ const catsByKind=(window)=>{
   return { audio, lyrics, quiz };
 };
 
-const { window, fetchCalls } = await bootApp();
+// JEDEN boot dla całej siatki: moduły app/ to singletony (cache ESM) — drugi boot nie
+// re-wiązałby DOM/window. serverAuthority czytane przy ładowaniu; roomsBase ustawiamy runtime
+// dopiero w grupie MP (reszta testów działa jak dotąd z pustym base → wariant „bez backendu").
+const { window, fetchCalls } = await bootApp({ serverAuthority:true });
 
 await group('load: app.js montuje się bez wyjątku', async ()=>{
   ok(window.STACJA_VERSION, 'STACJA_VERSION ustawione: '+window.STACJA_VERSION);
@@ -100,6 +103,29 @@ await group('social: liga/profil renderują (wariant wylogowany, bez backendu)',
   $(window,'goProfil').click();
   await settle(8);
   ok(window.document.body.classList.contains('profil'), 'goProfil → body.profil');
+});
+
+// MP używa transportu — fake WebSocket + serverAuthority (zaślepka DO w domEnv.js); ten sam boot.
+await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', async ()=>{
+  const w = window;
+  w.STACJA_CONFIG.roomsBase='https://test.invalid';   // runtime: włącz transport (fake WS) dla MP
+  resetSelection(window);
+  $(w,'goMp').click(); await settle(4);
+  ok(w.document.body.classList.contains('mp'), 'goMp → body.mp');
+  $(w,'mpCreate').click(); await settle(8);   // host tworzy pokój → mpEnterRoom → fake WS → lobby
+  ok($(w,'mpRoom').style.display==='' , 'pokój widoczny (#mpRoom)');
+  ok($(w,'mpRoom').innerHTML.length>200, 'lobby wyrenderowane (niepuste)');
+  ok(!/Błąd kanału|Brak połączenia/.test($(w,'mpRoom').innerHTML), 'lobby bez bannera błędu transportu');
+  // host: poczekalnia → „ułóż mecz" (picker jest lokalny, bez serwera)
+  ok(typeof w.mpLobbyStart==='function', 'most do HTML: mpLobbyStart na window');
+  w.mpLobbyStart(); await settle(4);
+  const html=$(w,'mpRoom').innerHTML;
+  ok(/Kategorie/.test(html) && /Tryby pytań/.test(html) && /Liczba rund/.test(html), 'picker MP: sekcje Kategorie/Tryby/Rundy');
+  ok(/um-start/.test(html), 'picker MP: przycisk startu meczu');
+  // toggle kategorii w pickerze MP → re-render bez wyjątku
+  const before=html.length;
+  w.mpToggleGrp && w.mpToggleGrp('dekady'); await settle(2);
+  ok($(w,'mpRoom').innerHTML.length>0, 'mpToggleGrp → re-render pickera bez wyjątku');
 });
 
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

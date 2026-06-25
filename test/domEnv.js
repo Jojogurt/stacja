@@ -34,23 +34,47 @@ class FakeAudioContext {
   resume(){ this.state='running'; return Promise.resolve(); }
 }
 
+/* Fake WebSocket — emuluje minimum protokołu DO (authority/relay), by mpEnterRoom dojechał
+ * do renderu lobby: po otwarciu na 'hello'/'track' odsyła presence z hostId = ten klient.
+ * Stan gry (arming/play) NIE jest symulowany — testujemy render lobby + picker, nie pętlę gry. */
+class FakeWebSocket {
+  constructor(url){
+    this.url=String(url); this.readyState=0;
+    let id='', name=''; try{ const q=new URL(this.url.replace(/^ws/,'http')).searchParams; id=q.get('id')||''; name=q.get('name')||''; }catch(_e){}
+    this._id=id; this._name=name;
+    setTimeout(()=>{ this.readyState=1; this.onopen && this.onopen({}); }, 0);
+  }
+  send(data){
+    let m; try{ m=JSON.parse(data); }catch(_e){ return; }
+    if(m.t==='track' && m.name) this._name=m.name;
+    if(m.t==='hello' || m.t==='track'){
+      // jeden członek = ten klient, host = on (hostId===myId → mpHost=true w trybie authority)
+      setTimeout(()=>this._emit({ t:'presence', members:[{id:this._id, name:this._name||'host'}], hostId:this._id }), 0);
+    }
+  }
+  _emit(obj){ this.onmessage && this.onmessage({ data: JSON.stringify(obj) }); }
+  close(){ this.readyState=3; this.onclose && this.onclose({}); }
+}
+FakeWebSocket.OPEN=1; FakeWebSocket.CLOSED=3;
+
 function installGlobals(window){
   // app.js używa „gołych" referencji (document/location/...) → muszą być na globalThis
-  for(const k of ['window','document','location','navigator','localStorage','fetch',
+  for(const k of ['window','document','location','navigator','localStorage','fetch','WebSocket',
     'speechSynthesis','SpeechSynthesisUtterance','matchMedia','Audio','AudioContext','webkitAudioContext','URL','getComputedStyle']){
     try{ Object.defineProperty(globalThis, k, { value: window[k], configurable:true, writable:true }); }
     catch(_e){ try{ globalThis[k]=window[k]; }catch(_e2){} }
   }
 }
 
-export async function bootApp({ fetchImpl, serverAuthority=false } = {}){
+export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='' } = {}){
   const dom = new JSDOM(read('index.html'), {
     url: 'https://stacja.test/', runScripts: 'outside-only', pretendToBeVisual: true,
   });
   const { window } = dom;
 
   // —— zaślepki Web API (zanim app.js się załaduje) ——
-  window.STACJA_CONFIG = { roomsBase:'', serverAuthority, googleClientId:'', appleServicesId:'' };
+  window.STACJA_CONFIG = { roomsBase, serverAuthority, googleClientId:'', appleServicesId:'' };
+  window.WebSocket = FakeWebSocket;
   window.matchMedia = () => ({ matches:false, addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} });
   window.AudioContext = window.webkitAudioContext = FakeAudioContext;
   window.Audio = FakeAudio;

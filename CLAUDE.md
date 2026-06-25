@@ -33,11 +33,13 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   wspólny solo+MP), `chatFeed.js` (feed czatu MP), `timing.js` (stałe/obliczenia czasowe), `util.js`.
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
 - **`adapters-web/`** — webowe implementacje portów + transport (iTunes, Cloudflare, Realtime).
-- **`app.js`** — warstwa aplikacji: UI, DOM, audio-element, sieć. **God object (~1690 linii,
-  w trakcie rozbijania; pozostała głównie warstwa MP)** — patrz niżej.
-- **`app/`** — moduły wyłuskane z `app.js`: `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy),
-  `audioCtx.js`+`audio.js` (audio solo), `social.js` (router ekranów + Drużyna/Znajomi/Profil).
-  `app/` zależy od `core/`, **nie** od `app.js` (powiązania z MP wstrzykiwane przez `init*`).
+- **`app.js`** — warstwa aplikacji: ~570 linii. Bootstrap + tryb SOLO (tuner, picker, rundy,
+  audio-element, mecz) + wstrzyknięcia do modułów `app/` (`init*`). Już NIE god object.
+- **`app/`** — moduły wyłuskane z `app.js` (zależą od `core/`, **nie** od `app.js`; powiązania
+  między sobą i z danymi kategorii przez `init*` — bez cykli importów):
+  `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js` (audio solo),
+  `social.js` (router ekranów `showScreen` + Drużyna/Znajomi/Profil/OAuth),
+  `mp.js` (CAŁY multiplayer: pokój, picker, gra, transport, czat — DOM+sieć; logika w `core/mpReducer`).
 - **`server/`** — Worker + Durable Object (`authorityRoom.js`); importuje `core/` (DRY z klientem).
 
 **Reguła:** nowa logika gry (czysta, testowalna) → `core/` + test w `test/run.js`. DOM/sieć → `app.js`/`app/`/`adapters-web/`.
@@ -46,16 +48,15 @@ core/  ←  server/                                   (serwer reużywa ten sam r
 
 - **Testy**: po zmianie w `core/` dopisz przypadki w `test/run.js` i odpal `npm test` (rdzeń,
   zero zależności; grupy `group`/`ok`/`eq`). Po zmianie w `app.js`/`app/` odpal `npm run test:dom`
-  (siatka jsdom: `test/integration.js` ładuje app.js w realnym index.html i klika kluczowe ścieżki).
-- **`app.js` to god object** w trakcie rozbijania — zostało głównie MP (~1100 linii). MP jest
-  splątany ze swoim transportem i **nie da się go zweryfikować headless** (`mpEnterRoom` czeka na
-  WebSocket/relay). Przed wyrwaniem `app/mp.js`: najpierw zaślepić transport w `test/domEnv.js`
-  (fake `authorityChannel`/`cfChannel`), żeby siatka dojechała do renderu lobby/pickera. Nie tnij
-  MP na ślepo — pełna weryfikacja wymaga 2 klientów. Wyłuskane moduły wstrzykują powiązania przez
-  `init*` (np. `initAudio`/`initSocial`), żeby `app/` nie zależało od `app.js` (bez cykli).
-- **Most do HTML**: `app.js` to moduł ES (własny scope), więc handlery z generowanych
-  stringów `onclick="..."` muszą żyć na `window` (`Object.assign(window, {...})` na końcu pliku).
-  Funkcje wiązane przez `el.onclick=fn` tego nie potrzebują.
+  (siatka jsdom: `test/integration.js` ładuje app.js w realnym index.html i klika kluczowe ścieżki —
+  solo/lektor/audio/ekrany/liga/profil + lobby i picker MP przez fake WebSocket z `test/domEnv.js`).
+- **Granica zależności**: moduły `app/` wstrzykują powiązania przez `init*` (`initAudio`/`initSocial`/
+  `initMp`), więc nie importują `app.js` (bez cykli). Łańcuch: `app.js` → `app/mp.js` → `app/social.js`.
+  `mp.js` woła `initSocial` wewnątrz `initMp`. `mpMe` to współdzielony obiekt (mutowany, nie reassignowany).
+- **Most do HTML**: handlery z generowanych stringów `onclick="..."` muszą żyć na `window`
+  (`Object.assign(window, {...})` — w `app/mp.js` dla funkcji MP, w `app/social.js` dla `dz*`/`ac*`).
+  Funkcje wiązane przez `el.onclick=fn` tego nie potrzebują. Test integracyjny musi robić JEDEN boot
+  (moduły `app/` to singletony — drugi boot nie re-wiązałby DOM/window).
 - **`window.CATEGORIES`** (z `categories.js`/`lyrics.js`/`questions.js`/`playlists.js`) to dane
   kategorii ładowane globalnie przed `app.js`. Rdzeń ich nie zna — `app.js` wstrzykuje `ALL_CATS`.
 - **Wersjonowanie**: `APP_VERSION` w `app.js` musi być zsynchronizowane z `CACHE` w `sw.js`
@@ -65,7 +66,7 @@ core/  ←  server/                                   (serwer reużywa ten sam r
 
 ## Status refaktoru
 
-app.js 2187 → **1691** linii. Zrobione: CI + siatka jsdom (`test/integration.js`),
-`core/timing|picker|chatFeed`, `app/dom|lektor|audioCtx|audio|social`; **387 rdzeń + 18
-integracyjnych** zielone. Zostało tylko wyrwanie **MP** (`app/mp.js`) — wymaga zaślepki transportu
-w siatce. Szczegóły i następny krok: pamięć projektu `refaktor-app-js`.
+**Zrobione.** app.js 2187 → **572** linii (−74%). God object rozbity na `core/timing|picker|chatFeed`
++ `app/dom|lektor|audioCtx|audio|social|mp`, każdy z init-injection (bez cykli). CI + siatka jsdom
+(z fake WebSocket pod MP). **387 rdzeń + 26 integracyjnych** zielone; MP zweryfikowane też w przeglądarce
+(pokój/lobby/picker przeciw realnemu workerowi). Historia i ewentualne dalsze kroki: pamięć `refaktor-app-js`.
