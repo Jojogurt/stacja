@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v23';   // FIX: wycofano kruchy wspoldzielony import bbLoader (psul init na stale-cache, martwy motyw) + klodka SVG
+const APP_VERSION = 'v24';   // FIX iOS: sesja audio 'ambient' (UI nie pauzuje muzyki w tle) + 'playback' na zajawce; przełącznik Dźwięki wł/wył
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
@@ -24,6 +24,18 @@ try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appV
     const dark=b.dataset.theme==='dark';
     document.documentElement.classList.toggle('dark', dark);
     try{ localStorage.setItem('stacjaTheme', dark?'dark':'light'); }catch(e){} sync();
+  });
+  sync();
+})();
+
+/* ---- dźwięki UI (klik + oklaski) wł/wył — segment w ustawieniach. NIE dotyka muzyki quizu
+   (ta gra niezależnie). Flaga localStorage 'bbSfx'; app/sfx.js czyta ją przy każdym dźwięku. ---- */
+(function wireSfx(){
+  const seg=document.getElementById('sfxSeg'); if(!seg) return;
+  const sync=()=>{ let on=true; try{ on=localStorage.getItem('bbSfx')!=='off'; }catch(e){}
+    seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.sfx===(on?'on':'off'))); };
+  seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    try{ localStorage.setItem('bbSfx', b.dataset.sfx==='off'?'off':'on'); }catch(e){} sync();
   });
   sync();
 })();

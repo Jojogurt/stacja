@@ -64,6 +64,7 @@
   /* ustawienie układu gry MP na ekranie głównym */
   .mh-setting{display:flex;align-items:center;gap:12px;margin-top:14px;padding:4px 2px}
   .mh-setting>span{font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted)}
+  .mh-set-hint{font-weight:700;font-size:10px;opacity:.7}
   .seg{margin-left:auto;display:flex;gap:4px;background:var(--panel2);border:2px solid var(--line);border-radius:12px;padding:3px}
   .seg button{font-family:var(--display);font-weight:800;font-size:12px;color:var(--muted);background:none;border:none;border-radius:9px;padding:7px 13px;cursor:pointer}
   .seg button.on{color:#fff;background:var(--blue)}
@@ -1113,6 +1114,13 @@
       <div class="seg" id="themeSeg">
         <button data-theme="light">Jasny</button>
         <button data-theme="dark">Ciemny</button>
+      </div>
+    </div>
+    <div class="mh-setting">
+      <span>Dźwięki <small class="mh-set-hint">(klik, oklaski — nie muzyka)</small></span>
+      <div class="seg" id="sfxSeg">
+        <button data-sfx="on">Wł</button>
+        <button data-sfx="off">Wył</button>
       </div>
     </div>
   </section>

@@ -9,6 +9,8 @@ import { SNIP_SECS as SNIP, soloSnipStart } from '../core/timing.js';
 
 let audio = null;        // bieżący element HTMLAudio (music/snippet/fallback)
 let revSrc = null;       // uchwyt BufferSource trybu „od tyłu" (z playReverse)
+// iOS: zajawka quizu PRZEJMUJE dźwięk ('playback'); po stopie wracamy do 'ambient' (UI miksuje, nie pauzuje muzyki)
+const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSession.type = t; }catch(e){} };
 
 // wstrzyknięte zależności (stan gry + wznowienie rundy)
 let getCurrent = () => null, getMode = () => 'music', requestRound = () => {};
@@ -35,6 +37,7 @@ function bindAudioUI(el){
 
 // dyspozytor — wybiera sposób odtwarzania wg trybu
 export function startAudio(){
+  audioSession('playback');   // quiz przejmuje dźwięk (wszystkie tryby: music/snippet/reverse)
   const mode=getMode(), current=getCurrent();
   if(mode==='reverse'){ return startReverse(); }
   if(mode==='snippet'){ return startSnippet(); }
@@ -92,6 +95,7 @@ export function stopAudio(){
   if(audio){audio.pause();audio=null;}
   if(revSrc){ revSrc.stop(); revSrc=null; }   // uchwyt z playReverse sam czyści timer
   lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live');
+  audioSession('ambient');   // koniec zajawki → oddaj dźwięk muzyce w tle
 }
 
 export function toggleAudio(){

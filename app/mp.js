@@ -52,6 +52,8 @@ const SERVER_AUTH = (()=>{ try{
 }catch(e){ return false; } })();
 const $m=id=>document.getElementById(id);
 /* nazwane stałe czasowe: core/timing.js (MP_BUFFER_TIMEOUT_MS, MP_SNIP_WINDOW_S, EMOJI_TTL_MS, SAY_TTL_MS) */
+// iOS: zajawka MP PRZEJMUJE dźwięk ('playback'); po stopie 'ambient' (UI/klik miksuje, nie pauzuje muzyki w tle)
+const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSession.type = t; }catch(e){} };
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
@@ -96,6 +98,7 @@ $m('mpExit').onclick=()=>{ showScreen('menu'); };
 async function mpLeave(){
   if(S.ch){ try{ await S.ch.unsubscribe(); }catch(e){} S.ch=null; }
   if(S.audio){ try{S.audio.pause();}catch(e){} }   // element trwały — pauza, nie zeruj
+  audioSession('ambient');                          // wyjście z pokoju → oddaj dźwięk muzyce w tle
   stopSpeech(); mpStopRev();
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
   S.ready=new Set(); S.lastArmNonce=null;
@@ -316,6 +319,7 @@ function mpKnobTap(){
   return mpPlayLocal();                                                                   // koniec/świeże/fragment-dograł → od nowa
 }
 function mpPlayLocal(){
+  audioSession('playback');   // zajawka przejmuje dźwięk
   lektorStop(); mpStopRev();
   if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}); return; }
   if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
@@ -492,7 +496,7 @@ function mpNewGame(){
 const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
 function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); S.playSkin=null; S.playRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
-function mpStopAudio(){ lektorStop(); mpStopRev(); if(S.audio){ try{S.audio.pause();}catch(e){} } }
+function mpStopAudio(){ lektorStop(); mpStopRev(); if(S.audio){ try{S.audio.pause();}catch(e){} } audioSession('ambient'); }
 function mpGoKombinuj(){ if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; } mpStopAudio(); S.sub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
