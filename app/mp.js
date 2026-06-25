@@ -23,9 +23,11 @@ import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, save
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer } from './mp-picker.js';
-import { S } from './mp-state.js';   // współdzielony stan MP (S.game→S.game, S.host→S.host, …)
+import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor } from './mp-render.js';
 
-initMpPicker(mpRender);   // picker re-renderuje widok pokoju (mpRender hoisted)
+initMpPicker(mpRender);   // picker re-renderuje widok pokoju
+// initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
 
 // wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
 export function initMp(){
@@ -38,9 +40,7 @@ export function mpBootDeepLink(){
 }
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
-// Cały współdzielony, mutowalny stan MP → app/mp-state.js (obiekt S; ten sam w mp.js i mp-render.js).
-// mpMe (tożsamość gracza) zostaje tutaj — eksportowana, używana też przez solo i social.
-let mpMe={id:Math.random().toString(36).slice(2,10), name:''};
+// Cały współdzielony stan MP (S) + tożsamość gracza (mpMe) → app/mp-state.js.
 // TASK 6 — flaga serwer-autorytetu. Default z config.serverAuthority. Override (rollback/test):
 // ?authority=1|0 w URL albo localStorage 'stacjaAuthority'='1'|'0' (0 = wymuś relay mimo defaultu true).
 const SERVER_AUTH = (()=>{ try{
@@ -51,7 +51,6 @@ const SERVER_AUTH = (()=>{ try{
   return !!(window.STACJA_CONFIG && window.STACJA_CONFIG.serverAuthority);
 }catch(e){ return false; } })();
 const $m=id=>document.getElementById(id);
-const REACTIONS=['😂','🔥','🎉','🤔','😱','🍺'];
 /* nazwane stałe czasowe: core/timing.js (MP_BUFFER_TIMEOUT_MS, MP_SNIP_WINDOW_S, EMOJI_TTL_MS, SAY_TTL_MS) */
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
@@ -479,403 +478,6 @@ function mpGoKombinuj(){ if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=nu
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
 // 06 Lobby — poczekalnia (host: kod + udostępnij + gracze + „ZACZNIJ"; gość: czeka na hosta)
-function mpLobbyWaitHTML(){
-  const ms=mpMembers();
-  const hostId = S.game ? S.game.hostId : (S.host ? mpMe.id : null);
-  const cards = ms.map(m=>{
-    const isHost = m.id===hostId, you = m.id===mpMe.id;
-    const av = escapeHtml((m.name||'?').slice(0,1).toUpperCase());
-    return `<div class="pcz-m">
-      <span class="pcz-av" style="background:${mpAvatarColor(m.name)}">${av}</span>
-      <div class="pcz-mn"><b>${escapeHtml(m.name||'gracz')}${isHost?' 👑':''}${you?' (Ty)':''}</b><small>${isHost?'host':'w pokoju'}</small></div>
-      <span class="pcz-badge">W POKOJU</span>
-    </div>`;
-  }).join('') || `<div class="pcz-waitmsg">czekamy na graczy…</div>`;
-  const n=ms.length, word = n===1?'osoba' : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? 'osoby' : 'osób';
-  const foot = S.host
-    ? `<button class="pcz-start" onclick="mpLobbyStart()">ZACZNIJ →</button>`
-    : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
-  return `<div class="pcz">
-    <div class="pcz-hd">
-      <div class="pcz-hd-r1"><span class="pcz-exit" onclick="mpRoomBack()">← wyjdź</span><span class="pcz-lbl">KOD POKOJU</span></div>
-      <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(S.code||'····')}</span><button class="pcz-share" onclick="mpShare(this)">🔗 Udostępnij</button></div>
-    </div>
-    <div class="pcz-team"><span>Drużyna</span><span class="pcz-count">${n} ${word}</span></div>
-    <div class="pcz-list">${cards}</div>
-    <div class="pcz-foot">${foot}</div>
-  </div>`;
-}
-function mpRender(){
-  const st=$m('mpStage'); if(!st) return;
-  // one-shot przejście przy zmianie „dużego" widoku (poczekalnia ↔ picker ↔ gra) — nie przy re-renderze
-  const view = (!S.game || S.game.phase==null) ? ((S.host && S.roomStage==='build') ? 'picker' : 'wait') : 'game';
-  if(view!==S.lastView){ S.lastView=view; animIn(st); }
-  if(!S.game || S.game.phase==null){
-    // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
-    const building = S.host && S.roomStage==='build';
-    st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
-    return;
-  }
-  const g=S.game;
-  const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
-  // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
-  if(g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce){
-    S.revealNonce=g.playNonce;
-    S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
-    if(g.reveal.teamOk || g.reveal.pewniakWin) confetti();   // drużyna trafiła → confetti
-  }
-  // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
-  if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(S.revealSnap); return; }
-  switch(g.phase){
-    case MP.LOADING: st.innerHTML=mpRenderLoading(head); return;
-    case MP.ARMING:  st.innerHTML=mpRenderArming(g, head); return;
-    case MP.NETERR:  st.innerHTML=mpRenderNetErr(g, head); return;
-    case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
-    case MP.PLAY:    mpRenderPlay(g, head, st); return;
-    case MP.REVEAL:  st.innerHTML=mpRenderWaitNext(head); return;   // już kliknąłem „dalej" — czekam na resztę
-    case MP.DONE:    st.innerHTML=mpRenderDone(g, head); return;
-  }
-}
-// pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania
-function mpReactsBarHTML(){
-  return `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
-    <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
-}
-
-const mpRenderLoading = (head)=> `${head}<div class="mp-deck"><div class="mp-state">host losuje utwór…</div></div>`;
-const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
-const mpRenderArming = (g, head)=>{
-  const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
-  return `${head}${mpRosterStrip(g)}<div class="mp-deck"><div class="mp-state">⏳ czekamy na graczy… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
-};
-// klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
-const mpRenderWaitNext = (head)=>{
-  const rc=(S.game&&S.game.readyCount)||0, rt=(S.game&&S.game.readyTotal)||mpMembers().length;
-  return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${mpReactsBarHTML()}`;
-};
-const mpRenderNetErr = (g, head)=>{
-  const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
-  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">${msg} ${S.host?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
-};
-const mpRenderNoLyric = (head)=> `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
-
-/* --- faza gry: małe budowniki HTML + częściowa aktualizacja (nie czyść pól) --- */
-// pasek osób (design): awatar w kole (kolor = stan) + etykieta stanu pod spodem
-const ROSTER_META={
-  idle:  {bg:'#E5E5E5',fg:'#9a958c',lab:'myśli',lc:'#9a958c'},
-  type:  {bg:'#1CB0F6',fg:'#fff',lab:'pisze…',lc:'#1899D6'},
-  ans:   {bg:'#58CC02',fg:'#fff',lab:'✓ typ',lc:'#46A302'},
-  unsure:{bg:'#CE82FF',fg:'#fff',lab:'🟣 niepewny',lc:'#A568CC',ring:'#EBD6FF'},
-  sure:  {bg:'#FFC800',fg:'#7a5a00',lab:'🟡 pewniak',lc:'#E6A800',ring:'#FFE9A8'},
-  pass:  {bg:'#E5E5E5',fg:'#9a958c',lab:'✋ pas',lc:'#9a958c',dim:1},
-};
-function mpRosterHTML(g){
-  if(mpSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
-    return `<span class="mp-stol">stół:</span>`+mpMembers().map(m=>{
-      const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
-      const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
-      return `<span class="mp-rchip${me.dim?' dim':''}${m.id===mpMe.id?' you':''}"><b style="background:${me.bg};color:${me.fg}">${av}</b><span style="color:${me.lc}">${me.lab}</span></span>`;
-    }).join('');
-  }
-  return mpMembers().map(m=>{
-    const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
-    const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
-    const ring=me.ring?`box-shadow:0 0 0 3px ${me.ring};`:'';
-    return `<div class="mp-rz${me.dim?' dim':''}${m.id===mpMe.id?' you':''}">
-      <span class="mp-rz-av" style="background:${me.bg};color:${me.fg};${ring}">${av}</span>
-      <span class="mp-rz-lab" style="color:${me.lc}">${me.lab}</span>
-    </div>`;
-  }).join('');
-}
-// tablica kolumnami (design): karta kandydata = wartość + ▲głosy + awatary + TOP; klik = głos
-const VOTE_COLORS=['#58CC02','#CE82FF','#FFC800','#FF4B4B','#1CB0F6','#1899D6'];
-function mpSlotsHTML(g){
-  const slots=g.answerSlots||slotsFor();
-  return `<div class="mp-slots">${slots.map(s=>{
-    const cands=candidatesForSlot(g, s.key);
-    const myVal=myVoteForSlot(g, s.key, mpMe.id);
-    const rows = cands.map((c,i)=>{
-      const isTop=i===0 && c.votes.length>0;
-      const voted = myVal && norm(myVal)===norm(c.value);
-      const dots = c.votes.slice(0,5).map((v,j)=>`<b class="mp-vdot" style="background:${VOTE_COLORS[j%VOTE_COLORS.length]}"></b>`).join('');
-      const tag = c.tag==='sure'?' <span class="mp-ctag s">🟡</span>':(c.tag==='unsure'?' <span class="mp-ctag u">🟣</span>':'');
-      return `<div class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">
-        <span class="cv">${escapeHtml(c.value)}${tag}</span>
-        <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
-      </div>`;
-    }).join('');
-    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}<div class="mp-addtyp" onclick="mpFocusTyp('${s.key}')">+ dorzuć typ…</div></div>`;
-  }).join('')}</div>`;
-}
-function mpFocusTyp(key){ const el=$m('mpProp_'+key)||$m('mpChatIn'); if(el) el.focus(); }
-// „odpowiedź drużyny" (design): ciemna karta (kolumny) / zielona przypięta (czat) + ×2 gdy pewniak
-function mpTeamHTML(g){
-  const ta=teamAnswer(g), slots=g.answerSlots||slotsFor();
-  const any=slots.some(s=>ta[s.key]);
-  const val = any ? slots.map(s=> ta[s.key]?escapeHtml(ta[s.key]):'—').join(' — ') : '— wrzućcie i przegłosujcie —';
-  const sure = (g.proposals||[]).some(p=>p.conf==='sure');
-  const badge = sure ? '<span class="mp-x2">🟡 ×2</span>' : '';
-  const lock = S.host ? `<button class="mp-lockmini" onclick="mpLock()" title="Zatwierdź odpowiedź drużyny" aria-label="Zatwierdź odpowiedź drużyny">✓</button>` : '';
-  const cls = mpSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
-  return `<div class="${cls}"><span class="ic">🎯</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}${lock}</div>`;
-}
-// wybór pewności typu (zwykła/niepewny/pewniak) + „pas" — jeden wiersz, bez dubli na dole.
-// pewniak = typ z conf=sure (×2), niepewny = fiolet, pas = toggle „nic już nie dodam".
-// Stan kto pewniakuje / spasował widać na pasku osób (roster), więc tu bez list imion.
-function mpConfHTML(withPass=true){
-  const seg=(v,label,cls,flex)=>`<button class="mp-seg ${cls}${S.conf===v?' on':''}" style="flex:${flex}" onclick="mpSetConf('${v}')">${label}</button>`;
-  const iPassed = S.game && (S.game.passed||[]).some(p=>p.id===mpMe.id);
-  const pass = withPass ? `<button class="mp-seg p${iPassed?' on':''}" style="flex:.9" onclick="mpSend({type:'pass'})">✋ pas</button>` : '';
-  return `${seg('normal','zwykła','',1)}${seg('unsure','🟣 niepewny','u',1.2)}${seg('sure','🟡 PEWNIAK ×2','s',1.5)}${pass}`;
-}
-// przełącznik skórki (A/B): per-klient, czysty render nad tym samym stanem
-const mpHr = ()=> `<div class="mp-hr"></div>`;
-// czas fazy „słuchaj" — z kategorii (cat.listenSecs) albo domyślnie wg trybu (core/timing.js)
-function mpListenSecs(g){
-  const cat=ALL_CATS[g.catKey];
-  return _listenSecs(g.mode, cat && cat.listenSecs);
-}
-const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
-const mpLockBtnHTML = (ghost)=> S.host ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
-const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
-// wiedza ogólna: treść pytania w tym samym pudełku co tekst lektora
-const mpPromptHTML = (g)=> g.mode==='quiz'&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">pytanie</span>${escapeHtml(g.prompt)}</div>` : '';
-function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
-function mpChatFeedHTML(){
-  const rows=S.feed.log.map(c=>{
-    if(c.kind==='sys') return `<div class="mp-csys ${c.cls||''}">${escapeHtml(c.text)}</div>`;
-    const av=escapeHtml((c.byName||'?').slice(0,1).toUpperCase());
-    const avb=`<b class="mp-cmav" style="background:${mpAvatarColor(c.byName)}">${av}</b>`;
-    if(c.kind==='typ'){
-      const dataVals = S.host ? ` data-values="${escapeHtml(JSON.stringify(c.values||{}))}"` : '';
-      const bubbleClick = S.host ? ' onclick="mpVoteFromBubble(this)" style="cursor:pointer"' : '';
-      const chips=(c.chips||[]).map(ch=>{
-        const valAttrs = (S.host && ch.key)
-          ? ` class="val mp-val-vote" data-k="${escapeHtml(ch.key)}" data-v="${escapeHtml(ch.val||'')}" onclick="event.stopPropagation();mpPick(this.dataset.k,this.dataset.v)"`
-          : ' class="val"';
-        return `<span class="mp-typline"><span class="mp-typchip">@${escapeHtml((ch.slot||'').toUpperCase())}</span><span${valAttrs}>${escapeHtml(ch.val||'')}</span></span>`;
-      }).join('');
-      return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb typ${c.mine?' me':''}"${dataVals}${bubbleClick}><span class="nm">${escapeHtml(c.byName||'')} · typ${S.host?' <span class="mp-host-tip">kliknij tytuł/wykonawcę = wybierz</span>':''}</span>${chips}</div></div>`;
-    }
-    return `<div class="mp-cmsg${c.mine?' me':''}">${avb}<div class="mp-cmb${c.mine?' me':''}"><span class="nm">${escapeHtml(c.byName||'')}</span><div class="tx">${escapeHtml(c.text||'')}</div></div></div>`;
-  }).join('');
-  return rows + mpTypingFeedHTML();
-}
-function mpTypingFeedHTML(){
-  const ids=[...(S.typingSet||[])].filter(id=>id && id!==mpMe.id);
-  if(!ids.length) return '';
-  const names=ids.map(mpNameOf), first=names[0]||'?';
-  return `<div class="mp-cmsg mp-ctyping"><b class="mp-cmav" style="background:${mpAvatarColor(first)}">${escapeHtml(first.slice(0,1).toUpperCase())}</b>`+
-    `<span class="mp-typing"><span></span><span></span><span></span></span><span class="mp-typname">${escapeHtml(names.join(', '))} pisze…</span></div>`;
-}
-// pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
-function mpRailHTML(active){
-  const order=['sluchaj','kombinuj','odslona'];
-  const md = S.game&&S.game.mode;
-  const listen = md==='quiz' ? ['❓','pytanie'] : (md==='lektor' ? ['📖','czytaj'] : ['🎧','słuchaj']);   // quiz: czytaj pytanie; lektor: tekst; reszta: audio
-  const meta={ sluchaj:listen, kombinuj:['🧠','kombinujcie'], odslona:['👁','odsłona'] };
-  const ai=order.indexOf(active);
-  let out='<div class="mp-rail">';
-  order.forEach((k,i)=>{
-    const cls = i<ai?'done':(i===ai?'on':'');
-    const dot = cls==='done' ? '✓' : meta[k][0];
-    out += `<div class="mp-rnode ${cls}"><span class="mp-rdot">${dot}</span><span class="mp-rlab">${meta[k][1]}</span></div>`;
-    if(i<order.length-1) out += `<span class="mp-rseg${i<ai?' done':''}"></span>`;
-  });
-  return out+'</div>';
-}
-// legenda stanów rostera (skórka czat — nad kreską)
-function mpLegendHTML(){
-  return `<div class="mp-legend"><span>🍺 pewniak</span><span>✓ zwykła</span><span style="color:#9B4DDB">? niepewny</span><span>··· pisze</span><span>🤚 pas</span><span>· myśli</span></div>`;
-}
-// formularz typowania per slot (wspólny dla fazy/kombinuj)
-function mpFormHTML(g){
-  const slots=g.answerSlots||slotsFor();
-  const inputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()">`).join('');
-  const cols=slots.map(()=>'1fr').join(' ')+' auto';
-  return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
-}
-// kolumny + odpowiedź drużyny + zatwierdź (host) — wspólny blok odpowiedzi
-function mpAnswerBlockHTML(g, ghostLock){
-  return `<div class="mp-board" id="mpBoard"></div>
-    <div class="mp-team" id="mpTeam"></div>`;
-}
-// composer „@odp" (czat): po wpisaniu „@" pole morfuje w pola slotów (tytuł/wykonawca) z szarymi
-// placeholderami — klikalne osobno. Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
-function mpComposerHTML(g){
-  const slots=g.answerSlots||slotsFor();
-  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
-  return `<div class="mp-composer">
-      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
-      <div class="mp-compfield">
-        <div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="napisz… (@ = typ odpowiedzi)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
-        <div class="mp-cwrap mp-cwrap-typ" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
-      </div>
-      <button id="mpCompBtn" class="mp-send" onclick="mpComposerSend()">➤</button>
-    </div>`;
-}
-// nagłówek gry (design): kolorowy pas — wiersz 1 runda·pokój·timer; wiersz 2 chipy kat/tryb/pyt
-function mpHeaderHTML(g){
-  const MODE={music:'♪ muzyka',lektor:'🗣 lektor',reverse:'🔄 od tyłu',snippet:'✂️ fragment'};
-  return `<div class="mp-hd">
-    <div class="mp-hd-r1">
-      <span class="mp-hd-back" onclick="mpRoomBack()">←</span>
-      <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(S.code||'')}</span>
-      <span class="mp-hd-timer" id="mpCountdown"></span>
-    </div>
-    <div class="mp-hd-chips">
-      <span>${escapeHtml(g.catLabel||g.catKey||'—')}</span>
-      <span>${MODE[g.mode]||g.mode||''}</span>
-      <span>Pyt. ${(g.qi||0)+1}/${QPC}</span>
-    </div>
-  </div>`;
-}
-const mpReactsOnlyHTML = ()=> `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
-
-// FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna).
-// QUIZ: bez audio/gałki — pokaż treść pytania i przejdź do odpowiadania.
-function mpSluchajBodyHTML(g){
-  if(g.mode==='quiz'){
-    return `${mpPromptHTML(g)}
-      <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">odpowiadamy →</button>
-      ${mpHr()}${mpReactsBarHTML()}`;
-  }
-  return `<div class="mp-deck">${mpKnobHTML()}
-      <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć</div>
-      <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
-    ${mpLyricHTML(g)}
-    <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
-    ${mpHr()}${mpReactsBarHTML()}`;
-}
-// FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze)
-function mpKombinujKolumnyHTML(g){
-  return `${mpPromptHTML(g)}${mpFormHTML(g)}
-    <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-    ${mpAnswerBlockHTML(g, false)}
-    ${mpHr()}${mpReactsBarHTML()}`;
-}
-// FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
-// strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
-function mpKombinujCzatHTML(g){
-  return `${mpPromptHTML(g)}<div class="mp-team" id="mpTeam"></div>
-    <div class="mp-chatfeed" id="mpChatFeed"></div>
-    <div class="mp-comp">
-      ${mpComposerHTML(g)}
-      <div class="mp-conf" id="mpConf">${mpConfHTML(true)}</div>
-      <div class="mp-comp-react">${REACTIONS.map(e=>`<button class="mp-rbtn" onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
-    </div>`;
-}
-// scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
-function mpScaffoldPlay(g, head){
-  const skin=mpSkin();
-  const top=`${head}
-    ${mpRailHTML(S.sub==='sluchaj'?'sluchaj':'kombinuj')}
-    <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>`;
-  if(S.sub==='sluchaj') return top+mpSluchajBodyHTML(g);
-  return top+(skin==='czat'?mpKombinujCzatHTML(g):mpKombinujKolumnyHTML(g));
-}
-// odśwież dynamiczne części (wspólne) — bez ruszania pól wpisywanych
-function mpRefreshDynamic(g){
-  const set=(id,html)=>{ const el=$m(id); if(el) el.innerHTML=html; };
-  set('mpRoster', mpRosterHTML(g));
-  set('mpBoard', mpSlotsHTML(g));
-  set('mpTeam', mpTeamHTML(g));
-  set('mpConf', mpConfHTML());   // zwykła/niepewny/pewniak/pas w jednej linii (obie skórki)
-  mpIngestFeed(g);                                  // dopisz nowe typy/pasy do feedu
-  const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
-}
-// start okna fazy słuchania (licznik czasu + auto-przejście do „kombinuj") — po intro
-function mpStartListenWindow(g){
-  S.listenStart=Date.now(); S.listenDur=mpListenSecs(g)*1000;
-  if(S.subTimer) clearTimeout(S.subTimer);
-  S.subTimer=setTimeout(()=>{ if(S.sub==='sluchaj' && S.game && S.game.phase===MP.PLAY) mpGoKombinuj(); }, S.listenDur);
-  mpAnimListenBar();
-}
-// animuj pasek czasu fazy słuchania (CSS-transition od pozostałego % do 0)
-function mpAnimListenBar(){
-  const bar=$m('mpListenBar'); if(!bar) return; const i=bar.querySelector('i'); if(!i) return;
-  const remMs=Math.max(0, S.listenDur-(Date.now()-S.listenStart));
-  i.style.transition='none'; i.style.width=(S.listenDur?remMs/S.listenDur*100:0)+'%';
-  requestAnimationFrame(()=>{ i.style.transition=`width ${remMs}ms linear`; i.style.width='0%'; });
-}
-function mpRenderPlay(g, head, st){
-  const skin=mpSkin();
-  const newRound = S.playRound!==g.playNonce;
-  if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
-    mpClearTyping(); S.composerMode='chat'; S.sub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
-    // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
-  }
-  if(newRound || S.playSkin!==skin || S.playSub!==S.sub || !$m('mpRoster')){
-    S.playRound=g.playNonce; S.playSkin=skin; S.playSub=S.sub;
-    st.innerHTML = mpScaffoldPlay(g, head);
-    if(S.sub==='sluchaj') mpAnimListenBar();
-  }
-  mpRefreshDynamic(g);
-  mpTickTimer();
-}
-
-// baner wyniku rundy (wspólny: muzyka + quiz) — pewniak/trafienie/pudło
-function mpRevealBanner(r){
-  if(r.pewniakWin) return `<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${r.gained}</span></div>`;
-  if(r.pewniakLose) return `<div class="rv-banner lose"><span class="ic">🍺</span><span class="tx"><b>Pewniak przepalony</b><small>stawia: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} — odbiór na żywo 😏</small></span></div>`;
-  if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+r.gained+' pkt'}</small></span><span class="pts">+${r.gained}</span></div>`;
-  return `<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
-}
-// odsłona rundy (design): rail + zielona karta utworu + baner pewniaka + odpowiedź drużyny
-function mpRenderRevealCard(snap){
-  const r=snap.reveal, head=snap.head, last=snap.isLast;
-  if(r.kind==='quiz') return mpRenderQuizReveal(snap);
-  const cover = r.art?`<img class="rv-cover" src="${r.art}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">💿</div>`;
-  const meta=[r.album,r.year].filter(Boolean).join(' · ');
-  const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span><span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
-  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
-    <div class="rv-card">
-      <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.track)}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
-      ${slot(r.okTitle,'TYTUŁ',r.track)}${slot(r.okArtist,'WYK.',r.artist)}
-    </div>
-    ${mpRevealBanner(r)}
-    <div class="rv-locked">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
-    ${mpReactsBarHTML()}
-    <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
-}
-// odsłona QUIZU: pytanie + per slot poprawne warianty (✓/✗) + odpowiedź drużyny (bez okładki/roku)
-function mpRenderQuizReveal(snap){
-  const r=snap.reveal, head=snap.head, last=snap.isLast;
-  const rows=(r.slots||[]).map(s=>{
-    const ok=!!(r.okBySlot&&r.okBySlot[s.key]);
-    const correct=((r.answers&&r.answers[s.key])||[]).map(escapeHtml).join(' / ')||'—';
-    const team=(r.locked&&r.locked[s.key])||'';
-    return `<div class="rv-slot"><span class="k">${escapeHtml((s.label||s.key).toUpperCase())}</span>
-      <span class="v">${correct}${team?`<small class="rv-team">drużyna: „${escapeHtml(team)}"</small>`:''}</span>
-      <span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
-  }).join('');
-  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}
-    <div class="rv-card quiz">
-      <div class="rv-prompt">${escapeHtml(r.prompt||'')}</div>
-      ${rows}
-    </div>
-    ${mpRevealBanner(r)}
-    ${mpReactsBarHTML()}
-    <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
-}
-
-// wynik meczu (design): złoty hero + MVP + kto stawia + paski wkładu
-function mpRenderDone(g, head){
-  const tally=(g.tallyList||[]);
-  const max=Math.max(1,...tally.map(t=>t.correct));
-  const rows=tally.map((t,i)=>{
-    const col=mpAvatarColor(t.name), pct=Math.round(t.correct/max*100), av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
-    return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${col}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${pct}%;background:${i===0?'var(--green)':(t.correct?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${t.correct}</span></div>`;
-  }).join('')||'<div class="mp-state">brak trafnych typów</div>';
-  const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${g.mvp.correct} trafnych typów</small></span></div>`:'';
-  const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
-  const stawia = beer.length?`<div class="dn-stawia"><span class="ic">🍺</span><span class="tx"><span class="l">STAWIA KOLEJKĘ</span><b>${beer.map(([n,c])=>escapeHtml(n)+(c>1?` (${c}×)`:'')).join(', ')}</b><small>przepalone pewniaki 🟡💥</small></span></div>`:'';
-  return `<div class="dn-hero"><div class="ic">🏆</div><div class="t">Mecz zakończony!</div><div class="s">wynik drużyny</div><div class="sc">${g.score}</div></div>
-    ${mvp}${stawia}
-    <div class="dn-lbl">Wkład drużyny</div>
-    <div class="dn-wk">${rows}</div>
-    <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">← menu</button>${S.host?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
-}
 function mpPropose(){
   const slots=(S.game&&S.game.answerSlots)||slotsFor();
   const values={}; let any=false;
@@ -1017,9 +619,11 @@ function mpClearTyping(){ S.typingSet.clear(); Object.values(S.typingTimers).for
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble, mpSetConf,
   mpReact, mpSay, mpSend, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
-  mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
+  mpGoKombinuj, mpComposerToggle, mpChatInput,
   mpStart, mpAdvance,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
+// initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
+initMpRender({ mpMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });
 
 export { mpMe };

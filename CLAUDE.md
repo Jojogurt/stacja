@@ -38,8 +38,10 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   `catalog.js` (dane kategorii z `window.CATEGORIES` + wrappery `ALL_CATS` + playlisty — importowany
   przez solo i mp), `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js`
   (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `social.js` (router ekranów
-  `showScreen` + Drużyna/Znajomi/Profil/OAuth), `mp.js` (multiplayer — DOM+transport; logika w `core/mpReducer`)
-  + `mp-picker.js` (host-picker „ułóż mecz"). Powiązania zwrotne (MP↔social, picker↔mpRender) przez `init*` — bez cykli.
+  `showScreen` + Drużyna/Znajomi/Profil/OAuth). **Multiplayer w 4 plikach**: `mp-state.js` (współdzielony
+  obiekt stanu `S` + tożsamość `mpMe`), `mp-render.js` (widok: dyspozytor `mpRender` + buildery HTML),
+  `mp-picker.js` (host-picker „ułóż mecz"), `mp.js` (transport/host/audio/czat; logika gry w `core/mpReducer`).
+  Powiązania zwrotne (MP↔social, picker↔mpRender, render↔logika) przez `init*` — bez statycznych cykli.
 - **`server/`** — Worker + Durable Object (`authorityRoom.js`); importuje `core/` (DRY z klientem).
 
 **Reguła:** nowa logika gry (czysta, testowalna) → `core/` + test w `test/run.js`. DOM/sieć → `app.js`/`app/`/`adapters-web/`.
@@ -51,8 +53,13 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   (siatka jsdom: `test/integration.js` ładuje app.js w realnym index.html i klika kluczowe ścieżki —
   solo/lektor/audio/ekrany/liga/profil + lobby i picker MP przez fake WebSocket z `test/domEnv.js`).
 - **Granica zależności**: moduły `app/` wstrzykują powiązania przez `init*` (`initAudio`/`initSocial`/
-  `initMp`), więc nie importują `app.js` (bez cykli). Łańcuch: `app.js` → `app/mp.js` → `app/social.js`.
-  `mp.js` woła `initSocial` wewnątrz `initMp`. `mpMe` to współdzielony obiekt (mutowany, nie reassignowany).
+  `initMp`/`initMpRender`/`initMpPicker`), więc nie importują `app.js` (bez cykli). Stan MP to obiekt
+  `S` w `app/mp-state.js` (żywe wiązanie ES — ten sam obiekt w `mp.js` i `mp-render.js`); `mpMe` też tam.
+  Uwaga: `initMpRender` woła się na KOŃCU `mp.js` (część back-calls to `const`, nie hoisted).
+- **PUŁAPKA renametu stanu** (gdy zmieniasz nazwy w `mp.js`): niektóre nazwy stanu są zarazem **id DOM**
+  w stringach (`mpConf` = zmienna ORAZ `id="mpConf"`). `perl -pe 's/\bmpConf\b/.../g'` zepsuje też string.
+  Po renamie: `grep -nE "['\"]S\.[a-z]"` (szukaj S.x w stringach) i przywróć id. Siatka tego NIE łapie
+  (`$m('mpConf')` zwraca null po cichu).
 - **Most do HTML**: handlery z generowanych stringów `onclick="..."` muszą żyć na `window`
   (`Object.assign(window, {...})` — w `app/mp.js` dla funkcji MP, w `app/social.js` dla `dz*`/`ac*`).
   Funkcje wiązane przez `el.onclick=fn` tego nie potrzebują. Test integracyjny musi robić JEDEN boot
@@ -66,7 +73,8 @@ core/  ←  server/                                   (serwer reużywa ten sam r
 
 ## Status refaktoru
 
-**Zrobione.** app.js 2187 → **27 linii** (czysty entry point). God object w pełni rozpuszczony:
-`core/timing|picker|chatFeed` + `app/catalog|dom|lektor|audioCtx|audio|solo|social|mp`. Największy plik
-to `app/mp.js` (~1160, spójny — cały multiplayer). CI + siatka jsdom (z fake WebSocket pod MP);
-**387 rdzeń + 26 integracyjnych** zielone; solo i MP zweryfikowane też w przeglądarce. Historia: pamięć `refaktor-app-js`.
+**Zrobione.** app.js 2187 → **27 linii** (czysty entry point). God object rozpuszczony:
+`core/timing|picker|chatFeed` + `app/catalog|dom|lektor|audioCtx|audio|solo|social` + MP w 4 plikach
+(`mp-state|mp-render|mp-picker|mp`; największy `mp.js` ~630). CI + siatka jsdom z fake WebSocket
+(pokrywa też fazy gry MP: play/kombinuj/reveal/done). **387 rdzeń + 41 integracyjnych** zielone;
+solo i MP zweryfikowane też w przeglądarce. Historia i pułapki: pamięć `refaktor-app-js`.

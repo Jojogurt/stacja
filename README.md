@@ -29,7 +29,8 @@ Webowy trener do nauki tytułów i wykonawców piosenek przed muzycznym pubquize
   `audioCtx.js` + `audio.js` (odtwarzanie solo: element, „od tyłu", fragment),
   `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie),
   `social.js` (router ekranów + Drużyna/Znajomi/Profil/OAuth),
-  `mp.js` (multiplayer: pokój, gra, transport, czat) + `mp-picker.js` (host-picker „ułóż mecz").
+  `mp.js` (multiplayer: transport, host, audio, czat) + `mp-state.js` (współdzielony stan `S`)
+  + `mp-render.js` (warstwa widoku: dyspozytor + buildery HTML) + `mp-picker.js` (host-picker „ułóż mecz").
 - `ports/` — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu,
   nie od konkretu — na natywie podmieniasz tylko adapter.
 - `adapters-web/` — webowe implementacje portów (`webAudio.js`, `itunesRepository.js`).

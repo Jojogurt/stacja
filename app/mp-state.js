@@ -4,6 +4,9 @@
  * żyje osobno w app/mp.js (eksportowana — używa jej też app/solo.js i app/social.js). */
 import { createFeed } from '../core/chatFeed.js';
 
+// tożsamość gracza — współdzielona przez mp.js / mp-render.js / solo.js / social.js (mutowana, nie reassignowana)
+export const mpMe = { id: Math.random().toString(36).slice(2,10), name: '' };
+
 export const S = {
   ch: null,               // kanał transportu (cfChannel/authorityChannel) lub null
   code: null,             // kod pokoju
