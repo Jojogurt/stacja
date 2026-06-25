@@ -75,7 +75,7 @@ export async function renderDruzyna(){
   // === KONTO — logowanie żyje w Profilu; tu tylko status/info ===
   const kontoSection = secured
     ? `<div class="dz-acct ok">✓ Zalogowano${dzMe.email?': '+escapeHtml(dzMe.email):''}</div>`
-    : `<div class="dz-acct">🔒 Zaloguj się w <b>Profilu</b>, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>`;
+    : `<div class="dz-acct">${ic('lock')} Zaloguj się w <b>Profilu</b>, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>`;
 
   // === DRUŻYNA ===
   const team = teams[0] || null;   // jedna „twoja drużyna" w UI (jak makieta)
@@ -86,8 +86,8 @@ export async function renderDruzyna(){
         <span class="nm"><b>${escapeHtml(team.name)}</b><small>${team.members} os. · kod <b>${escapeHtml(team.code)}</b></small></span>
         <span class="dz-online" id="dzOnline"></span></div>
       <div class="dz-team-btns">
-        <button class="dz-play" onclick="dzPlay()">🎮 Zagraj</button>
-        <button class="dz-mini" onclick="dzCopy('${escapeHtml(team.code)}')">📋 kod</button>
+        <button class="dz-play" onclick="dzPlay()">${ic('play')} Zagraj</button>
+        <button class="dz-mini" onclick="dzCopy('${escapeHtml(team.code)}')">${ic('copy')} kod</button>
         <button class="dz-mini red" onclick="dzLeave('${team.id}')">wyjdź</button>
       </div>
       <div class="dz-gamebanner" id="dzGameBanner" style="display:none"></div>
@@ -101,7 +101,7 @@ export async function renderDruzyna(){
     <div class="dz-row2">
       <input id="dzJoin" maxlength="6" placeholder="KOD DRUŻYNY" style="text-transform:uppercase">
       <button class="dz-go blue" onclick="dzJoin()">Dołącz</button>
-    </div>` : '<div class="dz-hint">🔒 zaloguj się w Profilu, żeby stworzyć lub dołączyć do drużyny</div>';
+    </div>` : `<div class="dz-hint">${ic('lock')} zaloguj się w Profilu, żeby stworzyć lub dołączyć do drużyny</div>`;
   const teamSection = `
     <div class="dz-lbl">Twoja drużyna</div>
     ${teamCard || '<div class="dz-empty">Nie masz jeszcze drużyny — stwórz albo dołącz po kodzie.</div>'}
@@ -120,10 +120,10 @@ export async function renderDruzyna(){
     || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie i zagrajcie razem.</div>';
   const friendAddRow = secured
     ? `<div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>`
-    : '<div class="dz-hint">🔒 zaloguj się w Profilu, żeby dodawać znajomych</div>';
+    : `<div class="dz-hint">${ic('lock')} zaloguj się w Profilu, żeby dodawać znajomych</div>`;
   const friendSection = `
     <div class="dz-lbl">Twój kod znajomego</div>
-    <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">📋 kopiuj</button></div>
+    <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">${ic('copy')} kopiuj</button></div>
     ${friendAddRow}
     ${pending.length?`<div class="dz-lbl">Zaproszenia <span class="dz-badge">${pending.length}</span></div>${pendRows}`:''}
     ${sent.length?`<div class="dz-lbl">Wysłane zaproszenia</div>${sentRows}`:''}
@@ -203,7 +203,7 @@ function acAccountHTML(secured, email){
   // natywny czarny przycisk Apple — Apple JS sam go renderuje w #appleid-signin
   const a = cfg.appleServicesId ? `<div id="appleid-signin" data-color="black" data-border="false" data-type="sign in" data-mode="center-align" data-border-radius="22" style="width:240px;height:44px;cursor:pointer"></div>` : '';
   const buttons = (g||a) ? `<div class="dz-oauth col">${g}${a}</div>` : `<div class="dz-hint">Logowanie Google/Apple — wkrótce.</div>`;
-  return `<div class="pf-acct"><div class="dz-acct">🔒 Zaloguj się, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>${buttons}<div class="dz-hint" id="acMsg"></div></div>`;
+  return `<div class="pf-acct"><div class="dz-acct">${ic('lock')} Zaloguj się, żeby zakładać drużyny i dodawać znajomych — i mieć je na każdym urządzeniu.</div>${buttons}<div class="dz-hint" id="acMsg"></div></div>`;
 }
 let _appleListenersAttached=false;
 // lazy-load SDK i wyrenderuj OBA natywne przyciski (Google GIS + Apple #appleid-signin)
