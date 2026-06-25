@@ -55,16 +55,37 @@ function mpLobbyWaitHTML(){
     <div class="pcz-foot">${foot}</div>
   </div>`;
 }
+// klucz sceny — jedno „gdzie jestem": picker | wait | play:nonce:sub | reveal:nonce | ph:faza.
+function mpSceneKey(g){
+  if(!g || g.phase==null) return (S.host && S.roomStage==='build') ? 'picker' : 'wait';
+  if(mpRevealPending()) return 'reveal:'+S.revealNonce;
+  if(g.phase===MP.PLAY) return 'play:'+g.playNonce+':'+S.sub;
+  return 'ph:'+g.phase;
+}
+// EFEKTY WEJŚCIA W SCENĘ (onEnter) — odpowiednik godotowego _enter_state(), w JEDNYM miejscu.
+// MP jest rozproszony: ten sam stan przychodzi wielokrotnie (sync) → triggery są nonce/klucz-strzeżone
+// (idempotentne). Efekty TRANSPORTU/AUDIO (buforowanie/odtwarzanie) zostają po stronie wejścia w stan
+// w mpAfterSync (app/mp.js) — render-side onEnter trzyma efekty renderu: migawka, confetti, oklaski, animIn.
+function mpOnEnter(g, head, st){
+  // wejście w ODSŁONĘ (nowy playNonce): migawka wyniku (każdy zostaje we własnym tempie) + confetti + oklaski
+  if(g && g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce){
+    S.revealNonce=g.playNonce;
+    S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
+    if(g.reveal.teamOk || g.reveal.pewniakWin){ confetti(); playClap(); }   // drużyna trafiła → confetti + oklaski
+  }
+  // płynne wejście sceny — animIn na ZMIANĘ klucza (nie przy re-renderze); odsłona/wynik mają własny „juice"
+  const scene=mpSceneKey(g);
+  if(scene!==S.lastView){ S.lastView=scene;
+    if(!(mpRevealPending() || (g && g.phase===MP.DONE))) animIn(st);
+  }
+}
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
   const salonHost=mpIsSalonHost();
   st.classList.toggle('salon', salonHost);            // duży ekran-monitor TV (CSS w index.html)
   document.body.classList.toggle('salon', salonHost); // wyłom z mobilnej powłoki 520px (szeroki TV)
-  // PŁYNNE WEJŚCIE SCENY: animIn (fade+slide, reduced-motion-safe) przy ZMIANIE sceny —
-  // faza/pod-faza/odsłona/widok — a NIE przy każdym re-renderze (głos/typ). Klucz sceny = S.lastView.
   if(!S.game || S.game.phase==null){
-    const pre = (S.host && S.roomStage==='build') ? 'picker' : 'wait';
-    if(pre!==S.lastView){ S.lastView=pre; animIn(st); }
+    mpOnEnter(S.game, null, st);   // przejście picker/poczekalnia → animIn
     // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
     const building = S.host && S.roomStage==='build';
     st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
@@ -72,18 +93,7 @@ function mpRender(){
   }
   const g=S.game;
   const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
-  // zachowaj migawkę odsłony (raz na pytanie) — by każdy mógł zostać na niej we własnym tempie
-  if(g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce){
-    S.revealNonce=g.playNonce;
-    S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
-    if(g.reveal.teamOk || g.reveal.pewniakWin){ confetti(); playClap(); }   // drużyna trafiła → confetti + oklaski
-  }
-  // wejście sceny gry — animIn na zmianę fazy/pod-fazy; odsłona i wynik mają własny „juice", więc bez animIn
-  const gScene = mpRevealPending() ? 'reveal:'+S.revealNonce
-    : (g.phase===MP.PLAY ? 'play:'+g.playNonce+':'+S.sub : 'ph:'+g.phase);
-  if(gScene!==S.lastView){ S.lastView=gScene;
-    if(!(mpRevealPending() || g.phase===MP.DONE)) animIn(st);
-  }
+  mpOnEnter(g, head, st);        // wszystkie efekty wejścia w scenę: migawka odsłony + confetti + oklaski + animIn
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
   if(mpRevealPending()){ st.innerHTML=mpRenderRevealCard(S.revealSnap); return; }
   switch(g.phase){
