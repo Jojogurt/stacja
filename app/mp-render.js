@@ -71,6 +71,7 @@ function mpOnEnter(g, head, st){
   if(g && g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce){
     S.revealNonce=g.playNonce;
     S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
+    S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
     if(g.reveal.teamOk || g.reveal.pewniakWin){ confetti(); playClap(); }   // drużyna trafiła → confetti + oklaski
   }
   // płynne wejście sceny — animIn na ZMIANĘ klucza (nie przy re-renderze); odsłona/wynik mają własny „juice"
@@ -409,6 +410,16 @@ function mpRevealBanner(r){
   if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+r.gained+' pkt'}</small></span><span class="pts">+${r.gained}</span></div>`;
   return `<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
 }
+// przycisk „dalej" na odsłonie. SALON-host (TV): nie gra → pokaż ile GRACZY kliknęło „dalej"
+// (TV przejdzie samo, gdy wszyscy) + przycisk = ręczny „pomiń czekanie".
+function mpRevealNextHTML(last){
+  if(mpIsSalonHost()){
+    const c=S.advCount||0, t=S.advTotal||mpPlayers().length||0;
+    return `<div class="mp-state" style="text-align:center;margin-top:6px">✓ ${c}/${t} graczy kliknęło „dalej"</div>
+      <button class="mp-next ghost" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'pomiń czekanie ›'}</button>`;
+  }
+  return `<button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
+}
 // odsłona rundy (design): rail + zielona karta utworu + baner pewniaka + odpowiedź drużyny
 function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
@@ -424,7 +435,7 @@ function mpRenderRevealCard(snap){
     ${mpRevealBanner(r)}
     <div class="rv-locked">odpowiedź drużyny: „${escapeHtml(r.locked.title||'—')} · ${escapeHtml(r.locked.artist||'—')}"</div>
     ${mpReactsBarHTML()}
-    <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
+    ${mpRevealNextHTML(last)}`;
 }
 // odsłona QUIZU: pytanie + per slot poprawne warianty (✓/✗) + odpowiedź drużyny (bez okładki/roku)
 function mpRenderQuizReveal(snap){
@@ -444,7 +455,7 @@ function mpRenderQuizReveal(snap){
     </div>
     ${mpRevealBanner(r)}
     ${mpReactsBarHTML()}
-    <button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
+    ${mpRevealNextHTML(last)}`;
 }
 
 // JUICE: licznik punktów bije od 0 do wyniku (ease-out). Jednorazowo per wynik — dataset na #mpStage

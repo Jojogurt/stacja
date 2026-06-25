@@ -103,6 +103,7 @@ async function mpLeave(){
   stopSpeech(); mpStopRev();
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
   S.ready=new Set(); S.lastArmNonce=null;
+  advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
   S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
@@ -161,6 +162,7 @@ async function mpEnterRoom(code, asHost){
   S.ch.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   S.ch.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
   S.ch.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
+  S.ch.on('broadcast',{event:'advanced'},({payload})=>{ mpOnPlayerAdvanced(payload); });   // SALON: gracz kliknął „dalej" na odsłonie
   S.ch.on('presence',{event:'sync'},()=>{
     if(SERVER_AUTH && S.ch.hostId) S.host=(S.ch.hostId===mpMe.id);   // host = autorytatywny hostId z DO
     mpRenderMembers(); if(!S.game || S.game.phase==null) mpRender();
@@ -234,14 +236,37 @@ function mpMaybeGo(){
   S.game.readyCount=r.count; S.game.readyTotal=r.total;
   if(r.all){ mpGo(); } else { mpBroadcast(); mpRender(); }
 }
+// host: zamknij odsłonę u siebie i przejdź do następnego pytania (DO advance / lokalnie)
+function mpHostNextReveal(){
+  if(!S.host || !S.game || S.game.phase!==MP.REVEAL) return;
+  S.ack=S.revealNonce;
+  if(SERVER_AUTH){ if(S.ch&&S.ch.next) S.ch.next(); mpRender(); } else mpNext();
+}
+// SALON: host (TV) zlicza, którzy GRACZE kliknęli „dalej" na bieżącej odsłonie, i przechodzi SAM,
+// gdy wszyscy gotowi — host nie gra, więc nie wymaga kliku na TV (klik na TV = ręczny „pomiń czekanie").
+let advancedSet=new Set(), advancedNonce=null;
+function mpOnPlayerAdvanced(payload){
+  if(!S.host || !S.game || !S.game.salon || S.game.phase!==MP.REVEAL) return;
+  if(!payload || payload.nonce!==S.game.playNonce) return;
+  if(advancedNonce!==S.game.playNonce){ advancedSet=new Set(); advancedNonce=S.game.playNonce; }
+  advancedSet.add(payload.by);
+  const players=mpPlayers().map(m=>m.id);                 // gracze = obecni bez TV
+  S.advCount=players.filter(id=>advancedSet.has(id)).length; S.advTotal=players.length;
+  mpRender();                                             // odśwież „X/Y gotowych" na TV
+  if(players.length>0 && players.every(id=>advancedSet.has(id))) mpHostNextReveal();
+}
 // „dalej" na ekranie wyniku — KAŻDY klika sam, we własnym tempie
 function mpAdvance(){
   if(!S.game) return;
   S.ack=S.revealNonce;                                  // zamknij u siebie odsłonę
   if(S.host){
-    if(S.game.phase===MP.REVEAL){ if(SERVER_AUTH){ if(S.ch&&S.ch.next) S.ch.next(); mpRender(); } else mpNext(); }  // host: DO advance / lokalnie
+    if(S.game.phase===MP.REVEAL){ mpHostNextReveal(); }  // host (też salon „pomiń") → następne pytanie
     else { mpRender(); }
   } else {
+    // SALON: zgłoś hostowi „kliknąłem dalej" — TV przejdzie samo, gdy wszyscy klikną (host nie gra)
+    if(S.game.salon && S.game.phase===MP.REVEAL && S.ch){
+      S.ch.send({type:'broadcast',event:'advanced',payload:{by:mpMe.id, nonce:S.game.playNonce}});
+    }
     if(S.game.phase===MP.ARMING && S.game.armNonce!==S.lastArmNonce){ mpArm(); }  // host już zbroi → zgłoś gotowość
     mpRender();
   }

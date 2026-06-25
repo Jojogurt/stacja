@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v26';   // rollout ikon: picker SOLO (chipy/tryby), korona lobby, timer MP -> Phosphor; spojnosc z MP
+const APP_VERSION = 'v27';   // fix: pull-to-refresh wyrzucal z gry; salon - host przechodzi sam gdy gracze klikna dalej; emotki 2x na TV
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
