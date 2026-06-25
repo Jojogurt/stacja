@@ -17,10 +17,12 @@ const $m = id => document.getElementById(id);
 const REACTIONS = ['😂','🔥','🎉','🤔','😱','🍺'];
 
 /* wstrzykiwane z mp.js (logika sterująca, której potrzebuje render) */
-let mpMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf;
+let mpMembers, mpPlayers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf;
 export function initMpRender(deps){
-  ({ mpMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf } = deps);
+  ({ mpMembers, mpPlayers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf } = deps);
 }
+// czy TEN klient jest ekranem salonowym (host w trybie salon) — render-monitor zamiast widoku gracza
+const mpIsSalonHost = ()=> !!(S.game && S.game.salon && S.host);
 
 function mpLobbyWaitHTML(){
   const ms=mpMembers();
@@ -50,6 +52,9 @@ function mpLobbyWaitHTML(){
 }
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
+  const salonHost=mpIsSalonHost();
+  st.classList.toggle('salon', salonHost);            // duży ekran-monitor TV (CSS w index.html)
+  document.body.classList.toggle('salon', salonHost); // wyłom z mobilnej powłoki 520px (szeroki TV)
   // one-shot przejście przy zmianie „dużego" widoku (poczekalnia ↔ picker ↔ gra) — nie przy re-renderze
   const view = (!S.game || S.game.phase==null) ? ((S.host && S.roomStage==='build') ? 'picker' : 'wait') : 'game';
   if(view!==S.lastView){ S.lastView=view; animIn(st); }
@@ -74,7 +79,7 @@ function mpRender(){
     case MP.ARMING:  st.innerHTML=mpRenderArming(g, head); return;
     case MP.NETERR:  st.innerHTML=mpRenderNetErr(g, head); return;
     case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
-    case MP.PLAY:    mpRenderPlay(g, head, st); return;
+    case MP.PLAY:    mpIsSalonHost() ? mpRenderSalonPlay(g, head, st) : mpRenderPlay(g, head, st); return;
     case MP.REVEAL:  st.innerHTML=mpRenderWaitNext(head); return;   // już kliknąłem „dalej" — czekam na resztę
     case MP.DONE:    st.innerHTML=mpRenderDone(g, head); return;
   }
@@ -114,13 +119,13 @@ const ROSTER_META={
 };
 function mpRosterHTML(g){
   if(mpSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
-    return `<span class="mp-stol">stół:</span>`+mpMembers().map(m=>{
+    return `<span class="mp-stol">stół:</span>`+mpPlayers().map(m=>{
       const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
       const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
       return `<span class="mp-rchip${me.dim?' dim':''}${m.id===mpMe.id?' you':''}"><b style="background:${me.bg};color:${me.fg}">${av}</b><span style="color:${me.lc}">${me.lab}</span></span>`;
     }).join('');
   }
-  return mpMembers().map(m=>{
+  return mpPlayers().map(m=>{
     const st=rosterState(g,m.id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle;
     const av=escapeHtml((m.name||'?').slice(0,1).toUpperCase());
     const ring=me.ring?`box-shadow:0 0 0 3px ${me.ring};`:'';
@@ -134,20 +139,22 @@ function mpRosterHTML(g){
 const VOTE_COLORS=['#58CC02','#CE82FF','#FFC800','#FF4B4B','#1CB0F6','#1899D6'];
 function mpSlotsHTML(g){
   const slots=g.answerSlots||slotsFor();
+  const ro=mpIsSalonHost();   // TV-sędzia: może KLIKNĄĆ propozycję (nadpisuje górkę głosów), ale nie dorzuca własnych typów
   return `<div class="mp-slots">${slots.map(s=>{
     const cands=candidatesForSlot(g, s.key);
     const myVal=myVoteForSlot(g, s.key, mpMe.id);
     const rows = cands.map((c,i)=>{
       const isTop=i===0 && c.votes.length>0;
-      const voted = myVal && norm(myVal)===norm(c.value);
+      const voted = myVal && norm(myVal)===norm(c.value);   // salon: podświetla wybór hosta (nadpisanie)
       const dots = c.votes.slice(0,5).map((v,j)=>`<b class="mp-vdot" style="background:${VOTE_COLORS[j%VOTE_COLORS.length]}"></b>`).join('');
       const tag = c.tag==='sure'?' <span class="mp-ctag s">🟡</span>':(c.tag==='unsure'?' <span class="mp-ctag u">🟣</span>':'');
       return `<div class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">
         <span class="cv">${escapeHtml(c.value)}${tag}</span>
         <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
       </div>`;
-    }).join('');
-    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}<div class="mp-addtyp" onclick="mpFocusTyp('${s.key}')">+ dorzuć typ…</div></div>`;
+    }).join('') || (ro?`<div class="mp-cand empty"><span class="cv" style="opacity:.5">— czekamy na typy z telefonów —</span></div>`:'');
+    const addTyp = ro?'':`<div class="mp-addtyp" onclick="mpFocusTyp('${s.key}')">+ dorzuć typ…</div>`;
+    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}${addTyp}</div>`;
   }).join('')}</div>`;
 }
 function mpFocusTyp(key){ const el=$m('mpProp_'+key)||$m('mpChatIn'); if(el) el.focus(); }
@@ -362,6 +369,34 @@ function mpRenderPlay(g, head, st){
     if(S.sub==='sluchaj') mpAnimListenBar();
   }
   mpRefreshDynamic(g);
+  mpTickTimer();
+}
+
+/* —— EKRAN SALONOWY (TV) — monitor stołu w fazie PLAY ——
+ * Host (TV) gra audio i pokazuje duży podgląd: gałka + tekst/pytanie, pasek osób (gracze bez TV),
+ * kolumny typów (read-only) i odpowiedź drużyny z przyciskiem „Zatwierdź ✓" (mpTeamHTML, tylko host).
+ * Zachowuje te same id (#mpKnob/#mpPlayStatus/#mpListenBar/#mpRoster/#mpBoard/#mpTeam/#mpCountdown),
+ * więc istniejące mpRefreshDynamic + obsługa audio działają bez zmian. */
+function mpSalonScaffold(g, head){
+  const clue = g.mode==='quiz' ? mpPromptHTML(g)
+    : `<div class="sl-deck"><div class="mp-deck">${mpKnobHTML('mpKnob','mp-knob')}
+        <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'}</div>
+        <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>${mpLyricHTML(g)}</div>`;
+  return `<div class="mp-play mp-salon">${head}
+    <div class="sl-grid">
+      <div class="sl-clue">${clue}<div class="sl-roster mp-roster" id="mpRoster"></div></div>
+      <div class="sl-answers"><div class="mp-board" id="mpBoard"></div><div class="mp-team" id="mpTeam"></div></div>
+    </div></div>`;
+}
+function mpRenderSalonPlay(g, head, st){
+  const newRound = S.playRound!==g.playNonce;
+  if(newRound){ mpClearTyping(); S.composerMode='chat'; S.sub='sluchaj'; mpFeedReset(); }
+  if(newRound || S.playSkin!=='salon' || !$m('mpBoard')){
+    S.playRound=g.playNonce; S.playSkin='salon'; S.playSub='salon';
+    st.innerHTML = mpSalonScaffold(g, head);
+    mpAnimListenBar();
+  }
+  mpRefreshDynamic(g);   // #mpRoster/#mpBoard/#mpTeam (#mpConf/#mpChatFeed nie istnieją → pomijane)
   mpTickTimer();
 }
 

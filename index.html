@@ -1000,6 +1000,36 @@
   html.dark .rv-banner.lose{background:rgba(255,75,75,.12)}
   html.dark .rv-banner.ok{background:rgba(88,204,2,.14)} html.dark .rv-banner.ok small{color:#7BD957}
   html.dark .mp-teamc{background:rgba(88,204,2,.14)}
+
+  /* ===== TRYB SALONOWY (TV) — toggle w pickerze + duży ekran-monitor hosta ===== */
+  .um-salon{padding-top:2px}
+  .um-salon-toggle{display:flex;align-items:center;gap:12px;width:100%;background:var(--panel2);border:2px solid var(--line);
+    border-radius:14px;padding:11px 13px;cursor:pointer;text-align:left;transition:border-color .15s,background .15s}
+  .um-salon-toggle.on{border-color:var(--green);background:#F7FCEF}
+  html.dark .um-salon-toggle.on{background:rgba(88,204,2,.14)}
+  .um-salon-tx{display:flex;flex-direction:column;gap:2px;flex:1;min-width:0}
+  .um-salon-tx b{font-size:14px;color:var(--ink)} .um-salon-tx small{font-size:11px;color:var(--muted)}
+  .um-salon-sw{flex:0 0 auto;width:46px;height:27px;border-radius:99px;background:var(--line);position:relative;transition:background .15s}
+  .um-salon-toggle.on .um-salon-sw{background:var(--green)}
+  .um-salon-sw i{position:absolute;top:3px;left:3px;width:21px;height:21px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 3px rgba(0,0,0,.25)}
+  .um-salon-toggle.on .um-salon-sw i{left:22px}
+
+  /* ekran-monitor: wyłom z mobilnej powłoki 520px → szeroki TV; layout MP skalowany */
+  body.salon{max-width:1180px}
+  #mpStage.salon{margin:0 auto}
+  .mp-salon .sl-grid{display:grid;grid-template-columns:1fr 1fr;gap:22px;align-items:start;margin-top:8px}
+  .mp-salon .sl-clue{display:flex;flex-direction:column;gap:14px}
+  .mp-salon .sl-deck .mp-knob{width:124px;height:124px} .mp-salon .sl-deck .mp-knob svg{width:46px;height:46px}
+  .mp-salon .sl-deck .mp-state{font-size:16px}
+  .mp-salon .sl-roster{justify-content:flex-start;flex-wrap:wrap}
+  .mp-salon .mp-slots{grid-template-columns:1fr 1fr;gap:14px}
+  .mp-salon .mp-slot-h{font-size:14px}
+  .mp-salon .mp-cand .cv{font-size:18px} .mp-salon .mp-cand .crow{font-size:13px}
+  .mp-salon .mp-cand.empty{opacity:.7}
+  .mp-salon .mp-teamd .v,.mp-salon .mp-teamc .v{font-size:20px}
+  .mp-salon .mp-lockmini{width:34px;height:34px;font-size:18px}
+  .mp-salon .lyric-box{font-size:18px;line-height:1.5}
+  @media(max-width:720px){ .mp-salon .sl-grid{grid-template-columns:1fr} }
 </style>
 <script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>

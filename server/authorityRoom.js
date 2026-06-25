@@ -221,6 +221,7 @@ export class GameAuthority extends Server {
   /* ---- start meczu (host wgrywa pule) ---- */
   async startMatch(config){
     const { rounds=4, timer=0, modes=[] } = config;
+    const salon = !!config.salon;                   // tryb salonowy: TV = prowadzący (render+roster), tempo bez zmian
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
     const catKeys = Object.keys(pools);
     const r = buildMatch(catKeys, modes, rounds, pools);
@@ -231,7 +232,7 @@ export class GameAuthority extends Server {
       hostId:this.hostId, phase:MP.PLAY, slots:r.slots, rounds:r.rounds, si:0, qi:0,
       score:0, catKey:s0.cat, mode:s0.mode, round:s0.round, catLabel:this.catLabelOf(s0.cat),
       answerSlots:slotsFor(s0.mode, s0.cat), proposals:[], votes:{}, passed:[],
-      reveal:null, results:[], preview:'', lyric:'', playNonce:0,
+      reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon,
       timer:timer||0, endsAt:null, beerTally:{}, tally:{},
     };
     await this.nextQuestion();

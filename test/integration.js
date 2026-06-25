@@ -126,6 +126,11 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   const before=html.length;
   w.mpToggleGrp && w.mpToggleGrp('dekady'); await settle(2);
   ok($(w,'mpRoom').innerHTML.length>0, 'mpToggleGrp → re-render pickera bez wyjątku');
+  // toggle „Tryb salonowy" w pickerze → zaznaczony stan w re-renderze
+  ok(typeof w.mpSetSalon==='function', 'most do HTML: mpSetSalon na window');
+  w.mpSetSalon(true); await settle(2);
+  ok(/um-salon-toggle on/.test($(w,'mpRoom').innerHTML) && /Tryb salonowy/.test($(w,'mpRoom').innerHTML), 'picker MP: toggle „Tryb salonowy" zaznaczony');
+  w.mpSetSalon(false); await settle(2);   // wyłącz — kolejne testy pushują stan bez salonu
 });
 
 await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)', async ()=>{
@@ -233,6 +238,28 @@ await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
   const dn=$(w,'mpRoom').innerHTML;
   ok(/dn-hero/.test(dn) && /dn-wk/.test(dn), 'done: hero wyniku + wkład drużyny');
   ok(!/undefined is not|Cannot read/.test(dn), 'done render bez wyjątku');
+});
+
+await group('MP: tryb salonowy — host renderuje monitor (read-only board, TV poza rosterem)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  // host=TV: salon:true → mpRender powinien dać monitor (board+gałka), bez pól typowania,
+  // board read-only (host nie głosuje), a host poza paskiem graczy.
+  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s', salon:true,
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    proposals:[{id:'p1',aid:'a1',by:'ktos',byName:'Ala',conf:'normal',values:{title:'Hey Jude',artist:'Beatles'}}],
+    votes:{ title:{ktos:'Hey Jude'}, artist:{ktos:'Beatles'} },
+    passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:50, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] });
+  await settle(8);
+  const stage=$(w,'mpStage'); const h=stage.innerHTML;
+  ok(stage.classList.contains('salon'), 'salon: #mpStage ma klasę .salon');
+  ok(/mp-salon/.test(h) && /id="mpBoard"/.test(h) && /id="mpKnob"/.test(h), 'salon: monitor (board + gałka audio)');
+  ok(h.includes('Hey Jude'), 'salon: typy z telefonów widoczne na board');
+  ok(!/onclick="mpVote/.test(h), 'salon: board read-only (host nie głosuje)');
+  ok(!/mpProp_|mp-composer/.test(h), 'salon: brak pól typowania na TV');
+  ok(/mp-lockmini/.test(h), 'salon: host ma przycisk „Zatwierdź ✓"');
+  ok(!/mp-rz[^>]*\byou\b/.test(h), 'salon: TV (host) poza paskiem graczy');
+  ok(!/undefined is not|Cannot read/.test(h), 'salon render bez wyjątku');
 });
 
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

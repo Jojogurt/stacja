@@ -20,7 +20,7 @@ export function initSocial(deps){
 /* ---- wejście / wyjście z trybu ---- */
 const SCR_HEAD={ solo:'Ułóż mecz', liga:'Drużyna i znajomi', profil:'Profil' };
 export function showScreen(s){
-  document.body.classList.remove('menu','solo','mp','liga','profil'); document.body.classList.add(s);
+  document.body.classList.remove('menu','solo','mp','liga','profil','salon'); document.body.classList.add(s);   // 'salon' (ekran-monitor TV) dokłada/zdejmuje mpRender
   if(s==='mp') mpPrefillName();
   const tt=$m('scrTitle'); if(tt) tt.textContent=SCR_HEAD[s]||'';
 }

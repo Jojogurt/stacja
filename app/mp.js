@@ -22,7 +22,7 @@ import { stopSpeech, lektorStop, lektorPlay } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor } from './mp-render.js';
 
@@ -175,9 +175,15 @@ function mpMembers(){
   Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||'?'}); });
   return out;
 }
+// GRACZE = członkowie pokoju; w trybie salonowym TV (host) jest tylko prowadzącym, więc poza listą.
+// Filtr działa od startu meczu (flaga salon żyje w stanie gry); przed meczem nie znamy roli.
+function mpPlayers(){
+  const ms=mpMembers(), g=S.game;
+  return (g && g.salon && g.hostId) ? ms.filter(m=>m.id!==g.hostId) : ms;
+}
 function mpRenderMembers(){
   const el=$m('mpMembers'); if(!el) return;   // pasek członków usunięty — lista jest w poczekalni
-  const ms=mpMembers();
+  const ms=mpPlayers();   // w salonie TV (host) nie jest graczem → poza listą
   el.innerHTML=ms.map(m=>{
     const host = S.game? (m.id===S.game.hostId) : (m.id===mpMe.id && S.host);
     return `<span class="mp-chip${host?' host':''}${m.id===mpMe.id?' you':''}">${escapeHtml(m.name)}</span>`;
@@ -379,14 +385,14 @@ function mpStart(){
     // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
     S.host=true; S.tally={}; S.ack=S.revealNonce=S.revealSnap=null;
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
-    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools });
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools, salon:mpPickSalon });
     S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }
   S.game={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
     score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, passed:[],
-    reveal:null, results:[], preview:'', lyric:'', playNonce:0,
+    reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
   S.tally={};
   S.hostSeen.clear();
@@ -631,6 +637,6 @@ Object.assign(window, {
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
-initMpRender({ mpMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });
+initMpRender({ mpMembers, mpPlayers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });
 
 export { mpMe };

@@ -10,6 +10,8 @@ let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render 
 export function initMpPicker(render){ mpRender = render; }
 
 let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickRounds=4, mpPickTimer=60;
+let mpPickSalon=false;   // tryb salonowy: TEN ekran tylko prowadzi i gra muzykę (TV), telefony = kontrolery
+function mpSetSalon(v){ mpPickSalon=!!v; mpRender(); }
 let mpPlOpen=false, mpPlStatus='', mpPlStatusCls='';   // panel importu Spotify w pickerze MP
 function mpPlToggle(){ mpPlOpen=!mpPlOpen; mpRender(); }
 async function mpPlImport(){
@@ -85,6 +87,10 @@ function mpPickerHTML(){
         <div class="um-rounds">${roundsBtns}</div></div>
       <div class="um-sec"><div class="um-h"><span>Timer pytania</span></div>
         <div class="um-rounds">${timerBtns}</div></div>
+      <div class="um-sec um-salon"><button class="um-salon-toggle${mpPickSalon?' on':''}" onclick="mpSetSalon(${mpPickSalon?'false':'true'})" role="switch" aria-checked="${mpPickSalon}">
+          <span class="um-salon-tx"><b>📺 Tryb salonowy</b><small>ten ekran tylko prowadzi i gra muzykę — gracze na telefonach</small></span>
+          <span class="um-salon-sw"><i></i></span>
+        </button></div>
       <div class="um-summary ${bad?'err':''}">${info}</div>
       <div class="um-foot">
         <button class="um-dice" onclick="mpRandomPick()" aria-label="Losuj kategorie i tryby">🎲</button>
@@ -121,5 +127,5 @@ function mpBuildPools(cats, modes){
 function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
-Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetRounds, mpSetTimer });
-export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer };
+Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetRounds, mpSetTimer, mpSetSalon });
+export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon };
