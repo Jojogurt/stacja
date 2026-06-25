@@ -12,3 +12,6 @@ server/.cf-token
 
 # lokalny podgląd design-exportu (nie commitować)
 _designref/
+
+# lokalny design-export (źródło _designref) — nie commitować
+STACJA - ekrany aplikacji.html

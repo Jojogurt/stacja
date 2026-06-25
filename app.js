@@ -44,7 +44,7 @@ const matchHeader= (m)                    => _matchHeader(m, ALL_CATS);
 
 // wersja apki — pokazywana pod logo (mały napis), żeby wiadomo było co jest wgrane.
 // Bumpuj RAZEM z CACHE w sw.js (np. v10 → v11).
-const APP_VERSION = 'v10';
+const APP_VERSION = 'v11';
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ============ stan ============ */
@@ -248,7 +248,8 @@ renderModeChips();
 (function wireRounds(){
   const rp=document.getElementById('roundPick'); if(!rp) return;
   rp.querySelectorAll('button').forEach(btn=>{ btn.onclick=()=>{
-    soloRounds=+btn.dataset.r; rp.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn)); updateMatchInfo();
+    soloRounds=+btn.dataset.r; rp.querySelectorAll('button').forEach(b=>b.classList.toggle('on',b===btn));
+    const rv=document.getElementById('roundVal'); if(rv) rv.textContent=soloRounds; updateMatchInfo();
   }; });
 })();
 document.getElementById('matchStart').onclick=startMatch;
@@ -265,24 +266,58 @@ function selectAllCats(){
 function syncCatTicks(){
   document.querySelectorAll('.tick').forEach(t=>{ const k=t.dataset.era; if(k&&k!=='rnd') t.classList.toggle('on', soloCats.has(k)); });
   const rb=document.querySelector('.tick.rnd'); if(rb) rb.classList.toggle('on', ALL_KEYS.length>0 && ALL_KEYS.every(k=>soloCats.has(k)));
+  syncQuizMode(); updateGrpChips();
 }
+/* tryb „quiz" jest wymagany przez buildMatch dla kategorii kind:'quiz' — trzymamy go w soloModes
+   automatycznie (chip ukryty), więc wybór grupy Wiedza wystarcza, bez ręcznego trybu. */
+function syncQuizMode(){
+  const hasQuiz=[...soloCats].some(k=>ALL_CATS[k] && ALL_CATS[k].kind==='quiz');
+  if(hasQuiz) soloModes.add('quiz'); else soloModes.delete('quiz');
+}
+/* ---- chipy-grup (Ułóż mecz, kompakt): grupa = ✓ gdy choć jedna kategoria z grupy wybrana ---- */
+const GRP_KEYS={ dekady:()=>ERA_KEYS, style:()=>STYLE_KEYS, playlisty:()=>READY_KEYS,
+  teksty:()=>LYRICS_KEYS, wiedza:()=>QUIZ_KEYS, twoje:()=>Object.keys(plLoad()) };
+function grpActive(g){ const f=GRP_KEYS[g]; return !!f && f().some(k=>soloCats.has(k)); }
+function plPick(n,one,few,many){ if(n===1) return one; const t=n%10, h=n%100; return (t>=2&&t<=4&&!(h>=12&&h<=14))?few:many; }
+function updateGrpChips(){
+  let n=0;
+  document.querySelectorAll('.grp-chip[data-grp]').forEach(ch=>{
+    const on=grpActive(ch.dataset.grp); ch.classList.toggle('on',on); if(on)n++;
+  });
+  const cc=document.getElementById('catCount'); if(cc) cc.textContent=n+' '+plPick(n,'wybrana','wybrane','wybranych');
+}
+(function wireGrpChips(){
+  const wrap=document.getElementById('grpChips'); if(!wrap) return;
+  wrap.querySelectorAll('.grp-chip[data-grp]').forEach(ch=>{
+    ch.onclick=()=>{
+      const band=document.querySelector('.grp-band[data-band="'+ch.dataset.grp+'"]');
+      const open=!ch.classList.contains('open');
+      ch.classList.toggle('open',open);
+      if(band) band.classList.toggle('open',open);
+    };
+  });
+  const gw=document.getElementById('grpWiedza');
+  if(gw){ if(QUIZ_KEYS.length) gw.hidden=false; else gw.remove(); }
+  updateGrpChips();
+})();
 function toggleMode(m){ if(soloModes.has(m)) soloModes.delete(m); else soloModes.add(m); renderModeChips(); updateMatchInfo(); }
 function randomPick(){ const {cats,modes}=randomPools(); soloCats=new Set(cats); soloModes=new Set(modes); syncCatTicks(); renderModeChips(); updateMatchInfo(); }
 function renderModeChips(){
   const el=document.getElementById('modeTicks'); if(!el) return; el.innerHTML='';
-  ALL_MODES.forEach(m=>{
-    const b=document.createElement('button'); b.className='tick gen'+(soloModes.has(m)?' on':''); b.dataset.mode=m;
-    b.innerHTML=MODE_LABEL[m]+'<small>'+MODE_SUB[m]+'</small>';
+  // tryb „quiz" nie jest osobnym chipem — włącza się automatycznie z kategorią Wiedza (patrz syncQuizMode)
+  ALL_MODES.filter(m=>m!=='quiz').forEach(m=>{
+    const b=document.createElement('button'); b.className='grp-chip mode'+(soloModes.has(m)?' on':''); b.dataset.mode=m;
+    b.textContent=MODE_LABEL[m];
     b.onclick=()=>toggleMode(m); el.appendChild(b);
   });
 }
 function updateMatchInfo(){
   const el=document.getElementById('matchInfo'); if(!el) return;
-  if(!soloCats.size || !soloModes.size){ el.className='match-info'; el.textContent='zaznacz kategorie i tryby'; return; }
+  if(!soloCats.size || !soloModes.size){ el.className='um-summary'; el.textContent='zaznacz kategorie i tryby'; return; }
   const r=buildMatch([...soloCats],[...soloModes],soloRounds);
-  if(r.error){ el.className='match-info err'; el.textContent=r.error; return; }
-  el.className='match-info';
-  el.textContent=`${soloRounds} ${soloRounds===1?'runda':(soloRounds<5?'rundy':'rund')} × ${CPR} kategorie × ${QPC} pytań = ${soloRounds*CPR*QPC} pytań`;
+  if(r.error){ el.className='um-summary err'; el.textContent=r.error; return; }
+  el.className='um-summary';
+  el.innerHTML=`${soloRounds} ${plPick(soloRounds,'runda','rundy','rund')} × ${CPR} kategorie × ${QPC} pytań = <b>${soloRounds*CPR*QPC} utworów</b>`;
 }
 
 /* ============ losowanie rundy (źródło utworów → TrackRepository) ============ */
@@ -519,7 +554,7 @@ function startMatch(){
   if(!soloCats.size){ updateMatchInfo(); return; }
   if(!soloModes.size){ updateMatchInfo(); return; }
   const r=buildMatch([...soloCats],[...soloModes],soloRounds);
-  if(r.error){ const el=document.getElementById('matchInfo'); el.className='match-info err'; el.textContent=r.error; return; }
+  if(r.error){ const el=document.getElementById('matchInfo'); el.className='um-summary err'; el.textContent=r.error; return; }
   session={match:{slots:r.slots, rounds:r.rounds, si:0, qi:0}, results:[]};
   seenTracks.clear(); recentArtists=[]; score=0; total=0; streak=0; updateScore();
   hideSummary(); hideReveal(); resetForm();
@@ -1352,34 +1387,69 @@ function mpToggleCat(k){ if(mpPickCats.has(k)) mpPickCats.delete(k); else mpPick
 function mpToggleMode(m){ if(mpPickModes.has(m)) mpPickModes.delete(m); else mpPickModes.add(m); mpRender(); }
 function mpSetRounds(r){ mpPickRounds=r; mpRender(); }
 function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
+// chipy-grup (host-picker MP) — analogicznie do solo (ekran 02). Stan rozwinięcia trwa między re-renderami.
+let mpPickOpenGrp=new Set();
+const MP_GRP=[
+  {g:'dekady', lab:'📅 Dekady', keys:()=>ERA_KEYS, cls:''},
+  {g:'style', lab:'🎸 Style', keys:()=>STYLE_KEYS, cls:'gen'},
+  {g:'playlisty', lab:'📋 Playlisty', keys:()=>READY_KEYS, cls:'pl'},
+  {g:'teksty', lab:'🗣 Teksty', keys:()=>LYRICS_KEYS, cls:'gen'},
+  {g:'wiedza', lab:'🧠 Wiedza', keys:()=>QUIZ_KEYS, cls:'gen'},
+  {g:'twoje', lab:'⭐ Twoje', keys:()=>Object.keys(plLoad()), cls:'pl'},
+];
+const MP_GRP_SUB={teksty:'tłumaczenia 🌐 (tryb lektor)', wiedza:'wiedza ogólna 🧠 (tryb quiz)'};
+function mpToggleGrp(g){ if(mpPickOpenGrp.has(g)) mpPickOpenGrp.delete(g); else mpPickOpenGrp.add(g); mpRender(); }
+function mpSyncQuizMode(){ const hasQuiz=[...mpPickCats].some(k=>ALL_CATS[k]&&ALL_CATS[k].kind==='quiz');
+  if(hasQuiz) mpPickModes.add('quiz'); else mpPickModes.delete('quiz'); }
 function mpPickerHTML(){
-  const band=(title,keys,cls)=> keys.length? `<div class="band-label">${title}</div><div class="ticks">`+
-    keys.map(k=>`<button class="tick ${cls} ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>` : '';
-  const cats=band('dekady',ERA_KEYS,'')+band('style i gatunki',STYLE_KEYS,'gen')+band('gotowe playlisty',READY_KEYS,'pl')+band('teksty — tłumaczenia 🌐',LYRICS_KEYS,'gen')+band('wiedza ogólna 🧠',QUIZ_KEYS,'gen');
-  // twoje playlisty ze Spotify — host rozwiązuje utwory sam, więc wystarczy mieć je w ALL_CATS (plMerge)
-  const PL_KEYS=Object.keys(plLoad());
-  const plBand=`<div class="band-label">twoje playlisty <button class="pl-add" onclick="mpPlToggle()">+ ze Spotify</button></div>`+
-    (PL_KEYS.length? `<div class="ticks">`+PL_KEYS.map(k=>`<button class="tick pl ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${(ALL_CATS[k].songs||[]).length} utw.</small></button>`).join('')+`</div>`
-      : `<div class="ticks"><span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span></div>`)+
-    `<div class="pl-panel${mpPlOpen?' show':''}"><input id="mpPlUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus">${escapeHtml(mpPlStatus)}</div></div>`;
-  const modes=`<div class="band-label">tryby (można kilka)</div><div class="ticks">`+
-    ALL_MODES.map(m=>`<button class="tick gen ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}<small>${MODE_SUB[m]}</small></button>`).join('')+`</div>`;
-  const rounds=`<div class="band-label">rundy (× 3 kategorie × 5 pytań)</div><div class="lenpick">`+
-    [1,2,3,4].map(r=>`<button class="${mpPickRounds===r?'on':''}" onclick="mpSetRounds(${r})">${r}</button>`).join('')+`</div>`;
-  const timer=`<div class="band-label">timer pytania</div><div class="lenpick">`+
-    [[0,'bez'],[30,'30s'],[60,'60s'],[90,'90s']].map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('')+`</div>`;
+  mpSyncQuizMode();
+  let grpChips='', grpBands='', nSel=0;
+  MP_GRP.forEach(d=>{
+    const keys=d.keys(); if(!keys.length && d.g!=='twoje') return;
+    const active=keys.some(k=>mpPickCats.has(k)); if(active) nSel++;
+    const open=mpPickOpenGrp.has(d.g);
+    grpChips+=`<button class="grp-chip${active?' on':''}${open?' open':''}" onclick="mpToggleGrp('${d.g}')">${d.lab}</button>`;
+    if(!open) return;
+    let inner;
+    if(d.g==='twoje'){
+      inner=`<div class="band-sub">twoje playlisty <button class="pl-add" onclick="mpPlToggle()">+ ze Spotify</button></div>`+
+        (keys.length? `<div class="ticks">`+keys.map(k=>`<button class="tick pl ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${(ALL_CATS[k].songs||[]).length} utw.</small></button>`).join('')+`</div>`
+          : `<div class="ticks"><span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span></div>`)+
+        `<div class="pl-panel${mpPlOpen?' show':''}"><input id="mpPlUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus">${escapeHtml(mpPlStatus)}</div></div>`;
+    } else {
+      inner=(MP_GRP_SUB[d.g]?`<div class="band-sub">${MP_GRP_SUB[d.g]}</div>`:'')+
+        `<div class="ticks">`+keys.map(k=>`<button class="tick ${d.cls} ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>`;
+    }
+    grpBands+=`<div class="grp-band open">${inner}</div>`;
+  });
+  const modeChips=ALL_MODES.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
+  const roundsBtns=[1,2,3,4].map(r=>`<button class="${mpPickRounds===r?'on':''}" onclick="mpSetRounds(${r})">${r}</button>`).join('');
+  const timerBtns=[[0,'bez'],[30,'30s'],[60,'60s'],[90,'90s']].map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
   const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
   const bad=(!mpPickCats.size||!mpPickModes.size||r.error);
-  const info=(!mpPickCats.size||!mpPickModes.size)?'zaznacz kategorie i tryby':(r.error||`${mpPickRounds} × 3 × 5 = ${mpPickRounds*15} pytań`);
+  const info=bad ? escapeHtml(r.error||'zaznacz kategorie i tryby')
+    : `${mpPickRounds} ${plPick(mpPickRounds,'runda','rundy','rund')} × ${CPR} kategorie × ${QPC} pytań = <b>${mpPickRounds*CPR*QPC} utworów</b>`;
+  const catCount=nSel+' '+plPick(nSel,'wybrana','wybrane','wybranych');
   return `<div class="mpnav">
       <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">←</button>
       <span class="nav-title">Ułóż mecz</span>
       <button class="nav-menu" onclick="mpExitMenu()" aria-label="menu">☰</button>
     </div>
-    <div class="mp-deck">${cats}${plBand}${modes}${rounds}${timer}
-    <button class="match-rand" onclick="mpRandomPick()">🎲 Losuj kategorie i tryby</button>
-    <div class="match-info ${bad?'err':''}">${escapeHtml(info)}</div>
-    <button class="mp-btn" style="width:100%;margin-top:12px${bad?';opacity:.5':''}" ${bad?'disabled':''} onclick="mpStart()">Start meczu →</button></div>`;
+    <div class="mp-deck">
+      <div class="um-sec"><div class="um-h"><span>Kategorie</span><span class="note">${catCount}</span></div>
+        <div class="um-chips">${grpChips}</div>${grpBands}</div>
+      <div class="um-sec"><div class="um-h"><span>Tryby pytań</span><span class="note">jak słyszysz utwór</span></div>
+        <div class="um-chips">${modeChips}</div></div>
+      <div class="um-sec"><div class="um-h"><span>Liczba rund</span><span class="note val">${mpPickRounds}</span></div>
+        <div class="um-rounds">${roundsBtns}</div></div>
+      <div class="um-sec"><div class="um-h"><span>Timer pytania</span></div>
+        <div class="um-rounds">${timerBtns}</div></div>
+      <div class="um-summary ${bad?'err':''}">${info}</div>
+      <div class="um-foot">
+        <button class="um-dice" onclick="mpRandomPick()" aria-label="Losuj kategorie i tryby">🎲</button>
+        <button class="um-start" ${bad?'disabled style="opacity:.55"':''} onclick="mpStart()">Zacznij mecz</button>
+      </div>
+    </div>`;
 }
 // AUTORYTET: złóż MINIMALNĄ pulę kategorii do wysłania (cap payloadu `start`).
 // DO potrzebuje: artists; songs {title,artist,preview,year,album}; lyric/tts TYLKO dla lektora.
@@ -2089,6 +2159,6 @@ Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble, mpSetConf,
   mpRandomPick, mpReact, mpSay, mpSend, mpSetRounds, mpSetTimer, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput, mpFocusTyp,
-  mpStart, mpToggleCat, mpToggleMode, mpAdvance, mpPlToggle, mpPlImport,
+  mpStart, mpToggleCat, mpToggleMode, mpToggleGrp, mpAdvance, mpPlToggle, mpPlImport,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
