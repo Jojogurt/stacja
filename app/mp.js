@@ -25,6 +25,7 @@ import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor } from './mp-render.js';
+import { ic } from './icons.js';
 
 initMpPicker(mpRender);   // picker re-renderuje widok pokoju
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
@@ -524,7 +525,7 @@ function mpTickTimer(){
   if(!S.game || S.game.phase!==MP.PLAY || !S.game.endsAt){ if(el) el.textContent=''; return; }
   const rem=Math.max(0, S.game.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
-  if(el){ const m=Math.floor(s/60); el.textContent='⏱ '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
+  if(el){ const m=Math.floor(s/60); el.innerHTML=ic('timer')+' '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
   if(rem<=0 && S.host && !S.autoLocked && S.game.phase===MP.PLAY){ mpLock(); }
 }
 function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(S.ch) S.ch.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
