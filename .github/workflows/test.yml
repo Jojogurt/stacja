@@ -1,0 +1,15 @@
+name: testy
+on:
+  push:
+  pull_request:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node test/run.js          # rdzeń (zero zależności)
+      - run: npm ci                     # jsdom pod testy integracyjne
+      - run: node test/integration.js   # siatka DOM
