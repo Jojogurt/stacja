@@ -38,8 +38,8 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   `catalog.js` (dane kategorii z `window.CATEGORIES` + wrappery `ALL_CATS` + playlisty — importowany
   przez solo i mp), `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js`
   (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `social.js` (router ekranów
-  `showScreen` + Drużyna/Znajomi/Profil/OAuth), `mp.js` (CAŁY multiplayer — DOM+transport; logika w `core/mpReducer`).
-  Powiązania zwrotne (np. MP↔social) przez `init*`, nie importy — bez cykli.
+  `showScreen` + Drużyna/Znajomi/Profil/OAuth), `mp.js` (multiplayer — DOM+transport; logika w `core/mpReducer`)
+  + `mp-picker.js` (host-picker „ułóż mecz"). Powiązania zwrotne (MP↔social, picker↔mpRender) przez `init*` — bez cykli.
 - **`server/`** — Worker + Durable Object (`authorityRoom.js`); importuje `core/` (DRY z klientem).
 
 **Reguła:** nowa logika gry (czysta, testowalna) → `core/` + test w `test/run.js`. DOM/sieć → `app.js`/`app/`/`adapters-web/`.
