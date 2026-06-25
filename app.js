@@ -44,8 +44,20 @@ const matchHeader= (m)                    => _matchHeader(m, ALL_CATS);
 
 // wersja apki — pokazywana pod logo (mały napis), żeby wiadomo było co jest wgrane.
 // Bumpuj RAZEM z CACHE w sw.js (np. v10 → v11).
-const APP_VERSION = 'v11';
+const APP_VERSION = 'v12';
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
+
+/* ---- motyw jasny/ciemny (klasa html.dark; wczesny skrypt w <head> ustawia ją przed renderem) ---- */
+(function wireTheme(){
+  const btn=document.getElementById('themeToggle'); if(!btn) return;
+  const sync=()=>{ const dark=document.documentElement.classList.contains('dark');
+    btn.textContent=dark?'☀️':'🌙';
+    const m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content', dark?'#15121E':'#58CC02');
+  };
+  btn.onclick=()=>{ const dark=document.documentElement.classList.toggle('dark');
+    try{ localStorage.setItem('stacjaTheme', dark?'dark':'light'); }catch(e){} sync(); };
+  sync();
+})();
 
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
@@ -419,7 +431,7 @@ async function startReverse(){
   const r=await playReverse(revCtx, current.preview, {
     cfg: window.STACJA_CONFIG,
     onProgress: f=>setRing(f),
-    onEnded: ()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); },
+    onEnded: ()=>{ revSrc=null; setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); },
   });
   if(r.ok){ revSrc=r; setIcon('pause'); setState('słuchaj — od tyłu!'); armControls(); return; }
   // i proxy i dekodowanie padło → zagraj normalnie, żeby runda działała
@@ -436,11 +448,22 @@ function toggleAudio(){
   unlockCtx();
   if(!current){ newRound(); return; }
   if(mode==='quiz'){ return; }   // wiedza ogólna — brak audio do odtworzenia
-  if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; }
-  if(mode==='reverse'||mode==='snippet'){ stopAudio(); startAudio(); return; }
-  if(!audio){ startAudio(); return; }      // też po 'ended' (audio=null) → czysty restart
-  if(audio.paused){ audio.play().catch(()=>{}); } // ikonę ustawi event play/playing
-  else { audio.pause(); }
+  if(mode==='lektor'){
+    const speaking=(lektorAudio && !lektorAudio.paused) || (window.speechSynthesis && speechSynthesis.speaking);
+    if(speaking){ lektorStop(); setIcon('play'); setState('pauza · ▶ wznów'); return; }   // czyta → stop
+    lektorPlay(current.lyric, current.tts, setState); return;
+  }
+  if(mode==='reverse'){
+    if(revSrc){ stopAudio(); setIcon('play'); setState('pauza · ↻ od nowa'); return; }     // od tyłu: stop (replay od nowa)
+    startReverse(); return;
+  }
+  // music / snippet — trwały element HTMLAudio z eventami: pauza/wznów BEZ restartu (jak w multi)
+  if(audio && !audio.paused && !audio.ended){ audio.pause(); return; }                       // gra → pauza
+  const snipDone = mode==='snippet' && audio && current.snipStart!=null && (audio.currentTime-current.snipStart)>=SNIP;
+  if(audio && audio.src && !audio.ended && audio.currentTime>0 && !snipDone){
+    audio.play().catch(()=>{}); return;                                                      // pauza → wznów (od miejsca)
+  }
+  startAudio();   // świeże / po 'ended' (audio=null) / fragment dograł → od nowa
 }
 function replay(){ if(!current) return; if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; } stopAudio(); startAudio(); }
 

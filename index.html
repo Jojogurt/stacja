@@ -928,9 +928,62 @@
     font-family:var(--display);font-weight:900;font-size:17px;letter-spacing:.05em;color:#fff;cursor:pointer;text-transform:uppercase}
   .um-start:active{transform:translateY(5px);box-shadow:none}
 
+  /* ===== DARK MODE ===== */
+  .theme-toggle{position:fixed;top:calc(env(safe-area-inset-top) + 10px);right:14px;z-index:60;
+    width:42px;height:42px;border-radius:50%;border:2px solid var(--line);background:var(--panel);
+    font-size:18px;line-height:1;cursor:pointer;display:none;box-shadow:0 2px 0 var(--line)}
+  body.menu .theme-toggle{display:grid;place-items:center}
+  .theme-toggle:active{transform:translateY(2px);box-shadow:none}
+  html.dark{
+    --bg:#15121E; --panel:#221C33; --panel2:#2C2540;
+    --ink:#ECE9F4; --muted:#8C84A1; --line:#39314F;
+  }
+  html.dark body{background:var(--bg);color:var(--ink)}
+  html.dark .theme-toggle{box-shadow:none}
+  /* powierzchnie z hardcodowanym #fff / jasnym tłem → panel/muted */
+  html.dark .grp-chip,
+  html.dark .um-rounds button,
+  html.dark .mh-mini,
+  html.dark .lenpick button,
+  html.dark .mini button,
+  html.dark .modepick button{background:var(--panel);color:var(--muted);border-color:var(--line)}
+  html.dark .seg{background:var(--panel2)}
+  html.dark .grp-chip.on,
+  html.dark .um-rounds button.on{background:rgba(88,204,2,.16);color:#7BD957;border-color:var(--green)}
+  html.dark .grp-chip.mode.on{background:rgba(28,176,246,.16);color:#5CC5FF;border-color:var(--blue)}
+  html.dark .nav-badge{background:rgba(88,204,2,.18);color:#7BD957}
+  html.dark .um-summary b{color:var(--ink)}
+  /* formularz / inputy */
+  html.dark .field input{color:var(--ink)}
+  html.dark .field input::placeholder{color:#5b5470}
+  html.dark .pl-panel input,
+  html.dark .mp-join input,
+  html.dark .mp-form input,
+  html.dark .dz-row2 input,
+  html.dark .pf-edit input,
+  html.dark .lb-cell{background:var(--panel2);color:var(--ink)}
+  /* profil */
+  html.dark .pf-st.g{background:rgba(88,204,2,.12);border-color:rgba(88,204,2,.32)}
+  html.dark .pf-st.b{background:rgba(28,176,246,.12);border-color:rgba(28,176,246,.32)}
+  html.dark .pf-st.y{background:rgba(255,200,0,.12);border-color:rgba(255,200,0,.32)}
+  html.dark .pf-cat .bar,
+  html.dark .stat-cat .bar,
+  html.dark .wk-row .bar{background:var(--panel2)}
+  html.dark .pf-edit{background:var(--panel2)}
+  html.dark .pf-badge{background:rgba(255,200,0,.1);border-color:rgba(255,200,0,.26)}
+  html.dark .pf-badge.lock{background:var(--panel2);border-color:var(--line)}
+  /* drużyna / lobby — najczęstsze jasne karty */
+  html.dark .dz-mini,
+  html.dark .dz-fr,
+  html.dark .pcz-m{background:var(--panel);border-color:var(--line)}
+  html.dark .dz-empty,
+  html.dark .dz-acct{background:var(--panel2);border-color:var(--line)}
+  html.dark .rv-banner.no{background:var(--panel2);border-color:var(--line)}
 </style>
+<script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>
 <body class="menu">
+  <button class="theme-toggle" id="themeToggle" aria-label="Zmień motyw (jasny/ciemny)">🌙</button>
   <div class="top">
     <button class="nav-back" id="toMenu" aria-label="wstecz">←</button>
     <span class="nav-title" id="scrTitle"></span>
