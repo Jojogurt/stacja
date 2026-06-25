@@ -5,6 +5,7 @@ import { ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, ALL_CATS, ran
 import { ALL_MODES, MODE_LABEL, CPR, QPC } from '../core/match.js';
 import { escapeHtml } from '../core/util.js';
 import { pickSummary, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive } from '../core/picker.js';
+import { ic } from './icons.js';
 
 let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render widoku pokoju)
 export function initMpPicker(render){ mpRender = render; }
@@ -34,12 +35,12 @@ function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
 // chipy-grup (host-picker MP) — analogicznie do solo (ekran 02). Stan rozwinięcia trwa między re-renderami.
 let mpPickOpenGrp=new Set();
 const MP_GRP=[
-  {g:'dekady', lab:'📅 Dekady', keys:()=>ERA_KEYS, cls:''},
-  {g:'style', lab:'🎸 Style', keys:()=>STYLE_KEYS, cls:'gen'},
-  {g:'playlisty', lab:'📋 Playlisty', keys:()=>READY_KEYS, cls:'pl'},
-  {g:'teksty', lab:'🗣 Teksty', keys:()=>LYRICS_KEYS, cls:'gen'},
-  {g:'wiedza', lab:'🧠 Wiedza', keys:()=>QUIZ_KEYS, cls:'gen'},
-  {g:'twoje', lab:'⭐ Twoje', keys:()=>Object.keys(plLoad()), cls:'pl'},
+  {g:'dekady', lab:ic('calendar')+' Dekady', keys:()=>ERA_KEYS, cls:''},
+  {g:'style', lab:ic('guitar')+' Style', keys:()=>STYLE_KEYS, cls:'gen'},
+  {g:'playlisty', lab:ic('playlist')+' Playlisty', keys:()=>READY_KEYS, cls:'pl'},
+  {g:'teksty', lab:ic('quotes')+' Teksty', keys:()=>LYRICS_KEYS, cls:'gen'},
+  {g:'wiedza', lab:ic('brain')+' Wiedza', keys:()=>QUIZ_KEYS, cls:'gen'},
+  {g:'twoje', lab:ic('star')+' Twoje', keys:()=>Object.keys(plLoad()), cls:'pl'},
 ];
 const MP_GRP_SUB={teksty:'tłumaczenia 🌐 (tryb lektor)', wiedza:'wiedza ogólna 🧠 (tryb quiz)'};
 function mpToggleGrp(g){ if(mpPickOpenGrp.has(g)) mpPickOpenGrp.delete(g); else mpPickOpenGrp.add(g); mpRender(); }
@@ -74,9 +75,9 @@ function mpPickerHTML(){
     : `${s.rounds} ${s.label} × ${CPR} kategorie × ${QPC} pytań = <b>${s.count} utworów</b>`;
   const catCount=nSel+' '+plPick(nSel,'wybrana','wybrane','wybranych');
   return `<div class="mpnav">
-      <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">←</button>
+      <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">${ic('back')}</button>
       <span class="nav-title">Ułóż mecz</span>
-      <button class="nav-menu" onclick="mpExitMenu()" aria-label="menu">☰</button>
+      <button class="nav-menu" onclick="mpExitMenu()" aria-label="menu">${ic('menu')}</button>
     </div>
     <div class="mp-deck">
       <div class="um-sec"><div class="um-h"><span>Kategorie</span><span class="note">${catCount}</span></div>
@@ -88,12 +89,12 @@ function mpPickerHTML(){
       <div class="um-sec"><div class="um-h"><span>Timer pytania</span></div>
         <div class="um-rounds">${timerBtns}</div></div>
       <div class="um-sec um-salon"><button class="um-salon-toggle${mpPickSalon?' on':''}" onclick="mpSetSalon(${mpPickSalon?'false':'true'})" role="switch" aria-checked="${mpPickSalon}">
-          <span class="um-salon-tx"><b>📺 Tryb salonowy</b><small>ten ekran tylko prowadzi i gra muzykę — gracze na telefonach</small></span>
+          <span class="um-salon-tx"><b>${ic('tv')} Tryb salonowy</b><small>ten ekran tylko prowadzi i gra muzykę — gracze na telefonach</small></span>
           <span class="um-salon-sw"><i></i></span>
         </button></div>
       <div class="um-summary ${bad?'err':''}">${info}</div>
       <div class="um-foot">
-        <button class="um-dice" onclick="mpRandomPick()" aria-label="Losuj kategorie i tryby">🎲</button>
+        <button class="um-dice" onclick="mpRandomPick()" aria-label="Losuj kategorie i tryby">${ic('dice')}</button>
         <button class="um-start" ${bad?'disabled style="opacity:.55"':''} onclick="mpStart()">Zacznij mecz</button>
       </div>
     </div>`;

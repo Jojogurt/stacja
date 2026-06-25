@@ -720,6 +720,7 @@
   .mh-card:active{transform:translateY(5px);box-shadow:none}
   .mh-card .ic{font-size:30px;width:54px;height:54px;background:rgba(255,255,255,.22);border-radius:16px;display:flex;align-items:center;justify-content:center;flex:0 0 auto;color:#fff}
   .mh-card .ic svg,.mh-mini svg{display:block}
+  .bbic{vertical-align:-.14em}   /* inline-ikony Phosphor (app/icons.js) — wyrównanie do tekstu */
   .mh-card .tx{display:flex;flex-direction:column}
   .mh-card .tx b{font-family:var(--display);font-weight:900;font-size:20px;color:#fff;letter-spacing:.02em}
   .mh-card .tx small{font-family:var(--body);font-weight:700;font-size:13px;color:rgba(255,255,255,.9)}
@@ -1083,7 +1084,7 @@
 </head>
 <body class="menu">
   <div class="top">
-    <button class="nav-back" id="toMenu" aria-label="wstecz">←</button>
+    <button class="nav-back" id="toMenu" aria-label="wstecz"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M168.49 199.51a12 12 0 0 1-17 17l-80-80a12 12 0 0 1 0-17l80-80a12 12 0 0 1 17 17L97 128Z"/></svg></button>
     <span class="nav-title" id="scrTitle"></span>
     <span class="nav-badge" id="navBadge">SOLO</span>
   </div>
@@ -1133,7 +1134,7 @@
     <!-- 05 POKÓJ — wejście (stwórz / dołącz) -->
     <div id="mpLobby">
       <div class="lb-top">
-        <button class="lb-back" id="mpExit">← menu</button>
+        <button class="lb-back" id="mpExit"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M168.49 199.51a12 12 0 0 1-17 17l-80-80a12 12 0 0 1 0-17l80-80a12 12 0 0 1 17 17L97 128Z"/></svg> menu</button>
         <span class="lb-title">Ze znajomymi</span>
         <span></span>
       </div>
