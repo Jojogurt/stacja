@@ -7,9 +7,10 @@ import { ensureSession, setHandle, fetchProfile, loginOAuth, logout,
   teamCreate, teamJoin, teamLeave, myTeams, friendAdd, friendRespond,
   friendsList, pendingFriends, sentFriends, meInfo } from '../adapters-web/cf.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
-import { bbLoader } from './dom.js';
+import { ic } from './icons.js';
 
 const $m = id => document.getElementById(id);
+const bbLoader = '<div class="bb-loader"><i></i><i></i><i></i></div>';   // lokalny (bez kruchego współdzielonego importu)
 
 /* —— zależności wstrzyknięte z app.js (warstwa MP + etykiety kategorii) ——
  * Zadeklarowane jako locale, by przeniesiony kod wołał je dokładnie tak jak wcześniej. */
@@ -267,7 +268,7 @@ export async function renderProfil(){
       <span class="bar"><i style="width:${pct}%;background:${col}"></i></span><span class="pct" style="color:${col}">${pct}%</span></div>`;
   }).join('') : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>';
   // odznaki: kilka pochodnych ze statystyk + reszta zablokowana (placeholdery — pełny system później)
-  const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:'🔒'}</span><small>${on?lab:'—'}</small></div>`;
+  const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:ic('lock')}</span><small>${on?lab:'—'}</small></div>`;
   const badgeDefs=[ [s.matches>0,'🎵','Pierwszy mecz'], [s.matches>=10,'🔥','10 meczów'],
     [s.points>=100,'💯','100 pkt'], [false,'','—'] ];
   const badges=badgeDefs.map(b=>badge(b[0],b[1],b[2])).join('');

@@ -10,7 +10,7 @@ import { MP } from '../core/phases.js';
 import { listenSecs as _listenSecs } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState } from '../core/mpReducer.js';
 import { ALL_CATS } from './catalog.js';
-import { confetti, animIn, bbLoader } from './dom.js';
+import { confetti, animIn } from './dom.js';
 import { playClap } from './sfx.js';
 import { ic } from './icons.js';
 import { mpPickerHTML } from './mp-picker.js';
@@ -114,6 +114,8 @@ function mpReactsBarHTML(){
     <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
+// loader „Beat & Beka" (3 kropki) — lokalny string (NIE współdzielony import: kruchy przy stale-cache).
+const bbLoader = `<div class="bb-loader"><i></i><i></i><i></i></div>`;
 const mpRenderLoading = (head)=> `${head}<div class="mp-deck">${bbLoader}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
 const mpRenderArming = (g, head)=>{

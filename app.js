@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v22';   // loadery profil/liga (koniec „pusto→doładowuje") + wspólny bbLoader + kostka solo na SVG
+const APP_VERSION = 'v23';   // FIX: wycofano kruchy wspoldzielony import bbLoader (psul init na stale-cache, martwy motyw) + klodka SVG
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
