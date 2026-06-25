@@ -281,21 +281,27 @@ function mpSluchajBodyHTML(g){
   if(g.mode==='quiz'){
     return `${mpPromptHTML(g)}
       <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">odpowiadamy →</button>
-      ${mpHr()}${mpReactsBarHTML()}`;
+      <div class="mp-foot">${mpHr()}${mpReactsBarHTML()}</div>`;
   }
   return `<div class="mp-deck">${mpKnobHTML()}
       <div class="mp-state" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć</div>
       <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
     ${mpLyricHTML(g)}
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
-    ${mpHr()}${mpReactsBarHTML()}`;
+    <div class="mp-foot">${mpHr()}${mpReactsBarHTML()}</div>`;
 }
 // FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze)
 function mpKombinujKolumnyHTML(g){
-  return `${mpPromptHTML(g)}${mpFormHTML(g)}
-    <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-    ${mpAnswerBlockHTML(g, false)}
-    ${mpHr()}${mpReactsBarHTML()}`;
+  // odpowiedź drużyny (góra) ─ profile ─ kolumny ─ [sticky dół: input+wrzuć ─ pewność ─ emotki]
+  return `<div class="mp-team" id="mpTeam"></div>
+    ${mpHr()}
+    <div class="mp-roster" id="mpRoster"></div>
+    ${mpHr()}
+    <div class="mp-board" id="mpBoard"></div>
+    <div class="mp-foot">${mpHr()}
+      ${mpPromptHTML(g)}${mpFormHTML(g)}
+      <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
+      ${mpHr()}${mpReactsBarHTML()}</div>`;
 }
 // FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
@@ -311,11 +317,13 @@ function mpKombinujCzatHTML(g){
 // scaffold fazy PLAY (obie skórki): nagłówek + rail + roster + ciało wg fazy/skórki
 function mpScaffoldPlay(g, head){
   const skin=mpSkin();
-  const top=`${head}
-    ${mpRailHTML(S.sub==='sluchaj'?'sluchaj':'kombinuj')}
-    <div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>`;
-  if(S.sub==='sluchaj') return top+mpSluchajBodyHTML(g);
-  return top+(skin==='czat'?mpKombinujCzatHTML(g):mpKombinujKolumnyHTML(g));
+  const rail=mpRailHTML(S.sub==='sluchaj'?'sluchaj':'kombinuj');
+  // skórka KOLUMNOWA, faza „kombinuj": własna kolejność (odpowiedź drużyny → profile → kolumny → input);
+  // roster jest WEWNĄTRZ ciała, nie w „top" — dlatego osobna gałąź.
+  if(S.sub!=='sluchaj' && skin!=='czat') return `<div class="mp-play">${head}${rail}${mpKombinujKolumnyHTML(g)}</div>`;
+  const top=`${head}${rail}<div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>`;
+  const body=S.sub==='sluchaj' ? mpSluchajBodyHTML(g) : mpKombinujCzatHTML(g);
+  return `<div class="mp-play">${top}${body}</div>`;
 }
 // odśwież dynamiczne części (wspólne) — bez ruszania pól wpisywanych
 function mpRefreshDynamic(g){

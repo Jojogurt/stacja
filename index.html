@@ -579,6 +579,11 @@
     border-radius:12px;padding:0 14px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--blue-d)}
   .mp-composer>button:active{transform:translateY(3px);box-shadow:none}
   .mp-hr{height:2px;background:var(--line);margin:13px 0 2px}
+  /* ekran gry: kolumna na pełną wysokość, pasek emotek (+ w kolumnach input/pewność) PRZYPIĘTY do dołu */
+  .mp-play{display:flex;flex-direction:column;min-height:calc(100dvh - 96px)}
+  .mp-play>.mp-board{flex:0 0 auto}
+  .mp-foot{margin-top:auto;position:sticky;bottom:0;background:var(--bg);padding-bottom:calc(env(safe-area-inset-bottom))}
+  .mp-foot .mp-reacts{margin-top:8px} .mp-foot .mp-hr{margin-top:8px}
   /* nagłówek kompaktowy (2 wiersze) + pasek czasu fazy słuchania */
   .mp-bar{display:flex;align-items:center;gap:8px;padding:2px 2px 5px;font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.02em;text-transform:uppercase}
   .mp-bar-r{color:var(--green);font-weight:900}
@@ -609,10 +614,10 @@
   .mp-rnode.on .mp-rlab{color:var(--blue-d);font-weight:900}
   .mp-rseg{flex:0 0 16px;height:3px;border-radius:2px;background:var(--line);margin-bottom:18px}
   .mp-rseg.done{background:var(--green)}
-  .mp-roster{display:flex;gap:8px;justify-content:center;padding:0;margin:0 0 14px;border-bottom:none!important}
-  .mp-rz{flex:1;display:flex;flex-direction:column;align-items:center;gap:4px;min-width:0}
+  .mp-roster{display:flex;gap:8px;justify-content:center;padding:0;margin:0;border-bottom:none!important}
+  .mp-rz{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;min-width:0}
   .mp-rz.dim{opacity:.55}
-  .mp-rz-av{width:42px;height:42px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:900;font-size:16px}
+  .mp-rz-av{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:900;font-size:13px}
   .mp-rz.you .mp-rz-av{outline:2px solid var(--ink);outline-offset:1px}
   .mp-rz-lab{font-family:var(--display);font-weight:800;font-size:10px;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
   .mp-conf{display:flex;gap:6px;flex-wrap:nowrap;overflow:visible;margin:12px 0}
@@ -979,6 +984,22 @@
   html.dark .dz-empty,
   html.dark .dz-acct{background:var(--panel2);border-color:var(--line)}
   html.dark .rv-banner.no{background:var(--panel2);border-color:var(--line)}
+  /* MP gra: kafelki kolumn (odpowiedzi ludzi) miały hardcodowane jasne tło + tekst var(--ink) → nieczytelne w dark */
+  html.dark .mp-cand{background:var(--panel2);border-color:var(--line)}
+  html.dark .mp-cand.is-top{background:rgba(88,204,2,.16);border-color:var(--green)}
+  html.dark .mp-cand.voted{box-shadow:0 0 0 3px rgba(28,176,246,.32)}
+  html.dark .mp-cand:not(.is-top) .up{color:var(--muted)}
+  html.dark .mp-slot-h{color:var(--muted)}
+  html.dark .mp-addtyp{color:var(--muted)}
+  html.dark .mp-foot{background:var(--bg)}
+  /* MP odsłona: jasnozielona karta + białe sloty → na dark czytelne tła i tekst */
+  html.dark .rv-card{background:var(--panel);border-color:var(--green)}
+  html.dark .rv-slot{background:var(--panel2);border-color:var(--line)}
+  html.dark .rv-info .a{color:#5CC5FF}
+  html.dark .rv-banner.win{background:rgba(255,200,0,.12)}
+  html.dark .rv-banner.lose{background:rgba(255,75,75,.12)}
+  html.dark .rv-banner.ok{background:rgba(88,204,2,.14)} html.dark .rv-banner.ok small{color:#7BD957}
+  html.dark .mp-teamc{background:rgba(88,204,2,.14)}
 </style>
 <script>/* motyw przed renderem — bez mignięcia */try{if(localStorage.getItem('stacjaTheme')==='dark')document.documentElement.classList.add('dark');}catch(e){}</script>
 </head>

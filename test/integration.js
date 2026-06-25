@@ -148,6 +148,13 @@ await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)'
   const h=$(w,'mpRoom').innerHTML;
   ok(h.length>200, 'kombinuj: niepusty render');
   ok(/mpProp_|mp-slot|mpChatIn|mpComposer|odpowied/i.test(h), 'kombinuj: pola odpowiedzi / composer');
+  // KOLEJNOŚĆ sekcji (design): odpowiedź drużyny → profile → kolumny → [foot: input+pewność+emotki]
+  const ix=s=>h.indexOf(s);
+  ok(ix('id="mpTeam"')<ix('id="mpRoster"') && ix('id="mpRoster"')<ix('id="mpBoard"')
+     && ix('id="mpBoard"')<ix('mp-foot') && ix('mp-form')>ix('mp-foot') && ix('mp-reacts')>ix('mp-form'),
+     'kolumny: kolejność team→profile→kolumny→[foot:input→emotki]');
+  ok((h.match(/mp-hr/g)||[]).length>=3, 'kolumny: sekcje oddzielone kreskami (mp-hr)');
+  ok(/class="mp-foot"/.test(h), 'kolumny: pasek emotek/input w sticky foot');
   // STAN Z GŁOSAMI → mpSlotsHTML porównuje przez norm (regresja: norm nieimportowane → throw, render zamarza).
   const g2 = { ...game, playNonce:1,
     proposals:[{id:'p1',aid:'a1',by:ws._id,byName:'Ja',conf:'normal',values:{title:'Hey Jude',artist:'Beatles'}}],
