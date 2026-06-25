@@ -3,7 +3,7 @@
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v21';
+const CACHE = 'stacja-v22';
 const SHELL = [
   './', './index.html',
   './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',

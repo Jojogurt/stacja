@@ -7,6 +7,7 @@ import { ensureSession, setHandle, fetchProfile, loginOAuth, logout,
   teamCreate, teamJoin, teamLeave, myTeams, friendAdd, friendRespond,
   friendsList, pendingFriends, sentFriends, meInfo } from '../adapters-web/cf.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
+import { bbLoader } from './dom.js';
 
 const $m = id => document.getElementById(id);
 
@@ -59,7 +60,7 @@ async function mpPrefillName(){
 }
 export async function renderDruzyna(){
   const el=$m('druzynaBody'); if(!el) return;
-  el.innerHTML='<div class="liga-empty">ładowanie…</div>';
+  el.innerHTML=`<div class="liga-empty">${bbLoader}</div>`;
   try{
   await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność
   const [meR, teamsR, friR, penR, sentR] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), sentFriends()]);
@@ -239,7 +240,8 @@ async function acInitAuthButtons(){
 async function acLogout(){ logout(); myHandle=null; await ensureSession(); acAfterLogin(); }
 
 export async function renderProfil(){
-  const el=$m('profilStats'); el.innerHTML='<div class="profil-empty">ładowanie…</div>';
+  const el=$m('profilStats'); el.innerHTML=`<div class="profil-empty">${bbLoader}</div>`;
+  const hd0=$m('profilHead'); if(hd0) hd0.innerHTML=`<div class="profil-empty" style="padding:20px 0">${bbLoader}</div>`;   // głowa też pokazuje loader (nie pustkę)
   await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
   const p=await fetchProfile();
   if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Brak połączenia z serwerem — spróbuj odświeżyć.</div>'; return; }

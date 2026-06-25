@@ -25,6 +25,9 @@ export function animIn(el){
   el.classList.remove('view-in'); void el.offsetWidth; el.classList.add('view-in');
 }
 
+// wspólny loader „Beat & Beka" (3 kropki) — używany tam, gdzie ekran czeka na dane (profil/liga/MP)
+export const bbLoader = '<div class="bb-loader"><i></i><i></i><i></i></div>';
+
 // confetti przy trafieniu (lekkie, czysty DOM/CSS; pomijane przy reduce-motion)
 export function confetti(n=90){
   try{ if(matchMedia('(prefers-reduced-motion: reduce)').matches) return; }catch(e){}
