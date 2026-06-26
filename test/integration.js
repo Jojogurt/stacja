@@ -297,6 +297,25 @@ await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
   ok(!/undefined is not|Cannot read/.test(dn), 'done render bez wyjątku');
 });
 
+await group('MP: odsłona ABCD — opcje w pionie (\\n) + bez labelu „litera lub odpowiedź"', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'q',mode:'quiz'}],
+    mode:'quiz', catKey:'q', catLabel:'Wiedza',
+    reveal:{ kind:'quiz', prompt:'Pytanie ABCD?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta',
+      slots:[{key:'a',label:'litera lub odpowiedź'}], answers:{ a:['B','Beta'] }, okBySlot:{a:true},
+      locked:{a:'B'}, teamOk:true },
+    proposals:[], votes:{}, passed:[], playNonce:7, timer:0 });
+  await settle(6);
+  const rv=$(w,'mpRoom').innerHTML;
+  ok(/rv-card quiz/.test(rv), 'ABCD reveal: karta quizu');
+  ok(/A\) Alfa\nB\) Beta\nC\) Gamma\nD\) Delta/.test(rv), 'ABCD reveal: opcje z \\n (renderowane w pionie przez pre-line)');
+  ok(/rv-slot mc/.test(rv), 'ABCD reveal: wiersz odpowiedzi w trybie mc (bez labelu po lewej)');
+  ok(!/LITERA LUB ODPOWIEDŹ/i.test(rv), 'ABCD reveal: usunięty zbędny label „litera lub odpowiedź"');
+  ok(!/undefined is not|Cannot read/.test(rv), 'ABCD reveal render bez wyjątku');
+  w.mpAdvance && w.mpAdvance();   // zamknij odsłonę u siebie (nie zostawiaj „reveal pending" następnej grupie)
+});
+
 await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emotek; board nadpisywalny', async ()=>{
   const w = window;
   const ws = wsInstances[wsInstances.length-1];
@@ -321,6 +340,22 @@ await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emot
   ok(/mp-lockmini/.test(h), 'salon: host ma „Zatwierdź ✓"');
   ok(!/mp-rz[^>]*\byou\b/.test(h), 'salon: TV (host) poza paskiem graczy');
   ok(!/undefined is not|Cannot read/.test(h), 'salon render bez wyjątku');
+});
+
+await group('MP: intro fazy zamiast paska faz (duża ikona na wejściu w scenę)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  // nowy playNonce → zmiana sceny → powinno odpalić intro (ikona „Słuchaj")
+  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:91, timer:0, endsAt:null, beerTally:{}, results:[] });
+  await settle(6);
+  const stage=$(w,'mpStage');
+  // intro „zaangażowane": #mpStage dostaje klasę intra (overlay sam jest ulotny — fake-WS echo go zmiata,
+  // w realnej apce zostaje; klasa przeżywa re-render, więc to stabilny sygnał)
+  ok(/mp-intro(ing|done)/.test(stage.className), 'intro: #mpStage w trybie intra na wejściu w fazę');
+  ok(!/mp-rail/.test($(w,'mpRoom').innerHTML), 'pasek faz (mp-rail) usunięty z widoku');
+  ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'render fazy z intrem bez wyjątku');
 });
 
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

@@ -59,7 +59,7 @@ function mpLobbyWaitHTML(){
 function mpSceneKey(g){
   if(!g || g.phase==null) return (S.host && S.roomStage==='build') ? 'picker' : 'wait';
   if(mpRevealPending()) return 'reveal:'+S.revealNonce;
-  if(g.phase===MP.PLAY) return 'play:'+g.playNonce+':'+S.sub;
+  if(g.phase===MP.PLAY) return 'play:'+g.playNonce+':'+mpEffSub(g);
   return 'ph:'+g.phase;
 }
 // EFEKTY WEJŚCIA W SCENĘ (onEnter) — odpowiednik godotowego _enter_state(), w JEDNYM miejscu.
@@ -74,10 +74,14 @@ function mpOnEnter(g, head, st){
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
     if(g.reveal.teamOk || g.reveal.pewniakWin){ confetti(); playClap(); }   // drużyna trafiła → confetti + oklaski
   }
-  // płynne wejście sceny — animIn na ZMIANĘ klucza (nie przy re-renderze); odsłona/wynik mają własny „juice"
+  // wejście sceny na ZMIANĘ klucza (nie przy re-renderze): INTRO fazy (duża ikona) tam gdzie jest meta,
+  // inaczej zwykłe płynne animIn. Wynik (DONE) ma własny „juice" — bez intra.
   const scene=mpSceneKey(g);
   if(scene!==S.lastView){ S.lastView=scene;
-    if(!(mpRevealPending() || (g && g.phase===MP.DONE))) animIn(st);
+    let reduce=false; try{ reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_e){}
+    const meta=mpPhaseIntroMeta(g);
+    if(meta && !reduce){ mpPlayPhaseIntro(st, meta); }
+    else if(!(g && g.phase===MP.DONE)) animIn(st);
   }
 }
 function mpRender(){
@@ -246,20 +250,42 @@ function mpTypingFeedHTML(){
     `<span class="mp-typing"><span></span><span></span><span></span></span><span class="mp-typname">${escapeHtml(names.join(', '))} pisze…</span></div>`;
 }
 // pasek faz (rail, design): duże węzły, done=✓ zielony, aktywny=poświata, segmenty
-function mpRailHTML(active){
-  const order=['sluchaj','kombinuj','odslona'];
-  const md = S.game&&S.game.mode;
-  const listen = md==='quiz' ? [ic('question'),'pytanie'] : (md==='lektor' ? [ic('book'),'czytaj'] : [ic('headphones'),'słuchaj']);   // quiz: pytanie; lektor: tekst; reszta: audio
-  const meta={ sluchaj:listen, kombinuj:[ic('brain'),'kombinujcie'], odslona:[ic('eye'),'odsłona'] };
-  const ai=order.indexOf(active);
-  let out='<div class="mp-rail">';
-  order.forEach((k,i)=>{
-    const cls = i<ai?'done':(i===ai?'on':'');
-    const dot = cls==='done' ? '✓' : meta[k][0];
-    out += `<div class="mp-rnode ${cls}"><span class="mp-rdot">${dot}</span><span class="mp-rlab">${meta[k][1]}</span></div>`;
-    if(i<order.length-1) out += `<span class="mp-rseg${i<ai?' done':''}"></span>`;
+// pasek faz USUNIĘTY z widoków (zaśmiecał) — zastąpiony animowanym INTRO fazy (mpPlayPhaseIntro).
+// Zwraca '' żeby nie ruszać miejsc wywołania (play/odsłona).
+function mpRailHTML(_active){ return ''; }
+// efektywna pod-faza: na NOWE pytanie (zmiana playNonce) mpRenderPlay ustawi S.sub='sluchaj' dopiero
+// PO mpOnEnter — więc klucz sceny i intro liczą sub z wyprzedzeniem (inaczej zły label / podwójne intro).
+function mpEffSub(g){ return (g && S.playRound!==g.playNonce) ? 'sluchaj' : S.sub; }
+// ikona + etykieta dla intra danej fazy (albo null = bez intra: picker/poczekalnia/ładowanie/wynik)
+function mpPhaseIntroMeta(g){
+  if(!g || g.phase==null) return null;
+  if(mpRevealPending()) return { icon:ic('eye'), label:'Odsłona' };
+  if(g.phase===MP.PLAY){
+    if(mpEffSub(g)==='sluchaj'){
+      if(g.mode==='quiz')   return { icon:ic('question'),   label:'Pytanie' };
+      if(g.mode==='lektor') return { icon:ic('book'),       label:'Czytaj' };
+      return { icon:ic('headphones'), label:'Słuchaj' };
+    }
+    return { icon:ic('brain'), label:'Kombinujcie' };
+  }
+  return null;
+}
+// INTRO fazy: duża ikona na środku (pop → zmniejsza się i fade do 0), w tym czasie treść ukryta
+// (nie zakryta białym ekranem — opacity 0), potem elementy wchodzą ze staggerem („oddech").
+let mpIntroTimers=[];
+function mpPlayPhaseIntro(st, meta){
+  mpIntroTimers.forEach(clearTimeout); mpIntroTimers=[];
+  requestAnimationFrame(()=>{
+    st.classList.remove('mp-introdone'); st.classList.add('mp-introing');
+    const old=st.querySelector('.mp-intro'); if(old) old.remove();
+    const ov=document.createElement('div'); ov.className='mp-intro';
+    ov.innerHTML=`<div class="mp-intro-ic">${meta.icon}</div><div class="mp-intro-lb">${escapeHtml(meta.label)}</div>`;
+    st.appendChild(ov);
+    const T=(ms,fn)=>mpIntroTimers.push(setTimeout(fn,ms));
+    T(700,()=>{ st.classList.remove('mp-introing'); st.classList.add('mp-introdone'); });   // oddech, potem odsłoń treść
+    T(760,()=>{ const o=st.querySelector('.mp-intro'); if(o) o.remove(); });
+    T(1500,()=>{ st.classList.remove('mp-introdone'); });
   });
-  return out+'</div>';
 }
 // legenda stanów rostera (skórka czat — nad kreską)
 function mpLegendHTML(){
@@ -440,11 +466,15 @@ function mpRenderRevealCard(snap){
 // odsłona QUIZU: pytanie + per slot poprawne warianty (✓/✗) + odpowiedź drużyny (bez okładki/roku)
 function mpRenderQuizReveal(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
+  const isMC=/\nA\)/.test(r.prompt||'');   // pytanie ABCD: opcje w treści, jeden slot „litera lub odpowiedź"
   const rows=(r.slots||[]).map(s=>{
     const ok=!!(r.okBySlot&&r.okBySlot[s.key]);
-    const correct=((r.answers&&r.answers[s.key])||[]).map(escapeHtml).join(' / ')||'—';
+    const variants=(r.answers&&r.answers[s.key])||[];
+    // ABCD: pokaż poprawną opcję zwięźle „A) Tekst" (zamiast wszystkich wariantów); bez zbędnego labelu po lewej
+    const correct = isMC ? escapeHtml((variants[0]||'')+(variants[1]?') '+variants[1]:'')) : (variants.map(escapeHtml).join(' / ')||'—');
     const team=(r.locked&&r.locked[s.key])||'';
-    return `<div class="rv-slot"><span class="k">${escapeHtml((s.label||s.key).toUpperCase())}</span>
+    const kLabel = isMC ? '' : `<span class="k">${escapeHtml((s.label||s.key).toUpperCase())}</span>`;
+    return `<div class="rv-slot${isMC?' mc':''}">${kLabel}
       <span class="v">${correct}${team?`<small class="rv-team">drużyna: „${escapeHtml(team)}"</small>`:''}</span>
       <span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
   }).join('');
