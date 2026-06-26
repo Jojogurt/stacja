@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v31';   // MP: intro fazy (duża ikona zamiast paska faz) + fix odsłony ABCD (opcje w pionie, bez zbędnego labelu)
+const APP_VERSION = 'v33';   // rebranding: Beat & Beka → Uszy & Muzg (tytuł, logo, manifest PWA)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

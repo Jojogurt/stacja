@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#58CC02">
 <meta name="robots" content="noindex">
-<title>Beat & Beka — trener pubquizu</title>
+<title>Uszy & Muzg — trener pubquizu</title>
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Beat & Beka">
+<meta name="apple-mobile-web-app-title" content="Uszy & Muzg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -580,7 +580,9 @@
   .mp-intro .mp-intro-lb{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);animation:mpIntroLb 2.74s ease forwards}
   @keyframes mpIntroIc{0%{transform:scale(.5);opacity:0}12%{transform:scale(1.12);opacity:1}17%{transform:scale(1);opacity:1}84%{transform:scale(1);opacity:1}100%{transform:scale(.34);opacity:0}}
   @keyframes mpIntroLb{0%{opacity:0;transform:translateY(12px)}12%{opacity:1;transform:none}84%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
-  #mpStage.mp-introing > *:not(.mp-intro){opacity:0}
+  /* !important + animation:none — bije własne animacje treści (np. odsłona „jSlam"), które inaczej
+     przykrywają statyczne opacity:0 (w kaskadzie animacja > zwykła reguła) i wjeżdżają pod intrem */
+  #mpStage.mp-introing > *:not(.mp-intro){opacity:0 !important;animation:none !important}
   #mpStage.mp-introdone > *:not(.mp-intro){animation:mpReveal .44s cubic-bezier(.2,.8,.2,1) both}
   #mpStage.mp-introdone > *:not(.mp-intro):nth-child(2){animation-delay:.06s}
   #mpStage.mp-introdone > *:not(.mp-intro):nth-child(3){animation-delay:.12s}
@@ -590,7 +592,15 @@
   #mpStage.mp-introdone > .mp-play > *:nth-child(2){animation-delay:.07s}
   #mpStage.mp-introdone > .mp-play > *:nth-child(3){animation-delay:.14s}
   #mpStage.mp-introdone > .mp-play > *:nth-child(n+4){animation-delay:.2s}
+  /* odsłona ma WŁASNE wejście „jSlam" — po intrze graj je (a nie mpReveal), żeby przy cleanup (zmiana
+     nazwy animacji) karta nie odpaliła się drugi raz; !important bije generyczny mpReveal + delay staggera */
+  #mpStage.mp-introdone > .rv-card{animation:jSlam .34s cubic-bezier(.2,.8,.2,1) both !important}
   @keyframes mpReveal{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:none}}
+  /* reduced-motion: intro BEZ ruchu (statyczna ikona+etykieta), ale TEN SAM LEAD — równy start audio u wszystkich */
+  @media (prefers-reduced-motion: reduce){
+    .mp-intro .mp-intro-ic, .mp-intro .mp-intro-lb,
+    #mpStage.mp-introdone > *:not(.mp-intro), #mpStage.mp-introdone > .mp-play > *{animation:none !important}
+  }
   .mp-rail{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px}
   .mp-rnode{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
   .mp-rdot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:14px;background:var(--panel);border:2px solid var(--line);color:var(--muted)}
@@ -1127,7 +1137,7 @@
   @keyframes jGrow{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
   @keyframes jRise{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
 
-  /* LOADER „Beat & Beka": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
+  /* LOADER „Uszy & Muzg": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
   .bb-loader{display:flex;gap:8px;justify-content:center;align-items:flex-end;height:20px;margin:4px 0 10px}
   .bb-loader i{width:12px;height:12px;border-radius:50%;background:var(--green)}
   .bb-loader i:nth-child(2){background:var(--blue)}
@@ -1150,7 +1160,7 @@
 
   <section id="menu">
     <div class="mh-hero">
-      <div class="mh-logo">Beat <b>&amp;</b> Beka</div>
+      <div class="mh-logo">Uszy <b>&amp;</b> Muzg</div>
       <div class="mh-sub">Sprawdź czy masz uszy i muzg</div>
       <div class="mh-ver" id="appVer"></div>
     </div>

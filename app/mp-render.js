@@ -72,16 +72,21 @@ function mpOnEnter(g, head, st){
     S.revealNonce=g.playNonce;
     S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
-    if(g.reveal.teamOk || g.reveal.pewniakWin){ confetti(); playClap(); }   // drużyna trafiła → confetti + oklaski
+    if(g.reveal.teamOk || g.reveal.pewniakWin){   // drużyna trafiła → confetti + oklaski DOPIERO po intrze (gdy odsłona wchodzi, nie pod ikoną)
+      const ms=mpIntroRevealMs();
+      if(ms>20) setTimeout(()=>{ if(mpRevealPending() && S.revealNonce===g.playNonce){ confetti(); playClap(); } }, ms);
+      else { confetti(); playClap(); }
+    }
   }
-  // wejście sceny na ZMIANĘ klucza (nie przy re-renderze): INTRO fazy (duża ikona) tam gdzie jest meta,
-  // inaczej zwykłe płynne animIn. Wynik (DONE) ma własny „juice" — bez intra.
+  // wejście sceny na ZMIANĘ klucza (nie przy re-renderze): INTRO fazy (duża ikona) tam gdzie jest meta.
+  // INTRO gra ZAWSZE (też przy reduced-motion — wtedy CSS robi je STATYCZNE, bez ruchu), bo wspólny LEAD
+  // = RÓWNY START audio u wszystkich (mpAfterSync wstrzymuje audio do S.introUntil = odbiór fazy + LEAD).
+  // Inaczej reduced-motion grałby od razu i miał ~2,3 s przewagi. Sceny bez meta (wynik/picker) → animIn.
   const scene=mpSceneKey(g);
   if(scene!==S.lastView){ S.lastView=scene;
-    let reduce=false; try{ reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_e){}
     const meta=mpPhaseIntroMeta(g);
-    if(meta && !reduce){ mpPlayPhaseIntro(st, meta); }
-    else { S.introUntil=0; if(!(g && g.phase===MP.DONE)) animIn(st); }   // bez intra → faza startuje od razu
+    if(meta){ mpPlayPhaseIntro(st, meta); }
+    else { S.introUntil=0; if(!(g && g.phase===MP.DONE)) animIn(st); }
   }
 }
 function mpRender(){
@@ -119,7 +124,7 @@ function mpReactsBarHTML(){
     <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
-// loader „Beat & Beka" (3 kropki) — lokalny string (NIE współdzielony import: kruchy przy stale-cache).
+// loader „Uszy & Muzg" (3 kropki) — lokalny string (NIE współdzielony import: kruchy przy stale-cache).
 const bbLoader = `<div class="bb-loader"><i></i><i></i><i></i></div>`;
 const mpRenderLoading = (head)=> `${head}<div class="mp-deck">${bbLoader}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
