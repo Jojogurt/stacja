@@ -5,6 +5,7 @@ import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, A
 import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from '../core/mpReducer.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
+import { resolveTrack } from '../core/trackSelect.js';
 import { buildSoloRecord, buildMpRecord } from '../core/matchRecord.js';
 import { listenSecs, soloSnipStart, mpSnipStart, shouldPing, SNIP_SECS, SOLO_SNIP_MAX, MP_SNIP_WINDOW_S } from '../core/timing.js';
 import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary } from '../core/picker.js';
@@ -399,6 +400,33 @@ group('chatFeed.ring-buffer', ()=>{
   eq(f.log.length,FEED_CAP,`limit ${FEED_CAP} wpisów`);
   eq(f.log[0].text,'m10','najstarsze wypchnięte');
 });
+
+group('mpReducer.evaluateAnswer: muzyka po quizie używa slotów title/artist (regresja answerSlots)', ()=>{
+  const music={ track:'Hey Jude', artist:'Beatles' };
+  // BUG: answerSlots dziedziczone z quizu (slot 'a') → ocenia 'a' vs puste pole utworu → pudło mimo dobrej odpowiedzi
+  const gStale={ answerSlots:[{key:'a',label:'x'}], proposals:[{by:'u1',byName:'A',values:{a:'Hey Jude'}}], votes:{a:{u1:'Hey Jude'}} };
+  ok(evaluateAnswer(gStale, music, {a:'Hey Jude'}).teamOk===false, 'stale quiz answerSlots → muzyka pudłuje (objaw buga)');
+  // FIX: answerSlots=null → slotsOf=DEFAULT (title/artist) → ocena poprawna
+  const gOk={ answerSlots:null, proposals:[{by:'u1',byName:'A',values:{title:'Hey Jude',artist:'Beatles'}}], votes:{title:{u1:'Hey Jude'},artist:{u1:'Beatles'}} };
+  const r=evaluateAnswer(gOk, music, {title:'Hey Jude', artist:'Beatles'});
+  ok(r.teamOk===true, 'answerSlots=null (reset) → muzyka oceniana po title/artist');
+  ok(r.reveal.kind==='music', 'reveal muzyki (bez current.answers) → kind=music');
+});
+
+// trackSelect.resolveFromSongs (playlista): zajawka MUSI pasować do tytułu+wykonawcy odpowiedzi,
+// inaczej grał inny utwór niż pokazana odpowiedź (regresja audio↔odpowiedź)
+await (async ()=>{
+  console.log('• trackSelect.resolveFromSongs: zajawka pasuje do odpowiedzi (bez rozjazdu)');
+  const song={ title:'Beat It', artist:'Michael Jackson' };
+  // iTunes zwraca tylko INNY utwór tego wykonawcy → BRAK trafienia → NIE bierz cudzej zajawki (dawniej res[0])
+  const wrong=async()=>[{ trackName:'Thriller', artistName:'Michael Jackson', previewUrl:'thriller.m4a' }];
+  const r1=await resolveTrack({ cat:{songs:[song]}, seen:new Set(), itunes:wrong });
+  ok(r1.error===true, 'brak pasującej zajawki → error (nie gra cudzego utworu)');
+  // iTunes zwraca pasujący utwór → zajawka TEGO utworu
+  const right=async()=>[{ trackName:'Beat It', artistName:'Michael Jackson', previewUrl:'beatit.m4a' }];
+  const r2=await resolveTrack({ cat:{songs:[song]}, seen:new Set(), itunes:right });
+  ok(r2.preview==='beatit.m4a' && r2.track==='Beat It', 'trafienie → zajawka tego samego utworu co odpowiedź');
+})();
 
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

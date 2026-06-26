@@ -472,14 +472,16 @@ async function mpHostNewRound(){
     const s=songs[Math.floor(Math.random()*songs.length)];
     S.hostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
     S.hostSeen.add(norm(s.title));
-    S.game.lyric=s.lyric; S.game.preview=''; S.game.ttsUrl=s.tts||''; S.game.prompt='';
+    S.game.lyric=s.lyric; S.game.preview=''; S.game.ttsUrl=s.tts||''; S.game.prompt=''; S.game.answerSlots=null;
   } else {
     // audio (muzyka/od tyłu/fragment) — playlistę i pulę wykonawców rozwiązuje repozytorium
     const t=await resolveTrack({cat:ALL_CATS[catKey], seen:S.hostSeen, cfg:window.STACJA_CONFIG});
     if(t.error){ S.game.phase=MP.NETERR; S.game.netReason=t.reason; mpBroadcast(); mpRender(); return; }
     S.hostCurrent={...t, lyric:''};
-    S.game.preview=t.preview; S.game.lyric=''; S.game.ttsUrl=''; S.game.prompt='';
+    S.game.preview=t.preview; S.game.lyric=''; S.game.ttsUrl=''; S.game.prompt=''; S.game.answerSlots=null;
   }
+  // RESET slotów dla muzyki/lektora → DEFAULT (tytuł+wykonawca). Bez tego runda audio po quizie
+  // dziedziczy sloty quizu (np. a/b/c/d) → złe pola wpisywania + zła ocena/odsłona (rozjazd answerSlots).
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
   S.game.snipStart = S.game.mode==='snippet' ? mpSnipStart() : 0;
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——

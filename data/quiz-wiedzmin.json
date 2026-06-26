@@ -1,0 +1,788 @@
+{
+  "label": "Wiedźmin",
+  "kind": "quiz",
+  "desc": "50 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Jak nazywa się główny bohater sagi — wiedźmin z Rivii?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Geralt z Rivii",
+          "Geralt",
+          "Bialy Wilk",
+          "Biały Wilk",
+          "Gwynbleidd"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czarodziejka, ukochana Geralta, słynąca z czarnych włosów i zapachu bzu i agrestu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Yennefer",
+          "Yennefer z Vengerbergu",
+          "Yen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak ma na imię Dziecko Niespodzianka, wychowanka Geralta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ciri",
+          "Cirilla",
+          "Cirilla Fiona Elen Riannon",
+          "Lwiątko z Cintry"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się bard, wierny przyjaciel Geralta, autor licznych ballad?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jaskier",
+          "Julian Alfred Pankratz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się warownia szkoły Wilka, w której szkolono wiedźminów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa miejsca"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kaer Morhen",
+          "Kaer Mohren"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak ma na imię stary wiedźmin, mentor Geralta z Kaer Morhen?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Vesemir",
+          "Wesemir"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się Znak wiedźmiński będący falą uderzeniową, która odpycha przeciwników?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa Znaku"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Aard"
+        ]
+      }
+    },
+    {
+      "prompt": "Który Znak wiedźmiński tworzy strumień ognia?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa Znaku"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Igni"
+        ]
+      }
+    },
+    {
+      "prompt": "Który Znak wiedźmiński działa hipnotycznie, pozwalając wpływać na umysł rozmówcy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa Znaku"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Axii"
+        ]
+      }
+    },
+    {
+      "prompt": "Który Znak wiedźmiński tworzy na ziemi magiczną pułapkę spowalniającą lub raniącą wrogów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa Znaku"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Yrden"
+        ]
+      }
+    },
+    {
+      "prompt": "Kim jest Triss Merigold?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kim jest"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czarodziejka",
+          "czarodziejka o rudych włosach",
+          "rudowłosa czarodziejka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rumiana klacz Geralta, którą wiedźmin nazywa kolejne wierzchowce?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię konia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Płotka",
+          "Plotka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się potwór powstały z dziewczynki dotkniętej klątwą, którego Geralt odczarowuje w opowiadaniu otwierającym sagę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rodzaj potwora"
+        }
+      ],
+      "answers": {
+        "a": [
+          "strzyga"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się wodny potwór z polskich legend, czyhający na ofiary w bagnach i stawach, częsty przeciwnik w grach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rodzaj potwora"
+        }
+      ],
+      "answers": {
+        "a": [
+          "utopiec",
+          "utopce"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ogromny leśny potwór, władca lasu przypominający rogatą istotę z drewna i mchu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rodzaj potwora"
+        }
+      ],
+      "answers": {
+        "a": [
+          "leszy",
+          "lesze"
+        ]
+      }
+    },
+    {
+      "prompt": "Kim z pochodzenia jest wampir Regis, przyjaciel Geralta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kim jest"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wampir",
+          "wyższy wampir",
+          "wyzszy wampir"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się krasnolud, towarzysz Geralta, lubiący gwint i piwo?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Zoltan",
+          "Zoltan Chivay"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem cyklu książek o wiedźminie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Andrzej Sapkowski",
+          "Sapkowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Które polskie studio stworzyło serię gier o wiedźminie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa studia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "CD Projekt RED",
+          "CD Projekt",
+          "CDPR",
+          "CD Projekt Red"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi pełny tytuł trzeciej, najbardziej znanej gry o wiedźminie z 2015 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł gry"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wiedźmin 3: Dziki Gon",
+          "Wiedzmin 3: Dziki Gon",
+          "Wiedźmin 3",
+          "Dziki Gon",
+          "The Witcher 3"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się portowe, kupieckie miasto będące jedną z głównych lokacji w „Wiedźminie 3”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa miasta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Novigrad",
+          "Nowigrad"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się archipelag wysp zamieszkany przez wojowniczych mieszkańców, lokacja w „Wiedźminie 3”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa krainy"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Skellige"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się popularna gra karciana, w którą gramy z bohaterami w „Wiedźminie 3”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa gry"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gwint",
+          "Gwint"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kolor oczu zyskują wiedźmini wskutek mutacji?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "cecha"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kocie oczy",
+          "żółte",
+          "zolte",
+          "kocie",
+          "żółte kocie oczy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się próba mutacji, którą przechodzą chłopcy szkoleni na wiedźminów i którą wielu nie przeżywa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa próby"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Próba Traw",
+          "Proba Traw",
+          "próba traw"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się stolica Temerii, jedno z głównych miast w świecie wiedźmina?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa miasta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wyzima",
+          "Wizima"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się imperium, które najeżdża Północne Królestwa i ściga Ciri?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa imperium"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nilfgaard",
+          "Cesarstwo Nilfgaardu"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się cesarz Nilfgaardu, ojciec Ciri?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Emhyr",
+          "Emhyr var Emreis",
+          "Duny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tajemnicza grupa upiornych jeźdźców polujących na Ciri, od której pochodzi podtytuł trzeciej gry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Dziki Gon",
+          "Wild Hunt"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się żywioł elfów, czyli prastara krew płynąca w żyłach Ciri?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Starsza Krew",
+          "Aen Hen Ichaer",
+          "prastara krew"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaką bronią białą wiedźmin posługuje się przeciw potworom, a jaką przeciw ludziom — z jakiego metalu jest ostrze na potwory?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "materiał miecza na potwory"
+        }
+      ],
+      "answers": {
+        "a": [
+          "srebro",
+          "srebrny",
+          "srebrny miecz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się królowa Cintry, babka Ciri, zwana Lwicą z Cintry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Calanthe"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czarodziej, doradca i mentor, jeden z bliskich Geraltowi magów, łysy i jednooki w grach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Dijkstra",
+          "Sigismund Dijkstra"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ten zniewieściały, okrutny dowódca Dzikiego Gonu, główny antagonista „Wiedźmina 3”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Eredin",
+          "Eredin Bréacc Glas",
+          "Eredin Breacc Glas"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dodatek do „Wiedźmina 3” rozgrywający się w słonecznym księstwie Toussaint?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł dodatku"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Krew i Wino",
+          "Blood and Wine"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dodatek do „Wiedźmina 3”, w którym Geralt mierzy się z Gaunterem O'Dimmem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł dodatku"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Serca z Kamienia",
+          "Serca Z Kamienia",
+          "Hearts of Stone"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tajemniczy człowiek zwany Panem Lusterko, demoniczny antagonista z dodatku „Serca z Kamienia”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gaunter O'Dimm",
+          "Gaunter ODimm",
+          "Pan Lusterko"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto zagrał Geralta w serialu Netflix „Wiedźmin” (sezony 1–3)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko aktora"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henry Cavill",
+          "Cavill"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakim eliksirem wiedźmini wyostrzają wzrok, by widzieć w ciemności?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa eliksiru"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kocie oko",
+          "Kocie Oko",
+          "Jaskółka",
+          "kocie oko"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przyjaciółka Yennefer, czarodziejka, która prowadzi szkołę magii w Aretuzie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tissaia",
+          "Tissaia de Vries"
+        ]
+      }
+    },
+    {
+      "prompt": "Co naprawdę kryje się pod „Prawem Niespodzianki”, którego Geralt żąda za uratowanie życia?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "opis"
+        }
+      ],
+      "answers": {
+        "a": [
+          "to, co zastaniesz w domu, a czego się nie spodziewasz",
+          "dziecko",
+          "nienarodzone dziecko",
+          "to czego nie wiesz że masz"
+        ]
+      }
+    },
+    {
+      "prompt": "Pierwsze opowiadanie o wiedźminie ukazało się w 1986 roku w konkursie magazynu „Fantastyka”. Jak nosiło tytuł?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł opowiadania"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wiedźmin",
+          "Wiedzmin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi tytuł pierwszego pełnoprawnego tomu sagi (powieści) o wiedźminie, wydanego w 1994 roku?\nA) Krew elfów\nB) Czas pogardy\nC) Miecz przeznaczenia\nD) Wieża Jaskółki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Krew elfów",
+          "Krew Elfów"
+        ]
+      }
+    },
+    {
+      "prompt": "Który ze Znaków wiedźmińskich NIE należy do pięciu podstawowych Znaków?\nA) Aard\nB) Heliotrop\nC) Yrden\nD) Quen",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Heliotrop"
+        ]
+      }
+    },
+    {
+      "prompt": "Do której szkoły wiedźminów należy Letho, antagonista „Wiedźmina 2”?\nA) Szkoła Kota\nB) Szkoła Gryfa\nC) Szkoła Żmii\nD) Szkoła Niedźwiedzia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Szkoła Żmii",
+          "Szkoła Zmii",
+          "Żmii",
+          "Zmii"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rasa małych, błękitnoskórych ludków-skrzatów pomagających w „Wiedźminie 3” przy stawie?\nA) Gnomy\nB) Niziołki\nC) Krasnoludy\nD) Bobołaki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Gnomy",
+          "gnomy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak ma na imię jarl ze Skellige, kandydat na króla wysp, sprzymierzeniec Geralta w „Wiedźminie 3”?\nA) Crach an Craite\nB) Hjalmar\nC) Cerys\nD) Birna",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Crach an Craite",
+          "Crach"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał muzykę do serialowej piosenki „Grosza daj wiedźminowi” (Toss A Coin To Your Witcher)?\nA) Marcin Przybyłowicz\nB) Sonya Belousova i Giona Ostinelli\nC) Mikolai Stroinski\nD) Percival Schuttenbach",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Sonya Belousova i Giona Ostinelli",
+          "Sonya Belousova",
+          "Belousova i Ostinelli"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się magiczna zdolność Ciri pozwalająca jej przemieszczać się między światami i czasem?\nA) Aard\nB) Moc Starszej Krwi\nC) Teleportacja\nD) Lara Dorren",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Moc Starszej Krwi",
+          "Starsza Krew",
+          "moc starszej krwi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się leśna istota, ptasiopodobna zjawa pojawiająca się w bagnach Velen w „Wiedźminie 3”, znana też jako biała pani?\nA) Płaczka\nB) Mglak\nC) Południca\nD) Pijawka",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Płaczka",
+          "Placzka"
+        ]
+      }
+    }
+  ]
+}

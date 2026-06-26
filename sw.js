@@ -3,7 +3,7 @@
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v34';
+const CACHE = 'stacja-v37';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -28,7 +28,7 @@ const SHELL = [
   './data/quiz-sport.json', './data/quiz-star-wars.json', './data/quiz-sztuka.json',
   './data/quiz-wladca-pierscieni.json', './data/quiz-zwierzeta.json',
   './data/quiz-krolowie-polscy.json', './data/quiz-informatyka.json', './data/quiz-lotnictwo.json',
-  './data/quiz-medycyna.json',
+  './data/quiz-medycyna.json', './data/quiz-wiedzmin.json',
 ];
 
 self.addEventListener('install', (e) => {

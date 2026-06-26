@@ -275,13 +275,14 @@ export class GameAuthority extends Server {
       const x=songs[Math.floor(Math.random()*songs.length)];
       this.current={ track:x.title, artist:x.artist, year:x.year||'', album:x.album||'', art:'', preview:'', lyric:x.lyric };
       this.hostSeen.add(norm(x.title));
-      this.game.lyric=x.lyric; this.game.preview=''; this.game.ttsUrl=x.tts||''; this.game.prompt='';
+      this.game.lyric=x.lyric; this.game.preview=''; this.game.ttsUrl=x.tts||''; this.game.prompt=''; this.game.answerSlots=null;
     } else {
       const t=await resolveTrackServer({ cat, seen:this.hostSeen, recent:this.recent });
       if(t.error){ this.game.phase=MP.NETERR; this.game.netReason=t.reason; this.broadcastState(); await this.persist(); return; }
       this.current={ ...t, lyric:'' };
-      this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt='';
+      this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
     }
+    // muzyka/lektor → sloty DEFAULT (tytuł+wykonawca); inaczej runda audio po quizie dziedziczy sloty quizu
     this.game.snipStart = this.game.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
     // FAZA GOTOWOŚCI: roześlij utwór (bez odpowiedzi), czekaj aż wszyscy zbuforują
     this.game.phase=MP.ARMING; this.game.armNonce=(this.game.armNonce||0)+1;

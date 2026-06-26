@@ -38,7 +38,9 @@ async function resolveFromSongs(cat, seen, itunes){
   for(const s of shuffle(pool)){
     let preview=s.preview||'', art='';
     if(!preview){
-      try{ const res=await itunes(s.artist); const t=res.find(r=>textMatch(r.trackName,s.title))||res[0]; if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); } }catch(e){}
+      // MUSI pasować tytuł I wykonawca — inaczej graliśmy zajawkę INNEGO utworu, a odpowiedź pokazywała
+      // tytuł z playlisty (rozjazd audio↔odpowiedź). Brak trafienia → pomiń ten utwór (nie bierz res[0]).
+      try{ const res=await itunes(s.artist); const t=res.find(r=>textMatch(r.trackName,s.title) && textMatch(r.artistName,s.artist)); if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); } }catch(e){}
     }
     if(preview){ seen.add(norm(s.title)); return { track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art }; }
     seen.add(norm(s.title));
