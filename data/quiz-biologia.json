@@ -1,0 +1,1650 @@
+{
+  "label": "Biologia i ciało człowieka",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Który narząd człowieka pompuje krew w organizmie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "serce"
+        ]
+      }
+    },
+    {
+      "prompt": "Największym narządem wewnętrznym człowieka jest?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "watroba"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym narządzie zachodzi wymiana gazowa między powietrzem a krwią?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pluca",
+          "pluco"
+        ]
+      }
+    },
+    {
+      "prompt": "Który narząd produkuje insulinę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "trzustka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czerwony barwnik krwi, który przenosi tlen?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "hemoglobina"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się krwinki białe?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "leukocyty",
+          "biale krwinki"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się płytki krwi odpowiadające za krzepnięcie?\nA) Erytrocyty\nB) Leukocyty\nC) Trombocyty\nD) Limfocyty",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Trombocyty",
+          "trombocyty",
+          "plytki krwi"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile komór ma serce człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "2",
+          "dwie"
+        ]
+      }
+    },
+    {
+      "prompt": "Naczynia krwionośne prowadzące krew od serca to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tetnice",
+          "tetnica"
+        ]
+      }
+    },
+    {
+      "prompt": "Naczynia krwionośne prowadzące krew do serca to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zyly",
+          "zyla"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największa tętnica w ciele człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "aorta"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najdłuższa kość w ciele człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa kości"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kosc udowa",
+          "udowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się najmniejsze kości w ciele człowieka, znajdujące się w uchu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kosteczki sluchowe",
+          "mloteczek kowadelko strzemiaczko"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ruchoma część czaszki, czyli żuchwa — kość, która pozwala otwierać usta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa kości"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zuchwa"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile par żeber ma zazwyczaj człowiek?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba par"
+        }
+      ],
+      "answers": {
+        "a": [
+          "12",
+          "dwanascie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kręgosłup w odcinku przy głowie, czyli odcinek szyjny — pierwsza część kręgosłupa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa odcinka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "szyjny",
+          "odcinek szyjny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tkanka łącząca mięsień z kością?\nA) Więzadło\nB) Ścięgno\nC) Chrząstka\nD) Powięź",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Sciegno",
+          "sciegno"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najsilniejszy (najmocniejszy) mięsień człowieka w przeliczeniu na masę — mięsień żwacz?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zwacz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mięsień oddechowy oddzielający klatkę piersiową od jamy brzusznej?\nA) Przepona\nB) Mięsień skośny\nC) Mięsień prosty brzucha\nD) Mięsień międzyżebrowy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Przepona",
+          "przepona"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mięsień dwugłowy ramienia (potocznie 'biceps')?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "biceps",
+          "miesien dwuglowy ramienia"
+        ]
+      }
+    },
+    {
+      "prompt": "Z ilu segmentów (odcinków) zbudowany jest typowo układ pokarmowy: usta, przełyk, żołądek, jelita — jak nazywa się początkowy odcinek, do którego trafia pokarm po przełknięciu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "przelyk"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym narządzie pokarm jest trawiony przy udziale kwasu solnego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zoladek"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym odcinku przewodu pokarmowego zachodzi większość wchłaniania składników odżywczych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "jelito cienkie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się żółta wydzielina produkowana przez wątrobę, magazynowana w pęcherzyku żółciowym?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zolc"
+        ]
+      }
+    },
+    {
+      "prompt": "Para narządów filtrujących krew i produkujących mocz to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "nerki",
+          "nerka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się narząd, w którym gromadzony jest mocz przed wydaleniem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pecherz moczowy",
+          "pecherz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się podstawowa jednostka budulcowa wszystkich organizmów żywych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "komorka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się część komórki zawierająca materiał genetyczny (DNA)?\nA) Mitochondrium\nB) Rybosom\nC) Jądro komórkowe\nD) Wakuola",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Jadro komorkowe",
+          "jadro komorkowe",
+          "jadro"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się organelle nazywane 'elektrowniami komórki', w których powstaje energia?\nA) Rybosomy\nB) Mitochondria\nC) Lizosomy\nD) Chloroplasty",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Mitochondria",
+          "mitochondria",
+          "mitochondrium"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakich organellach komórki roślinnej zachodzi fotosynteza?\nA) Mitochondria\nB) Wakuole\nC) Rybosomy\nD) Chloroplasty",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Chloroplasty",
+          "chloroplasty",
+          "chloroplast"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się błona otaczająca komórkę i kontrolująca wymianę substancji?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "blona komorkowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki cukier prosty powstaje w roślinach w wyniku fotosyntezy?\nA) Glukoza\nB) Sacharoza\nC) Skrobia\nD) Laktoza",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Glukoza",
+          "glukoza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz wydzielają rośliny jako produkt uboczny fotosyntezy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen",
+          "o2"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces, w którym komórki rozkładają glukozę, by uzyskać energię, zużywając tlen?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa procesu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "oddychanie komorkowe",
+          "oddychanie tlenowe"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się cząsteczka przechowująca informację genetyczną, mająca kształt podwójnej helisy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dna",
+          "kwas deoksyrybonukleinowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile chromosomów ma w sumie typowa komórka człowieka?\nA) 23\nB) 44\nC) 46\nD) 48",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "46"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się fragment DNA kodujący jedną cechę lub białko?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gen"
+        ]
+      }
+    },
+    {
+      "prompt": "Para chromosomów płci u kobiety to?\nA) XX\nB) XY\nC) YY\nD) X0",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "XX",
+          "xx"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto sformułował teorię ewolucji przez dobór naturalny?\nA) Grzegorz Mendel\nB) Karol Darwin\nC) Ludwik Pasteur\nD) Karol Linneusz",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Karol Darwin",
+          "Darwin",
+          "Charles Darwin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zakonnik uznawany za ojca genetyki, badający dziedziczenie cech grochu?\nA) Karol Darwin\nB) Ludwik Pasteur\nC) Grzegorz Mendel\nD) Robert Hooke",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Grzegorz Mendel",
+          "Mendel",
+          "Gregor Mendel"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się cztery zasady azotowe budujące DNA (litery)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litery"
+        }
+      ],
+      "answers": {
+        "a": [
+          "a t c g",
+          "adenina tymina cytozyna guanina"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się podział komórki prowadzący do powstania komórek płciowych (gamet)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mejoza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się żeńska komórka rozrodcza u człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "komorka jajowa",
+          "jajo",
+          "oocyt"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile zmysłów tradycyjnie wyróżnia się u człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "5",
+          "piec"
+        ]
+      }
+    },
+    {
+      "prompt": "Który zmysł odpowiada za odbieranie zapachów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zmysł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wech",
+          "powonienie"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym narządzie znajdują się receptory wzroku — pręciki i czopki?\nA) Rogówka\nB) Soczewka\nC) Siatkówka\nD) Tęczówka",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Siatkowka",
+          "siatkowka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kolorowa część oka regulująca wielkość źrenicy?\nA) Tęczówka\nB) Rogówka\nC) Siatkówka\nD) Twardówka",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Teczowka",
+          "teczowka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się soczewka oka skupiająca obraz na siatkówce?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "część oka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "soczewka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się błona w uchu, która drga pod wpływem dźwięku?\nA) Ślimak\nB) Trąbka słuchowa\nC) Małżowina\nD) Błona bębenkowa",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Blona bebenkowa",
+          "blona bebenkowa",
+          "bebenek"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile podstawowych smaków rozróżnia człowiek (słodki, słony, kwaśny, gorzki, umami)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "5",
+          "piec"
+        ]
+      }
+    },
+    {
+      "prompt": "Który narząd jest centralnym ośrodkiem układu nerwowego, zarządzającym myśleniem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mozg"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się podstawowa komórka układu nerwowego przewodząca impulsy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "neuron",
+          "komorka nerwowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gruczoł produkujący hormony i nazywany 'dyrygentem' układu hormonalnego, leżący w mózgu?\nA) Tarczyca\nB) Nadnercza\nC) Przysadka mózgowa\nD) Grasica",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Przysadka mozgowa",
+          "przysadka mozgowa",
+          "przysadka"
+        ]
+      }
+    },
+    {
+      "prompt": "Który gruczoł znajdujący się na szyi produkuje hormony tarczycy i wymaga jodu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tarczyca"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się hormon obniżający poziom cukru we krwi, produkowany przez trzustkę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa hormonu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "insulina"
+        ]
+      }
+    },
+    {
+      "prompt": "Witamina, której niedobór powoduje szkorbut, to witamina?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "oznaczenie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "c",
+          "witamina c"
+        ]
+      }
+    },
+    {
+      "prompt": "Która witamina powstaje w skórze pod wpływem światła słonecznego?\nA) Witamina A\nB) Witamina C\nC) Witamina D\nD) Witamina B12",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Witamina D",
+          "d",
+          "witamina d"
+        ]
+      }
+    },
+    {
+      "prompt": "Witamina ważna dla wzroku, której bogatym źródłem jest marchew, to witamina?\nA) Witamina A\nB) Witamina B\nC) Witamina C\nD) Witamina E",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Witamina A",
+          "a",
+          "witamina a"
+        ]
+      }
+    },
+    {
+      "prompt": "Który pierwiastek jest głównym budulcem kości i zębów, obecny w nabiale?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wapn",
+          "wapno",
+          "ca"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki narząd zmysłu reaguje na bodźce dotyku, ciepła i bólu na powierzchni ciała?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "skora"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najczęstsza grupa krwi określana jako 'uniwersalny dawca' (z czynnikiem Rh ujemnym)?\nA) Grupa A\nB) Grupa B\nC) Grupa AB\nD) Grupa 0",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Grupa 0",
+          "0",
+          "zero",
+          "0 rh minus"
+        ]
+      }
+    },
+    {
+      "prompt": "Płynna część krwi, w której zawieszone są komórki, to?\nA) Limfa\nB) Osocze\nC) Surowica\nD) Fibryna",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Osocze",
+          "osocze"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się białko, z którego powstaje skrzep tamujący krwawienie?\nA) Hemoglobina\nB) Albumina\nC) Fibryna\nD) Keratyna",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Fibryna",
+          "fibryna",
+          "wloknik"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile mniej więcej litrów krwi krąży w organizmie dorosłego człowieka?\nA) Około 2 litry\nB) Około 5 litrów\nC) Około 8 litrów\nD) Około 10 litrów",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Okolo 5 litrow",
+          "5",
+          "okolo 5",
+          "piec"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady zwierząt należą żaby i ropuchy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada"
+        }
+      ],
+      "answers": {
+        "a": [
+          "plazy",
+          "plaz"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady zwierząt należą węże, jaszczurki i krokodyle?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gady",
+          "gad"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gromada zwierząt obejmująca owady, pajęczaki i skorupiaki, mających szkielet zewnętrzny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "stawonogi",
+          "stawonog"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile nóg ma pająk?\nA) 6\nB) 8\nC) 10\nD) 12",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "8",
+          "osiem"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces przemiany owada od larwy do postaci dorosłej (np. gąsienica w motyla)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa procesu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "przeobrazenie",
+          "metamorfoza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki narząd umożliwia rybom oddychanie pod wodą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "skrzela",
+          "skrzele"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się organizm odżywiający się gotową materią organiczną, np. zwierzę (cudzożywny)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "heterotrof",
+          "cudzozywny",
+          "konsument"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zależność między dwoma gatunkami, gdzie oba odnoszą korzyść?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "symbioza",
+          "mutualizm"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się organizm żyjący kosztem innego, czerpiąc z niego korzyść i szkodząc mu (np. tasiemiec)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pasozyt"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się organizmy rozkładające martwą materię organiczną, np. grzyby i bakterie?\nA) Producenci\nB) Konsumenci\nC) Destruenci\nD) Drapieżniki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Destruenci",
+          "destruenci",
+          "reducenci",
+          "destruent"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki proces u roślin polega na parowaniu wody przez liście (oddawaniu pary wodnej)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "transpiracja"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się część rośliny, która pobiera wodę i sole mineralne z gleby?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "część rośliny"
+        }
+      ],
+      "answers": {
+        "a": [
+          "korzen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się żeńska część kwiatu, w której powstaje zalążek?\nA) Pręcik\nB) Słupek\nC) Płatek\nD) Działka kielicha",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Slupek",
+          "slupek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się męska część kwiatu, w której powstaje pyłek?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "część kwiatu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "precik"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces przenoszenia pyłku z pręcika na słupek, często z udziałem owadów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zapylenie",
+          "zapylanie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się jednokomórkowy organizm bez jądra komórkowego, np. pałeczka okrężnicy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bakteria",
+          "bakterie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się drobnoustrój, który nie jest komórką i namnaża się tylko wewnątrz żywych komórek, np. grypy?\nA) Bakteria\nB) Wirus\nC) Pierwotniak\nD) Pleśń",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Wirus",
+          "wirus"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się odporność, którą organizm zyskuje po przechorowaniu lub szczepieniu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rodzaj odporności"
+        }
+      ],
+      "answers": {
+        "a": [
+          "nabyta",
+          "odpornosc nabyta"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się białka odpornościowe wytwarzane przez organizm do zwalczania antygenów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "przeciwciala",
+          "przeciwcialo"
+        ]
+      }
+    },
+    {
+      "prompt": "Główny związek, z którego zbudowane są mięśnie, skóra i enzymy, dostarczany m.in. przez mięso, to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa składnika"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bialko",
+          "bialka"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile procent ciała dorosłego człowieka stanowi w przybliżeniu woda?\nA) Około 40%\nB) Około 60%\nC) Około 80%\nD) Około 90%",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Okolo 60%",
+          "60",
+          "okolo 60",
+          "60 procent"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dział biologii zajmujący się budową organizmów, w tym budową ciała człowieka?\nA) Fizjologia\nB) Anatomia\nC) Genetyka\nD) Ekologia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Anatomia",
+          "anatomia"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dział biologii badający funkcjonowanie organizmów i ich narządów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa działu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "fizjologia"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj narząd i układ, do którego należy. Płuca to narząd, który należy do układu...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        },
+        {
+          "key": "b",
+          "label": "układ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pluca"
+        ],
+        "b": [
+          "oddechowy",
+          "uklad oddechowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj narząd i układ. Żołądek to narząd należący do układu...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        },
+        {
+          "key": "b",
+          "label": "układ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zoladek"
+        ],
+        "b": [
+          "pokarmowy",
+          "uklad pokarmowy",
+          "trawienny"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj narząd i układ. Nerka to narząd należący do układu...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        },
+        {
+          "key": "b",
+          "label": "układ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "nerka",
+          "nerki"
+        ],
+        "b": [
+          "moczowy",
+          "uklad moczowy",
+          "wydalniczy"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj narząd i układ. Mózg to narząd należący do układu...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd"
+        },
+        {
+          "key": "b",
+          "label": "układ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mozg"
+        ],
+        "b": [
+          "nerwowy",
+          "uklad nerwowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa rodzaje krwinek (poza płytkami krwi) występujące we krwi człowieka.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "krwinki 1"
+        },
+        {
+          "key": "b",
+          "label": "krwinki 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czerwone",
+          "erytrocyty",
+          "czerwone krwinki"
+        ],
+        "b": [
+          "biale",
+          "leukocyty",
+          "biale krwinki"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj nazwy trzech głównych składników odżywczych dostarczających energii: cukry, tłuszcze i...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik 1"
+        },
+        {
+          "key": "b",
+          "label": "składnik 2"
+        },
+        {
+          "key": "c",
+          "label": "składnik 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "cukry",
+          "weglowodany"
+        ],
+        "b": [
+          "tluszcze",
+          "tluszcz"
+        ],
+        "c": [
+          "bialka",
+          "bialko"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj substraty i produkt. Do fotosyntezy roślina potrzebuje dwutlenku węgla i wody, a produkuje glukozę oraz...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "substrat (gaz)"
+        },
+        {
+          "key": "b",
+          "label": "substrat (ciecz)"
+        },
+        {
+          "key": "c",
+          "label": "produkt (gaz)"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dwutlenek wegla",
+          "co2"
+        ],
+        "b": [
+          "woda",
+          "h2o"
+        ],
+        "c": [
+          "tlen",
+          "o2"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa gazy biorące udział w oddychaniu człowieka: wdychamy tlen, a wydychamy...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz wdychany"
+        },
+        {
+          "key": "b",
+          "label": "gaz wydychany"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen",
+          "o2"
+        ],
+        "b": [
+          "dwutlenek wegla",
+          "co2"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj dwie pary chromosomów płci: u kobiety jest to para... a u mężczyzny para...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kobieta"
+        },
+        {
+          "key": "b",
+          "label": "mężczyzna"
+        }
+      ],
+      "answers": {
+        "a": [
+          "xx"
+        ],
+        "b": [
+          "xy"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj nazwy dwóch typów podziału komórkowego: jeden daje komórki identyczne (...), drugi daje gamety (...).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podział somatyczny"
+        },
+        {
+          "key": "b",
+          "label": "podział płciowy"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mitoza"
+        ],
+        "b": [
+          "mejoza"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwie komórki rozrodcze człowieka: żeńską i męską.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "komórka żeńska"
+        },
+        {
+          "key": "b",
+          "label": "komórka męska"
+        }
+      ],
+      "answers": {
+        "a": [
+          "komorka jajowa",
+          "jajo",
+          "oocyt"
+        ],
+        "b": [
+          "plemnik"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj części oka. Kolorowa część regulująca źrenicę to... a światłoczuła błona na dnie oka to...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kolorowa część"
+        },
+        {
+          "key": "b",
+          "label": "błona światłoczuła"
+        }
+      ],
+      "answers": {
+        "a": [
+          "teczowka"
+        ],
+        "b": [
+          "siatkowka"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy odcinki przewodu pokarmowego, przez które przechodzi pokarm po przełyku: żołądek, jelito cienkie i...",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narząd 1"
+        },
+        {
+          "key": "b",
+          "label": "narząd 2"
+        },
+        {
+          "key": "c",
+          "label": "narząd 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zoladek"
+        ],
+        "b": [
+          "jelito cienkie"
+        ],
+        "c": [
+          "jelito grube"
+        ]
+      }
+    }
+  ]
+}

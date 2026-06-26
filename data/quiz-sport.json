@@ -1,0 +1,1699 @@
+{
+  "label": "Sport",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Ilu zawodników jednej drużyny przebywa na boisku w piłce nożnej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "11",
+          "jedenastu",
+          "jedenastka"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim kraju odbył się mundial w 1974 roku, wygrany przez gospodarzy?\nA) Argentyna\nB) RFN\nC) Hiszpania\nD) Włochy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "RFN",
+          "Niemcy",
+          "Niemcy Zachodnie",
+          "Republika Federalna Niemiec"
+        ]
+      }
+    },
+    {
+      "prompt": "Która reprezentacja zdobyła mistrzostwo świata w piłce nożnej w 1966 roku?\nA) Anglia\nB) Włochy\nC) Brazylia\nD) RFN",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Anglia"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto zdobył Złotą Piłkę w 2008 roku?\nA) Lionel Messi\nB) Kaká\nC) Cristiano Ronaldo\nD) Andrés Iniesta",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Cristiano Ronaldo",
+          "Ronaldo",
+          "Cristiano"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku reprezentacja Polski zajęła 3. miejsce na mistrzostwach świata w Hiszpanii?\nA) 1974\nB) 1978\nC) 1982\nD) 1986",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1982"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski piłkarz zdobył Złotego Buta (króla strzelców) na mundialu 1974?\nA) Andrzej Szarmach\nB) Kazimierz Deyna\nC) Robert Gadocha\nD) Grzegorz Lato",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Grzegorz Lato",
+          "Lato"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodzi klub piłkarski FC Barcelona?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hiszpania"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim mieście gra klub Manchester United?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Manchester"
+        ]
+      }
+    },
+    {
+      "prompt": "Który kraj jako pierwszy zdobył mistrzostwo świata w piłce nożnej pięć razy?\nA) Niemcy\nB) Włochy\nC) Argentyna\nD) Brazylia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Brazylia"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się legendarny brazylijski piłkarz, zdobywca trzech mistrzostw świata, „Król futbolu”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ksywa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Pele",
+          "Pelé"
+        ]
+      }
+    },
+    {
+      "prompt": "Który argentyński piłkarz strzelił słynnego gola „ręką Boga” w 1986 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Diego Maradona",
+          "Maradona"
+        ]
+      }
+    },
+    {
+      "prompt": "Która reprezentacja zdobyła mistrzostwo świata w 2014 roku?\nA) Niemcy\nB) Argentyna\nC) Brazylia\nD) Holandia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Niemcy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najważniejszy klubowy puchar piłkarski rozgrywany w Europie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa rozgrywek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Liga Mistrzów",
+          "Champions League",
+          "Liga Mistrzow"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakim stadionie swoje mecze rozgrywa Real Madryt?\nA) Camp Nou\nB) Santiago Bernabeu\nC) Wanda Metropolitano\nD) Mestalla",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Santiago Bernabeu",
+          "Bernabeu",
+          "Santiago Bernabéu"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile trwa standardowy mecz piłki nożnej (bez doliczonego czasu)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "minuty"
+        }
+      ],
+      "answers": {
+        "a": [
+          "90 minut",
+          "90",
+          "dziewięćdziesiąt minut"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się polski bramkarz, mistrz świata 1974, słynny z parady w meczu na Wembley w 1973 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jan Tomaszewski",
+          "Tomaszewski"
+        ]
+      }
+    },
+    {
+      "prompt": "Który francuski piłkarz strzelił dwa gole głową w finale mundialu 1998?\nA) Zinedine Zidane\nB) Didier Deschamps\nC) Thierry Henry\nD) Emmanuel Petit",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Zinedine Zidane",
+          "Zidane"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kolor kartki oznacza wykluczenie zawodnika z gry w piłce nożnej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kolor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czerwony",
+          "czerwona"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się polski napastnik, wieloletni kapitan reprezentacji, rekordzista strzelecki kadry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Robert Lewandowski",
+          "Lewandowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się angielska najwyższa klasa rozgrywkowa w piłce nożnej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa ligi"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Premier League"
+        ]
+      }
+    },
+    {
+      "prompt": "Który argentyński piłkarz zdobył 7 razy Złotą Piłkę i grał wiele lat w FC Barcelonie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lionel Messi",
+          "Messi",
+          "Leo Messi"
+        ]
+      }
+    },
+    {
+      "prompt": "Reprezentacja którego kraju zdobyła mistrzostwo świata w piłce nożnej w 2006 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Włochy",
+          "Wlochy"
+        ]
+      }
+    },
+    {
+      "prompt": "Reprezentacja którego kraju zdobyła mistrzostwo świata w piłce nożnej w 2018 roku?\nA) Chorwacja\nB) Belgia\nC) Francja\nD) Anglia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Francja"
+        ]
+      }
+    },
+    {
+      "prompt": "Reprezentacja którego kraju zdobyła Euro 2012 w piłce nożnej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hiszpania"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się stadion narodowy w Warszawie, na którym rozgrywano mecze Euro 2012?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa stadionu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stadion Narodowy",
+          "PGE Narodowy",
+          "Narodowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rzut wykonywany z 11 metrów po przewinieniu w polu karnym?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa rzutu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "rzut karny",
+          "karny",
+          "jedenastka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sytuacja, gdy zawodnik strzela trzy gole w jednym meczu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "hat-trick",
+          "hattrick",
+          "hat trick"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski skoczek narciarski zdobył 4 medale olimpijskie i wygrał Turniej Czterech Skoczni w 2001 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Adam Małysz",
+          "Malysz",
+          "Adam Malysz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się prestiżowy cykl czterech konkursów skoków narciarskich rozgrywany na przełomie roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Turniej Czterech Skoczni",
+          "TCS"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski skoczek zdobył dwa złote medale olimpijskie indywidualnie w Soczi 2014?\nA) Adam Małysz\nB) Kamil Stoch\nC) Piotr Żyła\nD) Dawid Kubacki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Kamil Stoch",
+          "Stoch"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się styl skoku narciarskiego, w którym narty układają się w kształt litery V?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "styl"
+        }
+      ],
+      "answers": {
+        "a": [
+          "styl V",
+          "V-styl"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najszybszy biegowy dystans sprinterski rozgrywany na stadionie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dystans"
+        }
+      ],
+      "answers": {
+        "a": [
+          "100 metrów",
+          "100 m",
+          "sto metrów"
+        ]
+      }
+    },
+    {
+      "prompt": "Który jamajski sprinter jest uznawany za najszybszego człowieka w historii, mistrz olimpijski na 100 m w latach 2008-2016?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Usain Bolt",
+          "Bolt"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile metrów liczy bieg maratoński?\nA) 21 097 metrów\nB) 40 000 metrów\nC) 45 000 metrów\nD) 42 195 metrów",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "42 195 metrów",
+          "42195 metrów",
+          "42 195 m",
+          "42,195 km",
+          "42195"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski lekkoatleta zdobył złoto olimpijskie w skoku o tyczce w 1980 roku, słynny z „gestu Kozakiewicza”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Kozakiewicz",
+          "Kozakiewicz",
+          "Wladyslaw Kozakiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej konkurencji lekkoatletycznej specjalizowała się Anita Włodarczyk, wielokrotna mistrzyni olimpijska?\nA) rzut oszczepem\nB) rzut dyskiem\nC) pchnięcie kulą\nD) rzut młotem",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "rzut młotem",
+          "młot",
+          "mlot",
+          "rzut mlotem"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski kulomiot zdobył dwa złote medale olimpijskie w pchnięciu kulą (Pekin 2008, Londyn 2012)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tomasz Majewski",
+          "Majewski"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile setów musi wygrać tenisista (mężczyzna), by zwyciężyć mecz na turnieju wielkoszlemowym?\nA) 2\nB) 3\nC) 4\nD) 5",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "3",
+          "trzy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tenisowy turniej wielkoszlemowy rozgrywany na trawie w Londynie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa turnieju"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wimbledon"
+        ]
+      }
+    },
+    {
+      "prompt": "Który szwajcarski tenisista zdobył rekordowe 8 tytułów na Wimbledonie?\nA) Stan Wawrinka\nB) Novak Djoković\nC) Rafael Nadal\nD) Roger Federer",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Roger Federer",
+          "Federer"
+        ]
+      }
+    },
+    {
+      "prompt": "Który hiszpański tenisista zyskał miano „Króla mączki” za rekordową liczbę triumfów w Roland Garros?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Rafael Nadal",
+          "Nadal"
+        ]
+      }
+    },
+    {
+      "prompt": "Która polska tenisistka wygrała wielkoszlemowy turniej Roland Garros w 2020 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Iga Świątek",
+          "Świątek",
+          "Iga Swiatek",
+          "Swiatek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się amerykański turniej wielkoszlemowy rozgrywany w Nowym Jorku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa turnieju"
+        }
+      ],
+      "answers": {
+        "a": [
+          "US Open"
+        ]
+      }
+    },
+    {
+      "prompt": "Ilu zawodników jednej drużyny przebywa jednocześnie na boisku w koszykówce?\nA) 5\nB) 6\nC) 7\nD) 11",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "5",
+          "pięciu",
+          "piec"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zawodowa liga koszykówki w Stanach Zjednoczonych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa ligi"
+        }
+      ],
+      "answers": {
+        "a": [
+          "NBA"
+        ]
+      }
+    },
+    {
+      "prompt": "Który koszykarz z numerem 23 zdobył 6 mistrzostw NBA z Chicago Bulls w latach 90.?\nA) Michael Jordan\nB) Magic Johnson\nC) Kobe Bryant\nD) LeBron James",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Michael Jordan",
+          "Jordan"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się polski koszykarz, „Polski Młot”, wieloletni gracz NBA m.in. w Phoenix Suns?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Marcin Gortat",
+          "Gortat"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się akcja w koszykówce, gdy zawodnik wsadza piłkę do kosza z góry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wsad",
+          "dunk",
+          "wsad do kosza"
+        ]
+      }
+    },
+    {
+      "prompt": "Który niemiecki kierowca zdobył 7 tytułów mistrza świata Formuły 1, jeżdżąc m.in. dla Ferrari?\nA) Sebastian Vettel\nB) Nico Rosberg\nC) Lewis Hamilton\nD) Michael Schumacher",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Michael Schumacher",
+          "Schumacher"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się polski kierowca, pierwszy Polak startujący w wyścigu Formuły 1?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Robert Kubica",
+          "Kubica"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim księstwie rozgrywane jest słynne uliczne Grand Prix Formuły 1 na torze Monte Carlo?\nA) Liechtenstein\nB) Andora\nC) Monako\nD) Luksemburg",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Monako",
+          "Monte Carlo"
+        ]
+      }
+    },
+    {
+      "prompt": "Który brazylijski kierowca Formuły 1, trzykrotny mistrz świata, zginął na torze Imola w 1994 roku?\nA) Nelson Piquet\nB) Ayrton Senna\nC) Rubens Barrichello\nD) Felipe Massa",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Ayrton Senna",
+          "Senna"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najsłynniejszy wyścig kolarski, wieloetapowa impreza rozgrywana co roku we Francji?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa wyścigu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tour de France"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kolor ma koszulka lidera klasyfikacji generalnej Tour de France?\nA) zielony\nB) żółty\nC) czerwony w grochy\nD) biały",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "żółty",
+          "żółta",
+          "zolty",
+          "zolta"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się włoski wieloetapowy wyścig kolarski, jeden z trzech wielkich tourów?\nA) Vuelta a España\nB) Paryż-Roubaix\nC) Giro d'Italia\nD) Mediolan-San Remo",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Giro d'Italia",
+          "Giro"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim mieście odbyły się letnie igrzyska olimpijskie w 1992 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Barcelona"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim kraju narodziły się starożytne igrzyska olimpijskie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Grecja",
+          "starożytna Grecja"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile kółek znajduje się w symbolu olimpijskim?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "5",
+          "pięć",
+          "piec"
+        ]
+      }
+    },
+    {
+      "prompt": "Który amerykański pływak zdobył rekordowe 8 złotych medali na jednych igrzyskach (Pekin 2008)?\nA) Mark Spitz\nB) Ryan Lochte\nC) Caeleb Dressel\nD) Michael Phelps",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Michael Phelps",
+          "Phelps"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim mieście odbyły się letnie igrzyska olimpijskie w 2012 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Londyn"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakiego koloru medal zdobywa zwycięzca konkurencji olimpijskiej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "metal"
+        }
+      ],
+      "answers": {
+        "a": [
+          "złoty",
+          "złoto",
+          "zloty",
+          "zloto"
+        ]
+      }
+    },
+    {
+      "prompt": "Ilu zawodników jednej drużyny przebywa na boisku w siatkówce?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "6",
+          "sześciu",
+          "szesciu"
+        ]
+      }
+    },
+    {
+      "prompt": "Do ilu punktów rozgrywany jest standardowy set w siatkówce (poza tie-breakiem)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba punktów"
+        }
+      ],
+      "answers": {
+        "a": [
+          "25",
+          "dwadzieścia pięć"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku reprezentacja Polski mężczyzn zdobyła mistrzostwo świata w siatkówce w Meksyku?\nA) 1970\nB) 1974\nC) 1978\nD) 1982",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1974"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile rund trwa standardowa zawodowa walka bokserska o tytuł mistrza świata?\nA) 8\nB) 10\nC) 12\nD) 15",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "12",
+          "dwanaście"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się amerykański bokser, „The Greatest”, mistrz wagi ciężkiej, dawniej Cassius Clay?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Muhammad Ali",
+          "Ali",
+          "Cassius Clay"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski bokser, „Góral”, był mistrzem świata wagi junior ciężkiej i ciężkiej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tomasz Adamek",
+          "Adamek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sytuacja w boksie, gdy zawodnik nie podnosi się przed wyliczeniem do dziesięciu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "nokaut",
+          "KO",
+          "k.o."
+        ]
+      }
+    },
+    {
+      "prompt": "Który amerykański bokser, „Iron Mike”, był najmłodszym mistrzem świata wagi ciężkiej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mike Tyson",
+          "Tyson"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się popularna formuła sportów walki w klatce, łącząca różne dyscypliny (skrót)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "skrót"
+        }
+      ],
+      "answers": {
+        "a": [
+          "MMA"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dyscyplina łącząca pływanie, jazdę na rowerze i bieg?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "triatlon",
+          "triathlon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sport walki na planszy bronią białą: szpadą, floretem lub szablą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "szermierka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się krążek używany w hokeju na lodzie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "krążek",
+          "puk",
+          "krazek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dyscyplina zimowa łącząca biegi narciarskie ze strzelaniem z karabinka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "biathlon",
+          "biatlon"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej dyscyplinie zimowej zdobywała medale olimpijskie Justyna Kowalczyk?\nA) biathlon\nB) biegi narciarskie\nC) łyżwiarstwo szybkie\nD) skoki narciarskie",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "biegi narciarskie",
+          "narciarstwo biegowe",
+          "biegi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dyscyplina, w której zawodnik zjeżdża na desce po zaśnieżonym stoku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "snowboard",
+          "snowboarding"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najwyższy szczyt świata, cel wypraw himalaistów?\nA) K2\nB) Mount Everest\nC) Kangczendzonga\nD) Lhotse",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Mount Everest",
+          "Everest"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się wybitna polska himalaistka, pierwsza Polka i pierwsza Europejka na szczycie Mount Everest?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wanda Rutkiewicz",
+          "Rutkiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Który styl pływacki jest uznawany za najszybszy, zwany potocznie kraulem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "styl"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kraul",
+          "styl dowolny",
+          "dowolny"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile metrów ma długość basenu olimpijskiego (długiego)?\nA) 25 metrów\nB) 33 metry\nC) 50 metrów\nD) 100 metrów",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "50 metrów",
+          "50 m",
+          "pięćdziesiąt metrów",
+          "50"
+        ]
+      }
+    },
+    {
+      "prompt": "Która polska pływaczka zdobyła złoty medal olimpijski na 200 m stylem motylkowym w Atenach 2004?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Otylia Jędrzejczak",
+          "Jędrzejczak",
+          "Otylia Jedrzejczak",
+          "Jedrzejczak"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sport walki pochodzący z Japonii, oparty na rzutach i dźwigniach, którego nazwa znaczy „łagodna droga”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "judo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się koreańska sztuka walki, dyscyplina olimpijska oparta na wysokich kopnięciach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "taekwondo",
+          "teakwondo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się japońska tradycyjna dyscyplina zapaśnicza, w której rywalizują otyli zawodnicy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "sumo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się amerykański finał ligi futbolu amerykańskiego NFL, rozgrywany co roku zimą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Super Bowl",
+          "Superbowl"
+        ]
+      }
+    },
+    {
+      "prompt": "Ilu zawodników jednej drużyny gra jednocześnie na boisku w piłce ręcznej (z bramkarzem)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "7",
+          "siedmiu"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju, „kraju klonowego liścia”, pochodzi wielu najlepszych hokeistów świata?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kanada"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa kluby tworzące wielkie derby Hiszpanii „El Clásico”.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "klub 1"
+        },
+        {
+          "key": "b",
+          "label": "klub 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Real Madryt",
+          "Real Madrid",
+          "Real"
+        ],
+        "b": [
+          "FC Barcelona",
+          "Barcelona",
+          "Barca",
+          "Barça"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj dwa kluby tworzące derby Manchesteru w Anglii.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "klub 1"
+        },
+        {
+          "key": "b",
+          "label": "klub 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Manchester United",
+          "United",
+          "Man Utd"
+        ],
+        "b": [
+          "Manchester City",
+          "City",
+          "Man City"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj kraj pochodzenia dwóch piłkarzy: Lionel Messi oraz Cristiano Ronaldo.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj Messiego"
+        },
+        {
+          "key": "b",
+          "label": "kraj Ronaldo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Argentyna"
+        ],
+        "b": [
+          "Portugalia"
+        ]
+      }
+    },
+    {
+      "prompt": "Które dwa kraje wspólnie zorganizowały piłkarskie mistrzostwa Europy Euro 2012?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kraj 1"
+        },
+        {
+          "key": "b",
+          "label": "kraj 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Polska"
+        ],
+        "b": [
+          "Ukraina"
+        ]
+      }
+    },
+    {
+      "prompt": "Skojarz zawodnika z dyscypliną: Adam Małysz i jego dyscyplina sportu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zawodnik"
+        },
+        {
+          "key": "b",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Adam Małysz",
+          "Malysz",
+          "Adam Malysz"
+        ],
+        "b": [
+          "skoki narciarskie",
+          "skoki"
+        ]
+      }
+    },
+    {
+      "prompt": "Skojarz zawodnika z dyscypliną: Robert Kubica i jego dyscyplina sportu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zawodnik"
+        },
+        {
+          "key": "b",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Robert Kubica",
+          "Kubica"
+        ],
+        "b": [
+          "Formuła 1",
+          "Formula 1",
+          "F1",
+          "wyścigi samochodowe"
+        ]
+      }
+    },
+    {
+      "prompt": "Skojarz zawodniczkę z konkurencją: Anita Włodarczyk i jej konkurencja lekkoatletyczna.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zawodniczka"
+        },
+        {
+          "key": "b",
+          "label": "konkurencja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Anita Włodarczyk",
+          "Włodarczyk",
+          "Anita Wlodarczyk",
+          "Wlodarczyk"
+        ],
+        "b": [
+          "rzut młotem",
+          "młot",
+          "rzut mlotem",
+          "mlot"
+        ]
+      }
+    },
+    {
+      "prompt": "Skojarz zawodnika z dyscypliną: Tomasz Adamek i jego dyscyplina sportu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zawodnik"
+        },
+        {
+          "key": "b",
+          "label": "dyscyplina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tomasz Adamek",
+          "Adamek"
+        ],
+        "b": [
+          "boks",
+          "pięściarstwo",
+          "pieściarstwo"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień rok i kraj-gospodarza mistrzostw świata w piłce nożnej, na których Polska zajęła 3. miejsce po raz pierwszy.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rok"
+        },
+        {
+          "key": "b",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "1974"
+        ],
+        "b": [
+          "RFN",
+          "Niemcy",
+          "Niemcy Zachodnie"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień rok i miasto-gospodarza letnich igrzysk olimpijskich, na których Usain Bolt zdobył pierwsze złoto na 100 m.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rok"
+        },
+        {
+          "key": "b",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "2008"
+        ],
+        "b": [
+          "Pekin"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech polskich skoczków narciarskich, którzy zostali indywidualnymi mistrzami olimpijskimi.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "skoczek 1"
+        },
+        {
+          "key": "b",
+          "label": "skoczek 2"
+        },
+        {
+          "key": "c",
+          "label": "skoczek 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Adam Małysz",
+          "Malysz",
+          "Adam Malysz",
+          "Wojciech Fortuna",
+          "Fortuna"
+        ],
+        "b": [
+          "Kamil Stoch",
+          "Stoch"
+        ],
+        "c": [
+          "Wojciech Fortuna",
+          "Fortuna",
+          "Adam Małysz",
+          "Malysz"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy dyscypliny wchodzące w skład triatlonu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dyscyplina 1"
+        },
+        {
+          "key": "b",
+          "label": "dyscyplina 2"
+        },
+        {
+          "key": "c",
+          "label": "dyscyplina 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pływanie",
+          "plywanie"
+        ],
+        "b": [
+          "kolarstwo",
+          "jazda na rowerze",
+          "rower"
+        ],
+        "c": [
+          "bieg",
+          "bieganie",
+          "biegi"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień cztery turnieje wielkoszlemowe w tenisie.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "turniej 1"
+        },
+        {
+          "key": "b",
+          "label": "turniej 2"
+        },
+        {
+          "key": "c",
+          "label": "turniej 3"
+        },
+        {
+          "key": "d",
+          "label": "turniej 4"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Australian Open"
+        ],
+        "b": [
+          "Roland Garros",
+          "French Open"
+        ],
+        "c": [
+          "Wimbledon"
+        ],
+        "d": [
+          "US Open"
+        ]
+      }
+    }
+  ]
+}

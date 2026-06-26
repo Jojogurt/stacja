@@ -1,0 +1,1663 @@
+{
+  "label": "Kosmos i astronomia",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Która planeta jest najbliżej Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Merkury"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta Układu Słonecznego jest największa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jowisz",
+          "Jupiter"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się naturalny satelita Ziemi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ksiezyc"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta nazywana jest Czerwoną Planetą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mars"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta słynie z najbardziej okazałych pierścieni?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Saturn"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gwiazda znajdująca się w centrum Układu Słonecznego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gwiazda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Slonce"
+        ]
+      }
+    },
+    {
+      "prompt": "Który astronom sformułował teorię heliocentryczną, według której planety krążą wokół Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mikolaj Kopernik",
+          "Kopernik",
+          "Nicolaus Copernicus"
+        ]
+      }
+    },
+    {
+      "prompt": "Który człowiek jako pierwszy poleciał w kosmos?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jurij Gagarin",
+          "Gagarin",
+          "Yuri Gagarin"
+        ]
+      }
+    },
+    {
+      "prompt": "Który człowiek jako pierwszy stanął na Księżycu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Neil Armstrong",
+          "Armstrong"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się misja, podczas której człowiek po raz pierwszy wylądował na Księżycu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "misja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Apollo 11",
+          "Apollo XI"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak miał na nazwisko pierwszy polski kosmonauta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hermaszewski",
+          "Miroslaw Hermaszewski"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta jest najbardziej oddalona od Słońca (ostatnia planeta Układu Słonecznego)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Neptun"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki obiekt powstaje, gdy masywna gwiazda zapada się tak bardzo, że nawet światło nie może z niej uciec?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "obiekt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czarna dziura"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się galaktyka, w której znajduje się nasz Układ Słoneczny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "galaktyka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Droga Mleczna",
+          "Galaktyka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmiczny teleskop wystrzelony w 1990 roku, nazwany na cześć astronoma Edwina?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa teleskopu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hubble",
+          "Teleskop Hubblea",
+          "HST"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmiczny teleskop podczerwony wystrzelony w 2021 roku, następca Hubblea?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa teleskopu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "James Webb",
+          "JWST",
+          "Teleskop Jamesa Webba"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy księżyc Jowisza i zarazem największy księżyc w Układzie Słonecznym?\nA) Tytan\nB) Ganimedes\nC) Kallisto\nD) Europa",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Ganimedes",
+          "Ganymede"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy księżyc Saturna?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tytan",
+          "Titan"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zjawisko, gdy Księżyc całkowicie zasłania tarczę Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zjawisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zacmienie Slonca",
+          "calkowite zacmienie Slonca"
+        ]
+      }
+    },
+    {
+      "prompt": "Który astronom jako pierwszy skierował lunetę w niebo i odkrył cztery największe księżyce Jowisza?\nA) Mikołaj Kopernik\nB) Johannes Kepler\nC) Galileusz\nD) Tycho Brahe",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Galileusz",
+          "Galileo Galilei",
+          "Galileo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się pas drobnych ciał skalnych krążących wokół Słońca między orbitami Marsa i Jowisza?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pas planetoid",
+          "pas asteroid",
+          "glowny pas planetoid"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ciało niebieskie z charakterystycznym warkoczem, zbudowane głównie z lodu i pyłu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "obiekt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kometa"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta straciła status pełnoprawnej planety w 2006 roku i została zaliczona do planet karłowatych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "obiekt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Pluton",
+          "Pluto"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka jest najbliższa Ziemi gwiazda poza Słońcem?\nA) Syriusz\nB) Proxima Centauri\nC) Betelgeza\nD) Gwiazda Polarna",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Proxima Centauri",
+          "Proksima Centauri"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego pierwiastka zbudowane jest głównie Słońce?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wodor"
+        ]
+      }
+    },
+    {
+      "prompt": "Która kobieta jako pierwsza poleciała w kosmos?\nA) Sally Ride\nB) Walentina Tiereszkowa\nC) Swietłana Sawicka\nD) Mae Jemison",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Walentina Tiereszkowa",
+          "Tiereszkowa",
+          "Valentina Tereshkova"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy wulkan w Układzie Słonecznym, znajdujący się na Marsie?\nA) Olympus Mons\nB) Maat Mons\nC) Mauna Kea\nD) Tharsis",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Olympus Mons",
+          "Gora Olimp"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile planet liczy obecnie Układ Słoneczny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "8",
+          "osiem"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się dwa naturalne księżyce Marsa? Podaj oba.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwszy księżyc"
+        },
+        {
+          "key": "b",
+          "label": "drugi księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Fobos",
+          "Phobos"
+        ],
+        "b": [
+          "Deimos"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się siła, która utrzymuje planety na orbitach wokół Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "siła"
+        }
+      ],
+      "answers": {
+        "a": [
+          "grawitacja",
+          "sila grawitacji",
+          "przyciaganie grawitacyjne"
+        ]
+      }
+    },
+    {
+      "prompt": "Który uczony sformułował prawo powszechnego ciążenia (grawitacji)?\nA) Albert Einstein\nB) Galileusz\nC) Johannes Kepler\nD) Isaac Newton",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Isaac Newton",
+          "Newton"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się amerykańska agencja kosmiczna?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "agencja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "NASA"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się europejska agencja kosmiczna (skrót)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "agencja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ESA"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się pierwszy sztuczny satelita Ziemi, wystrzelony przez ZSRR w 1957 roku?\nA) Sputnik\nB) Explorer 1\nC) Wostok\nD) Łunnik",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Sputnik",
+          "Sputnik 1"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się suczka, pierwsze zwierzę wysłane na orbitę Ziemi przez ZSRR w 1957 roku?\nA) Striełka\nB) Biełka\nC) Łajka\nD) Czernuszka",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Lajka",
+          "Laika"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się księżyc Jowisza pokryty lodem, pod którym przypuszczalnie znajduje się ocean ciekłej wody?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Europa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się znany z aktywności wulkanicznej księżyc Jowisza?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Io"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka jednostka określa odległość, jaką światło przebywa w ciągu jednego roku?\nA) Parsek\nB) Jednostka astronomiczna\nC) Rok świetlny\nD) Lata kosmiczne",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "rok swietlny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najbliższa Drodze Mlecznej duża galaktyka spiralna, którą można dostrzec gołym okiem?\nA) Galaktyka Andromedy\nB) Wielki Obłok Magellana\nC) Galaktyka Wir\nD) Galaktyka Sombrero",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Galaktyka Andromedy",
+          "Andromeda",
+          "M31"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się teoria opisująca początek Wszechświata jako gwałtowną ekspansję z bardzo gorącego i gęstego stanu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "teoria"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wielki Wybuch",
+          "Big Bang",
+          "teoria Wielkiego Wybuchu"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta obraca się wokół własnej osi praktycznie 'na boku', leżąc na płaszczyźnie swojej orbity?\nA) Neptun\nB) Saturn\nC) Uran\nD) Wenus",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Uran",
+          "Uranus"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się charakterystyczny ogromny antycyklon na Jowiszu, widoczny jako czerwonawa plama?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wielka Czerwona Plama",
+          "Czerwona Plama"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień cztery planety skaliste (wewnętrzne) Układu Słonecznego.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta 1"
+        },
+        {
+          "key": "b",
+          "label": "planeta 2"
+        },
+        {
+          "key": "c",
+          "label": "planeta 3"
+        },
+        {
+          "key": "d",
+          "label": "planeta 4"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Merkury"
+        ],
+        "b": [
+          "Wenus",
+          "Venus"
+        ],
+        "c": [
+          "Ziemia"
+        ],
+        "d": [
+          "Mars"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się amerykański program kosmiczny, którego celem było lądowanie człowieka na Księżycu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "program"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Apollo",
+          "program Apollo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się drugi człowiek, który stanął na Księżycu, towarzysz Neila Armstronga?\nA) Michael Collins\nB) Buzz Aldrin\nC) Pete Conrad\nD) Alan Shepard",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Buzz Aldrin",
+          "Aldrin",
+          "Edwin Aldrin"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta jest najgorętsza w Układzie Słonecznym, z uwagi na gęstą atmosferę i silny efekt cieplarniany?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wenus",
+          "Venus"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się ciemniejsze, chłodniejsze obszary na powierzchni Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "plamy sloneczne",
+          "plamy na Slncu",
+          "plamy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gwiazda, która niemal dokładnie wskazuje kierunek północny i wyznacza północny biegun nieba?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gwiazda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gwiazda Polarna",
+          "Polaris",
+          "Gwiazda Polnocy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najjaśniejsza gwiazda widoczna na nocnym niebie, znajdująca się w gwiazdozbiorze Wielkiego Psa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gwiazda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Syriusz",
+          "Sirius"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień cztery gazowe olbrzymy (planety zewnętrzne) Układu Słonecznego.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta 1"
+        },
+        {
+          "key": "b",
+          "label": "planeta 2"
+        },
+        {
+          "key": "c",
+          "label": "planeta 3"
+        },
+        {
+          "key": "d",
+          "label": "planeta 4"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jowisz",
+          "Jupiter"
+        ],
+        "b": [
+          "Saturn"
+        ],
+        "c": [
+          "Uran",
+          "Uranus"
+        ],
+        "d": [
+          "Neptun"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces zachodzący we wnętrzu Słońca, w którym jądra wodoru łączą się w hel, uwalniając energię?\nA) Rozszczepienie jądrowe\nB) Fuzja jądrowa\nC) Spalanie\nD) Jonizacja",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "fuzja jadrowa",
+          "synteza jadrowa",
+          "reakcja termojadrowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się amerykański łazik marsjański, który wylądował na Marsie w 2021 roku i poszukuje śladów dawnego życia?\nA) Curiosity\nB) Opportunity\nC) Perseverance\nD) Spirit",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Perseverance"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się mały dron-helikopter, który jako pierwszy odbył kontrolowany lot na Marsie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ingenuity"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się łazik marsjański NASA, który eksploruje krater Gale od 2012 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "łazik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Curiosity"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rakieta SpaceX wielokrotnego użytku, której pierwszy stopień ląduje samodzielnie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rakieta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Falcon 9",
+          "Falcon Nine"
+        ]
+      }
+    },
+    {
+      "prompt": "Która sonda kosmiczna, wystrzelona w 1977 roku, jest najdalej oddalonym od Ziemi obiektem stworzonym przez człowieka?\nA) Pioneer 10\nB) Voyager 2\nC) Voyager 1\nD) New Horizons",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Voyager 1"
+        ]
+      }
+    },
+    {
+      "prompt": "Który astronom napisał dzieło 'O obrotach sfer niebieskich'?\nA) Galileusz\nB) Johannes Kepler\nC) Tycho Brahe\nD) Mikołaj Kopernik",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Mikolaj Kopernik",
+          "Kopernik"
+        ]
+      }
+    },
+    {
+      "prompt": "Który astronom sformułował trzy prawa opisujące ruch planet po orbitach eliptycznych?\nA) Johannes Kepler\nB) Isaac Newton\nC) Galileusz\nD) Edmond Halley",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Johannes Kepler",
+          "Kepler"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kształt mają orbity planet wokół Słońca zgodnie z pierwszym prawem Keplera?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kształt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "elipsa",
+          "eliptyczny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się hipotetyczna niewidoczna substancja, której grawitacyjny wpływ tłumaczy zachowanie galaktyk, a której nie da się bezpośrednio zaobserwować?\nA) Ciemna materia\nB) Ciemna energia\nC) Antymateria\nD) Plazma",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "ciemna materia"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tajemnicza forma energii odpowiedzialna za przyspieszanie ekspansji Wszechświata?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ciemna energia"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy księżyc Plutona?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Charon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się odległy region Układu Słonecznego za orbitą Neptuna, w którym znajdują się Pluton i inne lodowe ciała?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Pas Kuipera",
+          "Kuiper"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przyrząd optyczny służący do obserwacji odległych obiektów na niebie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przyrząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "teleskop"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj planetę i jej znany księżyc: planeta z pierścieniami oraz jej największy księżyc z gęstą atmosferą.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        },
+        {
+          "key": "b",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Saturn"
+        ],
+        "b": [
+          "Tytan",
+          "Titan"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się jednostka astronomiczna, czyli średnia odległość Ziemi od Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "jednostka astronomiczna",
+          "AU",
+          "au"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile mniej więcej minut potrzebuje światło, by dotrzeć ze Słońca do Ziemi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba minut"
+        }
+      ],
+      "answers": {
+        "a": [
+          "8",
+          "osiem",
+          "okolo 8"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gwiazdozbiór znany jako Wielki Wóz lub Wielka Niedźwiedzica, jeden z najłatwiej rozpoznawalnych na niebie półkuli północnej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gwiazdozbiór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wielka Niedzwiedzica",
+          "Wielki Woz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gwiazdozbiór przedstawiany jako myśliwy z pasem trzech jasnych gwiazd?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gwiazdozbiór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Orion"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czerwony nadolbrzym w gwiazdozbiorze Oriona, jedna z największych znanych gwiazd?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gwiazda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Betelgeza",
+          "Betelgeuse"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zjawisko, gdy Ziemia znajduje się między Słońcem a Księżycem i rzuca cień na Księżyc?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zjawisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zacmienie Ksiezyca"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zjawisko świetlne na niebie w okolicach biegunów, wywołane oddziaływaniem wiatru słonecznego z atmosferą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zjawisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zorza polarna",
+          "aurora"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się graniczna powierzchnia czarnej dziury, zza której nic nie może uciec?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "horyzont zdarzen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się sonda kosmiczna ESA, która w 2014 roku jako pierwsza umieściła lądownik na powierzchni komety?\nA) Giotto\nB) Cassini\nC) Rosetta\nD) Huygens",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Rosetta"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się statek kosmiczny wielokrotnego użytku używany przez NASA do 2011 roku, po polsku zwany promem kosmicznym?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "prom kosmiczny",
+          "wahadlowiec",
+          "space shuttle"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się prom kosmiczny, który uległ katastrofie tuż po starcie w 1986 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Challenger"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się obecny program NASA, którego celem jest powrót ludzi na Księżyc?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "program"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Artemis",
+          "program Artemis"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się dowódca misji Apollo 13, który po awarii bezpiecznie sprowadził załogę na Ziemię?\nA) Jim Lovell\nB) Neil Armstrong\nC) John Glenn\nD) Alan Shepard",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Jim Lovell",
+          "Lovell",
+          "James Lovell"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największa znana planetoida w głównym pasie planetoid, zaliczana też do planet karłowatych?\nA) Westa\nB) Pallas\nC) Ceres\nD) Hygiea",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Ceres"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sonda kosmiczna NASA, która w 2015 roku przeleciała w pobliżu Plutona i przesłała jego zdjęcia?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "sonda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "New Horizons"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sonda kosmiczna NASA, która okrążała Saturna w latach 2004-2017?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "sonda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Cassini"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy pierwsze planety Układu Słonecznego, licząc od Słońca.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwsza"
+        },
+        {
+          "key": "b",
+          "label": "druga"
+        },
+        {
+          "key": "c",
+          "label": "trzecia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Merkury"
+        ],
+        "b": [
+          "Wenus",
+          "Venus"
+        ],
+        "c": [
+          "Ziemia"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz, niezbędny do oddychania, stanowi około 21 procent atmosfery Ziemi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz stanowi największą część (około 78 procent) atmosfery Ziemi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz"
+        }
+      ],
+      "answers": {
+        "a": [
+          "azot"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się warstwa atmosfery chroniąca Ziemię przed szkodliwym promieniowaniem ultrafioletowym Słońca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "warstwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "warstwa ozonowa",
+          "ozonosfera",
+          "ozon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się hipotetyczna, bardzo odległa otoczka lodowych ciał na obrzeżach Układu Słonecznego, źródło komet długookresowych?\nA) Pas Kuipera\nB) Pas planetoid\nC) Obłok Oorta\nD) Heliosfera",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Oblok Oorta",
+          "Oort"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj planetę i jej znany księżyc: gazowy olbrzym o nazwie od króla bogów rzymskich oraz jego księżyc z podpowierzchniowym oceanem, noszący nazwę kontynentu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        },
+        {
+          "key": "b",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jowisz",
+          "Jupiter"
+        ],
+        "b": [
+          "Europa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się pierwszy człowiek, który wyszedł w otwartą przestrzeń kosmiczną (odbył spacer kosmiczny) w 1965 roku?\nA) Jurij Gagarin\nB) Aleksiej Leonow\nC) Niemiec Titow\nD) Walery Bykowski",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Aleksiej Leonow",
+          "Leonow",
+          "Alexei Leonov"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy księżyc Neptuna, krążący wokół planety w kierunku przeciwnym do jej obrotu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tryton",
+          "Triton"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się odległy obiekt, niezwykle jasne jądro aktywnej galaktyki zasilane przez supermasywną czarną dziurę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "obiekt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kwazar"
+        ]
+      }
+    },
+    {
+      "prompt": "Która planeta ma najkrótszy okres obrotu wokół własnej osi (najkrótszą dobę), trwający niespełna 10 godzin?\nA) Mars\nB) Ziemia\nC) Saturn\nD) Jowisz",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Jowisz",
+          "Jupiter"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się supermasywna czarna dziura znajdująca się w centrum naszej galaktyki, Drogi Mlecznej?\nA) Cygnus X-1\nB) Sagittarius A\nC) M87\nD) TON 618",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Sagittarius A",
+          "Strzelec A",
+          "Sgr A"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj planetę i jej największy księżyc: Czerwona Planeta oraz jej większy księżyc o nazwie od greckiego boga strachu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        },
+        {
+          "key": "b",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mars"
+        ],
+        "b": [
+          "Fobos",
+          "Phobos"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy ostatnie planety Układu Słonecznego, licząc od Słońca.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta 1"
+        },
+        {
+          "key": "b",
+          "label": "planeta 2"
+        },
+        {
+          "key": "c",
+          "label": "planeta 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Uran",
+          "Uranus"
+        ],
+        "b": [
+          "Neptun"
+        ],
+        "c": [
+          "Saturn"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj dwóch pierwszych ludzi, którzy stanęli na Księżycu (w kolejności).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwszy"
+        },
+        {
+          "key": "b",
+          "label": "drugi"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Neil Armstrong",
+          "Armstrong"
+        ],
+        "b": [
+          "Buzz Aldrin",
+          "Aldrin"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa najbardziej znane kosmiczne teleskopy: optyczny z 1990 roku i podczerwony z 2021 roku.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "teleskop 1"
+        },
+        {
+          "key": "b",
+          "label": "teleskop 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hubble",
+          "Teleskop Hubblea"
+        ],
+        "b": [
+          "James Webb",
+          "JWST"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj planetę i jej księżyc znany z aktywności wulkanicznej: największy gazowy olbrzym oraz jego księżyc o krótkiej nazwie.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        },
+        {
+          "key": "b",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jowisz",
+          "Jupiter"
+        ],
+        "b": [
+          "Io"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa główne gazy tworzące atmosferę Ziemi (najobficiej i drugi w kolejności).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz 1"
+        },
+        {
+          "key": "b",
+          "label": "gaz 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "azot"
+        ],
+        "b": [
+          "tlen"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj pierwszego człowieka w kosmosie oraz pierwszą kobietę w kosmosie.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwszy człowiek"
+        },
+        {
+          "key": "b",
+          "label": "pierwsza kobieta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jurij Gagarin",
+          "Gagarin"
+        ],
+        "b": [
+          "Walentina Tiereszkowa",
+          "Tiereszkowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj planetę i jej największy księżyc: planeta o nazwie od rzymskiego boga mórz oraz jej największy księżyc krążący wstecznie.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        },
+        {
+          "key": "b",
+          "label": "księżyc"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Neptun"
+        ],
+        "b": [
+          "Tryton",
+          "Triton"
+        ]
+      }
+    }
+  ]
+}

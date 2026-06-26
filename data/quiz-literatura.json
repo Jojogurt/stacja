@@ -1,0 +1,1735 @@
+{
+  "label": "Literatura",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Kto napisał „Pana Tadeusza”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Adam Mickiewicz",
+          "Mickiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi pełny tytuł „Pana Tadeusza”, wskazujący na pierwsze słowa inwokacji — „... ojczyzno moja!”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "słowo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Litwo"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem dramatu „Dziady”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Adam Mickiewicz",
+          "Mickiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał dramat „Kordian”?\nA) Adam Mickiewicz\nB) Juliusz Słowacki\nC) Zygmunt Krasiński\nD) Cyprian Norwid",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Juliusz Słowacki",
+          "Juliusz Slowacki",
+          "Slowacki",
+          "Słowacki"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem dramatu „Balladyna”?\nA) Juliusz Słowacki\nB) Adam Mickiewicz\nC) Aleksander Fredro\nD) Zygmunt Krasiński",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Juliusz Słowacki",
+          "Juliusz Slowacki",
+          "Slowacki",
+          "Słowacki"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał „Nie-Boską komedię”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Zygmunt Krasinski",
+          "Krasinski",
+          "Zygmunt Krasiński",
+          "Krasiński"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się dwoje głównych bohaterów „W pustyni i w puszczy”? Podaj imiona obojga.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "chłopiec"
+        },
+        {
+          "key": "b",
+          "label": "dziewczynka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stas",
+          "Staś",
+          "Stas Tarkowski",
+          "Staś Tarkowski"
+        ],
+        "b": [
+          "Nel",
+          "Nel Rawlison"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem trylogii „Ogniem i mieczem”, „Potop”, „Pan Wołodyjowski”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Za którą powieść Henryk Sienkiewicz otrzymał Nagrodę Nobla w 1905 roku?\nA) Krzyżacy\nB) Potop\nC) Quo vadis\nD) W pustyni i w puszczy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Quo vadis",
+          "Quo Vadis"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Lalka”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Boleslaw Prus",
+          "Prus",
+          "Bolesław Prus"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater „Lalki” Bolesława Prusa, zakochany w Izabeli Łęckiej?\nA) Tomasz Judym\nB) Stanisław Wokulski\nC) Cezary Baryka\nD) Ignacy Rzecki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Stanisław Wokulski",
+          "Stanislaw Wokulski",
+          "Wokulski"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem „Faraona”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Boleslaw Prus",
+          "Prus",
+          "Bolesław Prus"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał „Ludzi bezdomnych”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stefan Zeromski",
+          "Zeromski",
+          "Stefan Żeromski",
+          "Żeromski"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł: epopeja narodowa zaczynająca się od słów „Litwo! Ojczyzno moja!”. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Adam Mickiewicz",
+          "Mickiewicz"
+        ],
+        "b": [
+          "Pan Tadeusz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater „Ludzi bezdomnych”, lekarz idealista?\nA) Stanisław Wokulski\nB) Cezary Baryka\nC) Tomasz Judym\nD) Rafał Olbromski",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Tomasz Judym",
+          "Judym"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Przedwiośnie”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stefan Zeromski",
+          "Zeromski",
+          "Stefan Żeromski",
+          "Żeromski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater „Przedwiośnia” Stefana Żeromskiego?\nA) Cezary Baryka\nB) Tomasz Judym\nC) Rafał Olbromski\nD) Andrzej Kmicic",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Cezary Baryka",
+          "Baryka"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał tragedię „Romeo i Julia”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "William Szekspir",
+          "Szekspir",
+          "Shakespeare",
+          "William Shakespeare"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem tragedii „Hamlet”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "William Szekspir",
+          "Szekspir",
+          "Shakespeare",
+          "William Shakespeare"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym duńskim zamku rozgrywa się akcja „Hamleta”?\nA) Kronborg\nB) Elsynor\nC) Rosenborg\nD) Frederiksborg",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Elsynor",
+          "Elsinore"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł powieści o rzymskim cesarzu Neronie i prześladowaniach chrześcijan, nagrodzonej Noblem. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ],
+        "b": [
+          "Quo vadis",
+          "Quo Vadis"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał „Makbeta”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "William Szekspir",
+          "Szekspir",
+          "Shakespeare",
+          "William Shakespeare"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Zbrodnia i kara”?\nA) Lew Tołstoj\nB) Antoni Czechow\nC) Fiodor Dostojewski\nD) Iwan Turgieniew",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Fiodor Dostojewski",
+          "Dostojewski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater „Zbrodni i kary”, który morduje lichwiarkę?\nA) Raskolnikow\nB) Myszkin\nC) Bazarow\nD) Karamazow",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Raskolnikow",
+          "Raskolnikov",
+          "Rodion Raskolnikow"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Bracia Karamazow”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Fiodor Dostojewski",
+          "Dostojewski"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem epopei „Wojna i pokój”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lew Tolstoj",
+          "Tolstoj",
+          "Tołstoj",
+          "Lew Tołstoj"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Anna Karenina”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lew Tolstoj",
+          "Tolstoj",
+          "Tołstoj",
+          "Lew Tołstoj"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł tragedii, w której pojawia się pytanie „Być albo nie być”. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "William Szekspir",
+          "Szekspir",
+          "Shakespeare",
+          "William Shakespeare"
+        ],
+        "b": [
+          "Hamlet"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem komedii „Zemsta”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Aleksander Fredro",
+          "Fredro"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał komedię „Śluby panieńskie”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Aleksander Fredro",
+          "Fredro"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem dramatu „Wesele”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanislaw Wyspianski",
+          "Wyspianski",
+          "Stanisław Wyspiański",
+          "Wyspiański"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej podkrakowskiej miejscowości rozgrywa się akcja „Wesela” Wyspiańskiego?\nA) Niepołomice\nB) Mogiła\nC) Tyniec\nD) Bronowice",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Bronowice"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Chłopi”, za którą otrzymał Nagrodę Nobla?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wladyslaw Reymont",
+          "Reymont",
+          "Władysław Reymont",
+          "Władysław Stanisław Reymont"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się wieś, w której rozgrywa się akcja „Chłopów” Reymonta?\nA) Lipce\nB) Soplicowo\nC) Bronowice\nD) Nawłoć",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Lipce"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech wielkich wieszczów polskiego romantyzmu (nazwiska, w dowolnej kolejności).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wieszcz 1"
+        },
+        {
+          "key": "b",
+          "label": "wieszcz 2"
+        },
+        {
+          "key": "c",
+          "label": "wieszcz 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mickiewicz",
+          "Adam Mickiewicz"
+        ],
+        "b": [
+          "Slowacki",
+          "Słowacki",
+          "Juliusz Slowacki",
+          "Juliusz Słowacki"
+        ],
+        "c": [
+          "Krasinski",
+          "Krasiński",
+          "Zygmunt Krasinski",
+          "Zygmunt Krasiński"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał wiersz „Bogurodzica” — najstarszą polską pieśń religijną? (jeśli autor nieznany, podaj odpowiedź „nieznany”)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "nieznany",
+          "autor nieznany",
+          "anonim"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem „Trenów”, napisanych po śmierci córki Urszulki?\nA) Mikołaj Rej\nB) Jan Kochanowski\nC) Ignacy Krasicki\nD) Wespazjan Kochowski",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Jan Kochanowski",
+          "Kochanowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak miała na imię córka Jana Kochanowskiego, której poświęcone są „Treny”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Urszula",
+          "Urszulka"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał „Odprawę posłów greckich”?\nA) Mikołaj Rej\nB) Ignacy Krasicki\nC) Jan Kochanowski\nD) Łukasz Górnicki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Jan Kochanowski",
+          "Kochanowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Mistrz i Małgorzata”?\nA) Borys Pasternak\nB) Michaił Bułhakow\nC) Aleksander Sołżenicyn\nD) Maksym Gorki",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Michaił Bułhakow",
+          "Michail Bulhakow",
+          "Bulhakow",
+          "Bułhakow"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Rok 1984”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "George Orwell",
+          "Orwell"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł powieści, której bohaterem jest student Raskolnikow mordujący lichwiarkę. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Fiodor Dostojewski",
+          "Dostojewski"
+        ],
+        "b": [
+          "Zbrodnia i kara"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem alegorycznej powieści „Folwark zwierzęcy”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "George Orwell",
+          "Orwell"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Nowy wspaniały świat”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Aldous Huxley",
+          "Huxley"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem cyklu fantasy o wiedźminie Geralcie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Andrzej Sapkowski",
+          "Sapkowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater sagi Sapkowskiego — wiedźmin z Rivii?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Geralt",
+          "Geralt z Rivii"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Solaris”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanislaw Lem",
+          "Lem",
+          "Stanisław Lem"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem „Cyberiady” i „Bajek robotów”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanislaw Lem",
+          "Lem",
+          "Stanisław Lem"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł dramatu rozgrywającego się podczas wesela w podkrakowskich Bronowicach. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanislaw Wyspianski",
+          "Wyspianski",
+          "Stanisław Wyspiański",
+          "Wyspiański"
+        ],
+        "b": [
+          "Wesele"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał trylogię „Władca Pierścieni”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "J.R.R. Tolkien",
+          "Tolkien",
+          "John Tolkien"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się hobbit, główny bohater „Władcy Pierścieni”, który niesie Pierścień?\nA) Bilbo Baggins\nB) Samwise Gamgee\nC) Frodo Baggins\nD) Peregrin Tuk",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Frodo Baggins",
+          "Frodo",
+          "Frodo Bagosz"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem cyklu „Opowieści z Narnii”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C.S. Lewis",
+          "Lewis",
+          "Clive Staples Lewis"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisała serię powieści o Harrym Potterze?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autorka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "J.K. Rowling",
+          "Rowling",
+          "Joanne Rowling"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Sto lat samotności”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gabriel Garcia Marquez",
+          "Garcia Marquez",
+          "Marquez",
+          "Gabriel García Márquez"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Don Kichot”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Miguel de Cervantes",
+          "Cervantes"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł powieści o chłopach ze wsi Lipce, nagrodzonej Noblem. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wladyslaw Reymont",
+          "Reymont",
+          "Władysław Reymont"
+        ],
+        "b": [
+          "Chlopi",
+          "Chłopi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się giermek Don Kichota?\nA) Rosynant\nB) Sancho Pansa\nC) Dulcynea\nD) Samson Carrasco",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Sancho Pansa",
+          "Sancho",
+          "Sanczo Pansa"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem dramatu „Faust”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Johann Wolfgang Goethe",
+          "Goethe"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Cierpienia młodego Wertera”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Johann Wolfgang Goethe",
+          "Goethe"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Nędznicy”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wiktor Hugo",
+          "Hugo",
+          "Victor Hugo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater „Nędzników”, były galernik?\nA) Edmund Dantès\nB) Jean Valjean\nC) Javert\nD) Mariusz Pontmercy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Jean Valjean",
+          "Jan Valjean",
+          "Valjean"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Hrabia Monte Christo”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Aleksander Dumas",
+          "Dumas",
+          "Alexandre Dumas"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj imię i nazwisko bohatera „Lalki” oraz nazwisko ukochanej arystokratki, w której jest zakochany. Wpisz oba nazwiska.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bohater"
+        },
+        {
+          "key": "b",
+          "label": "ukochana"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanislaw Wokulski",
+          "Wokulski",
+          "Stanisław Wokulski"
+        ],
+        "b": [
+          "Izabela Lecka",
+          "Lecka",
+          "Izabela Łęcka",
+          "Łęcka"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Trzej muszkieterowie”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Aleksander Dumas",
+          "Dumas",
+          "Alexandre Dumas"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Zbrodnia w Orient Expressie”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autorka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Agatha Christie",
+          "Christie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się słynny belgijski detektyw stworzony przez Agathę Christie?\nA) Herkules Poirot\nB) Sherlock Holmes\nC) Miss Marple\nD) Ojciec Brown",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Herkules Poirot",
+          "Hercule Poirot",
+          "Poirot"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem opowiadań o detektywie Sherlocku Holmesie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Arthur Conan Doyle",
+          "Conan Doyle",
+          "Doyle"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przyjaciel i kronikarz przygód Sherlocka Holmesa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Watson",
+          "doktor Watson",
+          "John Watson"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Wielki Gatsby”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Francis Scott Fitzgerald",
+          "Fitzgerald",
+          "Scott Fitzgerald"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwie polskie poetki uhonorowane literacką Nagrodą Nobla (1996 i 2018; nazwiska).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "Nobel 1996"
+        },
+        {
+          "key": "b",
+          "label": "Nobel 2018"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Szymborska",
+          "Wislawa Szymborska",
+          "Wisława Szymborska"
+        ],
+        "b": [
+          "Tokarczuk",
+          "Olga Tokarczuk"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Stary człowiek i morze”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ernest Hemingway",
+          "Hemingway"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Buszujący w zbożu”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jerome David Salinger",
+          "Salinger",
+          "J.D. Salinger"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Proces”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Franz Kafka",
+          "Kafka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny bohater opowiadania „Przemiana” Franza Kafki, który zmienia się w robaka?\nA) Josef K.\nB) Gregor Samsa\nC) Georg Bendemann\nD) Karl Rossmann",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Gregor Samsa",
+          "Samsa"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Dżuma”?\nA) Jean-Paul Sartre\nB) André Gide\nC) Albert Camus\nD) Marcel Proust",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Albert Camus",
+          "Camus"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim algierskim mieście rozgrywa się akcja „Dżumy” Alberta Camusa?\nA) Algier\nB) Konstantyna\nC) Annaba\nD) Oran",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Oran"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł powieści o łodzi podwodnej Nautilus i kapitanie Nemo. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Juliusz Verne",
+          "Verne",
+          "Jules Verne"
+        ],
+        "b": [
+          "20 000 mil podmorskiej zeglugi",
+          "20 000 mil podmorskiej żeglugi",
+          "Dwadziescia tysiecy mil podmorskiej zeglugi"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem „Małego Księcia”?\nA) Jules Verne\nB) Antoine de Saint-Exupéry\nC) Albert Camus\nD) Romain Gary",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Antoine de Saint-Exupéry",
+          "Antoine de Saint-Exupery",
+          "Saint-Exupery",
+          "Saint-Exupéry"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Mistrzowie” — pomyłka; kto napisał „Jądro ciemności”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Joseph Conrad",
+          "Conrad",
+          "Joseph Conrad-Korzeniowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Robinson Crusoe”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Daniel Defoe",
+          "Defoe"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Podróże Guliwera”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jonathan Swift",
+          "Swift"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „20 000 mil podmorskiej żeglugi”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Juliusz Verne",
+          "Verne",
+          "Jules Verne"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kapitan łodzi podwodnej Nautilus w powieści Verne'a?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nemo",
+          "kapitan Nemo"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł powieści o wojnie z Krzyżakami zakończonej bitwą pod Grunwaldem. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ],
+        "b": [
+          "Krzyzacy",
+          "Krzyżacy"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „W pustyni i w puszczy”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem „Kamieni na szaniec”?\nA) Aleksander Kamiński\nB) Roman Bratny\nC) Krzysztof Kamil Baczyński\nD) Arkady Fiedler",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Aleksander Kamiński",
+          "Aleksander Kaminski",
+          "Kaminski",
+          "Kamiński"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał „Medaliony” — zbiór opowiadań o czasach okupacji?\nA) Maria Dąbrowska\nB) Zofia Nałkowska\nC) Hanna Krall\nD) Maria Kuncewiczowa",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Zofia Nałkowska",
+          "Zofia Nalkowska",
+          "Nalkowska",
+          "Nałkowska"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem opowiadań obozowych „Pożegnanie z Marią” i „U nas, w Auschwitzu...”?\nA) Tadeusz Borowski\nB) Gustaw Herling-Grudziński\nC) Zofia Nałkowska\nD) Tadeusz Różewicz",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Tadeusz Borowski",
+          "Borowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał „Inny świat” — wspomnienia z sowieckiego łagru?\nA) Tadeusz Borowski\nB) Józef Czapski\nC) Gustaw Herling-Grudziński\nD) Aleksander Wat",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Gustaw Herling-Grudziński",
+          "Gustaw Herling-Grudzinski",
+          "Herling-Grudzinski",
+          "Herling-Grudziński"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Ferdydurke”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Witold Gombrowicz",
+          "Gombrowicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy dramaty Williama Szekspira (tytuły, w dowolnej kolejności).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dramat 1"
+        },
+        {
+          "key": "b",
+          "label": "dramat 2"
+        },
+        {
+          "key": "c",
+          "label": "dramat 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hamlet"
+        ],
+        "b": [
+          "Makbet",
+          "Macbeth"
+        ],
+        "c": [
+          "Romeo i Julia",
+          "Otello",
+          "Krol Lear",
+          "Król Lear",
+          "Burza"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał powieść „Sklepy cynamonowe”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bruno Schulz",
+          "Schulz"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest pierwszym polskim laureatem literackiej Nagrody Nobla (1905)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski poeta otrzymał literacką Nagrodę Nobla w 1980 roku?\nA) Czesław Miłosz\nB) Zbigniew Herbert\nC) Tadeusz Różewicz\nD) Wisława Szymborska",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Czesław Miłosz",
+          "Czeslaw Milosz",
+          "Milosz",
+          "Miłosz"
+        ]
+      }
+    },
+    {
+      "prompt": "Która polska poetka otrzymała literacką Nagrodę Nobla w 1996 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wislawa Szymborska",
+          "Szymborska",
+          "Wisława Szymborska"
+        ]
+      }
+    },
+    {
+      "prompt": "Która polska pisarka otrzymała literacką Nagrodę Nobla za rok 2018?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Olga Tokarczuk",
+          "Tokarczuk"
+        ]
+      }
+    },
+    {
+      "prompt": "Za którą powieść Olga Tokarczuk jest najbardziej znana, zdobywając Bookera — „Bieguni” lub ta sześcioksięgowa epopeja?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ksiegi Jakubowe",
+          "Księgi Jakubowe"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj autora i tytuł dramatu, w którego pierwszej części pojawia się duch ojca; bohaterem jest książę duński. Wpisz autora i tytuł.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        },
+        {
+          "key": "b",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "William Szekspir",
+          "Szekspir",
+          "Shakespeare"
+        ],
+        "b": [
+          "Hamlet"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem powieści „Quo vadis”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "autor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się epoka literacka, w której tworzyli Mickiewicz, Słowacki i Krasiński?\nA) oświecenie\nB) romantyzm\nC) pozytywizm\nD) Młoda Polska",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "romantyzm"
+        ]
+      }
+    }
+  ]
+}

@@ -23,6 +23,9 @@ group('scoring.norm', ()=>{
   eq(norm('AC/DC'),'ac dc','znaki specjalne → spacja');
   eq(norm('Motörhead'),'motorhead','ö → o');
   eq(norm('Łódź'),'lodz','ł obsłużone przez deLatin');
+  eq(norm('A'),'a','sam przedimek „a" (litera A w ABCD) nie redukuje się do pustego');
+  eq(norm('the'),'the','samodzielny przedimek zachowany (gdy to całość)');
+  eq(norm('A Day in the Life'),'day in life','przedimki w zdaniu nadal usuwane');
 });
 group('scoring.lev', ()=>{
   eq(lev('kot','kot'),0,'identyczne = 0');
@@ -36,6 +39,10 @@ group('scoring.textMatch', ()=>{
   ok(textMatch('Bohemian Rapsody','Bohemian Rhapsody'),'jedna literówka tolerowana');
   ok(!textMatch('Yesterday','Help'),'różne tytuły odrzucone');
   ok(!textMatch('',''),'puste odrzucone');
+  ok(textMatch('a','A'),'ABCD: mała „a" trafia odpowiedź „A" (litera, nie przedimek)');
+  ok(textMatch('A','A'),'ABCD: „A" trafia „A"');
+  ok(!textMatch('a','B'),'ABCD: zła litera nie trafia');
+  ok(textMatch('d','D'),'ABCD: „d" trafia „D"');
   ok(textMatch('Imagine','Imagine (Remastered)'),'sufiks remaster pomijany');
   ok(textMatch('problem','PRO8L3M'),'leetspeak: „problem” == „PRO8L3M”');
   ok(textMatch('PRO8L3M','problem'),'leetspeak: symetrycznie');

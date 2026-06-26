@@ -1,0 +1,1747 @@
+{
+  "label": "Kosmetyki i uroda",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Który składnik aktywny słynie ze zdolności wiązania wody i nawilżania skóry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kwas hialuronowy",
+          "hialuronowy",
+          "kwas hialuronowy (HA)"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka pochodna witaminy A jest złotym standardem w walce ze zmarszczkami i trądzikiem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "retinol",
+          "retinoid"
+        ]
+      }
+    },
+    {
+      "prompt": "Inna nazwa niacynamidu to witamina o jakim symbolu?\nA) Witamina A\nB) Witamina B3\nC) Witamina C\nD) Witamina E",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub witamina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Witamina B3",
+          "witamina B3",
+          "B3",
+          "wit. B3"
+        ]
+      }
+    },
+    {
+      "prompt": "Która witamina (silny antyoksydant) rozjaśnia przebarwienia i jest składnikiem serum na dzień?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "witamina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "witamina C",
+          "wit. C",
+          "C"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót SPF na opakowaniu kremu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie / znaczenie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "filtr przeciwsłoneczny",
+          "Sun Protection Factor",
+          "wskaznik ochrony przeciwslonecznej",
+          "ochrona przeciwsloneczna"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmetyk nakładany pod podkład, wygładzający skórę i przedłużający trwałość makijażu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "primer",
+          "baza pod makijaz",
+          "baza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki produkt do makijażu służy do tuszowania niedoskonałości i cieni pod oczami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "korektor",
+          "concealer"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się puder lub kremowy kosmetyk dający skórze opaleniznę i ciepły odcień?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bronzer",
+          "bronze"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się technika makijażu polegająca na optycznym wyszczuplaniu i rzeźbieniu twarzy ciemniejszym pudrem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "technika"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kontur",
+          "konturowanie",
+          "contouring"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się zaskórniki, czyli zatkane ujścia gruczołów łojowych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "komedony",
+          "zaskorniki"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tłusta wydzielina gruczołów łojowych skóry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "sebum",
+          "loj"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zabieg złuszczania martwego naskórka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zabieg"
+        }
+      ],
+      "answers": {
+        "a": [
+          "peeling",
+          "eksfoliacja",
+          "zluszczanie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się skoncentrowany, lekki kosmetyk o płynnej konsystencji, nakładany przed kremem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "serum",
+          "serum do twarzy"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodzi marka Chanel?\nA) Francja\nB) Włochy\nC) USA\nD) Wielka Brytania",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Francja"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodzi koncern kosmetyczny L'Oréal?\nA) Niemcy\nB) USA\nC) Francja\nD) Szwajcaria",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Francja"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się legendarne perfumy Chanel oznaczone numerem, wypuszczone w 1921 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Chanel No. 5",
+          "No. 5",
+          "No 5",
+          "Chanel No 5",
+          "numer 5"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodzi marka kosmetyczna Maybelline?\nA) Francja\nB) Wielka Brytania\nC) Kanada\nD) USA",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "USA",
+          "Stany Zjednoczone",
+          "Ameryka"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym kraju powstała marka MAC Cosmetics?\nA) Kanada\nB) USA\nC) Francja\nD) Australia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Kanada"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodzi marka Estée Lauder?\nA) Francja\nB) Niemcy\nC) Włochy\nD) USA",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "USA",
+          "Stany Zjednoczone",
+          "Ameryka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki rodzaj kwasów (AHA/BHA) jest rozpuszczalny w tłuszczach i dociera w głąb porów — np. kwas salicylowy?\nA) AHA\nB) BHA\nC) PHA\nD) LHA",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rodzaj kwasów"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "BHA",
+          "kwasy BHA"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kwas (BHA) jest najczęściej stosowany w kosmetykach do cery trądzikowej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kwas"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kwas salicylowy",
+          "salicylowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się typ cery, która błyszczy się w całości i ma tendencję do zaskórników?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ cery"
+        }
+      ],
+      "answers": {
+        "a": [
+          "cera tlusta",
+          "tlusta"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się typ cery, która błyszczy się w strefie T, a policzki są suche?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ cery"
+        }
+      ],
+      "answers": {
+        "a": [
+          "cera mieszana",
+          "mieszana"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmetyk do makijażu nadający policzkom kolor (róż)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "roz",
+          "blush",
+          "roz do policzkow"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rozświetlający kosmetyk nakładany na kości policzkowe i grzbiet nosa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "rozswietlacz",
+          "highlighter"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmetyk do makijażu w płynie lub kremie, ujednolicający koloryt całej twarzy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "podklad",
+          "foundation"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się produkt utrwalający makijaż, rozpylany na twarz na końcu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mgielka utrwalajaca",
+          "utrwalacz",
+          "setting spray",
+          "spray utrwalajacy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie tłuszczowe składniki budujące barierę skóry mają nazwę zaczynającą się na 'cer'?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ceramidy",
+          "ceramid"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki olejek znany ze świata roślinnego, podobny do ludzkiego sebum, pozyskuje się z krzewu simondsia?\nA) Olej jojoba\nB) Olej kokosowy\nC) Olej arganowy\nD) Olej rycynowy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub olejek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Olej jojoba",
+          "olej jojoba",
+          "jojoba",
+          "olejek jojoba"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się masło roślinne z afrykańskiego drzewa, popularne w balsamach do ciała?\nA) Masło kakaowe\nB) Masło shea\nC) Masło mango\nD) Lanolina",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Masło shea",
+          "maslo shea",
+          "shea",
+          "karite",
+          "maslo karite"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się olejek pozyskiwany z marokańskiego drzewa, popularny do włosów i skóry?\nA) Olejek lniany\nB) Olejek migdałowy\nC) Olejek arganowy\nD) Olejek tamanu",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub olejek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Olejek arganowy",
+          "olejek arganowy",
+          "argan",
+          "olej arganowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się antyoksydant, witamina znana jako 'witamina młodości', oznaczana literą E?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "witamina"
+        }
+      ],
+      "answers": {
+        "a": [
+          "witamina E",
+          "wit. E",
+          "tokoferol",
+          "E"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się krótkie łańcuchy aminokwasów stymulujące skórę do produkcji kolagenu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "peptydy",
+          "peptyd"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie białko strukturalne odpowiada za jędrność i napięcie skóry, a jego ubytek powoduje zmarszczki?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "białko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kolagen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie białko odpowiada za sprężystość i elastyczność skóry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "białko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "elastyna"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki barwnik decyduje o kolorze skóry i pełni rolę naturalnej ochrony przed słońcem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "barwnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "melanina"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się typ filtra SPF, który odbija promienie UV i zawiera tlenek cynku lub dwutlenek tytanu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ filtra"
+        }
+      ],
+      "answers": {
+        "a": [
+          "filtr mineralny",
+          "mineralny",
+          "filtr fizyczny",
+          "fizyczny"
+        ]
+      }
+    },
+    {
+      "prompt": "Przed jakimi dwoma rodzajami promieniowania chroni filtr oznaczony jako 'broad spectrum' / szerokie spektrum?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwszy rodzaj"
+        },
+        {
+          "key": "b",
+          "label": "drugi rodzaj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "UVA"
+        ],
+        "b": [
+          "UVB"
+        ]
+      }
+    },
+    {
+      "prompt": "Które promieniowanie (UVA czy UVB) odpowiada głównie za poparzenia słoneczne skóry?\nA) UVA\nB) UVB\nC) UVC\nD) Podczerwień",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub promieniowanie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "UVB"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki rodzaj kosmetyku w kremowej lub żelowej formie usuwa makijaż i zanieczyszczenia jako pierwszy krok oczyszczania?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zel do mycia twarzy",
+          "zel myjacy",
+          "mleczko",
+          "olejek do demakijazu",
+          "zmywacz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się woda kosmetyczna z drobinami micelarnymi, zmywająca makijaż bez spłukiwania?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "plyn micelarny",
+          "woda micelarna",
+          "micele"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się produkt nakładany po oczyszczaniu, przywracający skórze odpowiednie pH?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tonik",
+          "tonik do twarzy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki popularny azjatycki kosmetyk to nasączona serum bawełniana 'maska w płachcie'?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "maska w plachcie",
+          "sheet mask",
+          "maska plachtowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju wywodzi się wielostopniowa pielęgnacja skóry zwana popularnie 'K-beauty'?\nA) Japonia\nB) Chiny\nC) Korea Południowa\nD) Tajlandia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Korea Południowa",
+          "Korea Poludniowa",
+          "Korea",
+          "Korea Pld"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dwuetapowe oczyszczanie twarzy (olejek + produkt na wodzie), popularne w K-beauty?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "metoda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "double cleansing",
+          "podwojne oczyszczanie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się składnik o nazwie pochodzącej od ślimaka, czyli ślimaczy filtrat/śluz w koreańskich kosmetykach?\nA) Śluz ślimaka (snail mucin)\nB) Jad pszczeli\nC) Kolagen morski\nD) Mleczko pszczele",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Śluz ślimaka (snail mucin)",
+          "sluz slimaka",
+          "filtrat slimaka",
+          "snail mucin",
+          "muszyna slimaka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kosmetyk koloryzujący do ust ma formę sztyftu i nadaje barwę wargom?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "szminka",
+          "pomadka",
+          "lipstick"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zabieg trwałego wygładzania i prostowania włosów z użyciem keratyny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zabieg"
+        }
+      ],
+      "answers": {
+        "a": [
+          "keratynowe prostowanie",
+          "prostowanie keratynowe",
+          "keratyna"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki naturalny barwnik roślinny używany jest do farbowania włosów na rudo i do tatuaży na ciele?\nA) Indygo\nB) Henna\nC) Kurkuma\nD) Szafran",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub barwnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Henna",
+          "henna",
+          "hena"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się substancja powodująca pienienie się szamponów i żeli, której skrót to SLS?\nA) Emulgator\nB) Konserwant\nC) Detergent (surfaktant)\nD) Humektant",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rodzaj substancji"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Detergent (surfaktant)",
+          "detergent",
+          "srodek powierzchniowo czynny",
+          "surfaktant",
+          "tensyd"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się specjalistyczny krem lub żel pod oczy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "krem pod oczy",
+          "eye cream"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rodzaj cery wrażliwej, reagującej zaczerwienieniem i pieczeniem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ cery"
+        }
+      ],
+      "answers": {
+        "a": [
+          "cera wrazliwa",
+          "wrazliwa",
+          "naczyniowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przewlekła choroba skóry twarzy objawiająca się rumieniem i naczynkami, częsta u dorosłych?\nA) Łuszczyca\nB) Trądzik różowaty (rosacea)\nC) Bielactwo\nD) Atopowe zapalenie skóry",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub schorzenie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Trądzik różowaty (rosacea)",
+          "tradzik rozowaty",
+          "rozowaty",
+          "rosacea"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się ciemne plamy na skórze powstałe z nadprodukcji melaniny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "przebarwienia",
+          "plamy pigmentacyjne",
+          "hiperpigmentacja"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmetyk lub produkt nadający opaleniznę bez słońca, zawierający DHA?\nA) Bronzer\nB) Samoopalacz\nC) Rozświetlacz\nD) Olejek do opalania",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Samoopalacz",
+          "samoopalacz",
+          "self-tan",
+          "bronzer w plynie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się lekki, uniwersalny krem koloryzujący 'beauty balm', łączący pielęgnację z lekkim kryciem (skrót dwuliterowy)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "krem BB",
+          "BB cream",
+          "BB"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rodzaj trwałego lakieru do paznokci utwardzanego lampą UV/LED?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "lakier hybrydowy",
+          "hybryda",
+          "hybrydy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zabieg pielęgnacji dłoni i paznokci?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zabieg"
+        }
+      ],
+      "answers": {
+        "a": [
+          "manicure",
+          "manikiur"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka marka kosmetyczna z czerwonym 'M' w logo słynie z tuszu do rzęs i hasła 'Maybe she's born with it'?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Maybelline",
+          "Maybelline New York"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka popularna marka kosmetyczna należąca do L'Oréal ma w nazwie słowo oznaczające 'czystą skórę' i hasło kojarzone z termalną wodą — to francuska...?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "La Roche-Posay",
+          "Roche-Posay"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka kultowa marka niemiecka słynie z niebieskiej puszki kremu uniwersalnego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nivea"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kultowy niebieski krem w okrągłym opakowaniu jest flagowym produktem marki Nivea?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nivea Creme",
+          "krem Nivea",
+          "Nivea Creme w puszce"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka marka kosmetyczna należąca do Rihanny zasłynęła rekordową liczbą odcieni podkładu?\nA) Fenty Beauty\nB) Rare Beauty\nC) Kylie Cosmetics\nD) KKW Beauty",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub marka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Fenty Beauty",
+          "Fenty"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka sieć perfumeryjna z biało-czarnym logo i pasiastą torbą należy do koncernu LVMH?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "sieć"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sephora"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gąbka w kształcie jajka do nakładania i rozprowadzania podkładu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "akcesorium"
+        }
+      ],
+      "answers": {
+        "a": [
+          "beautyblender",
+          "gabka do makijazu",
+          "blender",
+          "gabka jajko"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się efekt makijażowy uzyskany przez sutą warstwę pudru utrwalającego pod oczami, którą się ściera ('zapiekanie')?\nA) Baking (zapiekanie)\nB) Strobing\nC) Draping\nD) Tightlining",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub technika"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Baking (zapiekanie)",
+          "baking",
+          "zapiekanie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się modny rozświetlony, 'mokry' wygląd skóry w makijażu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "efekt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "glow",
+          "efekt glow",
+          "rozswietlona skora",
+          "dewy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się popularny ciemny, dymny makijaż oczu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "makijaż"
+        }
+      ],
+      "answers": {
+        "a": [
+          "smokey eyes",
+          "smoky eyes",
+          "dymne oczy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmetyk lub żel do stylizacji i utrwalania brwi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zel do brwi",
+          "mydlo do brwi",
+          "soap brows",
+          "pomada do brwi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zabieg trwałego makijażu brwi metodą nacinania włosków?\nA) Henna pudrowa\nB) Microblading\nC) Laminacja brwi\nD) Microshading",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub zabieg"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Microblading",
+          "microblading",
+          "mikroblading"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się składnik aktywny do walki z trądzikiem, utleniacz o nazwie nadtlenek...?\nA) Nadtlenek wodoru\nB) Nadtlenek benzoilu\nC) Nadtlenek cynku\nD) Nadtlenek sodu",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Nadtlenek benzoilu",
+          "nadtlenek benzoilu",
+          "benzoyl peroxide",
+          "BPO"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się warstwa skóry najbardziej zewnętrzna, którą widzimy i pielęgnujemy kosmetykami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "warstwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "naskorek",
+          "epiderma",
+          "epidermis"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się warstwa skóry pod naskórkiem, zawierająca kolagen i naczynia krwionośne?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "warstwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "skora wlasciwa",
+          "dermis",
+          "skora wlasciwa (dermis)"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodziła Helena Rubinstein, pionierka przemysłu kosmetycznego (urodzona w Krakowie)?\nA) Polska\nB) Austria\nC) Francja\nD) USA",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Polska"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kosmetyk w kremie lub żelu nakładany na noc dla intensywnej regeneracji?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "krem na noc",
+          "krem nocny",
+          "night cream"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki rodzaj kosmetyku do ciała w formie płynnej nawilża skórę po kąpieli?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "balsam do ciala",
+          "balsam",
+          "mleczko do ciala",
+          "body lotion"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się skala określająca kwasowość, której wartość dla zdrowej skóry wynosi ok. 5,5?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "skala"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pH",
+          "skala pH"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ochronna, lekko kwaśna warstwa na powierzchni skóry chroniąca przed bakteriami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "plaszcz hydrolipidowy",
+          "plaszcz hydro-lipidowy",
+          "plaszcz kwasowy",
+          "bariera hydrolipidowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się popularna marka kosmetyków aptecznych z Francji, której nazwa kojarzy się z wodą termalną i kremem na podrażnienia (Cicaplast) — to La Roche-Posay lub...?\nA) Eucerin\nB) CeraVe\nC) Avène\nD) Neutrogena",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub marka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Avène",
+          "Avene",
+          "Avene Eau Thermale",
+          "Cetaphil",
+          "Bioderma"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki popularny płyn micelarny pochodzi od francuskiej marki aptecznej Bioderma i nosi nazwę linii...?\nA) Sensibio\nB) Hydrabio\nC) Sébium\nD) Atoderm",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa linii"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Sensibio",
+          "Sensibio H2O",
+          "Bioderma Sensibio"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ochronna substancja typu wazelina, używana też w kosmetyce jako okluzja zatrzymująca wodę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "substancja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wazelina",
+          "petrolatum",
+          "vaseline"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rodzaj kremu o lekkiej, nietłustej konsystencji wchłaniającej się szybko, polecanego cerze tłustej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "niekomedogenny",
+          "lekki krem",
+          "krem niekomedogenny",
+          "non-comedogenic"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki składnik o silnym działaniu nawilżającym i kojącym pozyskuje się z liści rośliny aloe vera?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "aloes",
+          "aloe vera",
+          "zel aloesowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ekstrakt roślinny o działaniu kojącym, popularny w kosmetykach łagodzących, pozyskuje się z kwiatu o tej samej nazwie (żółto-biały kwiat)?\nA) Lawenda\nB) Nagietek\nC) Róża\nD) Rumianek",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Rumianek",
+          "rumianek",
+          "ekstrakt z rumianku",
+          "chamomile"
+        ]
+      }
+    },
+    {
+      "prompt": "Marka i kraj pochodzenia: podaj markę słynącą z perfum 'No. 5' oraz kraj jej powstania.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        },
+        {
+          "key": "b",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Chanel"
+        ],
+        "b": [
+          "Francja"
+        ]
+      }
+    },
+    {
+      "prompt": "Marka i kraj pochodzenia: podaj markę MAC Cosmetics oraz kraj, w którym powstała.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        },
+        {
+          "key": "b",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "MAC",
+          "MAC Cosmetics"
+        ],
+        "b": [
+          "Kanada"
+        ]
+      }
+    },
+    {
+      "prompt": "Marka i kraj pochodzenia: podaj markę Shiseido oraz kraj, z którego pochodzi.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        },
+        {
+          "key": "b",
+          "label": "kraj"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Shiseido"
+        ],
+        "b": [
+          "Japonia"
+        ]
+      }
+    },
+    {
+      "prompt": "Składnik i jego główne działanie: podaj składnik 'kwas hialuronowy' oraz jego podstawowe działanie na skórę.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        },
+        {
+          "key": "b",
+          "label": "działanie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kwas hialuronowy",
+          "hialuronowy"
+        ],
+        "b": [
+          "nawilzanie",
+          "nawilza",
+          "wiazanie wody",
+          "nawodnienie"
+        ]
+      }
+    },
+    {
+      "prompt": "Składnik i jego główne działanie: podaj składnik 'retinol' oraz jego główny efekt pielęgnacyjny.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        },
+        {
+          "key": "b",
+          "label": "działanie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "retinol"
+        ],
+        "b": [
+          "przeciwzmarszczkowe",
+          "redukcja zmarszczek",
+          "odmladzanie",
+          "wygladzanie zmarszczek",
+          "anti-aging"
+        ]
+      }
+    },
+    {
+      "prompt": "Składnik i jego główne działanie: podaj składnik 'witamina C' oraz jego główne działanie na koloryt skóry.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik"
+        },
+        {
+          "key": "b",
+          "label": "działanie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "witamina C",
+          "wit. C"
+        ],
+        "b": [
+          "rozjasnianie",
+          "rozjasnia",
+          "rozswietlanie",
+          "redukcja przebarwien",
+          "antyoksydacja"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy podstawowe typy cery (poza mieszaną): tłusta oraz dwa pozostałe.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ 1"
+        },
+        {
+          "key": "b",
+          "label": "typ 2"
+        },
+        {
+          "key": "c",
+          "label": "typ 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlusta",
+          "cera tlusta"
+        ],
+        "b": [
+          "sucha",
+          "cera sucha"
+        ],
+        "c": [
+          "normalna",
+          "cera normalna"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy popularne składniki aktywne serum przeciwstarzeniowego: retinol, witamina C oraz jeden z grupy nawilżających.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "składnik 1"
+        },
+        {
+          "key": "b",
+          "label": "składnik 2"
+        },
+        {
+          "key": "c",
+          "label": "składnik 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "retinol"
+        ],
+        "b": [
+          "witamina C",
+          "wit. C"
+        ],
+        "c": [
+          "kwas hialuronowy",
+          "hialuronowy",
+          "peptydy",
+          "niacynamid"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy produkty do makijażu oczu: tusz do rzęs, cienie do powiek oraz produkt do podkreślania linii rzęs.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt 1"
+        },
+        {
+          "key": "b",
+          "label": "produkt 2"
+        },
+        {
+          "key": "c",
+          "label": "produkt 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mascara",
+          "tusz do rzes"
+        ],
+        "b": [
+          "cienie do powiek",
+          "cienie"
+        ],
+        "c": [
+          "eyeliner",
+          "kredka do oczu"
+        ]
+      }
+    },
+    {
+      "prompt": "Produkt i jego funkcja: podaj produkt 'primer' oraz jego główną funkcję w makijażu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        },
+        {
+          "key": "b",
+          "label": "funkcja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "primer",
+          "baza"
+        ],
+        "b": [
+          "wygladza skore",
+          "przedluza trwalosc makijazu",
+          "baza pod makijaz",
+          "wyrownuje skore",
+          "utrwala makijaz"
+        ]
+      }
+    },
+    {
+      "prompt": "Filtr i rodzaj: podaj typ filtra zawierającego tlenek cynku oraz określ, czy odbija on, czy pochłania promienie UV.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "typ filtra"
+        },
+        {
+          "key": "b",
+          "label": "mechanizm"
+        }
+      ],
+      "answers": {
+        "a": [
+          "filtr mineralny",
+          "mineralny",
+          "fizyczny"
+        ],
+        "b": [
+          "odbija",
+          "odbija promienie",
+          "odbicie"
+        ]
+      }
+    },
+    {
+      "prompt": "Marka i charakterystyczny produkt: podaj markę Nivea oraz jej kultowy produkt w niebieskiej puszce.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "marka"
+        },
+        {
+          "key": "b",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nivea"
+        ],
+        "b": [
+          "krem Nivea",
+          "Nivea Creme",
+          "krem w niebieskiej puszce"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się drobnoziarnisty puder transparentny używany do matowienia i utrwalania makijażu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "produkt"
+        }
+      ],
+      "answers": {
+        "a": [
+          "puder transparentny",
+          "puder sypki",
+          "puder utrwalajacy",
+          "puder"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się okluzyjny, intensywnie nawilżający trend pielęgnacyjny polegający na 'zaklejaniu' skóry warstwą wazeliny na noc?\nA) Slugging\nB) Skin cycling\nC) Skin flooding\nD) Glass skin",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub trend / metoda"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Slugging",
+          "slugging",
+          "sluging"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki składnik o nazwie kwasu, naturalnie obecny w skórze i występujący też w mleku, należy do AHA i ma nazwę kwas...?\nA) Kwas salicylowy\nB) Kwas glikolowy\nC) Kwas mlekowy\nD) Kwas azelainowy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kwas"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Kwas mlekowy",
+          "kwas mlekowy",
+          "mlekowy",
+          "lactic acid"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się składnik aktywny o nazwie pochodzącej od witaminy B3, znany z regulacji sebum i zwężania porów?\nA) Niacynamid\nB) Kwas askorbinowy\nC) Pantenol\nD) Retinaldehyd",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub składnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Niacynamid",
+          "niacynamid",
+          "niacinamid",
+          "niacynamid (B3)"
+        ]
+      }
+    }
+  ]
+}

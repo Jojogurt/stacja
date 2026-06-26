@@ -1,0 +1,1745 @@
+{
+  "label": "Marvel",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Iron Mana?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tony Stark",
+          "Anthony Stark",
+          "Iron Man"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor wciela się w Tony'ego Starka w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Robert Downey Jr",
+          "Robert Downey Junior",
+          "Robert Downey"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Kapitana Ameryki?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Steve Rogers",
+          "Steven Rogers",
+          "Captain America",
+          "Kapitan Ameryka"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor gra Kapitana Amerykę (Steve'a Rogersa) w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Chris Evans",
+          "Evans"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się asgardzki bóg piorunów, syn Odyna?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thor"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor wciela się w Thora w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Chris Hemsworth",
+          "Hemsworth"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przybrany brat Thora, bóg psot?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Loki"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor gra Lokiego w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tom Hiddleston",
+          "Hiddleston"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Spider-Mana?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Peter Parker",
+          "Spider-Man",
+          "Spider Man"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor gra Spider-Mana w MCU (od 2016 roku)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tom Holland",
+          "Holland"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Hulka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bruce Banner",
+          "Robert Bruce Banner",
+          "Banner"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Black Widow (Czarnej Wdowy)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Natasha Romanoff",
+          "Natalia Romanova",
+          "Black Widow",
+          "Czarna Wdowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Która aktorka wciela się w Czarną Wdowę w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktorka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Scarlett Johansson",
+          "Johansson"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Hawkeye'a (Sokolego Oka)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Clint Barton",
+          "Hawkeye",
+          "Sokole Oko"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główny złoczyńca trylogii „Avengers”, który zbiera Kamienie Nieskończoności?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thanos"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor zagrał Thanosa w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Josh Brolin",
+          "Brolin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rękawica, w którą Thanos wkłada Kamienie Nieskończoności?\nA) Rękawica Mocy\nB) Rękawica Czasu\nC) Rękawica Asgardu\nD) Rękawica Nieskończoności",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Rękawica Nieskończoności",
+          "Rekawica Nieskonczonosci",
+          "Infinity Gauntlet"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się fikcyjne afrykańskie królestwo, którego władcą jest Czarna Pantera?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa kraju"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wakanda"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Czarnej Pantery (króla Wakandy)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "TChalla",
+          "T'Challa",
+          "Tchalla"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor wcielił się w Czarną Panterę (T'Challę) w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Chadwick Boseman",
+          "Boseman"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się cenny metal, z którego zbudowana jest tarcza Kapitana Ameryki, wydobywany w Wakandzie?\nA) Vibranium\nB) Uru\nC) Adamantium\nD) Carbonadium",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub metal"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Vibranium",
+          "vibranium",
+          "wibranium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sztuczna inteligencja, asystent Tony'ego Starka, zanim powstał Vision?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa AI"
+        }
+      ],
+      "answers": {
+        "a": [
+          "JARVIS",
+          "Jarvis"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się szef i twórca organizacji S.H.I.E.L.D., który zbiera Avengers?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nick Fury",
+          "Fury"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor gra Nicka Fury'ego w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Samuel L Jackson",
+          "Samuel Jackson",
+          "Jackson"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gadające drzewo ze „Strażników Galaktyki”, które mówi tylko „I am Groot”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Groot"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się uzbrojony, gadający szop ze „Strażników Galaktyki”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Rocket",
+          "Rocket Raccoon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Star-Lorda, lidera Strażników Galaktyki?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Peter Quill",
+          "Star-Lord",
+          "Star Lord"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor wciela się w Star-Lorda (Petera Quilla)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Chris Pratt",
+          "Pratt"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zielonoskóra wojowniczka, przybrana córka Thanosa, ze „Strażników Galaktyki”?\nA) Nebula\nB) Mantis\nC) Gamora\nD) Hela",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Gamora"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się muskularny wojownik ze „Strażników Galaktyki”, który nie rozumie metafor?\nA) Korg\nB) Drax\nC) Yondu\nD) Kraglin",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Drax",
+          "Drax Niszczyciel"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się Najwyższy Czarownik, mistrz magii grany przez Benedicta Cumberbatcha?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Doctor Strange",
+          "Doktor Strange",
+          "Stephen Strange",
+          "Strange"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor gra Doktora Strange'a w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Benedict Cumberbatch",
+          "Cumberbatch"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złoczyńca z pierwszego filmu „Iron Man”, mentor, a potem wróg Tony'ego Starka?\nA) Justin Hammer\nB) Aldrich Killian\nC) Ivan Vanko\nD) Obadiah Stane",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Obadiah Stane",
+          "Iron Monger",
+          "Stane"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię i nazwisko Ant-Mana (głównego, granego przez Paula Rudda)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Scott Lang",
+          "Lang"
+        ]
+      }
+    },
+    {
+      "prompt": "Który aktor gra Ant-Mana (Scotta Langa) w MCU?\nA) Paul Bettany\nB) Paul Rudd\nC) Paul Dano\nD) Mark Ruffalo",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Paul Rudd",
+          "Rudd"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się android stworzony z Kamienia Umysłu, który nosi pelerynę i ma czerwoną skórę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Vision"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi prawdziwe imię Scarlet Witch (Szkarłatnej Wiedźmy)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wanda Maximoff",
+          "Scarlet Witch",
+          "Szkarlatna Wiedzma"
+        ]
+      }
+    },
+    {
+      "prompt": "Która aktorka gra Wandę Maximoff (Scarlet Witch) w MCU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktorka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Elizabeth Olsen",
+          "Olsen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się brat-bliźniak Wandy, superszybki Quicksilver?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Pietro Maximoff",
+          "Quicksilver",
+          "Pietro"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złoczyńca-android, sztuczna inteligencja, który chce wytępić ludzkość w „Avengers: Czas Ultrona”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ultron"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przyjaciel Steve'a Rogersa, który stał się zmanipulowanym zabójcą Zimowym Żołnierzem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko / pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bucky Barnes",
+          "James Barnes",
+          "Winter Soldier",
+          "Zimowy Zolnierz",
+          "Bucky"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przyjaciel Kapitana Ameryki latający dzięki mechanicznym skrzydłom (Falcon)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko / pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sam Wilson",
+          "Falcon",
+          "Wilson"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się siostra T'Challi, genialna wynalazczyni technologii Wakandy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Shuri"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złoczyńca, główny przeciwnik w filmie „Czarna Pantera” (2018), kuzyn T'Challi?\nA) Killmonger\nB) Klaue\nC) M'Baku\nD) Namor",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Killmonger",
+          "Erik Killmonger",
+          "Erik Stevens"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się magiczny młot Thora?\nA) Stormbreaker\nB) Gungnir\nC) Mjolnir\nD) Hofund",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Mjolnir",
+          "Mjollnir"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się topór, który Thor zdobywa w „Avengers: Wojna bez granic”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stormbreaker",
+          "Burzogrom"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto napisał słynne kwestie i współtworzył wielu bohaterów Marvela, był też twarzą firmy (cameo w filmach)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stan Lee",
+          "Lee"
+        ]
+      }
+    },
+    {
+      "prompt": "Który rysownik współtworzył z Stanem Lee m.in. Kapitana Amerykę, Fantastyczną Czwórkę i Hulka?\nA) Steve Ditko\nB) Jack Kirby\nC) John Romita\nD) Jim Lee",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Jack Kirby",
+          "Kirby"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się drużyna mutantów stworzona przez Stana Lee i Jacka Kirby'ego, prowadzona przez profesora X?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa drużyny"
+        }
+      ],
+      "answers": {
+        "a": [
+          "X-Men",
+          "X-Meni",
+          "X Men"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mutant z adamantium w szkielecie i wysuwanymi pazurami, członek X-Men?\nA) Cyclops\nB) Sabretooth\nC) Wolverine\nD) Gambit",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Wolverine",
+          "Logan",
+          "Rosomak"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czerwony antybohater Marvela znany z czwartej ściany i czarnego humoru, grany przez Ryana Reynoldsa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Deadpool"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się Kamień Nieskończoności ukryty wewnątrz berła Lokiego, a potem w czole Visiona?\nA) Kamień Czasu\nB) Kamień Mocy\nC) Kamień Duszy\nD) Kamień Umysłu",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa kamienia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Kamień Umysłu",
+          "Kamien Umyslu",
+          "Mind Stone"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się Kamień Nieskończoności ukryty w Tesseracie (świecącej kostce)?\nA) Kamień Rzeczywistości\nB) Kamień Czasu\nC) Kamień Mocy\nD) Kamień Przestrzeni",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa kamienia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Kamień Przestrzeni",
+          "Kamien Przestrzeni",
+          "Space Stone"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się Kamień Nieskończoności w naszyjniku Eye of Agamotto Doktora Strange'a?\nA) Kamień Czasu\nB) Kamień Umysłu\nC) Kamień Przestrzeni\nD) Kamień Duszy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa kamienia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Kamień Czasu",
+          "Kamien Czasu",
+          "Time Stone"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki Kamień Nieskończoności ukryty jest na planecie Vormir i wymaga poświęcenia ukochanej osoby?\nA) Kamień Mocy\nB) Kamień Rzeczywistości\nC) Kamień Duszy\nD) Kamień Czasu",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub kamień"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Kamień Duszy",
+          "Kamien Duszy",
+          "Soul Stone"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przybrana siostra Gamory, cyborg, córka Thanosa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nebula"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się film z 2018 roku, w którym Thanos zdobywa wszystkie Kamienie i dokonuje „pstryknięcia”?\nA) Avengers: Czas Ultrona\nB) Avengers: Koniec gry\nC) Avengers: Wojna bez granic\nD) Avengers",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub tytuł filmu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Avengers: Wojna bez granic",
+          "Avengers Wojna bez granic",
+          "Avengers Infinity War",
+          "Wojna bez granic",
+          "Infinity War"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się film z 2019 roku, finał Sagi Nieskończoności, w którym Avengers cofają się w czasie po Kamienie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł filmu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Avengers Koniec gry",
+          "Avengers Endgame",
+          "Koniec gry",
+          "Endgame"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kolorowy kombinezon nosi Iron Man — jakie dwa główne kolory dominują w jego zbroi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kolor 1"
+        },
+        {
+          "key": "b",
+          "label": "kolor 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czerwony",
+          "czerwona"
+        ],
+        "b": [
+          "zloty",
+          "zlota",
+          "zloto"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwoje rodzeństwa Maximoff — bliźniaków z Sokovii, którzy zyskali moce dzięki Kamieniowi Umysłu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bliźniak 1"
+        },
+        {
+          "key": "b",
+          "label": "bliźniak 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wanda",
+          "Wanda Maximoff",
+          "Scarlet Witch"
+        ],
+        "b": [
+          "Pietro",
+          "Pietro Maximoff",
+          "Quicksilver"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj tytuł filmu o Iron Manie oraz aktora grającego tytułową rolę. (a = tytuł, b = aktor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł filmu"
+        },
+        {
+          "key": "b",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Iron Man"
+        ],
+        "b": [
+          "Robert Downey Jr",
+          "Robert Downey Junior",
+          "Robert Downey"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj króla Wakandy (pseudonim bohatera) oraz nazwę jego królestwa. (a = bohater, b = królestwo)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bohater"
+        },
+        {
+          "key": "b",
+          "label": "królestwo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Czarna Pantera",
+          "Black Panther",
+          "TChalla",
+          "T'Challa"
+        ],
+        "b": [
+          "Wakanda"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień prawdziwe imię i nazwisko Kapitana Ameryki oraz aktora, który go gra. (a = bohater, b = aktor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko bohatera"
+        },
+        {
+          "key": "b",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Steve Rogers",
+          "Steven Rogers"
+        ],
+        "b": [
+          "Chris Evans",
+          "Evans"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień prawdziwe imię i nazwisko Thora oraz nazwę jego młota. (a = postać, b = młot)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        },
+        {
+          "key": "b",
+          "label": "młot"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thor",
+          "Thor Odinson"
+        ],
+        "b": [
+          "Mjolnir",
+          "Mjollnir"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwóch braci z Asgardu: boga piorunów i boga psot. (a = bóg piorunów, b = bóg psot)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bóg piorunów"
+        },
+        {
+          "key": "b",
+          "label": "bóg psot"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thor"
+        ],
+        "b": [
+          "Loki"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień prawdziwe imię i nazwisko Hulka oraz aktora grającego go w „Avengers”. (a = postać, b = aktor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        },
+        {
+          "key": "b",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bruce Banner",
+          "Banner"
+        ],
+        "b": [
+          "Mark Ruffalo",
+          "Ruffalo"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień czterech oryginalnych Avengersów (poza Thorem i Iron Manem) z pierwszego filmu „Avengers” — podaj pseudonimy lub imiona. (a, b, c, d to dowolni czterej z: Kapitan Ameryka, Hulk, Czarna Wdowa, Hawkeye)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bohater 1"
+        },
+        {
+          "key": "b",
+          "label": "bohater 2"
+        },
+        {
+          "key": "c",
+          "label": "bohater 3"
+        },
+        {
+          "key": "d",
+          "label": "bohater 4"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kapitan Ameryka",
+          "Captain America",
+          "Steve Rogers"
+        ],
+        "b": [
+          "Hulk",
+          "Bruce Banner"
+        ],
+        "c": [
+          "Czarna Wdowa",
+          "Black Widow",
+          "Natasha Romanoff"
+        ],
+        "d": [
+          "Hawkeye",
+          "Sokole Oko",
+          "Clint Barton"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech członków-założycieli Strażników Galaktyki spoza Groota i Rocketa. (a = Star-Lord, b = Gamora, c = Drax)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "lider"
+        },
+        {
+          "key": "b",
+          "label": "wojowniczka"
+        },
+        {
+          "key": "c",
+          "label": "wojownik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Star-Lord",
+          "Star Lord",
+          "Peter Quill"
+        ],
+        "b": [
+          "Gamora"
+        ],
+        "c": [
+          "Drax"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwie postacie, które złożyły swoje życie na Vormir w „Endgame”, by zdobyć Kamień Duszy oddany przez jedną z nich. (a = ta, która poświęciła życie w Endgame; b = ta, która oddała życie w Wojnie bez granic)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "Endgame — Vormir"
+        },
+        {
+          "key": "b",
+          "label": "Infinity War — Vormir"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Czarna Wdowa",
+          "Black Widow",
+          "Natasha Romanoff",
+          "Natasha"
+        ],
+        "b": [
+          "Gamora"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj nazwę Kamienia Nieskończoności ukrytego w Tesseracie oraz jego kolor. (a = nazwa, b = kolor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa kamienia"
+        },
+        {
+          "key": "b",
+          "label": "kolor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kamien Przestrzeni",
+          "Space Stone"
+        ],
+        "b": [
+          "niebieski",
+          "niebieska"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień nazwę organizacji szpiegowskiej Nicka Fury'ego oraz aktora grającego Fury'ego. (a = organizacja, b = aktor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "organizacja"
+        },
+        {
+          "key": "b",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "SHIELD",
+          "S.H.I.E.L.D.",
+          "Tarcza"
+        ],
+        "b": [
+          "Samuel L Jackson",
+          "Samuel Jackson",
+          "Jackson"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj pseudonim Petera Quilla oraz aktora, który go gra. (a = pseudonim, b = aktor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pseudonim"
+        },
+        {
+          "key": "b",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Star-Lord",
+          "Star Lord"
+        ],
+        "b": [
+          "Chris Pratt",
+          "Pratt"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień prawdziwe imię i nazwisko Spider-Mana oraz aktora grającego go w MCU. (a = postać, b = aktor)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        },
+        {
+          "key": "b",
+          "label": "aktor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Peter Parker"
+        ],
+        "b": [
+          "Tom Holland",
+          "Holland"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień złoczyńcę z trylogii Avengers oraz jego główny cel — przedmiot, który gromadzi. (a = złoczyńca, b = przedmioty)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "złoczyńca"
+        },
+        {
+          "key": "b",
+          "label": "co gromadzi"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thanos"
+        ],
+        "b": [
+          "Kamienie Nieskonczonosci",
+          "Infinity Stones",
+          "Kamienie"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwoje twórców Marvela: scenarzystę-twarz firmy oraz słynnego rysownika współtworzącego wielu bohaterów. (a = scenarzysta, b = rysownik)",
+      "slots": [
+        {
+          "key": "a",
+          "label": "scenarzysta"
+        },
+        {
+          "key": "b",
+          "label": "rysownik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stan Lee",
+          "Lee"
+        ],
+        "b": [
+          "Jack Kirby",
+          "Kirby"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się film z 2016 roku, w którym Avengers dzielą się na dwa obozy wokół Sokovia Accords?\nA) Kapitan Ameryka: Wojna bohaterów\nB) Kapitan Ameryka: Zimowy Żołnierz\nC) Avengers: Czas Ultrona\nD) Avengers: Wojna bez granic",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub tytuł filmu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Kapitan Ameryka: Wojna bohaterów",
+          "Kapitan Ameryka Wojna bohaterow",
+          "Captain America Civil War",
+          "Wojna bohaterow",
+          "Civil War"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się pierwszy film MCU, otwierający całe uniwersum w 2008 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł filmu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Iron Man"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się bohaterka z mocami kosmicznymi, która świeci na żółto-niebiesko, grana przez Brie Larson?\nA) Wasp\nB) Scarlet Witch\nC) Kapitan Marvel\nD) Czarna Wdowa",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Kapitan Marvel",
+          "Captain Marvel"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi imię i nazwisko Kapitan Marvel?\nA) Carol Danvers\nB) Jennifer Walters\nC) Monica Rambeau\nD) Maria Hill",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Carol Danvers",
+          "Danvers"
+        ]
+      }
+    },
+    {
+      "prompt": "Która aktorka gra Kapitan Marvel?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "aktorka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Brie Larson",
+          "Larson"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rasa zmiennokształtnych kosmitów z filmu „Kapitan Marvel”?\nA) Kree\nB) Chitauri\nC) Celestianie\nD) Skrullowie",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rasa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Skrullowie",
+          "Skrull",
+          "Skrulle"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się siostra Thora, bogini śmierci, główna złoczyńczyni „Thor: Ragnarok”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hela"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się asystentka, a później partnerka Tony'ego Starka, grana przez Gwyneth Paltrow?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko / pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Pepper Potts",
+          "Virginia Potts",
+          "Pepper"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najlepszy przyjaciel Tony'ego Starka, pilot wojskowy noszący zbroję War Machine?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko / pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "James Rhodes",
+          "Rhodey",
+          "War Machine",
+          "Rhodes"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złoczyńca z „Spider-Man: Homecoming”, handlarz bronią z mechanicznymi skrzydłami (Vulture)?\nA) Doc Ock\nB) Adrian Toomes\nC) Norman Osborn\nD) Mac Gargan",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Adrian Toomes",
+          "Vulture",
+          "Sep",
+          "Toomes"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złoczyńca-iluzjonista z „Spider-Man: Daleko od domu”, podszywający się pod bohatera (Mysterio)?\nA) Quentin Beck\nB) Adrian Toomes\nC) Norman Osborn\nD) Curt Connors",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Quentin Beck",
+          "Mysterio",
+          "Beck"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się film z 2021 roku, w którym do MCU wracają złoczyńcy i Spider-Mani z poprzednich serii?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł filmu"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Spider-Man Bez drogi do domu",
+          "Spider-Man No Way Home",
+          "Bez drogi do domu",
+          "No Way Home"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się żona Ant-Mana z komiksów / partnerka bohaterka potrafiąca latać i zmieniać rozmiar (The Wasp)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pseudonim"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wasp",
+          "The Wasp",
+          "Osa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi imię i nazwisko The Wasp (Osy) w MCU, córki Hanka Pyma?\nA) Janet van Dyne\nB) Hope van Dyne\nC) Cassie Lang\nD) Maggie Lang",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Hope van Dyne",
+          "Hope Van Dyne",
+          "Van Dyne",
+          "Hope"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się naukowiec, twórca cząsteczek Pyma i pierwszy Ant-Man, grany przez Michaela Douglasa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hank Pym",
+          "Pym"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mistrz kung-fu, bohater filmu „Shang-Chi” z 2021 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Shang-Chi",
+          "Shang Chi",
+          "Shang"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się organizacja / dziesięć pierścieni dających moc, prowadzona przez ojca Shang-Chi?\nA) Hydra\nB) Dziesięć Pierścieni\nC) Hand\nD) AIM",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Dziesięć Pierścieni",
+          "Dziesiec Pierscieni",
+          "Ten Rings"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się starożytna rasa nieśmiertelnych bohaterów z filmu „Eternals” (2021)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Eternals",
+          "Eternale",
+          "Wieczni"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się prawniczka, kuzynka Bruce'a Bannera, która sama staje się zieloną olbrzymką (She-Hulk)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jennifer Walters",
+          "She-Hulk",
+          "Walters"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się organizacja kontrolująca linie czasu w serialu „Loki” (skrót)?\nA) S.W.O.R.D.\nB) TVA\nC) S.H.I.E.L.D.\nD) A.I.M.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub skrót organizacji"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "TVA",
+          "Time Variance Authority"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tytuł zbiorczy pierwszych trzech faz MCU, zakończonych w „Endgame”?\nA) Saga Multiwersum\nB) Saga Kosmiczna\nC) Saga Nieskończoności\nD) Saga Avengers",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa sagi"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Saga Nieskończoności",
+          "Saga Nieskonczonosci",
+          "Infinity Saga"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaką sławną kwestią Tony Stark kończy film „Avengers: Koniec gry” tuż przed pstryknięciem?\nA) „Avengers, naprzód”\nB) „I am Iron Man”\nC) „Hulk, smash”\nD) „Wakanda forever”",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub cytat"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "I am Iron Man",
+          "Jestem Iron Manem",
+          "Ja jestem Iron Manem"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie słowa wypowiada Kapitan Ameryka, gdy w „Endgame” chwyta młot Thora i przewodzi Avengers?\nA) „Avengers assemble”\nB) „I can do this all day”\nC) „On your left”\nD) „I am Iron Man”",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub cytat"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Avengers assemble",
+          "Avengers, naprzod",
+          "Avengers do boju"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się fikcyjny kraj w Europie Wschodniej, ojczyzna bliźniaków Maximoff, zniszczony w „Czasie Ultrona”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa kraju"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sokovia"
+        ]
+      }
+    },
+    {
+      "prompt": "Który z Avengersów stworzył sztuczną inteligencję Ultron w filmie „Avengers: Czas Ultrona”?\nA) Bruce Banner\nB) Hank Pym\nC) Shuri\nD) Tony Stark",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub twórca Ultrona"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Tony Stark",
+          "Stark",
+          "Iron Man"
+        ]
+      }
+    }
+  ]
+}

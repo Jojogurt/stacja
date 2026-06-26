@@ -1,0 +1,1792 @@
+{
+  "label": "Zwierzęta i przyroda",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Jakie zwierzę lądowe jest najszybsze na krótkim dystansie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gepard"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie jest największe zwierzę, które kiedykolwiek żyło na Ziemi?\nA) Tyranozaur\nB) Słoń afrykański\nC) Płetwal błękitny\nD) Kaszalot",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "płetwal błękitny",
+          "pletwal blekitny",
+          "płetwal",
+          "wieloryb błękitny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak lądowy jest największy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "słoń afrykański",
+          "słoń"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak jest największy na świecie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "struś",
+          "struś afrykański"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak nie potrafi latać, ale świetnie pływa i żyje m.in. na Antarktydzie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pingwin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najszybszy ptak świata podczas lotu nurkowego?\nA) Orzeł przedni\nB) Jerzyk\nC) Albatros\nD) Sokół wędrowny",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "sokół wędrowny",
+          "sokol wedrowny",
+          "sokół"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się samica konia?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "klacz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się samiec kury?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kogut"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się młode krowy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "cielę",
+          "ciele",
+          "cielak"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się młode owcy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "jagnię",
+          "jagnie",
+          "baranek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się samiec świni?\nA) Knur\nB) Wieprz\nC) Kiernoz\nD) Maciorek",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "knur"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się młode psa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "szczeniak",
+          "szczenię",
+          "szczenie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się młode kota?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kocię",
+          "kocie",
+          "kociak"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się samiec gęsi?\nA) Gęsior\nB) Gąsior\nC) Gęśniak\nD) Gander",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "gąsior",
+          "gasior"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady kręgowców należy nietoperz?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ssaki"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady kręgowców należy żaba?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada"
+        }
+      ],
+      "answers": {
+        "a": [
+          "płazy",
+          "plazy"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady kręgowców należy wąż?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gady"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady należy delfin?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ssaki"
+        ]
+      }
+    },
+    {
+      "prompt": "Do jakiej gromady kręgowców należy rekin?\nA) Ssaki\nB) Gady\nC) Płazy\nD) Ryby",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "ryby",
+          "ryba"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile nóg ma owad (np. mrówka)?\nA) 4\nB) 6\nC) 8\nD) 10",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "6",
+          "sześć",
+          "szesc"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile nóg ma pająk?\nA) 6\nB) 8\nC) 10\nD) 12",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "8",
+          "osiem"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakim kontynencie naturalnie występują kangury?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kontynent"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Australia"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakim kontynencie żyją dzikie lwy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kontynent"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Afryka"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakim kontynencie żyje niedźwiedź polarny?\nA) Antarktyda\nB) Arktyka\nC) Azja\nD) Europa",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Arktyka",
+          "Ameryka Północna",
+          "Ameryka Polnocna"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego kraju pochodzi miś panda wielka?\nA) Japonia\nB) Indie\nC) Chiny\nD) Tajlandia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Chiny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy drapieżny ssak lądowy?\nA) Niedźwiedź polarny\nB) Tygrys syberyjski\nC) Lew\nD) Niedźwiedź grizzly",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "niedźwiedź polarny",
+          "niedzwiedz polarny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę nazywane jest „królem dżungli”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "lew"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę ma najdłuższą szyję?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "żyrafa",
+          "zyrafa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę jest symbolem leniwego trybu życia i wisi głową w dół na drzewach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "leniwiec"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największa małpa świata?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "goryl"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę produkuje miód?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pszczoła",
+          "pszczola"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przekształcenie gąsienicy w motyla i podobne przemiany?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "metamorfoza",
+          "przeobrażenie",
+          "przeobrazenie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki owad buduje kopce i żyje w wielkich koloniach z królową?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "owad"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mrówka",
+          "mrowka",
+          "termit"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak składa jaja i występuje w Australii?\nA) Koala\nB) Dziobak\nC) Kangur\nD) Wombat",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "dziobak",
+          "kolczatka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najwyższy ssak świata?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "żyrafa",
+          "zyrafa"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile serc ma ośmiornica?\nA) 1\nB) 2\nC) 4\nD) 3",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "3",
+          "trzy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę potrafi zmieniać kolor skóry, by się maskować?\nA) Kameleon\nB) Iguana\nC) Gekon\nD) Waran",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "kameleon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak słynie z naśladowania ludzkiej mowy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "papuga"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak symbolizuje pokój?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gołąb",
+          "golab"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak budzi nas rano pianiem i jest symbolem wsi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kogut"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę nosi pancerz i może chować się do skorupy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "żółw",
+          "zolw"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki owad ma czerwone skrzydła w czarne kropki i przynosi szczęście?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "owad"
+        }
+      ],
+      "answers": {
+        "a": [
+          "biedronka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największa ryba świata, odżywiająca się planktonem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ryba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "rekin wielorybi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak drapieżny jest godłem Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "orzeł",
+          "orzel",
+          "orzeł biały",
+          "bielik"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak jest największym zwierzęciem żyjącym w polskich lasach?\nA) Łoś\nB) Żubr\nC) Jeleń\nD) Dzik",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "żubr",
+          "zubr"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki bocian gniazduje na dachach i kominach polskich wsi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bocian biały",
+          "bocian"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gryzoń buduje tamy na rzekach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bóbr",
+          "bobr"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki drapieżnik z rodziny psowatych żyje w polskich lasach i wyje?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wilk"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak zwija się w kolczastą kulę, gdy się broni?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "jeż",
+          "jez"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki rogaty ssak leśny jest największym jeleniowatym w Polsce?\nA) Jeleń szlachetny\nB) Sarna\nC) Łoś\nD) Daniel",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "łoś",
+          "los"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się samiec sarny?\nA) Byk\nB) Kozioł\nC) Jeleń\nD) Rogal",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "kozioł",
+          "koziol",
+          "rogacz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się samiec jelenia?\nA) Byk\nB) Kozioł\nC) Tryk\nD) Knur",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "byk"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak zimą przylatuje do Polski i ma czerwoną pierś?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gil"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki płaz ma jaskrawą żółto-czarną skórę i żyje w wilgotnych lasach?\nA) Traszka\nB) Ropucha\nC) Salamandra plamista\nD) Kumak",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "salamandra plamista",
+          "salamandra"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces wytwarzania tlenu przez rośliny z udziałem światła?\nA) Oddychanie\nB) Fotosynteza\nC) Transpiracja\nD) Fermentacja",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "fotosynteza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz pobierają rośliny z powietrza podczas fotosyntezy?\nA) Tlen\nB) Azot\nC) Wodór\nD) Dwutlenek węgla",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "dwutlenek węgla",
+          "dwutlenek wegla",
+          "CO2"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz wydzielają rośliny do powietrza podczas fotosyntezy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najwyższe drzewo świata, rosnące w Kalifornii?\nA) Baobab\nB) Dąb\nC) Eukaliptus\nD) Sekwoja",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "sekwoja",
+          "mamutowiec",
+          "sekwoja wieczniezielona"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy las deszczowy świata?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "las / region"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Amazonia",
+          "puszcza amazońska",
+          "puszcza amazonska"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki barwnik nadaje liściom zielony kolor?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "barwnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "chlorofil"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najstarsza i największa puszcza w Polsce, dom żubrów?\nA) Puszcza Kampinoska\nB) Puszcza Białowieska\nC) Puszcza Augustowska\nD) Bory Tucholskie",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Puszcza Białowieska",
+          "Puszcza Bialowieska",
+          "Białowieża",
+          "Bialowieza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się wiosenny kwiat, który przebija się przez śnieg jako jeden z pierwszych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kwiat"
+        }
+      ],
+      "answers": {
+        "a": [
+          "przebiśnieg",
+          "przebisnieg"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się drzewo iglaste, które na zimę zrzuca igły?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "drzewo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "modrzew"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego drzewa pochodzą żołędzie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "drzewo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dąb",
+          "dab"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiego drzewa pochodzą kasztany jadalne i ozdobne (kasztanowce)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "drzewo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kasztanowiec",
+          "kasztan"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się część rośliny, która pobiera wodę z gleby?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "część rośliny"
+        }
+      ],
+      "answers": {
+        "a": [
+          "korzeń",
+          "korzen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największa pustynia gorąca świata?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pustynia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sahara"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak żyje na pustyni i magazynuje tłuszcz w garbach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wielbłąd",
+          "wielblad"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najgłębszy ocean / rów oceaniczny świata?\nA) Rów Portorykański\nB) Rów Tonga\nC) Rów Mariański\nD) Rów Jawajski",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Rów Mariański",
+          "Row Marianski",
+          "Głębia Challengera",
+          "Glebia Challengera"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy ocean na Ziemi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ocean"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ocean Spokojny",
+          "Pacyfik"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zjawisko, w którym zwierzęta zapadają w zimowy sen (np. niedźwiedź, jeż)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zjawisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "hibernacja",
+          "sen zimowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sezonowa wędrówka zwierząt, np. ptaków na południe?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zjawisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "migracja",
+          "wędrówka",
+          "wedrowka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zwierzę odżywiające się wyłącznie roślinami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "roślinożerca",
+          "roslinozerca",
+          "roślinożerne",
+          "roslinozerne"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zwierzę odżywiające się mięsem innych zwierząt?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mięsożerca",
+          "miesozerca",
+          "drapieżnik",
+          "drapieznik"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zwierzę jedzące zarówno rośliny, jak i mięso?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "termin"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wszystkożerca",
+          "wszystkozerca",
+          "wszystkożerne",
+          "wszystkozerne"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę jest największym żyjącym gadem?\nA) Anakonda\nB) Krokodyl różańcowy\nC) Waran z Komodo\nD) Żółw słoniowy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "krokodyl różańcowy",
+          "krokodyl roznicowy",
+          "krokodyl"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jad ma najjadowitszy wąż lub jak nazywa się najbardziej znany jadowity wąż Indii (z kapturem)?\nA) Kobra\nB) Żmija\nC) Grzechotnik\nD) Mamba",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "kobra",
+          "kobra indyjska"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy wąż świata pod względem masy, dusiciel z Ameryki Południowej?\nA) Pyton\nB) Boa\nC) Anakonda\nD) Mamba",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "anakonda"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę morskie ma osiem ramion i potrafi wypuszczać atrament?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ośmiornica",
+          "osmiornica"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy ssak żyjący w polskich rzekach i jeziorach (gryzoń)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bóbr",
+          "bobr"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ptak nocny słynie z polowania w ciemności i obracania głowy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak"
+        }
+      ],
+      "answers": {
+        "a": [
+          "sowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy żyjący gatunek żółwia, żyjący w morzu?\nA) Żółw słoniowy\nB) Żółw skórzasty\nC) Żółw zielony\nD) Kareta",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "żółw skórzasty",
+          "zolw skorzasty"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie zwierzę nazywane jest „okrętem pustyni”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wielbłąd",
+          "wielblad"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki owad zapyla kwiaty i wytwarza wosk?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "owad"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pszczoła",
+          "pszczola"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak morski jest uważany za jednego z najinteligentniejszych i komunikuje się gwizdami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "delfin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największy ptak drapieżny Ameryki Południowej, padlinożerca o ogromnej rozpiętości skrzydeł?\nA) Orzeł harpia\nB) Sęp\nC) Kondor wielki\nD) Albatros",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "kondor wielki",
+          "kondor"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ssak ma czarno-białe pasy i żyje w afrykańskiej sawannie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zebra"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki duży ssak afrykański ma róg na nosie i grubą skórę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        }
+      ],
+      "answers": {
+        "a": [
+          "nosorożec",
+          "nosorozec"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj zwierzę i kontynent: gdzie naturalnie żyje koala?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        },
+        {
+          "key": "b",
+          "label": "kontynent"
+        }
+      ],
+      "answers": {
+        "a": [
+          "koala"
+        ],
+        "b": [
+          "Australia"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj zwierzę i kontynent: gdzie naturalnie żyje tygrys?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        },
+        {
+          "key": "b",
+          "label": "kontynent"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tygrys"
+        ],
+        "b": [
+          "Azja"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj zwierzę i kontynent: gdzie naturalnie żyje pingwin cesarski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        },
+        {
+          "key": "b",
+          "label": "kontynent"
+        }
+      ],
+      "answers": {
+        "a": [
+          "pingwin cesarski",
+          "pingwin"
+        ],
+        "b": [
+          "Antarktyda"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj samca i samicę: jak nazywa się samiec i samica gęsi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "samiec"
+        },
+        {
+          "key": "b",
+          "label": "samica"
+        }
+      ],
+      "answers": {
+        "a": [
+          "gąsior",
+          "gasior"
+        ],
+        "b": [
+          "gęś",
+          "ges"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj samca i samicę bydła: jak nazywa się samiec i samica?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "samiec"
+        },
+        {
+          "key": "b",
+          "label": "samica"
+        }
+      ],
+      "answers": {
+        "a": [
+          "byk"
+        ],
+        "b": [
+          "krowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa ssaki morskie (rzędu waleni).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ssak 1"
+        },
+        {
+          "key": "b",
+          "label": "ssak 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "delfin",
+          "wieloryb",
+          "płetwal",
+          "pletwal",
+          "orka",
+          "morświn",
+          "morswin",
+          "kaszalot"
+        ],
+        "b": [
+          "wieloryb",
+          "delfin",
+          "płetwal",
+          "pletwal",
+          "orka",
+          "morświn",
+          "morswin",
+          "kaszalot"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy zwierzęta żyjące w afrykańskiej sawannie.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę 1"
+        },
+        {
+          "key": "b",
+          "label": "zwierzę 2"
+        },
+        {
+          "key": "c",
+          "label": "zwierzę 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "lew",
+          "słoń",
+          "slon",
+          "żyrafa",
+          "zyrafa",
+          "zebra",
+          "antylopa",
+          "nosorożec",
+          "nosorozec",
+          "hipopotam",
+          "gepard",
+          "lampart",
+          "hiena",
+          "bawół",
+          "bawol"
+        ],
+        "b": [
+          "żyrafa",
+          "zyrafa",
+          "zebra",
+          "słoń",
+          "slon",
+          "lew",
+          "antylopa",
+          "nosorożec",
+          "nosorozec",
+          "hipopotam",
+          "gepard",
+          "lampart",
+          "hiena",
+          "bawół",
+          "bawol"
+        ],
+        "c": [
+          "zebra",
+          "antylopa",
+          "słoń",
+          "slon",
+          "żyrafa",
+          "zyrafa",
+          "lew",
+          "nosorożec",
+          "nosorozec",
+          "hipopotam",
+          "gepard",
+          "lampart",
+          "hiena",
+          "bawół",
+          "bawol"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy gromady kręgowców.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gromada 1"
+        },
+        {
+          "key": "b",
+          "label": "gromada 2"
+        },
+        {
+          "key": "c",
+          "label": "gromada 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ssaki",
+          "ptaki",
+          "ryby",
+          "gady",
+          "płazy",
+          "plazy"
+        ],
+        "b": [
+          "ptaki",
+          "ssaki",
+          "ryby",
+          "gady",
+          "płazy",
+          "plazy"
+        ],
+        "c": [
+          "ryby",
+          "gady",
+          "płazy",
+          "plazy",
+          "ssaki",
+          "ptaki"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy ptaki, które można spotkać w polskim ogrodzie lub parku.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ptak 1"
+        },
+        {
+          "key": "b",
+          "label": "ptak 2"
+        },
+        {
+          "key": "c",
+          "label": "ptak 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wróbel",
+          "wrobel",
+          "sikorka",
+          "kos",
+          "szpak",
+          "gołąb",
+          "golab",
+          "wrona",
+          "sroka",
+          "kawka",
+          "dzięcioł",
+          "dzieciol",
+          "rudzik",
+          "kowalik"
+        ],
+        "b": [
+          "sikorka",
+          "kos",
+          "szpak",
+          "wróbel",
+          "wrobel",
+          "gołąb",
+          "golab",
+          "wrona",
+          "sroka",
+          "kawka",
+          "dzięcioł",
+          "dzieciol",
+          "rudzik",
+          "kowalik"
+        ],
+        "c": [
+          "kos",
+          "szpak",
+          "sroka",
+          "wrona",
+          "kawka",
+          "sikorka",
+          "wróbel",
+          "wrobel",
+          "gołąb",
+          "golab",
+          "dzięcioł",
+          "dzieciol",
+          "rudzik",
+          "kowalik"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj zwierzę i kontynent: gdzie naturalnie żyje panda wielka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zwierzę"
+        },
+        {
+          "key": "b",
+          "label": "kontynent"
+        }
+      ],
+      "answers": {
+        "a": [
+          "panda",
+          "panda wielka"
+        ],
+        "b": [
+          "Azja"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj samca i samicę: jak nazywa się samiec i samica kaczki?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "samiec"
+        },
+        {
+          "key": "b",
+          "label": "samica"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kaczor"
+        ],
+        "b": [
+          "kaczka"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy owady.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "owad 1"
+        },
+        {
+          "key": "b",
+          "label": "owad 2"
+        },
+        {
+          "key": "c",
+          "label": "owad 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mrówka",
+          "mrowka",
+          "pszczoła",
+          "pszczola",
+          "motyl",
+          "biedronka",
+          "komar",
+          "ważka",
+          "wazka",
+          "osa",
+          "chrząszcz",
+          "chrzaszcz",
+          "mucha",
+          "ćma",
+          "cma",
+          "trzmiel"
+        ],
+        "b": [
+          "pszczoła",
+          "pszczola",
+          "motyl",
+          "biedronka",
+          "komar",
+          "mrówka",
+          "mrowka",
+          "ważka",
+          "wazka",
+          "osa",
+          "chrząszcz",
+          "chrzaszcz",
+          "mucha",
+          "ćma",
+          "cma",
+          "trzmiel"
+        ],
+        "c": [
+          "motyl",
+          "biedronka",
+          "komar",
+          "ważka",
+          "wazka",
+          "osa",
+          "pszczoła",
+          "pszczola",
+          "mrówka",
+          "mrowka",
+          "chrząszcz",
+          "chrzaszcz",
+          "mucha",
+          "ćma",
+          "cma",
+          "trzmiel"
+        ]
+      }
+    }
+  ]
+}

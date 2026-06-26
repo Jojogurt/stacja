@@ -753,7 +753,7 @@
   .rv-prompt{font-family:var(--display);font-weight:900;font-size:16px;color:var(--ink);line-height:1.3}
   .rv-card.quiz .rv-slot .v{white-space:normal}
   .rv-team{display:block;font-family:var(--body);font-weight:700;font-size:11px;color:#9a958c;margin-top:2px}
-  .lyric-box.quiz{font-family:var(--display);font-weight:900;font-size:17px;color:var(--ink)}
+  .lyric-box.quiz{font-family:var(--display);font-weight:900;font-size:17px;color:var(--ink);white-space:pre-line}
   .rv-banner{display:flex;align-items:center;gap:12px;border-radius:16px;padding:13px 15px;margin-bottom:12px}
   .rv-banner .ic{font-size:24px;flex:0 0 auto}
   .rv-banner .tx{display:flex;flex-direction:column;min-width:0}
@@ -1299,7 +1299,7 @@
   </div>
   <div class="foot">źródło: iTunes Search API · 30 s zajawki<br>year/album = bonus · ocenia tytuł + wykonawcę</div>
 
-<script type="module" src="app.js"></script>
+<script type="module" src="quiz-loader.js"></script>
 <script>
   /* PWA: rejestracja service workera (offline + instalowalność). Best-effort. */
   if ('serviceWorker' in navigator) {

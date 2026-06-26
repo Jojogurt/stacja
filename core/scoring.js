@@ -11,14 +11,16 @@ export function deLatin(s){
 // bez „(remaster)", „feat.", przedimków itd.)
 export function norm(s){
   if(!s) return '';
-  return deLatin(s.toLowerCase()).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
+  const base = deLatin(s.toLowerCase()).normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .replace(/\(.*?\)|\[.*?\]/g,' ')
     .replace(/\s*-\s*(remaster.*|radio edit.*|single version.*|mono|stereo|live.*|.*\bversion\b.*)$/i,' ')
     .replace(/\bfeat\.?\b.*$/i,' ').replace(/\bft\.?\b.*$/i,' ')
     .replace(/&/g,' and ')
-    .replace(/[^a-z0-9 ]/g,' ')
-    .replace(/\b(the|a|an|de|le|la)\b/g,' ')
-    .replace(/\s+/g,' ').trim();
+    .replace(/[^a-z0-9 ]/g,' ');
+  const noArt = base.replace(/\b(the|a|an|de|le|la)\b/g,' ').replace(/\s+/g,' ').trim();
+  // nie redukuj do pustego, gdy ca\u0142o\u015b\u0107 to sam przedimek \u2014 np. odpowied\u017a \u201eA" w pytaniu ABCD
+  // (inaczej \u201ea" znormalizowane = '' i nigdy nie trafia litery A)
+  return noArt || base.replace(/\s+/g,' ').trim();
 }
 
 // odległość Levenshteina

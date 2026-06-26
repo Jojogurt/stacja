@@ -1,0 +1,1674 @@
+{
+  "label": "Star Wars",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Jak nazywa się planeta rodzinna Luke'a Skywalkera?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tatooine"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się siostra bliźniaczka Luke'a Skywalkera?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Leia",
+          "Leia Organa",
+          "ksiezniczka Leia"
+        ]
+      }
+    },
+    {
+      "prompt": "Pod jaką postacią ukrywa się Anakin Skywalker po przejściu na ciemną stronę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię / tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Darth Vader",
+          "Vader"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się statek pilotowany przez Hana Solo i Chewbaccę?\nA) Gwiezdny Niszczyciel\nB) Ślizgacz X-34\nC) Sokół Millennium\nD) Tantive IV",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Sokół Millennium",
+          "Sokol Millennium",
+          "Sokol Millenium",
+          "Millennium Falcon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakiej rasy jest Chewbacca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rasa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wookiee",
+          "Wookie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaką broń charakterystyczną dla rycerzy Jedi i Sithów nosi Luke?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "broń"
+        }
+      ],
+      "answers": {
+        "a": [
+          "miecz swietlny",
+          "lightsaber"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tajemnicza siła przenikająca wszechświat, którą posługują się Jedi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Moc",
+          "Force"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mały, niebiesko-biały droid astromechaniczny należący m.in. do Luke'a?\nA) C-3PO\nB) BB-8\nC) R2-D2\nD) K-2SO",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "R2-D2",
+          "R2D2",
+          "Artoo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złoty droid protokolarny, towarzysz R2-D2?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "droid"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C-3PO",
+          "C3PO",
+          "Threepio"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się kulisty droid pojawiający się w trylogii sequeli, towarzysz Poe Damerona?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "droid"
+        }
+      ],
+      "answers": {
+        "a": [
+          "BB-8",
+          "BB8"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się stacja bojowa Imperium zdolna zniszczyć całą planetę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "stacja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gwiazda Smierci",
+          "Death Star"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mistrz Jedi o zielonej skórze, który szkoli Luke'a na planecie Dagobah?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Yoda"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się Jedi, który jako pierwszy szkoli Luke'a (znany też jako Ben)?\nA) Qui-Gon Jinn\nB) Mace Windu\nC) Yoda\nD) Obi-Wan Kenobi",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Obi-Wan Kenobi",
+          "Obi-Wan",
+          "Ben Kenobi",
+          "Kenobi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi pełne imię i tytuł złego władcy Imperium, mistrza Sithów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię / tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Palpatine",
+          "Darth Sidious",
+          "Imperator Palpatine",
+          "Sidious"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główna bohaterka trylogii sequeli (epizody VII–IX)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Rey"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki tytuł nosi główny antagonista trylogii sequeli, syn Hana i Lei?\nA) Kylo Ren\nB) Darth Maul\nC) General Hux\nD) Snoke",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Kylo Ren",
+          "Ben Solo",
+          "Kylo"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakiej lodowej planecie Rebelianci mają bazę w „Imperium kontratakuje”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hoth"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakim leśnym księżycu zamieszkanym przez Ewoki rozgrywa się finał „Powrotu Jedi”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "księżyc / planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Endor",
+          "ksiezyc Endoru"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiej planety pochodzi królowa Padmé Amidala?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Naboo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się myśliwiec Rebelii o charakterystycznych rozkładanych skrzydłach w kształcie litery X?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "myśliwiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "X-wing",
+          "X-Wing"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywają się żołnierze Imperium w białych zbrojach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "szturmowcy",
+          "stormtroopers",
+          "stormtrooperzy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rasa małych, futrzastych istot żyjących na księżycu Endor?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rasa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ewoki",
+          "Ewok",
+          "Ewokowie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się łowca nagród noszący zbroję Mandalorianina, ścigający Hana Solo?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Boba Fett",
+          "Fett"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gangster z Tatooine, u którego Han Solo ma dług?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jabba",
+          "Jabba the Hutt",
+          "Jabba Hutt"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakiego koloru jest miecz świetlny tradycyjnie używany przez Sithów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "kolor"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czerwony"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zakon przeciwny Jedi, używający ciemnej strony Mocy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sith",
+          "Sithowie",
+          "zakon Sithow"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mistrz Jedi grany przez Samuela L. Jacksona, posługujący się fioletowym mieczem?\nA) Mace Windu\nB) Kit Fisto\nC) Plo Koon\nD) Ki-Adi-Mundi",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Mace Windu",
+          "Windu"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakim charakterystycznym zdaniem Darth Vader wyjawia Luke'owi prawdę o ojcu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zdanie (sens)"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jestem twoim ojcem",
+          "I am your father",
+          "Luke, jestem twoim ojcem"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dwunożny kroczący pojazd bojowy Imperium używany w bitwie o Hoth?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pojazd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "AT-AT",
+          "ATAT"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kontynentalny tytuł nosi pierwsza część sagi z 1977 roku (epizod IV)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podtytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Nowa nadzieja",
+          "A New Hope"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu V z 1980 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podtytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Imperium kontratakuje",
+          "The Empire Strikes Back"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu VI z 1983 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podtytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Powrot Jedi",
+          "Return of the Jedi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu I z 1999 roku?\nA) Atak klonów\nB) Nowa nadzieja\nC) Zemsta Sithów\nD) Mroczne widmo",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Mroczne widmo",
+          "The Phantom Menace"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu II z 2002 roku?\nA) Mroczne widmo\nB) Zemsta Sithów\nC) Atak klonów\nD) Ostatni Jedi",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Atak klonów",
+          "Atak klonow",
+          "Attack of the Clones"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu III z 2005 roku?\nA) Zemsta Sithów\nB) Atak klonów\nC) Powrót Jedi\nD) Mroczne widmo",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Zemsta Sithów",
+          "Zemsta Sithow",
+          "Revenge of the Sith"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu VII z 2015 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podtytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Przebudzenie Mocy",
+          "The Force Awakens"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu VIII z 2017 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podtytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ostatni Jedi",
+          "The Last Jedi"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmi podtytuł epizodu IX z 2019 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "podtytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Skywalker. Odrodzenie",
+          "Skywalker Odrodzenie",
+          "The Rise of Skywalker"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto stworzył oryginalną sagę „Gwiezdne wojny” i wyreżyserował epizod IV?\nA) Steven Spielberg\nB) J.J. Abrams\nC) Irvin Kershner\nD) George Lucas",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "George Lucas",
+          "Lucas"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto skomponował kultową muzykę do „Gwiezdnych wojen”?\nA) Hans Zimmer\nB) Danny Elfman\nC) John Williams\nD) Howard Shore",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "John Williams",
+          "Williams"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się słynny serial o łowcy nagród z planety Mandalore (Disney+)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "The Mandalorian",
+          "Mandalorianin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak fani nazwali małą zieloną istotę z serialu „The Mandalorian” (oficjalnie Grogu)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię / przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Grogu",
+          "Baby Yoda",
+          "Dziecko"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przyjaciel Luke'a, przemytnik, zostaje później generałem Rebelii?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Han Solo",
+          "Han"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się klan / lud pustynnych mieszkańców Tatooine, zwanych też Tuskenami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tuskeni",
+          "Tusken Raiders",
+          "piaskowi ludzie",
+          "Tusken"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiej planety, pokrytej miastem, pochodzi siedziba Senatu Republiki i Świątynia Jedi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Coruscant"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki tytuł nosi Sheev Palpatine, gdy przejmuje pełnię władzy nad galaktyką?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "tytuł"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Imperator",
+          "Emperor"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się żona Anakina Skywalkera i matka Luke'a i Lei?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Padme",
+          "Padme Amidala",
+          "Amidala"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się lord Sith, mistrz Dartha Vadera w epizodzie I, z czerwono-czarną twarzą i podwójnym mieczem?\nA) Darth Maul\nB) Hrabia Dooku\nC) Savage Opress\nD) General Grievous",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Darth Maul",
+          "Maul"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się hrabia, dawny Jedi i lord Sith (Darth Tyranus) z epizodów II i III?\nA) Darth Maul\nB) Qui-Gon Jinn\nC) Mace Windu\nD) Hrabia Dooku",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Hrabia Dooku",
+          "Dooku",
+          "Darth Tyranus",
+          "Tyranus"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się cyborg-generał dowodzący armią droidów, ścigany przez Obi-Wana w epizodzie III?\nA) Generał Grievous\nB) Admirał Ackbar\nC) Generał Hux\nD) Wat Tambor",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Generał Grievous",
+          "General Grievous",
+          "Grievous"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiej planety pochodzą szablonowi żołnierze klony, sklonowani z Jango Fetta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kamino"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się łowca nagród, pierwowzór armii klonów, ojciec Boby Fetta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jango Fett",
+          "Jango"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakiej wulkanicznej planecie Obi-Wan pokonuje Anakina w epizodzie III?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mustafar"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się organizacja przejmująca rolę Imperium w trylogii sequeli?\nA) Ruch Oporu\nB) Separatyści\nC) Rebelia\nD) Najwyższy Porządek",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Najwyższy Porządek",
+          "Najwyzszy Porzadek",
+          "First Order"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ruch oporu walczący z Najwyższym Porządkiem w epizodach VII–IX?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ruch Oporu",
+          "Resistance"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najlepszy pilot Ruchu Oporu, właściciel droida BB-8?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Poe Dameron",
+          "Poe"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ogromna planeta-broń Najwyższego Porządku z epizodu VII (większa od Gwiazdy Śmierci)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Baza Starkiller",
+          "Starkiller",
+          "Starkiller Base"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rycerz Jedi z prequeli, mistrz Obi-Wana, który ginie z ręki Dartha Maula?\nA) Qui-Gon Jinn\nB) Mace Windu\nC) Yoda\nD) Ki-Adi-Mundi",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Qui-Gon Jinn",
+          "Qui-Gon",
+          "Qui Gon"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się admirał floty Rebelii rasy Mon Calamari („To pułapka!”)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię / stopień"
+        }
+      ],
+      "answers": {
+        "a": [
+          "admiral Ackbar",
+          "Ackbar"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie słynne zdanie wypowiada admirał Ackbar na widok zasadzki Imperium nad Endorem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "cytat"
+        }
+      ],
+      "answers": {
+        "a": [
+          "To pulapka",
+          "It's a trap",
+          "Its a trap"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przyjaciel Hana Solo, baron-administrator Bespin (Miasta w Chmurach)?\nA) Boba Fett\nB) Lando Calrissian\nC) Wedge Antilles\nD) Dengar",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Lando Calrissian",
+          "Lando"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gazowy olbrzym, na którego orbicie znajduje się Miasto w Chmurach?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bespin"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej substancji zostaje zamrożony Han Solo na końcu „Imperium kontratakuje”?\nA) bacta\nB) karbonit\nC) kortozis\nD) beskar",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "karbonit",
+          "carbonite"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się gubernator (Grand Moff) dowodzący Gwiazdą Śmierci w epizodzie IV?\nA) Generał Veers\nB) Admirał Piett\nC) Grand Moff Tarkin\nD) Krennic",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Grand Moff Tarkin",
+          "Tarkin",
+          "Wilhuff Tarkin"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się mikroorganizmy w krwi, których wysoka liczba świadczy o silnej więzi z Mocą?\nA) midichloriany\nB) kyber\nC) bacta\nD) holocrony",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "midichloriany",
+          "midi-chloriany",
+          "midichlorians"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się legendarny szlak / trasa kosmiczna, którą Han Solo przebył „w mniej niż 12 parseków”?\nA) Szlak Hydiański\nB) Szlak Rimma\nC) Korelliański Bieg\nD) Szlak Kessel",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Szlak Kessel",
+          "Kessel Run",
+          "trasa Kessel"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się duży, gąsienicowaty potwór w jamie na pustyni, który połyka skazańców (dół Sarlacca)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "potwór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sarlacc",
+          "Sarlaak"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ogromny potwór trzymany przez Jabbę w lochu, którego zabija Luke?\nA) Wampa\nB) Rancor\nC) Sarlacc\nD) Dianoga",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Rancor"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dwunożny stwór, na którym Luke jeździ podczas patrolu na Hoth?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "stwór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tauntaun",
+          "taun-taun"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się futrzasty drapieżnik z planety Hoth, który atakuje Luke'a?\nA) Wampa\nB) Rancor\nC) Nexu\nD) Acklay",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Wampa",
+          "wampa",
+          "wumpa"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakiej planety, zniszczonej przez Gwiazdę Śmierci, pochodzi (oficjalnie) księżniczka Leia?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Alderaan"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przybrany ojciec Lei, senator z Alderaanu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bail Organa",
+          "Bail"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się wuj Luke'a, który wraz z ciotką wychowuje go na Tatooine?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Owen",
+          "Owen Lars",
+          "wujek Owen"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ciotka Luke'a wychowująca go na Tatooine?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Beru",
+          "Beru Lars",
+          "ciotka Beru"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się matka Anakina Skywalkera, niewolnica z Tatooine?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Shmi",
+          "Shmi Skywalker"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się obrzydliwy handlarz, właściciel Anakina i jego matki na Tatooine (epizod I)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Watto"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim sporcie ścigowym bierze udział mały Anakin w epizodzie I?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "sport / wyścig"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wyscigi scigaczy",
+          "podracing",
+          "wyscig scigaczy",
+          "podrace"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się tajemniczy Najwyższy Lider Najwyższego Porządku w epizodach VII–VIII?\nA) Hux\nB) Snoke\nC) Kylo Ren\nD) Palpatine",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Snoke",
+          "Najwyzszy Lider Snoke",
+          "Supreme Leader Snoke"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ognistowłosa generał Najwyższego Porządku w srebrnej zbroi (Captain ...)?\nA) Phasma\nB) Holdo\nC) Rae Sloane\nD) Pryde",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Phasma",
+          "Captain Phasma",
+          "kapitan Phasma"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rudowłosy generał Najwyższego Porządku, rywal Kylo Rena?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hux",
+          "general Hux",
+          "Armitage Hux"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się pierwszy film typu „spin-off” (2016) opowiadający o kradzieży planów Gwiazdy Śmierci?\nA) Han Solo\nB) The Mandalorian\nC) Łotr 1\nD) Obi-Wan Kenobi",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Łotr 1",
+          "Lotr 1",
+          "Rogue One",
+          "Lotr 1. Gwiezdne wojny - historie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się główna bohaterka filmu „Łotr 1”, córka konstruktora Gwiazdy Śmierci?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jyn Erso",
+          "Jyn"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakiego koloru był pierwszy miecz świetlny Luke'a (odziedziczony po ojcu)?\nA) zielony\nB) żółty\nC) czerwony\nD) niebieski",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "niebieski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakiego koloru miecz świetlny Luke buduje sobie sam i używa w „Powrocie Jedi”?\nA) niebieski\nB) zielony\nC) czerwony\nD) żółty",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "zielony"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kryształ zasila ostrze miecza świetlnego?\nA) kunda\nB) beskar\nC) kyber\nD) kortozis",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "kyber",
+          "krysztal kyber",
+          "kyber crystal"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ojczysta planeta Mandalorian, lud noszący charakterystyczne zbroje?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mandalore"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się pustynna planeta z epizodu VII, na której mieszka Rey jako poszukiwaczka złomu?\nA) Tatooine\nB) Jedha\nC) Geonosis\nD) Jakku",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Jakku"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się oceaniczna planeta z wyspą, na której Rey odnajduje Luke'a (epizod VII/VIII)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ahch-To",
+          "Ahch To"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie rdzewiejące, świńskopodobne istoty pilnują wyspy z Luke'em w epizodzie VIII (mleczne)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Porgi",
+          "Porg",
+          "Porgowie",
+          "Porgs"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień postać i jej planetę rodzinną: bohater, który dorastał jako poszukiwacz złomu na pustynnym świecie (epizod VII).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        },
+        {
+          "key": "b",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Rey"
+        ],
+        "b": [
+          "Jakku"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień postać i jej planetę rodzinną: Jedi, który dorastał na pustynnym świecie z dwoma słońcami.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        },
+        {
+          "key": "b",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Luke",
+          "Luke Skywalker",
+          "Anakin",
+          "Anakin Skywalker"
+        ],
+        "b": [
+          "Tatooine"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwa najsłynniejsze droidy z oryginalnej trylogii (parę przyjaciół).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "droid 1"
+        },
+        {
+          "key": "b",
+          "label": "droid 2"
+        }
+      ],
+      "answers": {
+        "a": [
+          "R2-D2",
+          "R2D2",
+          "C-3PO",
+          "C3PO"
+        ],
+        "b": [
+          "C-3PO",
+          "C3PO",
+          "R2-D2",
+          "R2D2"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień parę: statek i jego dwóch głównych pilotów z oryginalnej trylogii.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "statek"
+        },
+        {
+          "key": "b",
+          "label": "piloci"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Sokol Millennium",
+          "Millennium Falcon",
+          "Sokol Millenium"
+        ],
+        "b": [
+          "Han Solo i Chewbacca",
+          "Han i Chewbacca",
+          "Han Solo",
+          "Chewbacca"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień postać i jej alter ego: rycerz Jedi, który przeszedł na ciemną stronę i stał się lordem Sith.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "Jedi"
+        },
+        {
+          "key": "b",
+          "label": "Sith"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Anakin Skywalker",
+          "Anakin"
+        ],
+        "b": [
+          "Darth Vader",
+          "Vader"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień postać i jej alter ego: senator Republiki, który okazał się mrocznym lordem Sith.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "polityk"
+        },
+        {
+          "key": "b",
+          "label": "Sith"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Palpatine",
+          "Sheev Palpatine"
+        ],
+        "b": [
+          "Darth Sidious",
+          "Sidious"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień dwie planety będące bazami Rebelii: lodową z epizodu V oraz leśny księżyc z epizodu VI.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta lodowa"
+        },
+        {
+          "key": "b",
+          "label": "księżyc leśny"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Hoth"
+        ],
+        "b": [
+          "Endor"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień parę rodzic-dziecko: ojciec i syn będący jednocześnie wrogami w trylogii sequeli.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ojciec"
+        },
+        {
+          "key": "b",
+          "label": "syn"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Han Solo",
+          "Han"
+        ],
+        "b": [
+          "Kylo Ren",
+          "Ben Solo",
+          "Ben"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień mistrza i ucznia: mistrz Jedi szkolący Luke'a na Dagobah oraz jego najsłynniejszy uczeń z oryginalnej trylogii.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "mistrz"
+        },
+        {
+          "key": "b",
+          "label": "uczeń"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Yoda"
+        ],
+        "b": [
+          "Luke",
+          "Luke Skywalker"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech łowców nagród / antagonistów z oryginalnej trylogii (np. spod znaku Mandalorian i Huttów).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać 1"
+        },
+        {
+          "key": "b",
+          "label": "postać 2"
+        },
+        {
+          "key": "c",
+          "label": "postać 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Boba Fett",
+          "Fett"
+        ],
+        "b": [
+          "Jabba",
+          "Jabba the Hutt"
+        ],
+        "c": [
+          "Darth Vader",
+          "Vader",
+          "Tarkin"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy planety z oryginalnej trylogii (epizody IV–VI).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta 1"
+        },
+        {
+          "key": "b",
+          "label": "planeta 2"
+        },
+        {
+          "key": "c",
+          "label": "planeta 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tatooine"
+        ],
+        "b": [
+          "Hoth"
+        ],
+        "c": [
+          "Endor",
+          "Bespin",
+          "Dagobah",
+          "Alderaan",
+          "Yavin"
+        ]
+      }
+    }
+  ]
+}

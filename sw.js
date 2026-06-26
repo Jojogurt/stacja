@@ -3,10 +3,10 @@
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v28';
+const CACHE = 'stacja-v29';
 const SHELL = [
   './', './index.html',
-  './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
+  './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
   './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
   './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
   './core/timing.js', './core/picker.js', './core/chatFeed.js',
@@ -18,6 +18,15 @@ const SHELL = [
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',
   './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
+  // kategorie quizu (ładowane przez quiz-loader.js) — precache do gry offline
+  './data/quiz-index.json',
+  './data/quiz-biologia.json', './data/quiz-disney.json', './data/quiz-film.json',
+  './data/quiz-geografia.json', './data/quiz-gry-wideo.json', './data/quiz-harry-potter.json',
+  './data/quiz-historia-polski.json', './data/quiz-historia-swiata.json', './data/quiz-kosmetyki.json',
+  './data/quiz-kosmos.json', './data/quiz-kuchnia.json', './data/quiz-literatura.json',
+  './data/quiz-marvel.json', './data/quiz-mitologia.json', './data/quiz-nauka.json',
+  './data/quiz-sport.json', './data/quiz-star-wars.json', './data/quiz-sztuka.json',
+  './data/quiz-wladca-pierscieni.json', './data/quiz-zwierzeta.json',
 ];
 
 self.addEventListener('install', (e) => {

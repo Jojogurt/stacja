@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v28';   // salon: faza gotowosci czeka tylko na graczy (host/TV poza bramka; buforuje audio sam)
+const APP_VERSION = 'v29';   // quiz: render opcji ABCD (white-space:pre-line) — pytania z 4 opcjami A-D + wpisz literke
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

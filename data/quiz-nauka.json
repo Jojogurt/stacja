@@ -1,0 +1,1681 @@
+{
+  "label": "Nauka i wynalazki",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Jaki jest wzór chemiczny wody?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wzór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "H2O",
+          "H₂O"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem O?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen",
+          "Oxygenium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem H?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wodór",
+          "Hydrogenium"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto sformułował teorię względności?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Albert Einstein",
+          "Einstein"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto odkrył prawo powszechnego ciążenia?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Isaac Newton",
+          "Newton"
+        ]
+      }
+    },
+    {
+      "prompt": "Która polska naukowczyni dwukrotnie otrzymała Nagrodę Nobla?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Maria Skłodowska-Curie",
+          "Maria Curie",
+          "Sklodowska-Curie",
+          "Maria Sklodowska-Curie"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest autorem teorii ewolucji przez dobór naturalny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Karol Darwin",
+          "Charles Darwin",
+          "Darwin"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto stworzył układ okresowy pierwiastków?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Dmitrij Mendelejew",
+          "Mendelejew"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem Fe?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "żelazo",
+          "zelazo",
+          "Ferrum"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem Au?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "złoto",
+          "zloto",
+          "Aurum"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem Ag?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "srebro",
+          "Argentum"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem Na?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "sód",
+          "sod",
+          "Natrium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem C?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "węgiel",
+          "wegiel",
+          "Carboneum"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz pochłaniają rośliny podczas fotosyntezy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dwutlenek węgla",
+          "dwutlenek wegla",
+          "CO2",
+          "CO₂"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz wydzielają rośliny podczas fotosyntezy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "gaz"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen",
+          "O2",
+          "O₂"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce mierzymy natężenie prądu elektrycznego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "amper",
+          "ampery",
+          "A"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce mierzymy napięcie elektryczne?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wolt",
+          "wolty",
+          "V"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce mierzymy moc?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wat",
+          "waty",
+          "W"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce mierzymy siłę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "niuton",
+          "newton",
+          "niutony",
+          "N"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce w układzie SI mierzymy energię?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dżul",
+          "dzul",
+          "joule",
+          "J"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto wynalazł żarówkę z włóknem węglowym, zakładając firmę w 1879 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wynalazca"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thomas Edison",
+          "Edison"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto wynalazł telefon (opatentowany w 1876 roku)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wynalazca"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Alexander Graham Bell",
+          "Graham Bell",
+          "Bell"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jest uznawany za polskiego wynalazcę lampy naftowej?\nA) Ignacy Łukasiewicz\nB) Mikołaj Kopernik\nC) Maria Skłodowska-Curie\nD) Jan Czochralski",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Ignacy Łukasiewicz",
+          "Lukasiewicz",
+          "Ignacy Lukasiewicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto opracował pierwszą skuteczną szczepionkę przeciw wściekliźnie?\nA) Robert Koch\nB) Louis Pasteur\nC) Alexander Fleming\nD) Edward Jenner",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Louis Pasteur",
+          "Pasteur"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto odkrył penicylinę?\nA) Louis Pasteur\nB) Robert Koch\nC) Alexander Fleming\nD) Joseph Lister",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Alexander Fleming",
+          "Fleming"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile wynosi w przybliżeniu prędkość światła w próżni (w km/s)?\nA) 300 000\nB) 30 000\nC) 3 000 000\nD) 150 000",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "300000",
+          "300 000",
+          "299792",
+          "299 792",
+          "trzysta tysięcy",
+          "trzysta tysiecy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka jest najmniejsza liczba pierwsza?\nA) 0\nB) 1\nC) 3\nD) 2",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "2",
+          "dwa"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile boków ma sześciokąt?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "6",
+          "sześć",
+          "szesc"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile stopni ma suma kątów wewnętrznych w trójkącie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba stopni"
+        }
+      ],
+      "answers": {
+        "a": [
+          "180",
+          "180 stopni"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się twierdzenie wiążące długości boków w trójkącie prostokątnym?\nA) twierdzenie Talesa\nB) twierdzenie Pitagorasa\nC) twierdzenie Eulera\nD) twierdzenie Fermata",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "twierdzenie Pitagorasa",
+          "Pitagorasa",
+          "Pitagoras"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile w przybliżeniu wynosi liczba pi (do dwóch miejsc po przecinku)?\nA) 2,72\nB) 3,14\nC) 3,41\nD) 1,62",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "3,14",
+          "3.14"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest wzór chemiczny soli kuchennej (chlorku sodu)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wzór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "NaCl"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest wzór chemiczny dwutlenku węgla?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wzór"
+        }
+      ],
+      "answers": {
+        "a": [
+          "CO2",
+          "CO₂"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek jest najlżejszy i najbardziej rozpowszechniony we Wszechświecie?\nA) wodór\nB) hel\nC) tlen\nD) węgiel",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "wodór",
+          "wodor",
+          "H"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz szlachetny wypełnia kolorowe neony, świecąc na czerwono?\nA) argon\nB) hel\nC) neon\nD) ksenon",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "neon",
+          "Ne"
+        ]
+      }
+    },
+    {
+      "prompt": "Który organ pompuje krew w organizmie człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "organ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "serce"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile kości ma w przybliżeniu dorosły człowiek?\nA) 106\nB) 206\nC) 306\nD) 256",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "206",
+          "dwieście sześć"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się cząsteczka przenosząca informację genetyczną?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "DNA",
+          "kwas deoksyrybonukleinowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto wraz z Jamesem Watsonem opisał strukturę podwójnej helisy DNA?\nA) Linus Pauling\nB) Gregor Mendel\nC) Francis Crick\nD) Frederick Sanger",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Francis Crick",
+          "Crick"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się najmniejsza jednostka strukturalna i funkcjonalna organizmu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "komórka",
+          "komorka"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najtwardszy znany naturalny minerał?\nA) korund\nB) kwarc\nC) topaz\nD) diament",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "diament"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki proces zachodzi, gdy woda zamienia się w parę wodną?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "proces"
+        }
+      ],
+      "answers": {
+        "a": [
+          "parowanie",
+          "wrzenie"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej temperaturze (w stopniach Celsjusza) wrze woda pod normalnym ciśnieniem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "temperatura"
+        }
+      ],
+      "answers": {
+        "a": [
+          "100",
+          "100 stopni",
+          "sto"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej temperaturze (w stopniach Celsjusza) zamarza woda?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "temperatura"
+        }
+      ],
+      "answers": {
+        "a": [
+          "0",
+          "0 stopni",
+          "zero"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto sformułował trzy prawa dynamiki?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Isaac Newton",
+          "Newton"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jako pierwszy stwierdził, że Ziemia krąży wokół Słońca (teoria heliocentryczna)?\nA) Galileusz\nB) Mikołaj Kopernik\nC) Isaac Newton\nD) Ptolemeusz",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Mikołaj Kopernik",
+          "Kopernik",
+          "Mikolaj Kopernik",
+          "Copernicus"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto skonstruował teleskop i obserwował księżyce Jowisza?\nA) Mikołaj Kopernik\nB) Johannes Kepler\nC) Tycho Brahe\nD) Galileusz",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "Galileusz",
+          "Galileo Galilei",
+          "Galileo"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem N?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "azot",
+          "Nitrogenium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem He?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "hel",
+          "Helium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem Ca?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wapń",
+          "wapn",
+          "Calcium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki pierwiastek oznaczamy symbolem K?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "potas",
+          "Kalium"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz stanowi największą część (ok. 78%) powietrza atmosferycznego?\nA) tlen\nB) dwutlenek węgla\nC) azot\nD) argon",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "azot",
+          "N2",
+          "N₂"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się siła przyciągania między ciałami posiadającymi masę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "siła"
+        }
+      ],
+      "answers": {
+        "a": [
+          "grawitacja",
+          "siła grawitacji",
+          "siła ciążenia"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się jednostka częstotliwości, równa jednemu cyklowi na sekundę?\nA) herc\nB) dżul\nC) wat\nD) bel",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "herc",
+          "hertz",
+          "Hz"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce mierzymy opór elektryczny?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "om",
+          "omy",
+          "ohm",
+          "Ω"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakiej jednostce w układzie SI mierzymy temperaturę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kelwin",
+          "kelwiny",
+          "K"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się centralna część atomu, w której znajdują się protony i neutrony?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "jądro",
+          "jadro",
+          "jądro atomowe"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ładunek elektryczny ma elektron?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ładunek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ujemny"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki ładunek elektryczny ma proton?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ładunek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dodatni"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto zbudował pierwszy działający samolot z napędem silnikowym (1903)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wynalazcy"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bracia Wright",
+          "Wright",
+          "Orville i Wilbur Wright",
+          "bracia Wright (Orville i Wilbur)"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto wynalazł druk za pomocą ruchomych czcionek w Europie?\nA) Leonardo da Vinci\nB) Johannes Gutenberg\nC) Thomas Edison\nD) Benjamin Franklin",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Johannes Gutenberg",
+          "Gutenberg"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto opracował teorię dziedziczenia cech, eksperymentując na grochu?\nA) Karol Darwin\nB) Louis Pasteur\nC) Gregor Mendel\nD) Francis Crick",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Gregor Mendel",
+          "Mendel"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces, w którym ciecz zamienia się w ciało stałe pod wpływem zimna?\nA) topnienie\nB) krzepnięcie\nC) sublimacja\nD) skraplanie",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "krzepnięcie",
+          "krzepniecie",
+          "zamarzanie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się przejście ciała stałego bezpośrednio w gaz?\nA) parowanie\nB) skraplanie\nC) sublimacja\nD) resublimacja",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "sublimacja"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki kwas znajduje się w żołądku i pomaga trawić pokarm?\nA) kwas siarkowy\nB) kwas solny\nC) kwas octowy\nD) kwas mlekowy",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "kwas solny",
+          "HCl",
+          "kwas żołądkowy",
+          "kwas chlorowodorowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czerwony barwnik krwi przenoszący tlen?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "hemoglobina"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się największa planeta Układu Słonecznego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jowisz",
+          "Jupiter"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się planeta najbliższa Słońcu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Merkury",
+          "Mercury"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się czerwona planeta Układu Słonecznego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "planeta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mars"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest najcięższy organ wewnętrzny w ciele człowieka?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "organ"
+        }
+      ],
+      "answers": {
+        "a": [
+          "wątroba",
+          "watroba"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się jednostka miary ilości materii w układzie SI?\nA) gram\nB) mol\nC) kandela\nD) kelwin",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "mol",
+          "mole"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przyrząd służy do pomiaru temperatury?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przyrząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "termometr"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przyrząd służy do pomiaru ciśnienia atmosferycznego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przyrząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "barometr"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przyrząd, wskazujący kierunki świata, działa dzięki polu magnetycznemu Ziemi?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przyrząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kompas",
+          "busola"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się jednostka, w której mierzymy częstotliwość fal radiowych i dźwięku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jednostka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "herc",
+          "hertz",
+          "Hz"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto opracował tablicę okresową, przewidując istnienie nieodkrytych jeszcze pierwiastków?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Dmitrij Mendelejew",
+          "Mendelejew"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki proces rozkładu wody na wodór i tlen zachodzi pod wpływem prądu elektrycznego?\nA) elektroliza\nB) hydroliza\nC) destylacja\nD) utlenianie",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "elektroliza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ujemnie naładowana cząstka krążąca wokół jądra atomu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "cząstka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "elektron"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się obojętna elektrycznie cząstka w jądrze atomu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "cząstka"
+        }
+      ],
+      "answers": {
+        "a": [
+          "neutron"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki jest wynik działania 7 razy 8?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "56",
+          "pięćdziesiąt sześć"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywamy liczbę podzielną tylko przez 1 i samą siebie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "liczba pierwsza",
+          "pierwsza"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile wierzchołków ma sześcian?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "8",
+          "osiem"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile metrów ma jeden kilometr?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "1000",
+          "1 000",
+          "tysiąc",
+          "tysiac"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przyrząd optyczny służy do obserwacji bardzo małych obiektów, np. komórek?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przyrząd"
+        }
+      ],
+      "answers": {
+        "a": [
+          "mikroskop"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto skonstruował pierwszy mikroskop pozwalający obserwować mikroorganizmy?\nA) Robert Hooke\nB) Galileusz\nC) Antonie van Leeuwenhoek\nD) Louis Pasteur",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "Antonie van Leeuwenhoek",
+          "Leeuwenhoek",
+          "van Leeuwenhoek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki gaz, oznaczany jako O3, tworzy warstwę chroniącą Ziemię przed promieniowaniem UV?\nA) tlen\nB) ozon\nC) azot\nD) dwutlenek węgla",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "ozon",
+          "O3",
+          "O₃"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces, w którym roślina wytwarza związki organiczne z udziałem światła?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "proces"
+        }
+      ],
+      "answers": {
+        "a": [
+          "fotosynteza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zielony barwnik roślin biorący udział w fotosyntezie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "barwnik"
+        }
+      ],
+      "answers": {
+        "a": [
+          "chlorofil"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto odkrył promieniowanie rentgenowskie (promienie X)?\nA) Wilhelm Roentgen\nB) Henri Becquerel\nC) Maria Skłodowska-Curie\nD) Ernest Rutherford",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Wilhelm Roentgen",
+          "Roentgen",
+          "Wilhelm Conrad Roentgen",
+          "Röntgen"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj nazwę wynalazcy i jego wynalazek (osoba opatentowana w 1876 r. i urządzenie do rozmów na odległość).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wynalazca"
+        },
+        {
+          "key": "b",
+          "label": "wynalazek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Alexander Graham Bell",
+          "Graham Bell",
+          "Bell"
+        ],
+        "b": [
+          "telefon"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj nazwisko naukowca i nazwę odkrytej przez niego substancji (badaczka promieniotwórczości i pierwiastek nazwany od Polski).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        },
+        {
+          "key": "b",
+          "label": "pierwiastek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Maria Skłodowska-Curie",
+          "Maria Curie",
+          "Sklodowska-Curie"
+        ],
+        "b": [
+          "polon",
+          "Po"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj pierwiastek i jego symbol chemiczny (metal szlachetny o symbolu Au).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        },
+        {
+          "key": "b",
+          "label": "symbol"
+        }
+      ],
+      "answers": {
+        "a": [
+          "złoto",
+          "zloto"
+        ],
+        "b": [
+          "Au"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj pierwiastek i jego symbol chemiczny (gaz oddychania o symbolu O).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        },
+        {
+          "key": "b",
+          "label": "symbol"
+        }
+      ],
+      "answers": {
+        "a": [
+          "tlen"
+        ],
+        "b": [
+          "O"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj wynalazcę i jego wynalazek (Amerykanin, który w 1879 r. spopularyzował żarówkę).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wynalazca"
+        },
+        {
+          "key": "b",
+          "label": "wynalazek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Thomas Edison",
+          "Edison"
+        ],
+        "b": [
+          "żarówka",
+          "zarowka",
+          "żarówka elektryczna"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj naukowca i nazwę jego najsłynniejszej teorii (autor E=mc² i teorii względności).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        },
+        {
+          "key": "b",
+          "label": "teoria"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Albert Einstein",
+          "Einstein"
+        ],
+        "b": [
+          "teoria względności",
+          "teoria wzglednosci",
+          "względność",
+          "wzglednosc"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj trzy stany skupienia materii.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "stan 1"
+        },
+        {
+          "key": "b",
+          "label": "stan 2"
+        },
+        {
+          "key": "c",
+          "label": "stan 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "stały",
+          "staly",
+          "ciało stałe",
+          "cialo stale"
+        ],
+        "b": [
+          "ciekły",
+          "ciekly",
+          "ciecz",
+          "płynny",
+          "plynny"
+        ],
+        "c": [
+          "gazowy",
+          "gaz",
+          "lotny"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj trzy pierwiastki wchodzące w skład cząsteczki cukru (glukozy C6H12O6).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek 1"
+        },
+        {
+          "key": "b",
+          "label": "pierwiastek 2"
+        },
+        {
+          "key": "c",
+          "label": "pierwiastek 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "węgiel",
+          "wegiel",
+          "C"
+        ],
+        "b": [
+          "wodór",
+          "wodor",
+          "H"
+        ],
+        "c": [
+          "tlen",
+          "O"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj pierwiastek i jego symbol chemiczny (metal magnetyczny o symbolu Fe).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwiastek"
+        },
+        {
+          "key": "b",
+          "label": "symbol"
+        }
+      ],
+      "answers": {
+        "a": [
+          "żelazo",
+          "zelazo"
+        ],
+        "b": [
+          "Fe"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj naukowca i dziedzinę, w której dokonał przełomu (autor teorii ewolucji, dzieło „O powstawaniu gatunków”).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "naukowiec"
+        },
+        {
+          "key": "b",
+          "label": "dziedzina/teoria"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Karol Darwin",
+          "Charles Darwin",
+          "Darwin"
+        ],
+        "b": [
+          "ewolucja",
+          "teoria ewolucji",
+          "biologia"
+        ]
+      }
+    },
+    {
+      "prompt": "Podaj dwie planety Układu Słonecznego sąsiadujące z Ziemią (bliższą i dalszą od Słońca).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bliższa Słońcu"
+        },
+        {
+          "key": "b",
+          "label": "dalsza od Słońca"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wenus",
+          "Venus"
+        ],
+        "b": [
+          "Mars"
+        ]
+      }
+    }
+  ]
+}

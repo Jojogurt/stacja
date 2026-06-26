@@ -1,0 +1,1830 @@
+{
+  "label": "Historia Polski",
+  "kind": "quiz",
+  "desc": "100 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Który władca uważany jest za pierwszego historycznego władcę Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mieszko I",
+          "Mieszko"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku miał miejsce chrzest Polski?\nA) 966\nB) 972\nC) 988\nD) 1000",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "966"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był pierwszym koronowanym królem Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bolesław Chrobry",
+          "Chrobry",
+          "Boleslaw Chrobry"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku koronował się Bolesław Chrobry?\nA) 1018\nB) 1025\nC) 1032\nD) 1038",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1025"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się dynastia panująca w Polsce od Mieszka I do Kazimierza Wielkiego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dynastia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Piastowie",
+          "Piastów",
+          "dynastia Piastów"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król jako jedyny w polskiej historii nosi przydomek „Wielki” i był ostatnim Piastem na tronie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kazimierz Wielki",
+          "Kazimierz III Wielki",
+          "Kazimierz"
+        ]
+      }
+    },
+    {
+      "prompt": "Dokończ powiedzenie o Kazimierzu Wielkim: „Zastał Polskę drewnianą, a zostawił…”",
+      "slots": [
+        {
+          "key": "a",
+          "label": "materiał"
+        }
+      ],
+      "answers": {
+        "a": [
+          "murowaną",
+          "kamienną"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku odbyła się bitwa pod Grunwaldem?\nA) 1385\nB) 1399\nC) 1410\nD) 1444",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1410"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakim zakonem walczyły wojska polsko-litewskie pod Grunwaldem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zakon"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Krzyżacy",
+          "zakon krzyżacki",
+          "Krzyzacy"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król dowodził polskimi wojskami pod Grunwaldem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Jagiełło",
+          "Jagiełło",
+          "Jagiello",
+          "Wladyslaw Jagiello"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się dynastia zapoczątkowana przez Władysława Jagiełłę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dynastia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jagiellonowie",
+          "Jagiellonów",
+          "dynastia Jagiellonów"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku zawarto unię w Krewie, łączącą Polskę i Litwę?\nA) 1385\nB) 1401\nC) 1410\nD) 1413",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "1385"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku zawarto unię lubelską, tworzącą Rzeczpospolitą Obojga Narodów?\nA) 1505\nB) 1525\nC) 1569\nD) 1572",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1569"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się królowa Polski, żona Jagiełły, kanonizowana świętą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jadwiga",
+          "Jadwiga Andegaweńska",
+          "święta Jadwiga"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku zawarto drugi pokój toruński, kończący wielką wojnę z zakonem krzyżackim?\nA) 1411\nB) 1454\nC) 1466\nD) 1525",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1466"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był ostatnim królem z dynastii Jagiellonów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Zygmunt August",
+          "Zygmunt II August"
+        ]
+      }
+    },
+    {
+      "prompt": "Astronom, autor dzieła „O obrotach sfer niebieskich”, twórca teorii heliocentrycznej — kto to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mikołaj Kopernik",
+          "Kopernik",
+          "Mikolaj Kopernik"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był pierwszym królem elekcyjnym Rzeczypospolitej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Walezy",
+          "Henryk Walezjusz",
+          "Walezy"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król odniósł zwycięstwo w bitwie pod Wiedniem w 1683 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jan III Sobieski",
+          "Sobieski",
+          "Jan Sobieski"
+        ]
+      }
+    },
+    {
+      "prompt": "Z jakim państwem walczyła odsiecz wiedeńska w 1683 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "państwo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Turcja",
+          "Imperium Osmańskie",
+          "Osmanowie"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku uchwalono Konstytucję 3 maja?\nA) 1791\nB) 1793\nC) 1794\nD) 1795",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "1791"
+        ]
+      }
+    },
+    {
+      "prompt": "Konstytucja 3 maja była pierwszą tego typu ustawą w Europie i drugą na świecie. Jako pierwsza powstała konstytucja którego państwa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "państwo"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stany Zjednoczone",
+          "USA",
+          "Stanów Zjednoczonych"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był ostatnim królem Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanisław August Poniatowski",
+          "Poniatowski",
+          "Stanislaw August Poniatowski"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku doszło do pierwszego rozbioru Polski?\nA) 1764\nB) 1768\nC) 1770\nD) 1772",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "1772"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku doszło do trzeciego, ostatniego rozbioru Polski?\nA) 1795\nB) 1797\nC) 1807\nD) 1815",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "1795"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto dowodził insurekcją z 1794 roku skierowaną przeciw zaborcom?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tadeusz Kościuszko",
+          "Kościuszko",
+          "Kosciuszko"
+        ]
+      }
+    },
+    {
+      "prompt": "Pod jaką miejscowością w 1794 roku kosynierzy odnieśli zwycięstwo w insurekcji kościuszkowskiej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miejscowość"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Racławice",
+          "Raclawice"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywało się powstanie narodowe, które wybuchło w listopadzie 1830 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "powstanie listopadowe",
+          "listopadowe"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywało się powstanie narodowe, które wybuchło w styczniu 1863 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "powstanie styczniowe",
+          "styczniowe"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku wybuchło powstanie styczniowe?\nA) 1830\nB) 1848\nC) 1863\nD) 1864",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1863"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku Polska odzyskała niepodległość?\nA) 1916\nB) 1918\nC) 1920\nD) 1922",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1918"
+        ]
+      }
+    },
+    {
+      "prompt": "Którego dnia i miesiąca 1918 roku obchodzimy Narodowe Święto Niepodległości?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "data (dzień i miesiąc)"
+        }
+      ],
+      "answers": {
+        "a": [
+          "11 listopada",
+          "jedenastego listopada",
+          "11.11"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto został Naczelnikiem Państwa po odzyskaniu niepodległości w 1918 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Józef Piłsudski",
+          "Piłsudski",
+          "Jozef Pilsudski",
+          "Pilsudski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się zwycięska bitwa z 1920 roku, w której Polska odparła Armię Czerwoną, nazywana „Cudem nad Wisłą”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa bitwy"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bitwa Warszawska",
+          "bitwa warszawska",
+          "Bitwa nad Wisłą"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku rozegrała się Bitwa Warszawska („Cud nad Wisłą”)?\nA) 1918\nB) 1919\nC) 1920\nD) 1921",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1920"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był pierwszym prezydentem II Rzeczypospolitej, zamordowanym w 1922 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gabriel Narutowicz",
+          "Narutowicz"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się zamach stanu z 1926 roku, po którym Piłsudski przejął władzę?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "przewrót majowy",
+          "zamach majowy",
+          "majowy"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku Niemcy napadły na Polskę, rozpoczynając II wojnę światową?\nA) 1936\nB) 1937\nC) 1938\nD) 1939",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "1939"
+        ]
+      }
+    },
+    {
+      "prompt": "Którego dnia i miesiąca 1939 roku Niemcy zaatakowały Polskę?\nA) 17 września\nB) 3 września\nC) 1 września\nD) 28 sierpnia",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub data"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1 września",
+          "1 wrzesnia",
+          "pierwszego września",
+          "1.09"
+        ]
+      }
+    },
+    {
+      "prompt": "Atak na jaki półwysep nad Bałtykiem rozpoczął się 1 września 1939 roku symbolicznym ostrzałem z pancernika?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Westerplatte"
+        ]
+      }
+    },
+    {
+      "prompt": "Którego dnia i miesiąca 1939 roku ZSRR napadł na Polskę od wschodu?\nA) 1 września\nB) 9 września\nC) 28 września\nD) 17 września",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub data"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "17 września",
+          "17 wrzesnia",
+          "siedemnastego września",
+          "17.09"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywano niemiecką taktykę „wojny błyskawicznej” zastosowaną w 1939 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "blitzkrieg",
+          "wojna błyskawiczna"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się zbrodnia z 1940 roku, w której NKWD wymordowało tysiące polskich oficerów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "zbrodnia katyńska",
+          "Katyń",
+          "Katyn",
+          "mord katyński"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się największa konspiracyjna organizacja zbrojna Polskiego Państwa Podziemnego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Armia Krajowa",
+          "AK"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku wybuchło powstanie warszawskie?\nA) 1943\nB) 1944\nC) 1945\nD) 1946",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1944"
+        ]
+      }
+    },
+    {
+      "prompt": "Którego dnia i miesiąca 1944 roku wybuchło powstanie warszawskie (godzina „W”)?\nA) 1 sierpnia\nB) 1 września\nC) 19 kwietnia\nD) 22 lipca",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub data"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "1 sierpnia",
+          "pierwszego sierpnia",
+          "1.08"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile dni trwało powstanie warszawskie?\nA) 44\nB) 56\nC) 63\nD) 71",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub liczba dni"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "63",
+          "sześćdziesiąt trzy"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywało się powstanie w żydowskiej dzielnicy Warszawy wiosną 1943 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "powstanie w getcie warszawskim",
+          "powstanie w getcie"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku zakończyła się II wojna światowa w Europie?\nA) 1942\nB) 1943\nC) 1944\nD) 1945",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "1945"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się niemiecki obóz koncentracyjny i zagłady na ziemiach polskich, symbol Holokaustu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Auschwitz",
+          "Auschwitz-Birkenau",
+          "Oświęcim",
+          "Oswiecim"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się system polityczny w Polsce w latach 1945–1989?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "ustrój / skrót"
+        }
+      ],
+      "answers": {
+        "a": [
+          "komunizm",
+          "PRL",
+          "Polska Rzeczpospolita Ludowa",
+          "socjalizm"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak brzmiała oficjalna nazwa państwa polskiego w latach 1952–1989 (skrót)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "skrót"
+        }
+      ],
+      "answers": {
+        "a": [
+          "PRL",
+          "Polska Rzeczpospolita Ludowa"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym mieście w czerwcu 1956 roku doszło do robotniczego buntu krwawo stłumionego przez władze?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Poznań",
+          "Poznan"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku Karol Wojtyła został wybrany papieżem?\nA) 1976\nB) 1978\nC) 1979\nD) 1981",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1978"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakie imię przyjął Karol Wojtyła jako papież?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię papieskie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jan Paweł II",
+          "Jan Pawel II"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się niezależny związek zawodowy powstały w 1980 roku w Stoczni Gdańskiej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Solidarność",
+          "NSZZ Solidarność",
+          "Solidarnosc"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był przywódcą „Solidarności”, późniejszym prezydentem RP?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lech Wałęsa",
+          "Wałęsa",
+          "Lech Walesa",
+          "Walesa"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku w Polsce wprowadzono stan wojenny?\nA) 1968\nB) 1976\nC) 1980\nD) 1981",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "1981"
+        ]
+      }
+    },
+    {
+      "prompt": "Którego dnia i miesiąca 1981 roku wprowadzono w Polsce stan wojenny?\nA) 13 grudnia\nB) 31 sierpnia\nC) 3 grudnia\nD) 22 lipca",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub data"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "13 grudnia",
+          "trzynastego grudnia",
+          "13.12"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jako Pierwszy Sekretarz wprowadził w Polsce stan wojenny w 1981 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wojciech Jaruzelski",
+          "Jaruzelski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywały się rozmowy władzy z opozycją na początku 1989 roku, które zapoczątkowały transformację ustrojową?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Okrągły Stół",
+          "obrady Okrągłego Stołu",
+          "Okragly Stol"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku odbyły się częściowo wolne wybory, uznawane za koniec komunizmu w Polsce?\nA) 1980\nB) 1981\nC) 1989\nD) 1990",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1989"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto został pierwszym niekomunistycznym premierem Polski po 1989 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tadeusz Mazowiecki",
+          "Mazowiecki"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku Polska wstąpiła do Unii Europejskiej?\nA) 2000\nB) 2002\nC) 2003\nD) 2004",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "2004"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku Polska wstąpiła do NATO?\nA) 1997\nB) 1999\nC) 2001\nD) 2004",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1999"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był pierwszym prezydentem III Rzeczypospolitej wybranym w wyborach powszechnych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lech Wałęsa",
+          "Wałęsa",
+          "Lech Walesa",
+          "Walesa"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim mieście w 2010 roku rozbił się samolot prezydencki, w katastrofie której zginął prezydent Lech Kaczyński?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Smoleńsk",
+          "Smolensk"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się stolica Polski przed Warszawą, w której koronowano królów?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kraków",
+          "Krakow"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym wieku stolicę Polski przeniesiono z Krakowa do Warszawy?\nA) XIV\nB) XV\nC) XVII\nD) XVI",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub wiek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "D",
+          "XVI",
+          "16",
+          "szesnasty",
+          "XVI wiek"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się pierwsza stolica państwa Piastów, z katedrą i grobami pierwszych władców?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "miasto"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gniezno"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski król nadał Krzyżakom ziemię chełmińską, sprowadzając ich do Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Konrad Mazowiecki",
+          "Konrad I Mazowiecki"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się układ z 1772 roku ustanawiający pierwszy rozbiór — które trzy państwa go dokonały? Podaj jedno z nich.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "państwo zaborcze"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Rosja",
+          "Prusy",
+          "Austria"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był marszałkiem Sejmu Wielkiego, jednym z twórców Konstytucji 3 maja?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanisław Małachowski",
+          "Małachowski",
+          "Malachowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się polski hymn napisany przez Józefa Wybickiego we Włoszech w 1797 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa / pierwsze słowa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mazurek Dąbrowskiego",
+          "Jeszcze Polska nie zginęła",
+          "Mazurek Dabrowskiego"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się generał, którego imię pojawia się w polskim hymnie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Dąbrowski",
+          "Jan Henryk Dąbrowski",
+          "Dabrowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywało się państwo polskie utworzone przez Napoleona w 1807 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Księstwo Warszawskie",
+          "Ksiestwo Warszawskie"
+        ]
+      }
+    },
+    {
+      "prompt": "Polski książę i marszałek Francji, który zginął w bitwie pod Lipskiem w 1813 roku — kto to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Józef Poniatowski",
+          "książę Józef Poniatowski",
+          "Jozef Poniatowski"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywało się królestwo połączone unią personalną z Rosją, utworzone na kongresie wiedeńskim w 1815 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Królestwo Polskie",
+          "Królestwo Kongresowe",
+          "Kongresówka",
+          "Krolestwo Polskie"
+        ]
+      }
+    },
+    {
+      "prompt": "Pierwszy marszałek Polski, twórca Legionów Polskich w czasie I wojny światowej — kto to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Józef Piłsudski",
+          "Piłsudski",
+          "Jozef Pilsudski",
+          "Pilsudski"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polityk, pianista i kompozytor był premierem Polski w 1919 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Ignacy Jan Paderewski",
+          "Paderewski"
+        ]
+      }
+    },
+    {
+      "prompt": "Bitwa i jej rok: zwycięstwo polsko-litewskie nad zakonem krzyżackim w średniowieczu.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bitwa"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Grunwald",
+          "bitwa pod Grunwaldem"
+        ],
+        "b": [
+          "1410"
+        ]
+      }
+    },
+    {
+      "prompt": "Bitwa i jej rok: odsiecz, w której Jan III Sobieski pokonał Turków.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bitwa"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wiedeń",
+          "bitwa pod Wiedniem",
+          "Wieden"
+        ],
+        "b": [
+          "1683"
+        ]
+      }
+    },
+    {
+      "prompt": "Bitwa i jej rok: „Cud nad Wisłą”, odparcie bolszewików pod Warszawą.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "bitwa"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bitwa Warszawska",
+          "Warszawa",
+          "bitwa warszawska"
+        ],
+        "b": [
+          "1920"
+        ]
+      }
+    },
+    {
+      "prompt": "Władca i jego dynastia: pierwszy koronowany król Polski.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "władca"
+        },
+        {
+          "key": "b",
+          "label": "dynastia"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bolesław Chrobry",
+          "Chrobry",
+          "Boleslaw Chrobry"
+        ],
+        "b": [
+          "Piastowie",
+          "Piastów",
+          "Piastow"
+        ]
+      }
+    },
+    {
+      "prompt": "Władca i jego dynastia: zwycięzca spod Wiednia w 1683 roku.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "władca"
+        },
+        {
+          "key": "b",
+          "label": "dynastia / ród"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jan III Sobieski",
+          "Sobieski",
+          "Jan Sobieski"
+        ],
+        "b": [
+          "Sobiescy",
+          "ród Sobieskich",
+          "Sobieski"
+        ]
+      }
+    },
+    {
+      "prompt": "Wydarzenie i jego rok: chrzest Polski za panowania Mieszka I.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wydarzenie"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "chrzest Polski",
+          "chrzest"
+        ],
+        "b": [
+          "966"
+        ]
+      }
+    },
+    {
+      "prompt": "Wydarzenie i jego rok: uchwalenie pierwszej polskiej konstytucji.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "wydarzenie"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Konstytucja 3 maja",
+          "uchwalenie Konstytucji 3 maja"
+        ],
+        "b": [
+          "1791"
+        ]
+      }
+    },
+    {
+      "prompt": "Powstanie i jego rok rozpoczęcia: zryw przeciw Rosji rozpoczęty w nocy listopadowej.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "powstanie"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "powstanie listopadowe",
+          "listopadowe"
+        ],
+        "b": [
+          "1830"
+        ]
+      }
+    },
+    {
+      "prompt": "Powstanie i jego rok rozpoczęcia: zryw warszawiaków przeciw Niemcom w czasie II wojny.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "powstanie"
+        },
+        {
+          "key": "b",
+          "label": "rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "powstanie warszawskie",
+          "warszawskie"
+        ],
+        "b": [
+          "1944"
+        ]
+      }
+    },
+    {
+      "prompt": "Postać i jej rola: przywódca związku „Solidarność” i późniejszy prezydent.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        },
+        {
+          "key": "b",
+          "label": "rola / funkcja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lech Wałęsa",
+          "Wałęsa",
+          "Lech Walesa",
+          "Walesa"
+        ],
+        "b": [
+          "prezydent",
+          "prezydent RP",
+          "prezydent Polski"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy państwa, które dokonały rozbiorów Polski.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "państwo 1"
+        },
+        {
+          "key": "b",
+          "label": "państwo 2"
+        },
+        {
+          "key": "c",
+          "label": "państwo 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Rosja"
+        ],
+        "b": [
+          "Prusy"
+        ],
+        "c": [
+          "Austria"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy dynastie panujące w Polsce: pierwszą rodzimą, drugą litewskiego pochodzenia oraz ród Jana III.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "dynastia rodzima"
+        },
+        {
+          "key": "b",
+          "label": "dynastia litewska"
+        },
+        {
+          "key": "c",
+          "label": "ród Sobieskiego"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Piastowie",
+          "Piastów",
+          "Piastow"
+        ],
+        "b": [
+          "Jagiellonowie",
+          "Jagiellonów",
+          "Jagiellonow"
+        ],
+        "c": [
+          "Sobiescy",
+          "Sobieski"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy główne miasta-stolice w historii Polski: pierwszą stolicę Piastów, dawną stolicę koronacyjną i obecną stolicę.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pierwsza stolica"
+        },
+        {
+          "key": "b",
+          "label": "stolica koronacyjna"
+        },
+        {
+          "key": "c",
+          "label": "obecna stolica"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Gniezno"
+        ],
+        "b": [
+          "Kraków",
+          "Krakow"
+        ],
+        "c": [
+          "Warszawa"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień czterech władców z dynastii Jagiellonów panujących w Polsce.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "władca 1"
+        },
+        {
+          "key": "b",
+          "label": "władca 2"
+        },
+        {
+          "key": "c",
+          "label": "władca 3"
+        },
+        {
+          "key": "d",
+          "label": "władca 4"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Jagiełło",
+          "Jagiełło",
+          "Jagiello"
+        ],
+        "b": [
+          "Kazimierz Jagiellończyk",
+          "Kazimierz IV Jagiellończyk",
+          "Jagiellończyk"
+        ],
+        "c": [
+          "Zygmunt Stary",
+          "Zygmunt I Stary"
+        ],
+        "d": [
+          "Zygmunt August",
+          "Zygmunt II August"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech polskich noblistów w dziedzinie literatury.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "noblista 1"
+        },
+        {
+          "key": "b",
+          "label": "noblista 2"
+        },
+        {
+          "key": "c",
+          "label": "noblista 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Sienkiewicz",
+          "Sienkiewicz"
+        ],
+        "b": [
+          "Władysław Reymont",
+          "Reymont"
+        ],
+        "c": [
+          "Czesław Miłosz",
+          "Miłosz",
+          "Wisława Szymborska",
+          "Szymborska",
+          "Olga Tokarczuk",
+          "Tokarczuk"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy zabory, dzieląc dawne ziemie Rzeczypospolitej między mocarstwa (nazwy zaborów).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zabór 1"
+        },
+        {
+          "key": "b",
+          "label": "zabór 2"
+        },
+        {
+          "key": "c",
+          "label": "zabór 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "rosyjski",
+          "zabór rosyjski"
+        ],
+        "b": [
+          "pruski",
+          "zabór pruski"
+        ],
+        "c": [
+          "austriacki",
+          "zabór austriacki"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech przywódców komunistycznej Polski (I sekretarzy PZPR).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przywódca 1"
+        },
+        {
+          "key": "b",
+          "label": "przywódca 2"
+        },
+        {
+          "key": "c",
+          "label": "przywódca 3"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Gomułka",
+          "Gomułka",
+          "Gomulka"
+        ],
+        "b": [
+          "Edward Gierek",
+          "Gierek"
+        ],
+        "c": [
+          "Wojciech Jaruzelski",
+          "Jaruzelski"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzech dowódców polskich powstań i insurekcji XVIII–XIX wieku: insurekcji 1794, dyktatora powstania listopadowego oraz ostatniego dyktatora powstania styczniowego.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "1794"
+        },
+        {
+          "key": "b",
+          "label": "powstanie listopadowe"
+        },
+        {
+          "key": "c",
+          "label": "powstanie styczniowe"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Tadeusz Kościuszko",
+          "Kościuszko",
+          "Kosciuszko"
+        ],
+        "b": [
+          "Józef Chłopicki",
+          "Chłopicki",
+          "Chlopicki"
+        ],
+        "c": [
+          "Romuald Traugutt",
+          "Traugutt"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień czterech prezydentów III Rzeczypospolitej (po 1989 roku).",
+      "slots": [
+        {
+          "key": "a",
+          "label": "prezydent 1"
+        },
+        {
+          "key": "b",
+          "label": "prezydent 2"
+        },
+        {
+          "key": "c",
+          "label": "prezydent 3"
+        },
+        {
+          "key": "d",
+          "label": "prezydent 4"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Lech Wałęsa",
+          "Wałęsa",
+          "Walesa"
+        ],
+        "b": [
+          "Aleksander Kwaśniewski",
+          "Kwaśniewski",
+          "Kwasniewski"
+        ],
+        "c": [
+          "Lech Kaczyński",
+          "Kaczyński",
+          "Kaczynski"
+        ],
+        "d": [
+          "Bronisław Komorowski",
+          "Komorowski",
+          "Andrzej Duda",
+          "Duda"
+        ]
+      }
+    },
+    {
+      "prompt": "Wymień trzy kluczowe wydarzenia roku 1989 w Polsce: rozmowy władzy z opozycją, częściowo wolne wybory oraz powstanie rządu kierowanego przez opozycję — podaj nazwę rozmów, miesiąc wyborów i nazwisko premiera.",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozmowy"
+        },
+        {
+          "key": "b",
+          "label": "miesiąc wyborów"
+        },
+        {
+          "key": "c",
+          "label": "premier"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Okrągły Stół",
+          "obrady Okrągłego Stołu",
+          "Okragly Stol"
+        ],
+        "b": [
+          "czerwiec",
+          "czerwca"
+        ],
+        "c": [
+          "Tadeusz Mazowiecki",
+          "Mazowiecki"
+        ]
+      }
+    }
+  ]
+}

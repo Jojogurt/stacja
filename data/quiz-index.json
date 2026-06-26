@@ -1,0 +1,25 @@
+{
+  "_": "Manifest kategorii quizu ładowanych przez quiz-loader.js do window.CATEGORIES.quiz. Dodajesz kategorię = wrzuć data/quiz-<slug>.json + dopisz nazwę pliku do files[].",
+  "files": [
+    "quiz-biologia.json",
+    "quiz-disney.json",
+    "quiz-film.json",
+    "quiz-geografia.json",
+    "quiz-gry-wideo.json",
+    "quiz-harry-potter.json",
+    "quiz-historia-polski.json",
+    "quiz-historia-swiata.json",
+    "quiz-kosmetyki.json",
+    "quiz-kosmos.json",
+    "quiz-kuchnia.json",
+    "quiz-literatura.json",
+    "quiz-marvel.json",
+    "quiz-mitologia.json",
+    "quiz-nauka.json",
+    "quiz-sport.json",
+    "quiz-star-wars.json",
+    "quiz-sztuka.json",
+    "quiz-wladca-pierscieni.json",
+    "quiz-zwierzeta.json"
+  ]
+}
