@@ -1,0 +1,257 @@
+{
+  "label": "Medycyna",
+  "kind": "quiz",
+  "desc": "50 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Który narząd produkuje insulinę?",
+      "slots": [{ "key": "a", "label": "narząd" }],
+      "answers": { "a": ["trzustka"] }
+    },
+    {
+      "prompt": "Ile komór ma serce człowieka?",
+      "slots": [{ "key": "a", "label": "liczba" }],
+      "answers": { "a": ["dwie", "2", "dwa"] }
+    },
+    {
+      "prompt": "Jak nazywa się lekarz zajmujący się leczeniem dzieci?",
+      "slots": [{ "key": "a", "label": "specjalista" }],
+      "answers": { "a": ["pediatra"] }
+    },
+    {
+      "prompt": "Jak nazywa się lekarz specjalizujący się w chorobach serca?",
+      "slots": [{ "key": "a", "label": "specjalista" }],
+      "answers": { "a": ["kardiolog"] }
+    },
+    {
+      "prompt": "Kto odkrył penicylinę?",
+      "slots": [{ "key": "a", "label": "naukowiec" }],
+      "answers": { "a": ["Alexander Fleming", "Fleming"] }
+    },
+    {
+      "prompt": "Jaki czerwony barwnik w krwinkach przenosi tlen?",
+      "slots": [{ "key": "a", "label": "białko" }],
+      "answers": { "a": ["hemoglobina"] }
+    },
+    {
+      "prompt": "Jak nazywa się największy narząd wewnętrzny człowieka, pełniący m.in. funkcje odtruwające?",
+      "slots": [{ "key": "a", "label": "narząd" }],
+      "answers": { "a": ["wątroba"] }
+    },
+    {
+      "prompt": "Jaki numer alarmowy obowiązuje w całej Unii Europejskiej?",
+      "slots": [{ "key": "a", "label": "numer" }],
+      "answers": { "a": ["112"] }
+    },
+    {
+      "prompt": "Jak nazywa się skrót oznaczający resuscytację krążeniowo-oddechową (uciskanie klatki i oddechy ratownicze)?",
+      "slots": [{ "key": "a", "label": "skrót" }],
+      "answers": { "a": ["RKO"] }
+    },
+    {
+      "prompt": "Jaka jest w przybliżeniu prawidłowa temperatura ciała człowieka w stopniach Celsjusza?",
+      "slots": [{ "key": "a", "label": "temperatura" }],
+      "answers": { "a": ["36,6", "36.6", "37"] }
+    },
+    {
+      "prompt": "Które krwinki odpowiadają za odporność i zwalczanie infekcji?",
+      "slots": [{ "key": "a", "label": "krwinki" }],
+      "answers": { "a": ["białe krwinki", "leukocyty", "biale krwinki"] }
+    },
+    {
+      "prompt": "Jak nazywają się czerwone krwinki?",
+      "slots": [{ "key": "a", "label": "krwinki" }],
+      "answers": { "a": ["erytrocyty", "czerwone krwinki"] }
+    },
+    {
+      "prompt": "Jak nazywa się choroba polegająca na zaburzeniu poziomu cukru we krwi związanym z insuliną?",
+      "slots": [{ "key": "a", "label": "choroba" }],
+      "answers": { "a": ["cukrzyca"] }
+    },
+    {
+      "prompt": "Jak nazywa się nagłe niedokrwienie mięśnia sercowego, potocznie „atak serca”?",
+      "slots": [{ "key": "a", "label": "choroba" }],
+      "answers": { "a": ["zawał serca", "zawał", "zawal serca", "zawal"] }
+    },
+    {
+      "prompt": "Kto odkrył promienie X (rentgenowskie)?",
+      "slots": [{ "key": "a", "label": "naukowiec" }],
+      "answers": { "a": ["Wilhelm Röntgen", "Röntgen", "Rentgen", "Roentgen"] }
+    },
+    {
+      "prompt": "Jak nazywa się dziedzina medycyny zajmująca się znieczulaniem pacjentów do operacji?",
+      "slots": [{ "key": "a", "label": "dziedzina" }],
+      "answers": { "a": ["anestezjologia", "anestezja"] }
+    },
+    {
+      "prompt": "Ile (w przybliżeniu) kości ma szkielet dorosłego człowieka?",
+      "slots": [{ "key": "a", "label": "liczba" }],
+      "answers": { "a": ["206", "około 206", "okolo 206"] }
+    },
+    {
+      "prompt": "Jaki narząd jest odpowiedzialny za wymianę gazową — pobieranie tlenu i oddawanie dwutlenku węgla?",
+      "slots": [{ "key": "a", "label": "narząd" }],
+      "answers": { "a": ["płuca", "pluca"] }
+    },
+    {
+      "prompt": "Jak nazywa się najdłuższa kość w ciele człowieka?",
+      "slots": [{ "key": "a", "label": "kość" }],
+      "answers": { "a": ["kość udowa", "kosc udowa", "udowa"] }
+    },
+    {
+      "prompt": "Jak nazywa się lekarz zajmujący się chorobami skóry?",
+      "slots": [{ "key": "a", "label": "specjalista" }],
+      "answers": { "a": ["dermatolog"] }
+    },
+    {
+      "prompt": "Witamina D jest wytwarzana w skórze pod wpływem czego?",
+      "slots": [{ "key": "a", "label": "czynnik" }],
+      "answers": { "a": ["światła słonecznego", "słońca", "promieni UV", "swiatla slonecznego", "slonca"] }
+    },
+    {
+      "prompt": "Niedobór której witaminy powoduje szkorbut?",
+      "slots": [{ "key": "a", "label": "witamina" }],
+      "answers": { "a": ["witamina C", "C", "kwas askorbinowy"] }
+    },
+    {
+      "prompt": "Jak nazywa się płyn ustrojowy krążący w naczyniach i przenoszący tlen oraz składniki odżywcze?",
+      "slots": [{ "key": "a", "label": "płyn" }],
+      "answers": { "a": ["krew"] }
+    },
+    {
+      "prompt": "Jak nazywa się centralny narząd układu nerwowego mieszczący się w czaszce?",
+      "slots": [{ "key": "a", "label": "narząd" }],
+      "answers": { "a": ["mózg", "mozg"] }
+    },
+    {
+      "prompt": "Jak nazywa się główna tętnica wychodząca z serca?",
+      "slots": [{ "key": "a", "label": "naczynie" }],
+      "answers": { "a": ["aorta"] }
+    },
+    {
+      "prompt": "Jak nazywa się lekarz zajmujący się leczeniem zębów?",
+      "slots": [{ "key": "a", "label": "specjalista" }],
+      "answers": { "a": ["stomatolog", "dentysta"] }
+    },
+    {
+      "prompt": "Jaki gruczoł w szyi reguluje metabolizm poprzez produkcję hormonów?",
+      "slots": [{ "key": "a", "label": "gruczoł" }],
+      "answers": { "a": ["tarczyca"] }
+    },
+    {
+      "prompt": "Jak nazywa się stan, w którym organizm reaguje nadmiernie na zwykle nieszkodliwą substancję, np. pyłki czy sierść?",
+      "slots": [{ "key": "a", "label": "stan" }],
+      "answers": { "a": ["alergia", "uczulenie"] }
+    },
+    {
+      "prompt": "Jak nazywa się para narządów filtrujących krew i produkujących mocz?",
+      "slots": [{ "key": "a", "label": "narządy" }],
+      "answers": { "a": ["nerki"] }
+    },
+    {
+      "prompt": "Jak nazywa się zabieg diagnostyczny wykorzystujący ultradźwięki, popularnie wykonywany m.in. w ciąży?",
+      "slots": [{ "key": "a", "label": "badanie" }],
+      "answers": { "a": ["USG", "ultrasonografia"] }
+    },
+    {
+      "prompt": "Co lekarze nazywają „diagnozą”?",
+      "slots": [{ "key": "a", "label": "znaczenie" }],
+      "answers": { "a": ["rozpoznanie choroby", "rozpoznanie", "określenie choroby"] }
+    },
+    {
+      "prompt": "Która grupa krwi w układzie AB0 jest uznawana za uniwersalnego dawcę krwinek czerwonych?",
+      "slots": [{ "key": "a", "label": "grupa" }],
+      "answers": { "a": ["0", "zero", "grupa 0"] }
+    },
+    {
+      "prompt": "Kto, jako dwukrotna noblistka, zajmowała się m.in. promieniotwórczością wykorzystywaną później w medycynie?",
+      "slots": [{ "key": "a", "label": "postać" }],
+      "answers": { "a": ["Maria Skłodowska-Curie", "Maria Curie", "Skłodowska-Curie", "Sklodowska-Curie"] }
+    },
+    {
+      "prompt": "Jak nazywa się mięsień oddechowy oddzielający klatkę piersiową od jamy brzusznej?",
+      "slots": [{ "key": "a", "label": "mięsień" }],
+      "answers": { "a": ["przepona"] }
+    },
+    {
+      "prompt": "Jak nazywa się układ odpowiedzialny za obronę organizmu przed drobnoustrojami?",
+      "slots": [{ "key": "a", "label": "układ" }],
+      "answers": { "a": ["układ odpornościowy", "układ immunologiczny", "uklad odpornosciowy", "odpornościowy"] }
+    },
+    {
+      "prompt": "Który zmysł jest związany z narządem oka?",
+      "slots": [{ "key": "a", "label": "zmysł" }],
+      "answers": { "a": ["wzrok"] }
+    },
+    {
+      "prompt": "Jak nazywa się preparat podawany w celu uodpornienia organizmu na daną chorobę zakaźną?",
+      "slots": [{ "key": "a", "label": "preparat" }],
+      "answers": { "a": ["szczepionka"] }
+    },
+    {
+      "prompt": "Jak nazywa się lekarz wykonujący operacje chirurgiczne?",
+      "slots": [{ "key": "a", "label": "specjalista" }],
+      "answers": { "a": ["chirurg"] }
+    },
+    {
+      "prompt": "Jak nazywają się drobne pęcherzyki w płucach, w których zachodzi wymiana gazowa?",
+      "slots": [{ "key": "a", "label": "struktura" }],
+      "answers": { "a": ["pęcherzyki płucne", "pecherzyki plucne", "alweole"] }
+    },
+    {
+      "prompt": "Czy grypa jest wywoływana przez bakterię czy przez wirusa?\nA) Bakterię\nB) Wirusa\nC) Grzyba",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Wirusa", "wirus", "wirusa"] }
+    },
+    {
+      "prompt": "Ile litrów krwi (w przybliżeniu) ma dorosły człowiek?\nA) Około 1–2 litry\nB) Około 5 litrów\nC) Około 10 litrów\nD) Około 15 litrów",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Około 5 litrów", "5 litrów", "5 litrow", "okolo 5 litrow"] }
+    },
+    {
+      "prompt": "Który narząd jest odpowiedzialny za trawienie pokarmu za pomocą kwasu solnego?\nA) Wątroba\nB) Trzustka\nC) Żołądek\nD) Śledziona",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["C", "Żołądek", "żołądek", "zoladek"] }
+    },
+    {
+      "prompt": "Na jaki rodzaj drobnoustrojów działają antybiotyki (nie na wirusy)?",
+      "slots": [{ "key": "a", "label": "drobnoustroje" }],
+      "answers": { "a": ["bakterie", "bakteria"] }
+    },
+    {
+      "prompt": "Jak nazywa się największy organ ludzkiego ciała w ogóle?\nA) Wątroba\nB) Skóra\nC) Płuca\nD) Jelita",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Skóra", "skóra", "skora"] }
+    },
+    {
+      "prompt": "Czerwone krwinki powstają głównie w:\nA) Wątrobie\nB) Szpiku kostnym\nC) Śledzionie\nD) Nerkach",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Szpiku kostnym", "szpik kostny", "szpiku kostnym", "szpik"] }
+    },
+    {
+      "prompt": "Ile kości znajduje się w dłoni jednej ręki człowieka?\nA) 14\nB) 27\nC) 33\nD) 40",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "27"] }
+    },
+    {
+      "prompt": "Który z wymienionych jest hormonem regulującym poziom cukru we krwi?\nA) Adrenalina\nB) Insulina\nC) Tyroksyna\nD) Melatonina",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Insulina", "insulina"] }
+    },
+    {
+      "prompt": "Jak nazywa się najmniejsza kość w ciele człowieka, znajdująca się w uchu?\nA) Strzemiączko\nB) Kość łzowa\nC) Rzepka",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["A", "Strzemiączko", "strzemiączko", "strzemiaczko"] }
+    },
+    {
+      "prompt": "Który organ pełni rolę „pompy” napędzającej krążenie krwi?\nA) Płuca\nB) Serce\nC) Wątroba\nD) Nerki",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Serce", "serce"] }
+    },
+    {
+      "prompt": "Jak nazywa się część krwi będąca płynem, w którym zawieszone są krwinki?\nA) Limfa\nB) Osocze\nC) Surowica",
+      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
+      "answers": { "a": ["B", "Osocze", "osocze"] }
+    }
+  ]
+}

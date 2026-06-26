@@ -191,6 +191,22 @@
   #quizForm .field{grid-template-columns:110px 1fr}
   .form.quiz .music-only{display:none}
   .form.quiz #quizForm{display:grid}
+  /* ABCD (multiple-choice): klikalne opcje zamiast wpisywania litery */
+  #quizForm .mc-opts{display:flex;flex-direction:column;gap:9px}
+  .mc-opt{display:flex;align-items:center;gap:12px;width:100%;text-align:left;cursor:pointer;
+    background:var(--panel);border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 14px;
+    font-family:var(--body);font-weight:700;font-size:16px;color:var(--ink);transition:transform .06s,border-color .12s,background .12s}
+  .mc-opt:active{transform:translateY(2px);border-bottom-width:2px}
+  .mc-opt .mc-let{flex:0 0 30px;height:30px;display:grid;place-items:center;border-radius:9px;
+    background:var(--panel2);color:var(--muted);font-family:var(--display);font-weight:900;font-size:15px;transition:.12s}
+  .mc-opt .mc-tx{flex:1;line-height:1.3}
+  .mc-opt.sel{border-color:var(--blue);background:rgba(28,176,246,.10)}
+  .mc-opt.sel .mc-let{background:var(--blue);color:#fff}
+  .mc-opt.ok{border-color:var(--green);background:rgba(88,204,2,.13)}
+  .mc-opt.ok .mc-let{background:var(--green);color:#fff}
+  .mc-opt.no{border-color:var(--red);background:rgba(255,75,75,.12)}
+  .mc-opt.no .mc-let{background:var(--red);color:#fff}
+  .mc-opt:disabled{cursor:default}
 
   .check{width:100%;margin-top:6px;font-family:var(--display);font-weight:800;letter-spacing:.03em;
     font-size:18px;color:#fff;background:var(--green);border:none;border-radius:16px;padding:16px;
@@ -936,6 +952,19 @@
     background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 0;cursor:pointer;transition:transform .08s}
   .um-rounds button:active{transform:translateY(2px);border-bottom-width:2px}
   .um-rounds button.on{color:#46A302;background:#F0FBE6;border-color:var(--green)}
+  /* #3: przełącznik trenera (powtórki oblanych) */
+  .um-repeat{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
+    font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);
+    background:var(--panel);border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 14px;transition:transform .08s,border-color .12s,background .12s}
+  .um-repeat:active{transform:translateY(2px);border-bottom-width:2px}
+  .um-repeat .ur-ic{font-size:16px;filter:grayscale(1);opacity:.55}
+  .um-repeat .ur-tx{flex:1}
+  .um-repeat .ur-state{font-weight:900;color:#b3aea4}
+  .um-repeat .ur-state::after{content:'wył.'}
+  .um-repeat.on{color:var(--ink);background:#F0FBE6;border-color:var(--green)}
+  .um-repeat.on .ur-ic{filter:none;opacity:1}
+  .um-repeat.on .ur-state{color:#46A302}
+  .um-repeat.on .ur-state::after{content:'wł.'}
   .um-summary{font-family:var(--display);font-weight:700;font-size:13px;color:#9a958c;margin-top:14px;min-height:16px}
   .um-summary b{font-weight:900;color:var(--ink)}
   .um-summary.err{color:var(--red)}
@@ -962,6 +991,8 @@
   html.dark .seg{background:var(--panel2)}
   html.dark .grp-chip.on,
   html.dark .um-rounds button.on{background:rgba(88,204,2,.16);color:#7BD957;border-color:var(--green)}
+  html.dark .um-repeat.on{background:rgba(88,204,2,.16);color:var(--ink);border-color:var(--green)}
+  html.dark .um-repeat.on .ur-state{color:#7BD957}
   html.dark .grp-chip.mode.on{background:rgba(28,176,246,.16);color:#5CC5FF;border-color:var(--blue)}
   html.dark .nav-badge{background:rgba(88,204,2,.18);color:#7BD957}
   html.dark .um-summary b{color:var(--ink)}
@@ -1223,6 +1254,11 @@
         <button data-r="3">3</button>
         <button data-r="4" class="on">4</button>
       </div>
+    </div>
+
+    <div class="um-sec">
+      <div class="um-h"><span>Trener</span><span class="note">quiz · solo</span></div>
+      <button class="um-repeat" id="quizRepeat" type="button"><span class="ur-ic">🔁</span><span class="ur-tx">Częściej pytania, które oblałeś</span><span class="ur-state"></span></button>
     </div>
 
     <div class="um-summary" id="matchInfo"></div>

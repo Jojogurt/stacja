@@ -1,0 +1,769 @@
+{
+  "label": "Informatyka",
+  "kind": "quiz",
+  "desc": "50 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Ile bitów ma jeden bajt?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "8",
+          "osiem",
+          "8 bitów"
+        ]
+      }
+    },
+    {
+      "prompt": "W jakim systemie liczbowym pracują komputery na najniższym poziomie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "system"
+        }
+      ],
+      "answers": {
+        "a": [
+          "dwójkowy",
+          "binarny",
+          "system binarny",
+          "system dwójkowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile to jest liczba dziesiętna 5 w systemie dwójkowym?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "zapis binarny"
+        }
+      ],
+      "answers": {
+        "a": [
+          "101",
+          "0101"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile bajtów liczy klasycznie (binarnie) jeden kilobajt?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba bajtów"
+        }
+      ],
+      "answers": {
+        "a": [
+          "1024",
+          "1024 bajty",
+          "2^10"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile bitów ma jedna cyfra w systemie szesnastkowym?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba bitów"
+        }
+      ],
+      "answers": {
+        "a": [
+          "4",
+          "cztery",
+          "4 bity"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka jest podstawa systemu szesnastkowego (hex)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "16",
+          "szesnaście"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót CPU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie / nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Central Processing Unit",
+          "procesor",
+          "jednostka centralna"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się ulotna pamięć operacyjna, w której komputer trzyma aktualnie używane dane?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pamięć"
+        }
+      ],
+      "answers": {
+        "a": [
+          "RAM",
+          "pamięć RAM",
+          "Random Access Memory"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót GPU?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie / nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Graphics Processing Unit",
+          "procesor graficzny",
+          "karta graficzna"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót SSD w kontekście dysków?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Solid State Drive",
+          "dysk półprzewodnikowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Który nośnik danych przechowuje dane na obracających się talerzach magnetycznych?\nA) SSD\nB) HDD\nC) RAM",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "HDD",
+          "dysk twardy"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót ROM?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Read-Only Memory",
+          "pamięć tylko do odczytu"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót USB?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Universal Serial Bus",
+          "uniwersalna magistrala szeregowa"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się skończony, uporządkowany ciąg kroków prowadzący do rozwiązania problemu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pojęcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "algorytm"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się program tłumaczący kod źródłowy na kod maszynowy w całości przed uruchomieniem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narzędzie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "kompilator",
+          "compiler"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki język jest podstawą do tworzenia struktury stron internetowych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "język / skrót"
+        }
+      ],
+      "answers": {
+        "a": [
+          "HTML",
+          "HyperText Markup Language"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót CSS używany przy tworzeniu stron?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Cascading Style Sheets",
+          "kaskadowe arkusze stylów"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto stworzył język programowania Python?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "twórca"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Guido van Rossum",
+          "van Rossum"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto stworzył jądro systemu Linux?\nA) Richard Stallman\nB) Linus Torvalds\nC) Ken Thompson\nD) Dennis Ritchie",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Linus Torvalds",
+          "Torvalds"
+        ]
+      }
+    },
+    {
+      "prompt": "Który z tych języków powstał najpierw?\nA) Python\nB) Java\nC) C\nD) JavaScript",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "język C"
+        ]
+      }
+    },
+    {
+      "prompt": "Brytyjski matematyk uznawany za ojca informatyki, autor koncepcji maszyny i testu nazwanego jego nazwiskiem — kto to?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Alan Turing",
+          "Turing"
+        ]
+      }
+    },
+    {
+      "prompt": "Którą XIX-wieczną postać uważa się za pierwszą programistkę w historii?\nA) Grace Hopper\nB) Ada Lovelace\nC) Hedy Lamarr",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Ada Lovelace",
+          "Lovelace"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był współzałożycielem firmy Microsoft razem z Paulem Allenem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bill Gates",
+          "Gates"
+        ]
+      }
+    },
+    {
+      "prompt": "Który z założycieli Apple znany był jako współtwórca pierwszych komputerów Apple i projektant układów (nie Steve Jobs)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "postać"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Steve Wozniak",
+          "Wozniak"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się protokół, na którym opiera się przeglądanie stron WWW?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "protokół"
+        }
+      ],
+      "answers": {
+        "a": [
+          "HTTP",
+          "HyperText Transfer Protocol"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaka litera dodawana jest do HTTP, by oznaczyć połączenie szyfrowane?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera / nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "S",
+          "HTTPS",
+          "Secure"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki system zamienia czytelne nazwy domen (np. google.com) na adresy IP?\nA) DHCP\nB) DNS\nC) FTP\nD) ARP",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "DNS",
+          "Domain Name System"
+        ]
+      }
+    },
+    {
+      "prompt": "Na którym domyślnym porcie działa nieszyfrowany ruch HTTP?\nA) 21\nB) 80\nC) 443\nD) 25",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "80",
+          "port 80"
+        ]
+      }
+    },
+    {
+      "prompt": "Na którym domyślnym porcie działa szyfrowany ruch HTTPS?\nA) 8080\nB) 22\nC) 443",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "443",
+          "port 443"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki adres IP w wersji 4 jest zarezerwowany jako pętla zwrotna (localhost)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "adres IP"
+        }
+      ],
+      "answers": {
+        "a": [
+          "127.0.0.1",
+          "localhost"
+        ]
+      }
+    },
+    {
+      "prompt": "Z ilu bitów składa się adres IPv4?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba bitów"
+        }
+      ],
+      "answers": {
+        "a": [
+          "32",
+          "32 bity"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót URL?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Uniform Resource Locator",
+          "adres internetowy"
+        ]
+      }
+    },
+    {
+      "prompt": "Co oznacza skrót SQL używany przy bazach danych?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Structured Query Language",
+          "strukturalny język zapytań"
+        ]
+      }
+    },
+    {
+      "prompt": "Które słowo kluczowe SQL służy do pobierania danych z tabeli?\nA) UPDATE\nB) SELECT\nC) DELETE",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "SELECT"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się złośliwe oprogramowanie, które szyfruje dane i żąda okupu?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pojęcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "ransomware"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak ogólnie nazywa się złośliwe oprogramowanie (wirusy, trojany, robaki itp.)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pojęcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "malware",
+          "złośliwe oprogramowanie"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki system operacyjny ma w logo pingwina o imieniu Tux?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "system"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Linux"
+        ]
+      }
+    },
+    {
+      "prompt": "Na jakim jądrze systemowym oparty jest Android?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "jądro / system"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Linux",
+          "jądro Linux",
+          "kernel Linux"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się standard kodowania znaków obejmujący niemal wszystkie języki świata, w tym emoji?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "standard"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Unicode"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile znaków podstawowych (7-bitowych) definiuje klasyczna tablica ASCII?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "128",
+          "128 znaków"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się błąd w programie potocznie określany słowem oznaczającym owada?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pojęcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "bug"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się proces wyszukiwania i usuwania błędów w programie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "pojęcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "debugowanie",
+          "debugging",
+          "debug"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się rozproszony system kontroli wersji stworzony przez Linusa Torvaldsa?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "narzędzie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Git"
+        ]
+      }
+    },
+    {
+      "prompt": "Który format pliku graficznego obsługuje przezroczystość i kompresję bezstratną?\nA) JPEG\nB) PNG\nC) BMP",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "PNG"
+        ]
+      }
+    },
+    {
+      "prompt": "Ile bajtów liczy binarnie jeden megabajt (w stosunku do kilobajtów)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "liczba"
+        }
+      ],
+      "answers": {
+        "a": [
+          "1024",
+          "1024 kB",
+          "1024 kilobajty"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się dwójkowa operacja logiczna prawdziwa tylko wtedy, gdy oba argumenty są prawdą?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "operacja"
+        }
+      ],
+      "answers": {
+        "a": [
+          "AND",
+          "iloczyn logiczny",
+          "koniunkcja"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki firmowy język zapytań i format opisu danych ma rozwinięcie JavaScript Object Notation?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "format / skrót"
+        }
+      ],
+      "answers": {
+        "a": [
+          "JSON"
+        ]
+      }
+    },
+    {
+      "prompt": "Który komputer z lat 40. XX wieku jest często wskazywany jako jeden z pierwszych elektronicznych komputerów ogólnego przeznaczenia (lampy próżniowe, USA)?\nA) ENIAC\nB) UNIVAC\nC) Altair 8800",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub odpowiedź"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "ENIAC"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywa się sieć lokalna o zasięgu np. jednego biura czy mieszkania (skrót)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "skrót"
+        }
+      ],
+      "answers": {
+        "a": [
+          "LAN",
+          "Local Area Network"
+        ]
+      }
+    },
+    {
+      "prompt": "Który firmowy adres MAC i protokół internetowy oznacza skrót IP?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "rozwinięcie"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Internet Protocol",
+          "protokół internetowy"
+        ]
+      }
+    }
+  ]
+}

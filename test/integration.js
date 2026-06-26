@@ -90,6 +90,60 @@ await group('lektor: tryb lektor → knob → synteza mowy (app/lektor.js)', asy
   ok(spoke>0, 'lektor: synteza mowy wywołana (speechSynthesis.speak)');
 });
 
+await group('quiz ABCD (solo): przyciski opcji + wybór + ocena + odsłona', async ()=>{
+  resetSelection(window);
+  const C=window.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  ok(qKey, 'jest kategoria quizu: '+qKey);
+  if(!qKey) return;
+  const cat=C.quiz[qKey]; const orig=cat.questions;
+  // wstrzyknij JEDNO pytanie ABCD (poprawna = B), by mecz pokazał je deterministycznie
+  cat.questions=[{ prompt:'Pytanie testowe ABCD?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta',
+    slots:[{key:'a',label:'litera lub odpowiedź'}], answers:{ a:['B','Beta'] } }];
+  try{
+    const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===qKey);
+    ok(tk, 'jest tick kategorii quizu'); if(tk && !tk.classList.contains('on')) tk.click();   // quiz włącza się sam
+    click(window,'matchStart');
+    await settle(10);
+    const opts=[...window.document.querySelectorAll('#quizForm .mc-opt')];
+    ok(opts.length===4, 'ABCD: 4 przyciski opcji (jest: '+opts.length+')');
+    ok(!$(window,'qf_a'), 'ABCD: brak pola tekstowego (klikasz zamiast pisać)');
+    ok(!$(window,'lyricBox').textContent.includes('Alfa'), 'ABCD: opcje poza treścią pytania (w przyciskach)');
+    const bBtn=opts.find(b=>b.dataset.letter==='B');
+    ok(bBtn, 'ABCD: jest opcja B'); bBtn.click();
+    ok(bBtn.classList.contains('sel'), 'ABCD: klik zaznacza opcję (.sel)');
+    ok(window.document.querySelectorAll('#quizForm .mc-opt.sel').length===1, 'ABCD: zaznaczona dokładnie jedna');
+    click(window,'check');
+    await settle(6);
+    ok($(window,'reveal').classList.contains('show'), 'ABCD: odsłona po „Sprawdź"');
+    ok($(window,'revealHead').className.includes('win'), 'ABCD: poprawna odpowiedź → win');
+    ok(bBtn.classList.contains('ok'), 'ABCD: poprawna opcja na zielono (.ok)');
+    ok(bBtn.disabled, 'ABCD: po ocenie opcje zablokowane');
+  } finally { cat.questions=orig; }
+});
+
+await group('quiz ABC (solo): 3 opcje też renderują się jako przyciski', async ()=>{
+  resetSelection(window);
+  const C=window.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  if(!qKey){ ok(true,'(brak kategorii quizu — pomijam)'); return; }
+  const cat=C.quiz[qKey]; const orig=cat.questions;
+  cat.questions=[{ prompt:'Pytanie z trzema opcjami?\nA) Pierwsza\nB) Druga\nC) Trzecia',
+    slots:[{key:'a',label:'litera lub odpowiedź'}], answers:{ a:['C','Trzecia'] } }];
+  try{
+    const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===qKey);
+    if(tk && !tk.classList.contains('on')) tk.click();
+    click(window,'matchStart');
+    await settle(10);
+    const opts=[...window.document.querySelectorAll('#quizForm .mc-opt')];
+    ok(opts.length===3, 'ABC: 3 przyciski opcji (jest: '+opts.length+')');
+    ok(opts.map(b=>b.dataset.letter).join('')==='ABC', 'ABC: litery A,B,C');
+    const cBtn=opts.find(b=>b.dataset.letter==='C'); cBtn.click();
+    click(window,'check');
+    await settle(6);
+    ok($(window,'revealHead').className.includes('win'), 'ABC: poprawna (C) → win');
+    ok(cBtn.classList.contains('ok'), 'ABC: opcja C na zielono');
+  } finally { cat.questions=orig; }
+});
+
 await group('ekrany: nawigacja menu → body class (showScreen)', async ()=>{
   $(window,'goSolo').click();
   ok(window.document.body.classList.contains('solo'), 'goSolo → body.solo');

@@ -298,27 +298,61 @@ function newQuizRound(){
   let pool=((cat&&cat.questions)||[]).filter(q=>q.prompt && !seenTracks.has(norm(q.prompt)));
   if(!pool.length){ ((cat&&cat.questions)||[]).forEach(q=>seenTracks.delete(norm(q.prompt))); pool=((cat&&cat.questions)||[]).slice(); }
   if(!pool.length){ busy=false; flash('Ta kategoria nie ma pytań.'); return; }
-  const q=pool[Math.floor(Math.random()*pool.length)];
-  current={prompt:q.prompt, slots:q.slots, answers:q.answers, era:eraKey, track:q.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:''};
+  // #3 (opcjonalnie): tryb trenera — częściej pytania wcześniej oblane (tylko quiz solo)
+  let q;
+  if(quizRepeat && pool.length>1){
+    const stats=loadQuizStats();
+    const failed=pool.filter(x=>{ const st=stats[quizStatKey(eraKey,x)]; return st && st.w>(st.r||0); });
+    q = (failed.length && Math.random()<0.7) ? failed[Math.floor(Math.random()*failed.length)] : pool[Math.floor(Math.random()*pool.length)];
+  } else {
+    q = pool[Math.floor(Math.random()*pool.length)];
+  }
+  const mc=parseMC(q.prompt);
+  current={prompt:q.prompt, slots:q.slots, answers:q.answers, era:eraKey, track:q.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:'', mc, statKey:quizStatKey(eraKey,q)};
   seenTracks.add(norm(q.prompt));
   busy=false;
   renderSoloForm();
-  showPrompt(q.prompt);
-  setIcon('play'); setState('odpowiedz na pytanie');
+  showPrompt(mc?mc.question:q.prompt);
+  setIcon('play'); setState(mc?'wybierz odpowiedź (A–D)':'odpowiedz na pytanie');
   document.getElementById('check').disabled=false;
   document.getElementById('skip').disabled=false;
-  const first=document.getElementById('qf_'+(q.slots[0]&&q.slots[0].key));
-  if(first) first.focus({preventScroll:true});
+  if(mc){ const fb=document.querySelector('#quizForm .mc-opt'); if(fb) fb.focus({preventScroll:true}); }
+  else { const first=document.getElementById('qf_'+(q.slots[0]&&q.slots[0].key)); if(first) first.focus({preventScroll:true}); }
 }
-// przełącz formularz solo między muzyką (statyczne pola) a quizem (sloty pytania)
+// pytanie multiple-choice: rozdziel treść od opcji „A) … B) …". 2–4 opcje (na przyszłość też 3).
+// null = pytanie otwarte. Renderowane pionowo (jeden przycisk pod drugim), więc liczba dowolna.
+function parseMC(prompt){
+  const lines=(prompt||'').split('\n');
+  const first=lines.findIndex(l=>/^[ABCD]\)/.test(l.trim()));
+  if(first<0) return null;
+  const options=[];
+  for(let i=first;i<lines.length;i++){ const m=lines[i].trim().match(/^([ABCD])\)\s*(.+)$/); if(m) options.push({letter:m[1],text:m[2].trim()}); }
+  if(options.length<2 || options.length>4) return null;
+  return { question: lines.slice(0,first).join('\n').trim(), options };
+}
+// zaznacz opcję ABCD (jedna na raz); ocena dopiero przy „Sprawdź"
+function selectMC(btn){
+  if(!btn || btn.disabled) return;
+  document.querySelectorAll('#quizForm .mc-opt').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+}
+// przełącz formularz solo między muzyką (statyczne pola), quizem otwartym (sloty) a ABCD (przyciski)
 function renderSoloForm(){
   const form=document.getElementById('form'); if(!form) return;
   const isQuiz = mode==='quiz';
   form.classList.toggle('quiz', isQuiz);
   document.body.classList.toggle('quiz-mode', isQuiz);   // ukryj gałkę/audio w decku dla quizu
   const qf=document.getElementById('quizForm'); if(!qf) return;
-  qf.innerHTML = (isQuiz && current && current.slots) ? current.slots.map(s=>
-    `<div class="field"><label for="qf_${s.key}">${escapeHtml(s.label||s.key)}</label><input id="qf_${s.key}" autocomplete="off" autocapitalize="off"></div>`).join('') : '';
+  if(isQuiz && current && current.mc){
+    qf.innerHTML='<div class="mc-opts">'+current.mc.options.map(o=>
+      `<button type="button" class="mc-opt" data-letter="${o.letter}"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span></button>`).join('')+'</div>';
+    qf.querySelectorAll('.mc-opt').forEach(b=>{ b.onclick=()=>selectMC(b); });
+  } else if(isQuiz && current && current.slots){
+    qf.innerHTML = current.slots.map(s=>
+      `<div class="field"><label for="qf_${s.key}">${escapeHtml(s.label||s.key)}</label><input id="qf_${s.key}" autocomplete="off" autocapitalize="off"></div>`).join('');
+  } else {
+    qf.innerHTML = '';
+  }
 }
 function showPrompt(text){ const b=document.getElementById('lyricBox'); if(!b) return;
   b.innerHTML='<span class="lyric-cap">pytanie</span>'+escapeHtml(text||''); b.classList.add('quiz'); b.hidden=false; }
@@ -452,23 +486,44 @@ function check(){
 // ocena quizu (solo): per slot dowolny wariant przez textMatch; trafienie = wszystkie sloty
 function checkQuiz(){
   setIcon('play');
+  const mc=current.mc;
   const slots=current.slots||[];
   const okBySlot={};
-  slots.forEach(s=>{ const guess=val('qf_'+s.key); okBySlot[s.key]=(current.answers[s.key]||[]).some(v=>textMatch(guess, v)); });
-  const roundOk=slots.length && slots.every(s=>okBySlot[s.key]);
+  let roundOk, guessLabel='';
+  if(mc){
+    const sel=document.querySelector('#quizForm .mc-opt.sel');
+    const guess=sel?sel.dataset.letter:'';
+    guessLabel=guess;
+    roundOk=(current.answers.a||[]).some(v=>textMatch(guess, v));
+  } else {
+    slots.forEach(s=>{ const guess=val('qf_'+s.key); okBySlot[s.key]=(current.answers[s.key]||[]).some(v=>textMatch(guess, v)); });
+    roundOk=slots.length && slots.every(s=>okBySlot[s.key]);
+  }
   total++; if(roundOk){score++;streak++;} else streak=0;
   updateScore();
+  if(mode==='quiz' && current.statKey) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł
   if(session){ const s=matchSlot(session.match); session.results.push({track:current.prompt, artist:'', okTitle:roundOk, okArtist:roundOk, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   const r=document.getElementById('rmeta'); r.innerHTML='';
-  slots.forEach(s=>{ const guess=val('qf_'+s.key);
-    const correct=(current.answers[s.key]||[]).join(' / ');
-    r.appendChild(line(okBySlot[s.key], s.label||s.key, correct + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)')));
-  });
+  if(mc){
+    const correctLetter=(current.answers.a[0]||'').toUpperCase();
+    document.querySelectorAll('#quizForm .mc-opt').forEach(b=>{   // zielona = poprawna, czerwona = błędny wybór
+      const wasSel=b.classList.contains('sel'); b.disabled=true; b.classList.remove('sel');
+      if(b.dataset.letter===correctLetter) b.classList.add('ok');
+      else if(wasSel) b.classList.add('no');
+    });
+    const correctTxt=current.answers.a[1]||current.answers.a[0]||'';
+    r.appendChild(line(roundOk,'odpowiedź', correctLetter+') '+correctTxt + (guessLabel?` (Ty: ${guessLabel})`:' (nie wybrano)')));
+  } else {
+    slots.forEach(s=>{ const guess=val('qf_'+s.key);
+      const correct=(current.answers[s.key]||[]).join(' / ');
+      r.appendChild(line(okBySlot[s.key], s.label||s.key, correct + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)')));
+    });
+  }
   const img=document.getElementById('art'); if(img) img.style.display='none';
   const rh=document.getElementById('revealHead');
   if(rh){ const cls=roundOk?'win':'fail'; const ic=roundOk?'✓':'✗';
     rh.className='rv-shead '+cls;
-    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':'Pudło'}</b><small>${roundOk?'wszystkie pola trafione':'sprawdź poprawne odpowiedzi'}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':'Pudło'}</b><small>${roundOk?(mc?'dobra odpowiedź':'wszystkie pola trafione'):'sprawdź poprawne odpowiedzi'}</small></span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
   document.getElementById('reveal').classList.add('show');
   if(roundOk){ confetti(); playClap(); }
@@ -478,8 +533,29 @@ function checkQuiz(){
 document.getElementById('check').onclick=check;
 document.getElementById('next').onclick=advance;
 document.getElementById('form').addEventListener('keydown',e=>{
+  // ABCD: klawisze A–D zaznaczają opcję (wygodne na desktopie)
+  if(mode==='quiz' && current && current.mc && /^[a-dA-D]$/.test(e.key)){
+    const b=document.querySelector(`#quizForm .mc-opt[data-letter="${e.key.toUpperCase()}"]`);
+    if(b && !b.disabled){ selectMC(b); e.preventDefault(); return; }
+  }
   if(e.key==='Enter' && !document.getElementById('check').disabled) check();
 });
+
+/* ===== #3: tryb trenera (solo quiz) — statystyki trafień + faworyzowanie oblanych ===== */
+const QUIZ_STATS_KEY='stacjaQuizStats', QUIZ_REPEAT_KEY='stacjaQuizRepeat';
+let quizRepeat = (()=>{ try{ return localStorage.getItem(QUIZ_REPEAT_KEY)==='1'; }catch(_e){ return false; } })();
+function quizStatKey(cat, q){ return cat+'::'+norm((q&&q.prompt)||''); }
+function loadQuizStats(){ try{ return JSON.parse(localStorage.getItem(QUIZ_STATS_KEY)||'{}'); }catch(_e){ return {}; } }
+function recordQuizStat(key, ok){
+  try{ const s=loadQuizStats(); const e=s[key]||{r:0,w:0}; if(ok)e.r++; else e.w++; s[key]=e;
+    localStorage.setItem(QUIZ_STATS_KEY, JSON.stringify(s)); }catch(_e){}
+}
+function syncRepeatBtn(){ const b=document.getElementById('quizRepeat'); if(b) b.classList.toggle('on', quizRepeat); }
+(function bindRepeatToggle(){
+  const b=document.getElementById('quizRepeat'); if(!b) return;
+  b.onclick=()=>{ quizRepeat=!quizRepeat; try{ localStorage.setItem(QUIZ_REPEAT_KEY, quizRepeat?'1':'0'); }catch(_e){} syncRepeatBtn(); };
+  syncRepeatBtn();
+})();
 
 function line(ok,k,v){
   const d=document.createElement('div'); d.className='rline';

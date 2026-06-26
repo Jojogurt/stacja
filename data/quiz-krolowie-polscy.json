@@ -1,0 +1,863 @@
+{
+  "label": "Królowie Polscy",
+  "kind": "quiz",
+  "desc": "50 pytań · poziom średni",
+  "questions": [
+    {
+      "prompt": "Który władca uważany jest za pierwszego historycznego władcę Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mieszko I",
+          "Mieszko",
+          "Mieszko Pierwszy"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był pierwszym koronowanym królem Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bolesław Chrobry",
+          "Chrobry",
+          "Boleslaw Chrobry",
+          "Bolesław I Chrobry",
+          "Bolesław Wielki"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku odbyła się koronacja Bolesława Chrobrego na króla Polski?\nA) 1000\nB) 1018\nC) 1025\nD) 1032",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1025"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przydomek nosił Kazimierz, który „zastał Polskę drewnianą, a zostawił murowaną”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wielki",
+          "Kazimierz Wielki",
+          "Kazimierz III Wielki"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król był ostatnim z dynastii Piastów na tronie polskim?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kazimierz Wielki",
+          "Kazimierz III Wielki",
+          "Kazimierz",
+          "Kazimierz Wielki Piast"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się litewski wielki książę, który po chrzcie i ślubie z Jadwigą został królem Polski jako Władysław II?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Jagiełło",
+          "Jagiełło",
+          "Wladyslaw Jagiello",
+          "Władysław II Jagiełło",
+          "Jogaila"
+        ]
+      }
+    },
+    {
+      "prompt": "Pod jaką bitwą w 1410 roku wojska polsko-litewskie pokonały zakon krzyżacki?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa bitwy"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Grunwald",
+          "bitwa pod Grunwaldem",
+          "pod Grunwaldem",
+          "Grunwaldem"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto jako pierwsza zasiadła na tronie polskim jako koronowany władca (król) z dynastii Andegawenów, córka Ludwika Węgierskiego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jadwiga",
+          "Jadwiga Andegaweńska",
+          "święta Jadwiga",
+          "Jadwiga Andegawenska"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przydomek nosił król Bolesław II, wygnany po konflikcie z biskupem Stanisławem?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Śmiały",
+          "Boleslaw Smialy",
+          "Bolesław Śmiały",
+          "Szczodry",
+          "Bolesław II Śmiały"
+        ]
+      }
+    },
+    {
+      "prompt": "Który władca z dynastii Wettynów, król Polski jako August II, nosił przydomek „Mocny”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "August II Mocny",
+          "August II",
+          "August Mocny",
+          "Friedrich August",
+          "August II Sas"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku odbyła się pierwsza wolna elekcja w Polsce?\nA) 1569\nB) 1573\nC) 1576\nD) 1587",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1573"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto został wybrany pierwszym królem elekcyjnym Rzeczypospolitej w 1573 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Henryk Walezy",
+          "Henryk Walezjusz",
+          "Walezy",
+          "Henryk de Valois",
+          "Henryk III Walezy"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król, pochodzący z Siedmiogrodu, słynął ze zwycięskich kampanii przeciw Rosji i reformy piechoty (piechota wybraniecka)?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stefan Batory",
+          "Batory",
+          "Stefan Bathory",
+          "Báthory"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król Polski odniósł zwycięstwo nad Turkami w bitwie pod Wiedniem w 1683 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jan III Sobieski",
+          "Jan Sobieski",
+          "Sobieski",
+          "Jan III"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto był ostatnim królem Polski przed rozbiorami, panującym w latach 1764–1795?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Stanisław August Poniatowski",
+          "Poniatowski",
+          "Stanislaw August Poniatowski",
+          "Stanisław Poniatowski",
+          "Stanisław II August"
+        ]
+      }
+    },
+    {
+      "prompt": "Która dynastia rządziła Polską od Mieszka I do Kazimierza Wielkiego?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa dynastii"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Piastowie",
+          "dynastia Piastów",
+          "Piastów",
+          "Piastowska"
+        ]
+      }
+    },
+    {
+      "prompt": "Która dynastia zasiadała na tronie polskim od Władysława Jagiełły do Zygmunta Augusta?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa dynastii"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jagiellonowie",
+          "dynastia Jagiellonów",
+          "Jagiellonów",
+          "Jagiellońska"
+        ]
+      }
+    },
+    {
+      "prompt": "Który Jagiellon, syn Władysława Jagiełły, zginął w bitwie pod Warną w 1444 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław III Warneńczyk",
+          "Warneńczyk",
+          "Wladyslaw Warnenczyk",
+          "Władysław Warneńczyk",
+          "Władysław III"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król, ojciec Władysława Warneńczyka i Kazimierza Jagiellończyka, panował w latach 1447–1492 i prowadził wojnę trzynastoletnią z Krzyżakami?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kazimierz Jagiellończyk",
+          "Kazimierz IV Jagiellończyk",
+          "Jagiellończyk",
+          "Kazimierz Jagiellonczyk",
+          "Kazimierz IV"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakim pokojem zakończyła się w 1466 roku wojna trzynastoletnia z zakonem krzyżackim?\nA) pokój kaliski\nB) pokój toruński\nC) pokój brzeski\nD) pokój wiedeński",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "pokój toruński",
+          "drugi pokój toruński",
+          "pokoj torunski"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król Polski jako pierwszy przyjął hołd pruski Albrechta Hohenzollerna w 1525 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Zygmunt Stary",
+          "Zygmunt I Stary",
+          "Zygmunt I",
+          "Stary"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król był ostatnim z dynastii Jagiellonów na tronie polskim?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Zygmunt August",
+          "Zygmunt II August",
+          "Zygmunt II",
+          "August Jagiellon"
+        ]
+      }
+    },
+    {
+      "prompt": "Z którą dynastią szwedzką związani byli polscy królowie Zygmunt III, Władysław IV i Jan Kazimierz?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa dynastii"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Wazowie",
+          "dynastia Wazów",
+          "Wazów",
+          "Waza",
+          "Wazowska"
+        ]
+      }
+    },
+    {
+      "prompt": "Za panowania którego króla z dynastii Wazów stolicę faktycznie przeniesiono z Krakowa do Warszawy?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Zygmunt III Waza",
+          "Zygmunt III",
+          "Zygmunt Waza",
+          "Zygmunt III Waza Szwedzki"
+        ]
+      }
+    },
+    {
+      "prompt": "Do którego miasta przeniesiono stolicę Polski z Krakowa na przełomie XVI i XVII wieku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa miasta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Warszawa",
+          "do Warszawy",
+          "Warszawy"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym mieście tradycyjnie odbywały się koronacje królów Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa miasta"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kraków",
+          "w Krakowie",
+          "Krakowie",
+          "Kraków (Wawel)"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku doszło do unii lubelskiej, łączącej Polskę i Litwę w Rzeczpospolitą Obojga Narodów?\nA) 1466\nB) 1505\nC) 1569\nD) 1572",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "C",
+          "1569"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król panował w czasie potopu szwedzkiego i abdykował w 1668 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Jan II Kazimierz",
+          "Jan Kazimierz",
+          "Jan Kazimierz Waza",
+          "Jan II Kazimierz Waza"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się okres szwedzkiego najazdu na Rzeczpospolitą w latach 1655–1660?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "potop szwedzki",
+          "potop",
+          "potop szwedzki 1655",
+          "szwedzki potop"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król, „Piast” wybrany w 1669 roku, był ojcem cesarza, lecz sam panował krótko i nieudolnie?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Michał Korybut Wiśniowiecki",
+          "Michał Korybut",
+          "Wiśniowiecki",
+          "Michal Korybut Wisniowiecki",
+          "Michał Wiśniowiecki"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się królowa, żona Jana III Sobieskiego, znana z licznych listów „do ukochanej Marysieńki”?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Marysieńka",
+          "Maria Kazimiera",
+          "Maria Kazimiera d'Arquien",
+          "Marysieńka Sobieska",
+          "Maria Kazimiera Sobieska"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przydomek nosił książę Bolesław III, który podzielił Polskę testamentem na dzielnice?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Krzywousty",
+          "Bolesław Krzywousty",
+          "Boleslaw Krzywousty",
+          "Bolesław III Krzywousty"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się dokument z 1138 roku, który wprowadził w Polsce rozbicie dzielnicowe?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "testament Bolesława Krzywoustego",
+          "statut Bolesława Krzywoustego",
+          "testament Krzywoustego",
+          "ustawa sukcesyjna",
+          "statut Krzywoustego"
+        ]
+      }
+    },
+    {
+      "prompt": "Który książę zjednoczył ziemie polskie i koronował się na króla w 1320 roku, kończąc rozbicie dzielnicowe?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Łokietek",
+          "Łokietek",
+          "Wladyslaw Lokietek",
+          "Władysław I Łokietek"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku koronował się Władysław Łokietek, kończąc okres rozbicia dzielnicowego?\nA) 1306\nB) 1320\nC) 1333\nD) 1340",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1320"
+        ]
+      }
+    },
+    {
+      "prompt": "Jaki przydomek nosił pierwszy król Polski z dynastii Przemyślidów, panujący na przełomie XIII i XIV wieku, Wacław II?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa dynastii lub kraju"
+        }
+      ],
+      "answers": {
+        "a": [
+          "czeski",
+          "Wacław II Czeski",
+          "król czeski",
+          "Przemyślida",
+          "Czech"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król ufundował Akademię Krakowską (późniejszy Uniwersytet Jagielloński) w 1364 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kazimierz Wielki",
+          "Kazimierz III Wielki",
+          "Kazimierz",
+          "Kazimierz Wielki Piast"
+        ]
+      }
+    },
+    {
+      "prompt": "Kto, według tradycji, był legendarnym założycielem dynastii Piastów, prostym kołodziejem spod Gniezna?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Piast",
+          "Piast Kołodziej",
+          "Piast Kolodziej"
+        ]
+      }
+    },
+    {
+      "prompt": "W którym roku odbył się zjazd gnieźnieński z udziałem cesarza Ottona III i Bolesława Chrobrego?\nA) 997\nB) 1000\nC) 1018\nD) 1025",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub rok"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "1000"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywał się drugi król Polski, syn Bolesława Chrobrego, koronowany w 1025 roku?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Mieszko II Lambert",
+          "Mieszko II",
+          "Mieszko Lambert",
+          "Mieszko II Gnuśny"
+        ]
+      }
+    },
+    {
+      "prompt": "Który władca, syn Mieszka II, odbudował państwo polskie po kryzysie i przeniósł stolicę do Krakowa, nosząc przydomek Odnowiciel?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Kazimierz Odnowiciel",
+          "Kazimierz I Odnowiciel",
+          "Odnowiciel",
+          "Kazimierz I"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król, wnuk Kazimierza Odnowiciela, koronował się w 1076 roku, a jego przydomek brzmiał Śmiały lub Szczodry?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Bolesław II Śmiały",
+          "Bolesław Śmiały",
+          "Boleslaw Smialy",
+          "Bolesław Szczodry",
+          "Bolesław II"
+        ]
+      }
+    },
+    {
+      "prompt": "Jakiego biskupa krakowskiego, późniejszego świętego, kazał stracić Bolesław Śmiały?\nA) Wojciech\nB) Stanisław\nC) Otton\nD) Andrzej",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Stanisław",
+          "święty Stanisław",
+          "Stanisław ze Szczepanowa",
+          "Stanislaw"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król z dynastii saskiej, syn Augusta II Mocnego, panował w Polsce w latach 1733–1763?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i numer"
+        }
+      ],
+      "answers": {
+        "a": [
+          "August III Sas",
+          "August III",
+          "August III Sas (Fryderyk August)",
+          "August III Wettyn"
+        ]
+      }
+    },
+    {
+      "prompt": "Który polski król-elekt, konkurent Augusta II i Augusta III, był teściem króla Francji Ludwika XV?\nA) Stanisław Leszczyński\nB) Michał Korybut Wiśniowiecki\nC) Jan III Sobieski\nD) Stefan Batory",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwisko"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Stanisław Leszczyński",
+          "Leszczyński",
+          "Stanislaw Leszczynski",
+          "Stanisław I Leszczyński"
+        ]
+      }
+    },
+    {
+      "prompt": "Pod jaką bitwą w 1331 roku Władysław Łokietek starł się z Krzyżakami, co uznano za pierwsze ważne starcie z zakonem?\nA) Grunwald\nB) Płowce\nC) Cedynia\nD) Legnica",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "B",
+          "Płowce",
+          "pod Płowcami",
+          "Plowce"
+        ]
+      }
+    },
+    {
+      "prompt": "Jak nazywała się żona Mieszka I, czeska księżniczka, z którą związany jest chrzest Polski?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Dobrawa",
+          "Dąbrówka",
+          "Dobrawa Przemyślidka",
+          "Dabrowka",
+          "Doubravka"
+        ]
+      }
+    },
+    {
+      "prompt": "Który syn Władysława Jagiełły został także królem Czech i Węgier, zapoczątkowując jagiellońskie wpływy w Europie Środkowej?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "imię i przydomek"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Władysław Warneńczyk",
+          "Władysław III Warneńczyk",
+          "Wladyslaw Warnenczyk",
+          "Warneńczyk",
+          "Władysław III"
+        ]
+      }
+    },
+    {
+      "prompt": "Który król Polski, syn Zygmunta III Wazy, panujący w latach 1632–1648, był uznawany za zdolnego wodza i mecenasa sztuki?\nA) Władysław IV Waza\nB) Jan II Kazimierz\nC) Zygmunt August\nD) Stefan Batory",
+      "slots": [
+        {
+          "key": "a",
+          "label": "litera lub imię"
+        }
+      ],
+      "answers": {
+        "a": [
+          "A",
+          "Władysław IV Waza",
+          "Władysław IV",
+          "Wladyslaw IV Waza",
+          "Władysław Waza"
+        ]
+      }
+    },
+    {
+      "prompt": "Który dokument uchwalony 3 maja 1791 roku za panowania Stanisława Augusta Poniatowskiego był pierwszą w Europie nowoczesną konstytucją?",
+      "slots": [
+        {
+          "key": "a",
+          "label": "nazwa"
+        }
+      ],
+      "answers": {
+        "a": [
+          "Konstytucja 3 maja",
+          "Konstytucja 3 Maja",
+          "Ustawa Rządowa",
+          "konstytucja trzeciego maja",
+          "Konstytucja 3 maja 1791"
+        ]
+      }
+    }
+  ]
+}
