@@ -124,6 +124,16 @@ group('scoring.evaluateGuess', ()=>{
 
 /* --- mpReducer --- */
 function mkGame(){ return {phase:MP.PLAY, round:1, answerSlots:slotsFor(), proposals:[], votes:{}, sure:[]}; }
+group('mpReducer.propose: JEDNA odpowiedź na gracza (nowa zastępuje starą)', ()=>{
+  const g=mkGame();
+  reduceAction(g,{type:'propose',by:'u1',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}});
+  reduceAction(g,{type:'propose',by:'u1',byName:'Ala',values:{title:'We Will Rock You',artist:'Queen'}});
+  eq(g.proposals.filter(p=>p.by==='u1').length,1,'gracz ma dokładnie 1 propozycję');
+  eq(g.proposals.find(p=>p.by==='u1').values.artist,'Queen','została najnowsza odpowiedź');
+  eq(g.votes.artist.u1,'Queen','głos gracza przesunięty na nową wartość');
+  reduceAction(g,{type:'propose',by:'u2',byName:'B',values:{title:'Yesterday',artist:'Beatles'}});
+  eq(g.proposals.length,2,'dwóch graczy → dwie propozycje (limit jest PER gracz)');
+});
 group('mpReducer.reduceAction', ()=>{
   const g=mkGame();
   ok(reduceAction(g,{type:'propose',by:'u1',byName:'Ala',conf:'sure',values:{title:'Hey Jude',artist:'Beatles'}}),'propose zmienia stan');

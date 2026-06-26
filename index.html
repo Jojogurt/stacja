@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#58CC02">
 <meta name="robots" content="noindex">
-<title>Uszy & Muzg — trener pubquizu</title>
+<title>Uszy & Muzk — trener pubquizu</title>
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Uszy & Muzg">
+<meta name="apple-mobile-web-app-title" content="Uszy & Muzk">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -45,13 +45,13 @@
   }
   *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
   html,body{margin:0}
-  html{overflow-x:hidden}
+  html{overflow-x:clip}            /* clip (nie hidden) → nie robi z html/body scroll-kontenera (Android: scroll jednym palcem) */
   html{overscroll-behavior:none}   /* blokuj pull-to-refresh (przeładowanie wyrzucało z gry do menu) */
   body{
     background:var(--bg);
     color:var(--ink); font-family:var(--body); font-weight:600;
     min-height:100dvh; padding:env(safe-area-inset-top) 16px calc(env(safe-area-inset-bottom) + 18px);
-    max-width:520px; margin:0 auto; line-height:1.4; overflow-x:hidden; overscroll-behavior-y:contain;
+    max-width:520px; margin:0 auto; line-height:1.4; overflow-x:clip; overscroll-behavior-y:contain;
   }
   /* ---- header / brand ---- */
   /* JEDEN navbar dla wszystkich ekranów: ← back | tytuł (środek) | ☰ menu (opcjonalnie) */
@@ -1137,7 +1137,7 @@
   @keyframes jGrow{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
   @keyframes jRise{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
 
-  /* LOADER „Uszy & Muzg": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
+  /* LOADER „Uszy & Muzk": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
   .bb-loader{display:flex;gap:8px;justify-content:center;align-items:flex-end;height:20px;margin:4px 0 10px}
   .bb-loader i{width:12px;height:12px;border-radius:50%;background:var(--green)}
   .bb-loader i:nth-child(2){background:var(--blue)}
@@ -1160,8 +1160,8 @@
 
   <section id="menu">
     <div class="mh-hero">
-      <div class="mh-logo">Uszy <b>&amp;</b> Muzg</div>
-      <div class="mh-sub">Sprawdź czy masz uszy i muzg</div>
+      <div class="mh-logo">Uszy <b>&amp;</b> Muzk</div>
+      <div class="mh-sub">Sprawdź czy masz uszy i muzk</div>
       <div class="mh-ver" id="appVer"></div>
     </div>
     <button class="mh-card solo" id="goSolo"><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M204.73 51.85A108.07 108.07 0 0 0 20 128v56a28 28 0 0 0 28 28h16a28 28 0 0 0 28-28v-40a28 28 0 0 0-28-28H44.84A84.05 84.05 0 0 1 128 44h.64a83.7 83.7 0 0 1 82.52 72H192a28 28 0 0 0-28 28v40a28 28 0 0 0 28 28h16a28 28 0 0 0 28-28v-56a107.34 107.34 0 0 0-31.27-76.15M64 140a4 4 0 0 1 4 4v40a4 4 0 0 1-4 4H48a4 4 0 0 1-4-4v-44Zm148 44a4 4 0 0 1-4 4h-16a4 4 0 0 1-4-4v-40a4 4 0 0 1 4-4h20Z"/></svg></span><span class="tx"><b>SOLO</b><small>Trening, własne tempo</small></span><span class="ar">›</span></button>

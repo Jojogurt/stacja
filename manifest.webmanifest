@@ -1,7 +1,7 @@
 {
-  "name": "Uszy & Muzg — trener pubquizu",
-  "short_name": "Uszy & Muzg",
-  "description": "Sprawdź czy masz uszy i muzg: rozpoznawaj utwory, graj solo i ze znajomymi na żywo.",
+  "name": "Uszy & Muzk — trener pubquizu",
+  "short_name": "Uszy & Muzk",
+  "description": "Sprawdź czy masz uszy i muzk: rozpoznawaj utwory, graj solo i ze znajomymi na żywo.",
   "lang": "pl",
   "dir": "ltr",
   "start_url": "./index.html",

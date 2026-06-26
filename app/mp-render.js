@@ -124,7 +124,7 @@ function mpReactsBarHTML(){
     <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
-// loader „Uszy & Muzg" (3 kropki) — lokalny string (NIE współdzielony import: kruchy przy stale-cache).
+// loader „Uszy & Muzk" (3 kropki) — lokalny string (NIE współdzielony import: kruchy przy stale-cache).
 const bbLoader = `<div class="bb-loader"><i></i><i></i><i></i></div>`;
 const mpRenderLoading = (head)=> `${head}<div class="mp-deck">${bbLoader}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
@@ -189,8 +189,8 @@ function mpSlotsHTML(g){
         <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
       </div>`;
     }).join('') || (ro?`<div class="mp-cand empty"><span class="cv" style="opacity:.5">— czekamy na typy z telefonów —</span></div>`:'');
-    const addTyp = ro?'':`<div class="mp-addtyp" onclick="mpFocusTyp('${s.key}')">+ dorzuć typ…</div>`;
-    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}${addTyp}</div>`;
+    // „+ dorzuć typ…" usunięte — wpisywanie jest w sekcji pól (mpFormHTML) pod kolumnami
+    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}</div>`;
   }).join('')}</div>`;
 }
 function mpFocusTyp(key){ const el=$m('mpProp_'+key)||$m('mpChatIn'); if(el) el.focus(); }

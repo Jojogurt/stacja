@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v37';   // fix(mp relay): muzyka/lektor po quizie resetuje answerSlots (koniec rozjazdu pól+oceny w mixie quiz+muzyka)
+const APP_VERSION = 'v38';   // MP: usun „+dorzuc typ", 1 odpowiedz/gracz; scroll Android (overflow clip); rebrand Muzg→Muzk
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
