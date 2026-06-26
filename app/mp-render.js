@@ -81,7 +81,7 @@ function mpOnEnter(g, head, st){
     let reduce=false; try{ reduce=matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_e){}
     const meta=mpPhaseIntroMeta(g);
     if(meta && !reduce){ mpPlayPhaseIntro(st, meta); }
-    else if(!(g && g.phase===MP.DONE)) animIn(st);
+    else { S.introUntil=0; if(!(g && g.phase===MP.DONE)) animIn(st); }   // bez intra → faza startuje od razu
   }
 }
 function mpRender(){
@@ -272,9 +272,15 @@ function mpPhaseIntroMeta(g){
 }
 // INTRO fazy: duża ikona na środku (pop → zmniejsza się i fade do 0), w tym czasie treść ukryta
 // (nie zakryta białym ekranem — opacity 0), potem elementy wchodzą ze staggerem („oddech").
+// czas intra (ms) do ODSŁONIĘCIA treści: ikona wchodzi → ~2 s PAUZY → wychodzi (CSS 2.74s). CAŁA faza
+// (audio + timer w mpAfterSync) startuje dopiero wtedy (S.introUntil) — nic nie rusza pod intrem.
+// Seam testowy: window.__MP_INTRO_MS__ skraca/zeruje czas w jsdom (siatka nie czeka realnych 2 s).
+const mpIntroRevealMs = ()=> (typeof window!=='undefined' && window.__MP_INTRO_MS__!=null) ? window.__MP_INTRO_MS__ : 2300;
 let mpIntroTimers=[];
 function mpPlayPhaseIntro(st, meta){
   mpIntroTimers.forEach(clearTimeout); mpIntroTimers=[];
+  const reveal=mpIntroRevealMs();
+  S.introUntil = Date.now() + reveal;   // synchronicznie — mpAfterSync wstrzyma start fazy do tego czasu
   requestAnimationFrame(()=>{
     st.classList.remove('mp-introdone'); st.classList.add('mp-introing');
     const old=st.querySelector('.mp-intro'); if(old) old.remove();
@@ -282,9 +288,9 @@ function mpPlayPhaseIntro(st, meta){
     ov.innerHTML=`<div class="mp-intro-ic">${meta.icon}</div><div class="mp-intro-lb">${escapeHtml(meta.label)}</div>`;
     st.appendChild(ov);
     const T=(ms,fn)=>mpIntroTimers.push(setTimeout(fn,ms));
-    T(700,()=>{ st.classList.remove('mp-introing'); st.classList.add('mp-introdone'); });   // oddech, potem odsłoń treść
-    T(760,()=>{ const o=st.querySelector('.mp-intro'); if(o) o.remove(); });
-    T(1500,()=>{ st.classList.remove('mp-introdone'); });
+    T(reveal,()=>{ st.classList.remove('mp-introing'); st.classList.add('mp-introdone'); });   // pauza minęła → treść wchodzi
+    T(reveal+460,()=>{ const o=st.querySelector('.mp-intro'); if(o) o.remove(); });
+    T(reveal+680,()=>{ st.classList.remove('mp-introdone'); });
   });
 }
 // legenda stanów rostera (skórka czat — nad kreską)

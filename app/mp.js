@@ -230,9 +230,14 @@ function mpAfterSync(){
   // Render NAJPIERW, żeby gałka/status już istniały, gdy mpPlayLocal ustawia „ładowanie…".
   const startPlay = S.game && S.game.phase===MP.PLAY && S.game.playNonce!==S.lastNonce;
   if(startPlay) S.lastNonce=S.game.playNonce;
-  mpRender();
-  // intro „słuchaj/czytaj": zakryj treść, pokaż tytuł → po animacji odsłoń, ruszaj okno i piosenkę
-  if(startPlay){ mpStartListenWindow(S.game); mpPlayLocal(); }
+  mpRender();   // może odpalić INTRO fazy i ustawić S.introUntil (start fazy wstrzymany do końca animacji)
+  // CAŁA faza (okno czasu + audio) startuje DOPIERO po intrze — nic nie gra/tyka pod dużą ikoną fazy.
+  if(startPlay){
+    const begin=()=>{ if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===S.lastNonce){ mpStartListenWindow(S.game); mpPlayLocal(); } };
+    const wait=(S.introUntil||0)-Date.now();
+    if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
+    if(wait>20) S.startTimer=setTimeout(begin, wait); else begin();
+  }
 }
 // czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
 function mpRevealPending(){ return !!S.revealSnap && S.ack!==S.revealNonce; }

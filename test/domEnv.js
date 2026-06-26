@@ -90,6 +90,7 @@ export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='' }
   window.SpeechSynthesisUtterance = class { constructor(t){ this.text=t; } };
   window.URL.createObjectURL = () => 'blob:fake'; window.URL.revokeObjectURL = () => {};
   try{ Object.defineProperty(window.navigator,'clipboard',{ value:{ writeText:()=>Promise.resolve() }, configurable:true }); }catch(_e){}
+  window.__MP_INTRO_MS__ = 0;   // intro fazy bez czekania w siatce (faza/audio startują od razu); test gatingu ustawia >0 sam
   const calls = [];
   window.fetch = (url, opts) => {
     calls.push(String(url));

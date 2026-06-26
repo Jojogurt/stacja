@@ -574,11 +574,12 @@
      treść w tym czasie UKRYTA (opacity 0, nie biały ekran), potem wchodzi ze staggerem. */
   #mpStage{position:relative}
   .mp-intro{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none}
-  .mp-intro .mp-intro-ic{color:var(--blue);animation:mpIntroIc .66s cubic-bezier(.2,.7,.2,1) forwards}
-  .mp-intro .mp-intro-ic svg{width:88px;height:88px;display:block}
-  .mp-intro .mp-intro-lb{font-family:var(--display);font-weight:900;font-size:21px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);animation:mpIntroLb .66s ease forwards}
-  @keyframes mpIntroIc{0%{transform:scale(.5);opacity:0}24%{transform:scale(1.12);opacity:1}54%{transform:scale(1);opacity:1}100%{transform:scale(.34);opacity:0}}
-  @keyframes mpIntroLb{0%{opacity:0;transform:translateY(10px)}24%{opacity:1;transform:none}66%{opacity:1}100%{opacity:0;transform:translateY(-6px)}}
+  /* 2.74s: wejście (~0.33s) → PAUZA ~2s na dużej ikonie → wyjście (~0.44s). Zsynchronizowane z timerami JS. */
+  .mp-intro .mp-intro-ic{color:var(--blue);animation:mpIntroIc 2.74s cubic-bezier(.2,.7,.2,1) forwards}
+  .mp-intro .mp-intro-ic svg{width:96px;height:96px;display:block}
+  .mp-intro .mp-intro-lb{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);animation:mpIntroLb 2.74s ease forwards}
+  @keyframes mpIntroIc{0%{transform:scale(.5);opacity:0}12%{transform:scale(1.12);opacity:1}17%{transform:scale(1);opacity:1}84%{transform:scale(1);opacity:1}100%{transform:scale(.34);opacity:0}}
+  @keyframes mpIntroLb{0%{opacity:0;transform:translateY(12px)}12%{opacity:1;transform:none}84%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
   #mpStage.mp-introing > *:not(.mp-intro){opacity:0}
   #mpStage.mp-introdone > *:not(.mp-intro){animation:mpReveal .44s cubic-bezier(.2,.8,.2,1) both}
   #mpStage.mp-introdone > *:not(.mp-intro):nth-child(2){animation-delay:.06s}

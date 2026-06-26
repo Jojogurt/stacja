@@ -358,5 +358,22 @@ await group('MP: intro fazy zamiast paska faz (duża ikona na wejściu w scenę)
   ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'render fazy z intrem bez wyjątku');
 });
 
+await group('MP: faza (audio+timer) startuje DOPIERO po intrze (gating)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const realWait=ms=>new Promise(r=>setTimeout(r,ms));
+  w.__MP_INTRO_MS__ = 220;   // krótkie intro, ale > 0 → start fazy wstrzymany
+  try{
+    ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+      answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+      proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:95, timer:0, endsAt:null, beerTally:{}, results:[] });
+    await settle(6);
+    const statusNow=(($(w,'mpPlayStatus')||{}).textContent||'');
+    ok(!/ładowanie|gra/.test(statusNow), 'pod intrem audio NIE wystartowało (status nietknięty)');
+    await realWait(300);   // intro mija → begin() odpala mpStartListenWindow + mpPlayLocal
+    ok(/ładowanie|gra/.test((($(w,'mpPlayStatus')||{}).textContent||'')), 'po intrze audio wystartowało (status ustawiony)');
+  } finally { w.__MP_INTRO_MS__ = 0; }
+});
+
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);
