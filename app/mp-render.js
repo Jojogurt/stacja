@@ -286,8 +286,10 @@ function mpPlayPhaseIntro(st, meta){
   mpIntroTimers.forEach(clearTimeout); mpIntroTimers=[];
   const reveal=mpIntroRevealMs();
   S.introUntil = Date.now() + reveal;   // synchronicznie — mpAfterSync wstrzyma start fazy do tego czasu
-  requestAnimationFrame(()=>{
-    st.classList.remove('mp-introdone'); st.classList.add('mp-introing');
+  // SYNCHRONICZNIE ukryj treść JESZCZE PRZED innerHTML (mpOnEnter biegnie przed renderem fazy), żeby
+  // elementy nie mignęły przed intrem. Klasa siedzi na #mpStage → przeżywa ustawienie innerHTML dzieci.
+  st.classList.remove('mp-introdone'); st.classList.add('mp-introing');
+  requestAnimationFrame(()=>{   // overlay z ikoną DOKŁADAMY po innerHTML (inaczej render fazy by go zmiótł)
     const old=st.querySelector('.mp-intro'); if(old) old.remove();
     const ov=document.createElement('div'); ov.className='mp-intro';
     ov.innerHTML=`<div class="mp-intro-ic">${meta.icon}</div><div class="mp-intro-lb">${escapeHtml(meta.label)}</div>`;
