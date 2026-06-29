@@ -28,11 +28,13 @@ export function buildSoloRecord({ results, slots, config, profileId, displayName
 export function buildMpRecord({ game, tally, members, hostId, roomCode }){
   const total = (game.slots ? game.slots.length : 0) * QPC;
   const t = tally || {};
+  // wynik meczu = wynik najlepszej drużyny (coop: jedyna drużyna; konkurencja: zwycięzca)
+  const score = game.scores ? Math.max(0, ...Object.values(game.scores)) : (game.score || 0);
   return {
     mode: 'mp',
     room_code: roomCode || null,
     host_id: hostId || null,
-    score: game.score || 0,
+    score,
     total_questions: total,
     config: { rounds: game.rounds },
     participants: (members || []).map(m => ({

@@ -23,6 +23,7 @@
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
 import { reduceAction, evaluateAnswer, slotsFor, countReady } from '../core/mpReducer.js';
+import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance } from '../core/match.js';
 import { buildMpRecord } from '../core/matchRecord.js';
@@ -220,6 +221,12 @@ export class GameAuthority extends Server {
     for(const c of this.getConnections()){ const s=c.state; if(s&&s.id) byId.set(s.id,{id:s.id,name:s.name||''}); }
     return [...byId.values()];
   }
+  // GRACZE = członkowie bez salon-hosta (TV nie gra) — do budowy/uzgodnienia drużyn
+  playersOf(salon){
+    const ms=this.members();
+    const s = salon!=null ? salon : (this.game && this.game.salon);
+    return (s && this.hostId) ? ms.filter(m=>m.id!==this.hostId) : ms;
+  }
   pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId })); }
   broadcastState(){ this.broadcast(JSON.stringify({ t:'state', game:this.game })); }
 
@@ -227,7 +234,7 @@ export class GameAuthority extends Server {
 
   /* ---- start meczu (host wgrywa pule) ---- */
   async startMatch(config){
-    const { rounds=4, timer=0, modes=[] } = config;
+    const { rounds=4, timer=0, modes=[], format='coop', assignments } = config;
     const salon = !!config.salon;                   // tryb salonowy: TV = prowadzący (render+roster), tempo bez zmian
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
     const catKeys = Object.keys(pools);
@@ -235,10 +242,14 @@ export class GameAuthority extends Server {
     if(r.error || !r.slots) return;                 // klient waliduje przed wysłaniem — zignoruj zły config
     this.pools = pools; this.hostSeen = new Set(); this.recent = [];
     const s0=r.slots[0];
+    // DRUŻYNY wg formatu (coop=1, solo=N×1, teams=podział hosta z `assignments`). Stan odpowiedzi per-drużyna.
+    const teams = buildTeams(format, this.playersOf(salon), assignments);
+    const scores = {}; teams.forEach(t=>{ scores[t.id]=0; });
     this.game = {
       hostId:this.hostId, phase:MP.PLAY, slots:r.slots, rounds:r.rounds, si:0, qi:0,
-      score:0, catKey:s0.cat, mode:s0.mode, round:s0.round, catLabel:this.catLabelOf(s0.cat),
-      answerSlots:slotsFor(s0.mode, s0.cat), proposals:[], votes:{}, passed:[],
+      catKey:s0.cat, mode:s0.mode, round:s0.round, catLabel:this.catLabelOf(s0.cat),
+      answerSlots:slotsFor(s0.mode, s0.cat),
+      format, teams, byTeam:emptyByTeam(teams), scores,
       reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon,
       timer:timer||0, endsAt:null, beerTally:{}, tally:{},
     };
@@ -255,7 +266,8 @@ export class GameAuthority extends Server {
 
   /* ---- nowa runda: rozwiąż utwór (sekret), faza gotowości ---- */
   async newRound(){
-    this.game.phase=MP.LOADING; this.game.proposals=[]; this.game.votes={}; this.game.passed=[];
+    reconcileTeams(this.game, this.playersOf());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
+    this.game.phase=MP.LOADING; this.game.byTeam=emptyByTeam(this.game.teams);   // czyste buckety; scores kumulują się
     this.game.reveal=null; this.game.endsAt=null; this.current=null;
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
@@ -330,11 +342,15 @@ export class GameAuthority extends Server {
   async lock(){
     if(!this.game || this.game.phase!==MP.PLAY) return;
     this.clearAutoLock();
-    const ev=evaluateAnswer(this.game, this.current);
-    this.game.score += ev.gained;
-    if(ev.firstById){ this.game.tally[ev.firstById]=this.game.tally[ev.firstById]||{name:ev.firstBy,correct:0}; this.game.tally[ev.firstById].correct++; }
+    const ev=evaluateAnswer(this.game, this.current);   // ocenia KAŻDĄ drużynę (ev.perTeam)
+    this.game.beerTally=this.game.beerTally||{};
+    for(const t of this.game.teams){
+      const rr=ev.perTeam[t.id]; if(!rr) continue;
+      this.game.scores[t.id]=(this.game.scores[t.id]||0)+rr.gained;
+      if(rr.firstById){ this.game.tally[rr.firstById]=this.game.tally[rr.firstById]||{name:rr.firstBy,correct:0}; this.game.tally[rr.firstById].correct++; }
+      if(!rr.teamOk && rr.anySure){ rr.pewniacy.forEach(n=>{ this.game.beerTally[n]=(this.game.beerTally[n]||0)+1; }); }
+    }
     this.game.results.push(ev.result);
-    if(!ev.teamOk && ev.anySure){ this.game.beerTally=this.game.beerTally||{}; ev.pewniacy.forEach(n=>{ this.game.beerTally[n]=(this.game.beerTally[n]||0)+1; }); }
     this.game.reveal=ev.reveal;                     // DOPIERO TERAZ odpowiedź trafia do rozsyłanego stanu
     this.game.phase=assertMp(this.game.phase, MP.REVEAL, console.warn); this.game.endsAt=null;
     this.broadcastState(); await this.persist();

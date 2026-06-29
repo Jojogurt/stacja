@@ -176,6 +176,26 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   const html=$(w,'mpRoom').innerHTML;
   ok(/Kategorie/.test(html) && /Tryby pytań/.test(html) && /Liczba rund/.test(html), 'picker MP: sekcje Kategorie/Tryby/Rundy');
   ok(/um-start/.test(html), 'picker MP: przycisk startu meczu');
+  // FORMAT (Wspólna/Solo/Drużyny) — wybór trybu konkurencyjnego
+  ok(/Format/.test(html) && /Wspólna/.test(html) && /Solo/.test(html), 'picker MP: sekcja Format (Wspólna/Solo)');
+  ok(typeof w.mpSetFormat==='function', 'most do HTML: mpSetFormat na window');
+  w.mpSetFormat('solo'); await settle(2);
+  ok(/każdy gra sam/.test($(w,'mpRoom').innerHTML), 'format Solo → opis „każdy gra sam"');
+  // Solo wyłącza salon (TV-sędzia tylko dla Wspólnej)
+  w.mpSetSalon(true); await settle(2);
+  ok(!/um-salon-toggle on/.test($(w,'mpRoom').innerHTML), 'Solo: salon wyłączony (niedostępny)');
+  // format Drużyny → sekcja przypisania (liczba drużyn + nazwy + chipy graczy)
+  w.mpSetFormat('teams'); await settle(2);
+  const ht=$(w,'mpRoom').innerHTML;
+  ok(/podział na drużyny/.test(ht) && /um-assign/.test(ht), 'format Drużyny → sekcja przypisania');
+  ok(/um-tname/.test(ht) && /um-balance/.test(ht), 'Drużyny: pola nazw + przycisk „równo"');
+  ok(['mpSetTeamCount','mpCycleAssign','mpSetTeamName','mpBalance'].every(f=>typeof w[f]==='function'), 'most do HTML: handlery drużyn');
+  w.mpSetTeamCount(3); await settle(2);   // zmiana liczby drużyn nie rzuca
+  ok((($(w,'mpRoom').innerHTML.match(/class="um-tname"/g)||[]).length)===3, 'mpSetTeamCount(3) → 3 pola nazw');
+  w.mpSetTeamName(0,'Rekiny');            // nazwa BEZ re-render (focus) — nie rzuca
+  w.mpBalance(); await settle(2);          // „równo" → reset round-robin, re-render bez wyjątku
+  ok(/um-assign/.test($(w,'mpRoom').innerHTML), 'mpBalance → re-render przypisania bez wyjątku');
+  w.mpSetFormat('coop'); await settle(2);   // przywróć Wspólną na kolejne testy
   // toggle kategorii w pickerze MP → re-render bez wyjątku
   const before=html.length;
   w.mpToggleGrp && w.mpToggleGrp('dekady'); await settle(2);
@@ -219,8 +239,9 @@ await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)'
   ok(/class="mp-foot"/.test(h), 'kolumny: pasek emotek/input w sticky foot');
   // STAN Z GŁOSAMI → mpSlotsHTML porównuje przez norm (regresja: norm nieimportowane → throw, render zamarza).
   const g2 = { ...game, playNonce:1,
-    proposals:[{id:'p1',aid:'a1',by:ws._id,byName:'Ja',conf:'normal',values:{title:'Hey Jude',artist:'Beatles'}}],
-    votes:{ title:{[ws._id]:'Hey Jude'}, artist:{[ws._id]:'Beatles'} } };
+    format:'coop', teams:[{id:'all',name:'Drużyna',members:[ws._id]}], scores:{all:0},
+    byTeam:{ all:{ proposals:[{id:'p1',aid:'a1',by:ws._id,byName:'Ja',values:{title:'Hey Jude',artist:'Beatles'}}],
+      votes:{ title:{[ws._id]:'Hey Jude'}, artist:{[ws._id]:'Beatles'} }, sure:[], passed:[] } } };
   ws.pushState(g2); await settle(4);
   ok($(w,'mpRoom').innerHTML.includes('Hey Jude'), 'render ze stanem+głosami pokazuje typ (mpSlotsHTML/norm OK)');
   // propose przez UI: optymistyczny apply + mpRender NIE może rzucać
@@ -323,9 +344,10 @@ await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emot
   // może KLIKNĄĆ propozycję (nadpisanie), a TV jest poza paskiem graczy.
   ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s', salon:true,
     answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
-    proposals:[{id:'p1',aid:'a1',by:'ktos',byName:'Ala',conf:'normal',values:{title:'Hey Jude',artist:'Beatles'}}],
-    votes:{ title:{ktos:'Hey Jude'}, artist:{ktos:'Beatles'} },
-    passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:50, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] });
+    format:'coop', teams:[{id:'all',name:'Drużyna',members:['ktos']}], scores:{all:0},
+    byTeam:{ all:{ proposals:[{id:'p1',aid:'a1',by:'ktos',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}}],
+      votes:{ title:{ktos:'Hey Jude'}, artist:{ktos:'Beatles'} }, sure:[], passed:[] } },
+    preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:50, timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[] });
   await settle(8);
   ok($(w,'mpStage').classList.contains('salon'), 'salon: #mpStage ma klasę .salon (powiększenie CSS)');
   ok(/id="mpKnob"/.test($(w,'mpRoom').innerHTML), 'salon słuchaj: gałka audio (host gra na TV)');

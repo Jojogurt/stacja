@@ -6,7 +6,8 @@ import { shuffle, escapeHtml } from '../core/util.js';
 import { norm } from '../core/scoring.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
-import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, slotsFor, teamOf } from '../core/mpReducer.js';
+import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord } from '../core/matchRecord.js';
 import { mpSnipStart, listenSecs as _listenSecs, shouldPing, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
@@ -22,12 +23,12 @@ import { stopSpeech, lektorStop, lektorPlay } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor } from './mp-render.js';
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor } from './mp-render.js';
 import { ic } from './icons.js';
 
-initMpPicker(mpRender);   // picker re-renderuje widok pokoju
+initMpPicker(mpRender, ()=>mpPlayers());   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
 
 // wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
@@ -188,6 +189,16 @@ function mpPlayers(){
   const salon=(g&&g.salon)||S.salon;                 // S.salon = host-lokalny fallback (przed game.salon z serwera)
   const hostId=g?g.hostId:(S.host?mpMe.id:null);
   return (salon && hostId) ? ms.filter(m=>m.id!==hostId) : ms;
+}
+// drużyna TEGO klienta (izolacja widoku). coop → 'all'; salon-host → drużyna, którą sędziuje.
+function myTeamId(){ return teamOf(S.game, mpMe.id) || COOP_TEAM; }
+// członkowie MOJEJ drużyny (do rostera) — NIE mylić z mpPlayers (wszyscy w pokoju, dla gotowości/salonu)
+function myTeamMembers(){
+  const g=S.game, tid=myTeamId();
+  const t=(g&&g.teams||[]).find(x=>x.id===tid);
+  if(!t) return mpPlayers();
+  const ids=new Set(t.members||[]);
+  return mpPlayers().filter(m=>ids.has(m.id));
 }
 // id-ki, na które czeka faza gotowości. SALON: tylko gracze (TV nie gra; buforuje audio sam).
 // Brak graczy → fallback na wszystkich (anty-deadlock, gdy host sam w pokoju).
@@ -433,13 +444,19 @@ function mpStart(){
     // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
     S.host=true; S.tally={}; S.ack=S.revealNonce=S.revealSnap=null;
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
-    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools, salon:mpPickSalon });
+    // format + przypisania MUSZĄ iść w configu — inaczej DO buduje zawsze coop (Solo/Drużyny „nie działają")
+    const assignments = mpPickFormat==='teams' ? mpTeamsFromAssign(mpPlayers()) : undefined;
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments });
     S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }
+  // RELAY: host buduje stan lokalnie. Drużyny wg formatu (coop=1, solo=N×1, teams=podział hosta).
+  const teams = mpPickFormat==='teams' ? mpTeamsFromAssign(mpPlayers()) : buildTeams(mpPickFormat, mpPlayers());
+  const scores={}; teams.forEach(t=>{ scores[t.id]=0; });
   S.game={hostId:mpMe.id, phase:'play', slots:r.slots, rounds:r.rounds, si:0, qi:0,
-    score:0, catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
-    answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat), proposals:[], votes:{}, passed:[],
+    catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
+    answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat),
+    format:mpPickFormat, teams, byTeam:emptyByTeam(teams), scores,
     reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}};
   S.tally={};
@@ -456,7 +473,9 @@ function mpHostNextQuestion(){
 }
 async function mpHostNewRound(){
   S.seenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
-  S.game.phase=MP.LOADING; S.game.proposals=[]; S.game.votes={}; S.game.passed=[]; S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.autoLocked=false;
+  reconcileTeams(S.game, mpPlayers());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
+  S.game.phase=MP.LOADING; S.game.byTeam=emptyByTeam(S.game.teams);   // czyste buckety; scores KUMULUJĄ się przez mecz
+  S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.autoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
   if(S.game.mode==='quiz'){
@@ -500,13 +519,16 @@ function mpLock(){
   if(SERVER_AUTH){ if(S.ch&&S.ch.lock) S.ch.lock(); return; }   // AUTORYTET: DO ocenia i robi reveal
   S.autoLocked=true;
   const c=S.hostCurrent;
-  const ev=evaluateAnswer(S.game, c);   // czysta ocena (core) — locked = odpowiedź drużyny (górka głosów per slot)
-  // nałóż wyliczenia na stan/tally (efekty zostają w app.js)
-  S.game.score += ev.gained;
-  if(ev.firstById){ S.tally[ev.firstById]=S.tally[ev.firstById]||{name:ev.firstBy,correct:0}; S.tally[ev.firstById].correct++; }
+  const ev=evaluateAnswer(S.game, c);   // czysta ocena (core) — ocenia KAŻDĄ drużynę (ev.perTeam)
+  // nałóż wyliczenia per-drużyna: punkty drużyny + wkład gracza (tally, globalny) + przegrane pewniaki
+  S.game.beerTally=S.game.beerTally||{};
+  for(const t of S.game.teams){
+    const r=ev.perTeam[t.id]; if(!r) continue;
+    S.game.scores[t.id]=(S.game.scores[t.id]||0)+r.gained;
+    if(r.firstById){ S.tally[r.firstById]=S.tally[r.firstById]||{name:r.firstBy,correct:0}; S.tally[r.firstById].correct++; }
+    if(!r.teamOk && r.anySure){ r.pewniacy.forEach(n=>{ S.game.beerTally[n]=(S.game.beerTally[n]||0)+1; }); }
+  }
   S.game.results.push(ev.result);
-  // #12: zlicz przegrane pewniaki per osoba (kto stawia i ile)
-  if(!ev.teamOk && ev.anySure){ S.game.beerTally=S.game.beerTally||{}; ev.pewniacy.forEach(n=>{ S.game.beerTally[n]=(S.game.beerTally[n]||0)+1; }); }
   S.game.reveal=ev.reveal;
   S.game.phase=assertMp(S.game.phase, MP.REVEAL, console.warn); S.game.endsAt=null;
   mpBroadcast(); mpRender();
@@ -546,9 +568,8 @@ function mpPropose(){
   const values={}; let any=false;
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); const v=el?el.value.trim():''; if(v){ values[s.key]=v; any=true; } });
   if(!any) return;
-  mpSend({type:'propose', conf:S.conf, values});
+  mpSend({type:'propose', values});
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); if(el) el.value=''; });
-  S.conf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML();
 }
 function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
 // host „wybiera odpowiedź": jawny WYBÓR slotu (set=true → zawsze ustaw, nie przełączaj)
@@ -557,7 +578,6 @@ function mpVoteFromBubble(el){
   if(!S.host) return;
   try{ const v=JSON.parse(el.dataset.values||'{}'); Object.entries(v).forEach(([k,val])=>mpPick(k,val)); }catch(e){}
 }
-function mpSetConf(v){ S.conf=v; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
 
 function mpTickTimer(){
   const el=$m('mpCountdown');
@@ -585,7 +605,7 @@ function mpNameOf(id){ const m=mpMembers().find(x=>x.id===id); return m?m.name:'
 function mpFeedReset(){ resetFeed(S.feed); }
 // zaksięguj NOWE typy/pasy do feedu (core/chatFeed.js) i zdejmij „pisze" dla autorów typów
 function mpIngestFeed(g){
-  const { clearTyping } = _ingestFeed(S.feed, g, mpMe.id);
+  const { clearTyping } = _ingestFeed(S.feed, g, mpMe.id, myTeamId());   // tylko typy/pasy MOJEJ drużyny
   clearTyping.forEach(mpClearTypingFor);
 }
 function mpDoSay(text){
@@ -625,7 +645,7 @@ function mpComposerSend(){
   if(S.composerMode==='typ'){              // pola slotów → typ
     const values={}; let any=false;
     slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); const v=c?c.value.trim():''; if(v){ values[s.key]=v; any=true; } });
-    if(any){ mpSend({type:'propose', conf:S.conf, values}); S.conf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+    if(any){ mpSend({type:'propose', values}); }
     slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=''; });
     mpSetComposerMode('chat');
     return;
@@ -636,7 +656,7 @@ function mpComposerSend(){
     const parts=raw.slice(1).split(',').map(x=>x.trim());
     const values={}; let any=false;
     slots.forEach((s,i)=>{ if(parts[i]){ values[s.key]=parts[i]; any=true; } });
-    if(any){ mpSend({type:'propose', conf:S.conf, values}); S.conf='normal'; if($m('mpConf')) $m('mpConf').innerHTML=mpConfHTML(); }
+    if(any){ mpSend({type:'propose', values}); }
   } else {
     mpDoSay(raw);
   }
@@ -680,13 +700,13 @@ function mpClearTyping(){ S.typingSet.clear(); Object.values(S.typingTimers).for
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 // picker (mpToggleCat/Mode/Grp/RandomPick/PlToggle/PlImport/SetRounds/SetTimer) → window w app/mp-picker.js
 Object.assign(window, {
-  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble, mpSetConf,
+  mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble,
   mpReact, mpSay, mpSend, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput,
   mpStart, mpAdvance,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
-initMpRender({ mpMembers, mpPlayers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });
+initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });
 
 export { mpMe };

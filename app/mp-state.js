@@ -31,7 +31,6 @@ export const S = {
   playRound: null,        // dla której rundy zbudowany formularz (by nie czyścić pól)
   timerInt: null,         // interwał odliczania
   seenActs: new Set(),    // id zastosowanych akcji — by akcja nie zadziałała dwa razy
-  conf: 'normal',         // wybrana pewność przy wrzucaniu typu (normal/unsure/sure)
   typingSet: new Set(),   // kto „pisze…" (ulotny broadcast „typing")
   typingTimers: {},       // id → timeout wygaszający „pisze" po ~3 s
   lastTyping: 0,          // throttle wysyłki własnego „typing"

@@ -524,7 +524,6 @@
   .mp-pl .s{font-size:11px}
   .mp-pl.ans{border-color:var(--green)} .mp-pl.ans .av{background:var(--green);color:#fff} .mp-pl.ans .s{color:var(--green)}
   .mp-pl.sure{border-color:var(--gold);background:#FFFBEC} .mp-pl.sure .av{background:var(--gold);color:#fff} .mp-pl.sure .s{color:var(--gold-d)}
-  .mp-pl.unsure{border-color:var(--purple)} .mp-pl.unsure .av{background:var(--purple);color:#fff} .mp-pl.unsure .s{color:#9B4DDB}
   .mp-pl.type{border-color:var(--blue)} .mp-pl.type .av{background:var(--blue);color:#fff} .mp-pl.type .s{color:var(--blue)}
   .mp-pl.pass{opacity:.5}
   .mp-pl.type .s{animation:mpblink 1s steps(1) infinite}
@@ -535,8 +534,6 @@
   .mp-cand{display:flex;align-items:center;gap:5px;background:var(--panel);border:2px solid var(--line);border-radius:11px;padding:8px 9px;margin-bottom:6px}
   .mp-cand.is-top{border-color:var(--green);background:#F0FBE6}
   .mp-cand .cv{flex:1;min-width:0;font-size:13px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .mp-cand .mp-ct{font-size:10px;font-weight:800;width:14px;text-align:center;flex:0 0 auto}
-  .mp-cand .mp-ct.sure{color:var(--gold-d)} .mp-cand .mp-ct.unsure{color:#9B4DDB}
   .mp-vt{font-family:var(--display);font-size:11px;font-weight:800;color:var(--muted);background:var(--panel2);border:2px solid var(--line);
     border-radius:8px;padding:4px 7px;white-space:nowrap;cursor:pointer}
   .mp-vt.on{color:#fff;background:var(--green);border-color:var(--green-d)}
@@ -681,7 +678,6 @@
   .mp-conf{display:flex;gap:6px;flex-wrap:nowrap;overflow:visible;margin:12px 0}
   .mp-seg{flex:1;font-family:var(--display);font-weight:800;font-size:11px;color:#9a958c;background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:13px;padding:9px 3px;cursor:pointer;text-align:center;white-space:nowrap;min-width:0}
   .mp-seg.on{background:#F0FBE6;border-color:var(--green);color:var(--green-d)}
-  .mp-seg.u{color:#A568CC} .mp-seg.u.on{background:#F3E9FF;border-color:var(--purple);color:#A568CC}
   .mp-seg.s{color:#E6A800;font-weight:900} .mp-seg.s.on{background:#FFF8E0;border-color:var(--gold);color:#E6A800}
   .mp-seg.p.on{background:#FFF1F1;border-color:var(--red);color:#E63946}
 
@@ -813,6 +809,15 @@
   .rv-banner.ok{background:#F0FBE6;border:2px solid var(--green)} .rv-banner.ok b{color:var(--green-d)} .rv-banner.ok small{color:#5a8a2a}
   .rv-banner.no{background:#F4F4F2;border:2px solid var(--line)} .rv-banner.no b{color:#9a958c} .rv-banner.no small{color:#9a958c} .rv-banner.no .ic{color:var(--red)}
   .rv-locked{font-family:var(--body);font-weight:700;font-size:12px;color:#9a958c;text-align:center;margin-bottom:10px}
+  .rv-standings{background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:10px 12px;margin-bottom:12px}
+  .rv-stand-h{font-family:var(--display);font-size:10px;font-weight:800;letter-spacing:.05em;color:var(--muted);margin-bottom:6px}
+  .rv-stand-row{display:flex;align-items:center;gap:8px;padding:4px 0}
+  .rv-stand-row.me{font-weight:900}
+  .rv-stand-row .rk{font-family:var(--display);font-weight:900;font-size:12px;color:var(--muted);width:16px}
+  .rv-stand-row .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--display);font-weight:900;font-size:12px;flex:0 0 auto}
+  .rv-stand-row .nm{flex:1;min-width:0;font-family:var(--body);font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rv-stand-row .mk{font-weight:900;font-size:13px} .rv-stand-row .mk.ok{color:var(--green)} .rv-stand-row .mk.no{color:var(--red)}
+  .rv-stand-row .pts{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink);min-width:22px;text-align:right}
   .mp-next{width:100%;font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:.04em;color:#fff;background:var(--blue);border:none;border-radius:18px;padding:16px;cursor:pointer;box-shadow:0 5px 0 var(--blue-d);margin-top:6px}
   .mp-next:active{transform:translateY(5px);box-shadow:none}
   .dn-hero{background:var(--gold);color:#7a5a00;text-align:center;border-radius:22px;padding:22px 18px;margin-bottom:14px}
@@ -984,6 +989,21 @@
     background:#fff;border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 0;cursor:pointer;transition:transform .08s}
   .um-rounds button:active{transform:translateY(2px);border-bottom-width:2px}
   .um-rounds button.on{color:#46A302;background:#F0FBE6;border-color:var(--green)}
+  /* przypisanie graczy do drużyn (format „Drużyny") */
+  .um-assign{display:flex;flex-wrap:wrap;gap:8px}
+  .um-assign-chip{display:flex;align-items:center;gap:7px;background:var(--panel);border:2px solid var(--line);border-radius:13px;padding:6px 10px 6px 6px;cursor:pointer}
+  .um-assign-chip:active{transform:translateY(1px)}
+  .um-assign-chip b{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--display);font-weight:900;font-size:13px;flex:0 0 auto}
+  .um-assign-chip span{font-family:var(--body);font-weight:800;font-size:13px;color:var(--ink);max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .um-assign-chip i{font-family:var(--display);font-weight:900;font-size:11px;color:#fff;border-radius:7px;padding:2px 6px;font-style:normal}
+  .um-assign-empty{font-family:var(--mono);font-size:11px;color:var(--muted);padding:6px 2px}
+  .um-teamrow{display:flex;gap:8px;align-items:stretch;margin-bottom:8px}
+  .um-teamrow .um-rounds{flex:1}
+  .um-balance{font-family:var(--display);font-weight:900;font-size:13px;color:var(--muted);background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;border-radius:12px;padding:0 12px;cursor:pointer;white-space:nowrap}
+  .um-balance:active{transform:translateY(2px);border-bottom-width:2px}
+  .um-tnames{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
+  .um-tname{flex:1;min-width:110px;font-family:var(--display);font-weight:800;font-size:13px;color:var(--ink);background:var(--panel);border:2px solid var(--line);border-radius:11px;padding:8px 10px}
+  .um-tname:focus{outline:none;border-bottom-width:3px}
   /* #3: przełącznik trenera (powtórki oblanych) */
   .um-repeat{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
     font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);

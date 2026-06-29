@@ -2,7 +2,8 @@
  * Uruchom: node test/run.js */
 import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
-import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
+import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 import { resolveTrack } from '../core/trackSelect.js';
@@ -122,45 +123,112 @@ group('scoring.evaluateGuess', ()=>{
   ok(!r.roundOk && r.okArtist,'zły tytuł → brak roundOk, ale wykonawca ok');
 });
 
-/* --- mpReducer --- */
-function mkGame(){ return {phase:MP.PLAY, round:1, answerSlots:slotsFor(), proposals:[], votes:{}, sure:[]}; }
+/* --- mpReducer (stan odpowiedzi PER-DRUŻYNA; coop = jedna drużyna 'all') --- */
+// helper: gra coop z bucketem 'all' (members muszą zawierać graczy, inaczej teamOf=null → akcje ignorowane)
+function coopG(over={}){
+  return { phase:MP.PLAY, round:over.round||1, format:'coop', catKey:over.catKey, mode:over.mode,
+    answerSlots: over.answerSlots||slotsFor(),
+    teams:[{id:COOP_TEAM, name:'Drużyna', members:over.members||['u1','u2','u3','u9']}],
+    byTeam:{ [COOP_TEAM]:{ proposals:over.proposals||[], votes:over.votes||{}, sure:over.sure||[], passed:over.passed||[] } },
+    scores:{ [COOP_TEAM]:over.score||0 }, salon:over.salon, hostId:over.hostId };
+}
+function mkGame(){ return coopG(); }
+const bAll = (g)=> g.byTeam[COOP_TEAM];   // bucket drużyny 'all'
+group('teams.buildTeams / emptyByTeam', ()=>{
+  const players=[{id:'u1',name:'Ala'},{id:'u2',name:'Bob'},{id:'u3',name:'Cyd'}];
+  const coop=buildTeams('coop', players);
+  eq(coop.length,1,'coop → jedna drużyna');
+  eq(coop[0].members.length,3,'…ze wszystkimi graczami');
+  const solo=buildTeams('solo', players);
+  eq(solo.length,3,'solo → N drużyn 1-osobowych');
+  eq(solo[0].id,'u1','solo: id drużyny = id gracza');
+  eq(solo[1].members,['u2'],'solo: drużyna = jeden gracz');
+  ok(solo[0].color!==solo[1].color,'kolory drużyn różne');
+  const bt=emptyByTeam(solo);
+  eq(Object.keys(bt).length,3,'emptyByTeam: bucket na drużynę');
+  eq(bt.u1.proposals,[],'bucket pusty (proposals)');
+  // teamOf: membership + brak dopasowania → null
+  const g=coopG({members:['u1','u2']});
+  eq(teamOf(g,'u1'),COOP_TEAM,'teamOf: gracz w drużynie');
+  eq(teamOf(g,'zzz'),null,'teamOf: spoza drużyn → null');
+  // teams: podział hosta z `assignments`
+  const asg=[{id:'t0',name:'Drużyna 1',color:'#58CC02',members:['u1','u3']},{id:'t1',name:'Drużyna 2',color:'#CE82FF',members:['u2']}];
+  const tm=buildTeams('teams', players, asg);
+  eq(tm.length,2,'teams → drużyny z assignments');
+  eq(tm[0].members,['u1','u3'],'teams: members z assignments');
+  eq(tm[1].name,'Drużyna 2','teams: nazwa z assignments');
+});
+group('teams.reconcileTeams', ()=>{
+  // coop: drużyna 'all' = wszyscy obecni
+  const gc=coopG({members:['u1']}); reconcileTeams(gc,[{id:'u1'},{id:'u2'}]);
+  eq(gc.teams[0].members,['u1','u2'],'coop: reconcile = wszyscy obecni');
+  // solo: dorzuć brakujących jako nowe 1-os. drużyny
+  const gs={ format:'solo', teams:[{id:'u1',name:'Ala',members:['u1']}], scores:{u1:0} };
+  reconcileTeams(gs,[{id:'u1',name:'Ala'},{id:'u2',name:'Bob'}]);
+  eq(gs.teams.length,2,'solo: nowy gracz → nowa drużyna');
+  eq(gs.scores.u2,0,'solo: scores zainicjowane dla nowej drużyny');
+  // teams: skład ZAMROŻONY — późny gracz bez drużyny
+  const gt={ format:'teams', teams:[{id:'t0',name:'A',members:['u1']},{id:'t1',name:'B',members:['u2']}], scores:{} };
+  reconcileTeams(gt,[{id:'u1'},{id:'u2'},{id:'u9'}]);
+  eq(gt.teams.length,2,'teams: reconcile nie tworzy nowych drużyn (skład zamrożony)');
+  ok(!gt.teams.find(t=>t.members.includes('u9')),'teams: późny gracz bez drużyny (widz do rewanżu)');
+  eq(gt.scores.t0,0,'teams: scores zainicjowane');
+});
 group('mpReducer.propose: JEDNA odpowiedź na gracza (nowa zastępuje starą)', ()=>{
   const g=mkGame();
   reduceAction(g,{type:'propose',by:'u1',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}});
   reduceAction(g,{type:'propose',by:'u1',byName:'Ala',values:{title:'We Will Rock You',artist:'Queen'}});
-  eq(g.proposals.filter(p=>p.by==='u1').length,1,'gracz ma dokładnie 1 propozycję');
-  eq(g.proposals.find(p=>p.by==='u1').values.artist,'Queen','została najnowsza odpowiedź');
-  eq(g.votes.artist.u1,'Queen','głos gracza przesunięty na nową wartość');
+  eq(bAll(g).proposals.filter(p=>p.by==='u1').length,1,'gracz ma dokładnie 1 propozycję');
+  eq(bAll(g).proposals.find(p=>p.by==='u1').values.artist,'Queen','została najnowsza odpowiedź');
+  eq(bAll(g).votes.artist.u1,'Queen','głos gracza przesunięty na nową wartość');
   reduceAction(g,{type:'propose',by:'u2',byName:'B',values:{title:'Yesterday',artist:'Beatles'}});
-  eq(g.proposals.length,2,'dwóch graczy → dwie propozycje (limit jest PER gracz)');
+  eq(bAll(g).proposals.length,2,'dwóch graczy → dwie propozycje (limit jest PER gracz)');
 });
 group('mpReducer.reduceAction', ()=>{
   const g=mkGame();
-  ok(reduceAction(g,{type:'propose',by:'u1',byName:'Ala',conf:'sure',values:{title:'Hey Jude',artist:'Beatles'}}),'propose zmienia stan');
-  eq(g.proposals.length,1,'1 propozycja');
+  ok(!reduceAction(g,{type:'propose',by:'zzz',values:{title:'x'}}),'gracz spoza drużyn → akcja ignorowana');
+  ok(reduceAction(g,{type:'propose',by:'u1',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}}),'propose zmienia stan');
+  eq(bAll(g).proposals.length,1,'1 propozycja');
   ok(!reduceAction(g,{type:'propose',by:'u2',byName:'B',values:{title:'',artist:''}}),'pusty typ odrzucony');
-  eq(g.votes.title.u1,'Hey Jude','auto-głos na własny tytuł');
-  eq(g.votes.artist.u1,'Beatles','auto-głos na własnego wykonawcę');
+  eq(bAll(g).votes.title.u1,'Hey Jude','auto-głos na własny tytuł');
+  eq(bAll(g).votes.artist.u1,'Beatles','auto-głos na własnego wykonawcę');
   ok(reduceAction(g,{type:'vote',by:'u2',slot:'title',value:'Hey Jude'}),'głos na slot dodany');
-  eq(g.votes.title.u2,'Hey Jude','głos zapisany');
+  eq(bAll(g).votes.title.u2,'Hey Jude','głos zapisany');
   reduceAction(g,{type:'vote',by:'u2',slot:'title',value:'Hey Jude'});  // ten sam = wycofanie
-  ok(!('u2' in g.votes.title),'ponowny głos = wycofanie');
-  // host „wybiera odpowiedź": set=true zawsze ustawia (bez przełączania), nawet ponownie
-  reduceAction(g,{type:'vote',by:'u1',slot:'title',value:'Hey Jude',set:true});
-  eq(g.votes.title.u1,'Hey Jude','set: wybór ustawiony (nie wycofany przy ponownym kliknięciu)');
+  ok(!('u2' in bAll(g).votes.title),'ponowny głos = wycofanie');
   reduceAction(g,{type:'vote',by:'u1',slot:'title',value:'Yesterday',set:true});
-  eq(g.votes.title.u1,'Yesterday','set: zmiana wyboru na inną wartość');
-  eq(g.proposals[0].conf,'sure','pewniak = typ z conf=sure (bez osobnego zakładu)');
+  eq(bAll(g).votes.title.u1,'Yesterday','set: zmiana wyboru na inną wartość');
+  // pewniak = per-gracz toggle (bucket), DZIAŁA też dla osoby która tylko głosowała (u2 nie ma typu)
+  ok(reduceAction(g,{type:'sure',by:'u2',byName:'B'}),'pewniak włączony (głosujący, bez typu)');
+  eq(bAll(g).sure.length,1,'1 pewniak');
+  reduceAction(g,{type:'sure',by:'u2',byName:'B'});
+  eq(bAll(g).sure.length,0,'pewniak wyłączony (toggle)');
   ok(reduceAction(g,{type:'pass',by:'u2',byName:'B'}),'pas włączony');
-  eq(g.passed.length,1,'1 pas');
-  reduceAction(g,{type:'pass',by:'u2',byName:'B'});
-  eq(g.passed.length,0,'pas wyłączony (toggle)');
-  const pid=g.proposals[0].id;
+  // pewniak i pas wzajemnie się wykluczają
+  reduceAction(g,{type:'sure',by:'u2',byName:'B'});
+  eq(bAll(g).sure.length,1,'pewniak włączony');
+  eq(bAll(g).passed.length,0,'…i pas zgaszony (przeciwne intencje)');
+  const pid=bAll(g).proposals[0].id;
   ok(reduceAction(g,{type:'unpropose',by:'u1',pid}),'autor usuwa typ');
-  eq(g.proposals.length,0,'typ usunięty');
+  eq(bAll(g).proposals.length,0,'typ usunięty');
   ok(!reduceAction(g,{type:'nieznana'}),'nieznana akcja → brak zmian');
-  const armed={phase:MP.ARMING, answerSlots:slotsFor(), proposals:[], votes:{}};
+  const armed=coopG({members:['x']}); armed.phase=MP.ARMING;
   ok(!reduceAction(armed,{type:'propose',by:'x',values:{title:'a'}}),'propose poza fazą play → ignorowane');
+});
+group('mpReducer: routing per-drużyna (izolacja bucketów)', ()=>{
+  // 2 drużyny: A(u1,u2), B(u3). Akcje trafiają do bucketu drużyny aktora.
+  const g={ phase:MP.PLAY, round:1, format:'teams', answerSlots:slotsFor(),
+    teams:[{id:'A',name:'A',members:['u1','u2']},{id:'B',name:'B',members:['u3']}],
+    byTeam:emptyByTeam([{id:'A'},{id:'B'}]), scores:{A:0,B:0} };
+  reduceAction(g,{type:'propose',by:'u1',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}});
+  reduceAction(g,{type:'propose',by:'u3',byName:'Cyd',values:{title:'Help',artist:'Beatles'}});
+  eq(g.byTeam.A.proposals.length,1,'typ u1 w buckecie A');
+  eq(g.byTeam.B.proposals.length,1,'typ u3 w buckecie B');
+  // izolacja selektorów: kandydaci A nie zawierają wartości z B
+  eq(candidatesForSlot(g,'A','title').map(c=>c.value),['Hey Jude'],'kandydaci A: tylko typ A');
+  eq(candidatesForSlot(g,'B','title').map(c=>c.value),['Help'],'kandydaci B: tylko typ B');
+  eq(teamAnswer(g,'A').title,'Hey Jude','odpowiedź A ≠ B');
+  eq(teamAnswer(g,'B').title,'Help','odpowiedź B');
 });
 group('mpReducer.countReady', ()=>{
   const s=new Set(['a','b']);
@@ -169,81 +237,99 @@ group('mpReducer.countReady', ()=>{
   eq(countReady(['a','b','c'],s).all,false,'brakuje jednego');
   eq(countReady([],s).all,false,'pusta lista → nie all');
 });
-group('mpReducer.evaluateAnswer', ()=>{
-  const g={phase:MP.PLAY, round:2, answerSlots:slotsFor(),
-    proposals:[{by:'u9',byName:'Zoe',conf:'sure',values:{title:'Hey Jude',artist:'The Beatles'}}],
-    votes:{ title:{u9:'Hey Jude'}, artist:{u9:'The Beatles'} }};
+group('mpReducer.evaluateAnswer (coop — wsteczna zgodność reveal)', ()=>{
+  const g=coopG({round:2, members:['u9'],
+    proposals:[{by:'u9',byName:'Zoe',values:{title:'Hey Jude',artist:'The Beatles'}}],
+    votes:{ title:{u9:'Hey Jude'}, artist:{u9:'The Beatles'} }, sure:[{id:'u9',name:'Zoe'}] });
   const cur={track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:''};
-  const ev=evaluateAnswer(g, cur);   // locked = odpowiedź drużyny (górka głosów)
-  ok(ev.teamOk,'drużyna trafiła (oba sloty)');
-  eq(ev.gained,2,'pewniak (conf=sure) + trafienie = 2 pkt');
-  eq(ev.pewniacy,['Zoe'],'pewniacy z typów conf=sure');
-  eq(ev.firstBy,'Zoe','pierwszy trafny = Zoe');
+  const ev=evaluateAnswer(g, cur);   // ocenia drużynę 'all'
+  ok(ev.reveal.teamOk,'drużyna trafiła (oba sloty)');
+  eq(ev.reveal.gained,2,'pewniak + trafienie = 2 pkt (reveal coop-flat)');
+  eq(ev.perTeam.all.gained,2,'perTeam.all.gained == reveal.gained (spread)');
+  eq(ev.reveal.pewniacy,['Zoe'],'pewniacy z bucketu drużyny');
+  eq(ev.reveal.firstBy,'Zoe','pierwszy trafny = Zoe');
+  eq(ev.perTeam.all.firstById,'u9','firstById per drużyna (do tally)');
   ok(ev.reveal.pewniakWin,'pewniak wygrany');
   eq(ev.result.round,2,'wynik z numerem rundy');
-  // pewniak nietrafiony: typ conf=sure, który nie pasuje → pewniakLose
-  const bad=evaluateAnswer({phase:MP.PLAY,round:1,answerSlots:slotsFor(),
-    proposals:[{by:'u1',byName:'A',conf:'sure',values:{title:'Złe',artist:'Złe'}}],
-    votes:{ title:{u1:'Złe'}, artist:{u1:'Złe'} }}, cur);
-  eq(bad.gained,0,'pewniak nietrafiony = 0 pkt');
+  eq(ev.ranking.length,1,'coop → ranking 1-elementowy');
+  // pewniak GŁOSUJĄCEGO (bez typu) + pudło → pewniakLose
+  const bad=evaluateAnswer(coopG({members:['u1','u2'],
+    proposals:[{by:'u1',byName:'A',values:{title:'Złe',artist:'Złe'}}],
+    votes:{ title:{u1:'Złe'}, artist:{u1:'Złe'} }, sure:[{id:'u2',name:'Bob'}] }), cur);
+  eq(bad.reveal.gained,0,'pewniak nietrafiony = 0 pkt');
+  eq(bad.reveal.pewniacy,['Bob'],'pewniak Bob (głosujący, nie autor typu)');
   ok(bad.reveal.pewniakLose,'pewniak przegrany');
 });
+group('mpReducer.evaluateAnswer: solo = wiele drużyn + ranking', ()=>{
+  // A (u1) trafia, B (u2) pudłuje → osobne punkty, ranking A > B
+  const g={ phase:MP.PLAY, round:1, format:'solo', answerSlots:slotsFor(),
+    teams:[{id:'u1',name:'Ala',members:['u1']},{id:'u2',name:'Bob',members:['u2']}],
+    byTeam:{ u1:{proposals:[{by:'u1',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}}], votes:{title:{u1:'Hey Jude'},artist:{u1:'Beatles'}}, sure:[], passed:[]},
+             u2:{proposals:[{by:'u2',byName:'Bob',values:{title:'Złe',artist:'Złe'}}], votes:{title:{u2:'Złe'},artist:{u2:'Złe'}}, sure:[], passed:[]} },
+    scores:{u1:0,u2:0} };
+  const cur={track:'Hey Jude', artist:'Beatles'};
+  const ev=evaluateAnswer(g, cur);
+  ok(ev.perTeam.u1.teamOk,'drużyna u1 trafiła');
+  ok(!ev.perTeam.u2.teamOk,'drużyna u2 pudłuje');
+  eq(ev.perTeam.u1.gained,1,'u1 +1');
+  eq(ev.perTeam.u2.gained,0,'u2 +0');
+  eq(ev.ranking[0].teamId,'u1','ranking: zwycięzca u1');
+  ok(!('teamOk' in ev.reveal) || ev.reveal.byTeam,'solo: reveal niesie byTeam (bez coop-spread)');
+});
+group('mpReducer.selektory (per-drużyna)', ()=>{
+  const g=coopG({
+    proposals:[ {id:'p1',by:'u1',byName:'A',values:{title:'Hey Jude',artist:'Beatles'}},
+                {id:'p2',by:'u2',byName:'B',values:{title:'Help',artist:'Beatles'}} ],
+    votes:{ title:{u1:'Hey Jude',u2:'Help',u3:'Hey Jude'}, artist:{u1:'Beatles',u2:'Beatles'} },
+    sure:[{id:'u1',name:'A'}] });
+  const tc=candidatesForSlot(g,COOP_TEAM,'title');
+  eq(tc[0].value,'Hey Jude','najwięcej głosów na górze');
+  eq(tc[0].votes.length,2,'„Hey Jude" ma 2 głosy');
+  const ta=teamAnswer(g,COOP_TEAM);
+  eq(ta.title,'Hey Jude','tytuł drużyny = górka');
+  eq(ta.artist,'Beatles','wykonawca drużyny = górka');
+  eq(myVoteForSlot(g,COOP_TEAM,'title','u2'),'Help','mój głos w slocie');
+  eq(myVoteForSlot(g,COOP_TEAM,'title','x'),null,'brak głosu → null');
+  eq(rosterState(g,COOP_TEAM,'u1'),'sure','u1 postawił pewniaka (bucket.sure)');
+  eq(rosterState(g,COOP_TEAM,'u2'),'ans','u2 wrzucił typ (bez pewniaka)');
+  eq(rosterState(g,COOP_TEAM,'zzz'),'idle','brak aktywności → myśli');
+  eq(rosterState(g,COOP_TEAM,'zzz',new Set(['zzz'])),'type','w secie typing (bez typu) → pisze');
+  eq(rosterState(g,COOP_TEAM,'u2',new Set(['u2'])),'ans','typ ma priorytet nad „pisze"');
+  eq(rosterState(g,COOP_TEAM,'u1',new Set(['u1'])),'sure','pewniak ma priorytet nad „pisze"');
+  g.byTeam[COOP_TEAM].passed=[{id:'u1'}];
+  eq(rosterState(g,COOP_TEAM,'u1'),'pass','pas ma priorytet nad pewniakiem');
+});
+
 group('mpReducer.evaluateAnswer (quiz)', ()=>{
-  // slotsFor z pytaniem → sloty z pytania; bez → domyślne
   eq(slotsFor('quiz', null, {slots:[{key:'a',label:'odp'}]}), [{key:'a',label:'odp'}], 'slotsFor: sloty z pytania');
   eq(slotsFor('music').map(s=>s.key), ['title','artist'], 'slotsFor: domyślne tytuł+wykonawca');
-  // 1-slot, wariant „Kanberra" zalicza
-  const g1={phase:MP.PLAY, round:1, answerSlots:[{key:'a',label:'odp'}],
-    proposals:[{by:'u1',byName:'A',conf:'normal',values:{a:'Kanberra'}}], votes:{ a:{u1:'Kanberra'} }};
+  const g1=coopG({members:['u1'], answerSlots:[{key:'a',label:'odp'}],
+    proposals:[{by:'u1',byName:'A',values:{a:'Kanberra'}}], votes:{ a:{u1:'Kanberra'} } });
   const q1={prompt:'Stolica Australii?', answers:{a:['Canberra','Kanberra']}};
   const e1=evaluateAnswer(g1, q1);
-  ok(e1.teamOk,'quiz 1-slot: wariant zalicza');
+  ok(e1.reveal.teamOk,'quiz 1-slot: wariant zalicza');
   eq(e1.reveal.kind,'quiz','reveal.kind=quiz');
   eq(e1.reveal.prompt,'Stolica Australii?','reveal.prompt');
   eq(e1.reveal.answers.a,['Canberra','Kanberra'],'reveal.answers per slot');
   eq(e1.reveal.locked.a,'Kanberra','reveal.locked per slot');
-  eq(e1.firstBy,'A','firstBy po wariancie');
+  eq(e1.reveal.firstBy,'A','firstBy po wariancie');
   eq(e1.result.track,'Stolica Australii?','result.track = prompt dla quizu');
-  // 2-slot mieszany: jeden dobrze, jeden źle → teamOk false
-  const g2={phase:MP.PLAY, round:1, answerSlots:[{key:'dir',label:'reżyser'},{key:'year',label:'rok'}],
-    proposals:[], votes:{ dir:{u1:'Tarantino'}, year:{u1:'2010'} }};
+  const g2=coopG({members:['u1'], answerSlots:[{key:'dir',label:'reżyser'},{key:'year',label:'rok'}],
+    votes:{ dir:{u1:'Tarantino'}, year:{u1:'2010'} } });
   const q2={prompt:'x', answers:{dir:['Tarantino','Quentin Tarantino'], year:['1994']}};
   const e2=evaluateAnswer(g2, q2);
-  ok(!e2.teamOk,'quiz 2-slot: jeden zły → drużyna nie trafia');
+  ok(!e2.reveal.teamOk,'quiz 2-slot: jeden zły → drużyna nie trafia');
   ok(e2.reveal.okBySlot.dir && !e2.reveal.okBySlot.year,'okBySlot per slot (dir ok, year zły)');
 });
-group('mpReducer.selektory', ()=>{
-  const g={answerSlots:slotsFor(), proposals:[
-    {id:'p1',by:'u1',byName:'A',conf:'sure',values:{title:'Hey Jude',artist:'Beatles'}},
-    {id:'p2',by:'u2',byName:'B',conf:'unsure',values:{title:'Help',artist:'Beatles'}},
-  ], votes:{ title:{u1:'Hey Jude',u2:'Help',u3:'Hey Jude'}, artist:{u1:'Beatles',u2:'Beatles'} }};
-  const tc=candidatesForSlot(g,'title');
-  eq(tc[0].value,'Hey Jude','najwięcej głosów na górze');
-  eq(tc[0].votes.length,2,'„Hey Jude" ma 2 głosy');
-  eq(tc[0].tag,'sure','tag pewniaka z propozycji u1');
-  const ta=teamAnswer(g);
-  eq(ta.title,'Hey Jude','tytuł drużyny = górka');
-  eq(ta.artist,'Beatles','wykonawca drużyny = górka');
-  eq(myVoteForSlot(g,'title','u2'),'Help','mój głos w slocie');
-  eq(myVoteForSlot(g,'title','x'),null,'brak głosu → null');
-  eq(rosterState(g,'u1'),'sure','u1 wrzucił pewniaka');
-  eq(rosterState(g,'u2'),'unsure','u2 tylko niepewny');
-  eq(rosterState(g,'zzz'),'idle','brak aktywności → myśli');
-  eq(rosterState(g,'zzz',new Set(['zzz'])),'type','w secie typing (bez typu) → pisze');
-  eq(rosterState(g,'u1',new Set(['u1'])),'sure','typ ma priorytet nad „pisze"');
-  eq(rosterState({...g,passed:[{id:'u1'}]},'u1'),'pass','pas ma priorytet');
-});
-
 group('mpReducer.teamAnswer — nadpisanie hosta (salon)', ()=>{
   // gracze: większość na „Help", ale host (TV) wskazał „Hey Jude" → nadpisuje górkę
-  const base={answerSlots:slotsFor(), proposals:[], hostId:'tv',
-    votes:{ title:{u1:'Help',u2:'Help',tv:'Hey Jude'}, artist:{u1:'Beatles'} }};
-  eq(teamAnswer({...base, salon:false}).title,'Help','bez salonu: górka głosów wygrywa (Help)');
-  eq(teamAnswer({...base, salon:true}).title,'Hey Jude','salon: pick hosta nadpisuje większość');
-  eq(teamAnswer({...base, salon:true}).artist,'Beatles','salon: slot bez picku hosta → górka głosów');
-  const noPick={answerSlots:slotsFor(), proposals:[], salon:true, hostId:'tv',
-    votes:{ title:{u1:'Help',u2:'Help'} }};
-  eq(teamAnswer(noPick).title,'Help','salon: host nic nie wskazał → auto górka głosów');
+  const mk=(salon)=> coopG({members:['u1','u2'], salon, hostId:'tv',
+    votes:{ title:{u1:'Help',u2:'Help',tv:'Hey Jude'}, artist:{u1:'Beatles'} } });
+  eq(teamAnswer(mk(false),COOP_TEAM).title,'Help','bez salonu: górka głosów wygrywa (Help)');
+  eq(teamAnswer(mk(true),COOP_TEAM).title,'Hey Jude','salon: pick hosta nadpisuje większość');
+  eq(teamAnswer(mk(true),COOP_TEAM).artist,'Beatles','salon: slot bez picku hosta → górka głosów');
+  const noPick=coopG({members:['u1','u2'], salon:true, hostId:'tv', votes:{ title:{u1:'Help',u2:'Help'} } });
+  eq(teamAnswer(noPick,COOP_TEAM).title,'Help','salon: host nic nie wskazał → auto górka głosów');
 });
 
 /* --- phases (FSM) --- */
@@ -385,23 +471,24 @@ group('chatFeed.pushChat / reset', ()=>{
 });
 group('chatFeed.ingestFeed', ()=>{
   const f=createFeed();
+  // typy/pewniaki/pasy czytane z bucketu MOJEJ drużyny (teamId='all')
   const g={ answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
-    proposals:[{aid:'a1',by:'u1',byName:'Ala',conf:'sure',values:{title:'Hey Jude',artist:'Beatles'}}],
-    passed:[{id:'u2',name:'Bob'}] };
-  const r=ingestFeed(f,g,'me');
+    byTeam:{ all:{ proposals:[{aid:'a1',by:'u1',byName:'Ala',values:{title:'Hey Jude',artist:'Beatles'}}],
+      votes:{}, sure:[{id:'u3',name:'Cyd'}], passed:[{id:'u2',name:'Bob'}] } } };
+  const r=ingestFeed(f,g,'me','all');
   ok(r.added,'doszły wpisy');
   eq(r.clearTyping,['u1'],'clearTyping zwraca autora typu');
   eq(f.log.filter(x=>x.kind==='typ').length,1,'1 wpis typu');
   eq(f.log.find(x=>x.kind==='typ').chips.length,2,'2 chipy (tytuł+wykonawca)');
-  ok(f.log.some(x=>x.kind==='sys'&&x.cls==='sure'),'pewniak → linia systemowa');
+  ok(f.log.some(x=>x.kind==='sys'&&x.cls==='sure'),'pewniak (bucket.sure) → linia systemowa');
   ok(f.log.some(x=>x.kind==='sys'&&x.cls==='pass'),'pas → linia systemowa');
   // ponowny ingest tego samego stanu → dedup, nic nie dochodzi
-  const r2=ingestFeed(f,g,'me');
+  const r2=ingestFeed(f,g,'me','all');
   ok(!r2.added,'dedup: ten sam stan → brak nowych');
   eq(r2.clearTyping.length,0,'dedup: brak clearTyping');
   // mine po meId
   const f2=createFeed();
-  ingestFeed(f2,{answerSlots:g.answerSlots,proposals:[{aid:'x',by:'me',byName:'Ja',values:{title:'T'}}]}, 'me');
+  ingestFeed(f2,{answerSlots:g.answerSlots, byTeam:{all:{proposals:[{aid:'x',by:'me',byName:'Ja',values:{title:'T'}}]}}}, 'me','all');
   ok(f2.log.find(x=>x.kind==='typ').mine,'typ od meId → mine=true');
 });
 group('chatFeed.ring-buffer', ()=>{
@@ -414,12 +501,15 @@ group('chatFeed.ring-buffer', ()=>{
 group('mpReducer.evaluateAnswer: muzyka po quizie używa slotów title/artist (regresja answerSlots)', ()=>{
   const music={ track:'Hey Jude', artist:'Beatles' };
   // BUG: answerSlots dziedziczone z quizu (slot 'a') → ocenia 'a' vs puste pole utworu → pudło mimo dobrej odpowiedzi
-  const gStale={ answerSlots:[{key:'a',label:'x'}], proposals:[{by:'u1',byName:'A',values:{a:'Hey Jude'}}], votes:{a:{u1:'Hey Jude'}} };
-  ok(evaluateAnswer(gStale, music, {a:'Hey Jude'}).teamOk===false, 'stale quiz answerSlots → muzyka pudłuje (objaw buga)');
+  const gStale=coopG({members:['u1'], answerSlots:[{key:'a',label:'x'}],
+    proposals:[{by:'u1',byName:'A',values:{a:'Hey Jude'}}], votes:{a:{u1:'Hey Jude'}} });
+  ok(evaluateAnswer(gStale, music).reveal.teamOk===false, 'stale quiz answerSlots → muzyka pudłuje (objaw buga)');
   // FIX: answerSlots=null → slotsOf=DEFAULT (title/artist) → ocena poprawna
-  const gOk={ answerSlots:null, proposals:[{by:'u1',byName:'A',values:{title:'Hey Jude',artist:'Beatles'}}], votes:{title:{u1:'Hey Jude'},artist:{u1:'Beatles'}} };
-  const r=evaluateAnswer(gOk, music, {title:'Hey Jude', artist:'Beatles'});
-  ok(r.teamOk===true, 'answerSlots=null (reset) → muzyka oceniana po title/artist');
+  const gOk=coopG({members:['u1'], answerSlots:null,
+    proposals:[{by:'u1',byName:'A',values:{title:'Hey Jude',artist:'Beatles'}}],
+    votes:{title:{u1:'Hey Jude'},artist:{u1:'Beatles'}} });
+  const r=evaluateAnswer(gOk, music);
+  ok(r.reveal.teamOk===true, 'answerSlots=null (reset) → muzyka oceniana po title/artist');
   ok(r.reveal.kind==='music', 'reveal muzyki (bez current.answers) → kind=music');
 });
 
