@@ -46,6 +46,7 @@ export function authorityChannel(code, cfg = {}) {
     startMatch(config) { return send({ t: 'start', config }); },
     lock() { return send({ t: 'lock' }); },
     next() { return send({ t: 'next' }); },
+    retry() { return send({ t: 'retry' }); },   // 1.3: host ponawia rundę zablokowaną w NETERR/NOLYRIC
 
     presenceState() { return presence; },
     unsubscribe() {

@@ -235,7 +235,13 @@ function mpAfterSync(){
   if(S.salon && S.game && !S.game.salon) S.game.salon=true;
   // faza gotowości: zbuforuj utwór i zgłoś „ready" — ale TYLKO gdy nie ma odsłony do
   // zamknięcia. Z zaległą odsłoną klient zbroi się dopiero po kliknięciu „dalej".
-  if(S.game && S.game.phase===MP.ARMING && S.game.armNonce!==S.lastArmNonce && !mpRevealPending()){
+  // 1.1: zbrój też, gdy serwer NIE widzi nas na liście gotowych (readyIds) mimo tego samego
+  // armNonce — nasze wcześniejsze `ready` zginęło (send przy zamkniętym sockecie zwraca false po cichu).
+  // Addytywne: stary serwer bez readyIds → Array.isArray false → zachowanie jak dziś.
+  const needArm = S.game && S.game.phase===MP.ARMING && !mpRevealPending() &&
+    (S.game.armNonce!==S.lastArmNonce ||
+     (Array.isArray(S.game.readyIds) && !S.game.readyIds.includes(mpMe.id)));
+  if(needArm){
     mpArm();
   }
   // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start).
@@ -257,7 +263,7 @@ function mpRevealPending(){ return !!S.revealSnap && S.ack!==S.revealNonce; }
 function mpMaybeGo(){
   if(!S.host || !S.game || S.game.phase!==MP.ARMING) return;
   const r=countReady(mpExpectedReady(), S.ready);
-  S.game.readyCount=r.count; S.game.readyTotal=r.total;
+  S.game.readyCount=r.count; S.game.readyTotal=r.total; S.game.readyIds=[...S.ready];   // 1.1
   if(r.all){ mpGo(); } else { mpBroadcast(); mpRender(); }
 }
 // host: zamknij odsłonę u siebie i przejdź do następnego pytania (DO advance / lokalnie)
@@ -265,6 +271,13 @@ function mpHostNextReveal(){
   if(!S.host || !S.game || S.game.phase!==MP.REVEAL) return;
   S.ack=S.revealNonce;
   if(SERVER_AUTH){ if(S.ch&&S.ch.next) S.ch.next(); mpRender(); } else mpNext();
+}
+// 1.3: host ponawia rundę zablokowaną w NETERR/NOLYRIC. Autorytet → komenda retry do DO
+// (relay-owe mpHostNewRound serwer i tak ignoruje). Relay → lokalne mpHostNewRound (jak dziś).
+function mpHostRetry(){
+  if(!S.host || !S.game) return;
+  if(SERVER_AUTH){ if(S.ch&&S.ch.retry) S.ch.retry(); }
+  else mpHostNewRound();
 }
 // SALON: host (TV) zlicza, którzy GRACZE kliknęli „dalej" na bieżącej odsłonie, i przechodzi SAM,
 // gdy wszyscy gotowi — host nie gra, więc nie wymaga kliku na TV (klik na TV = ręczny „pomiń czekanie").
@@ -425,7 +438,7 @@ function mpHandleAct(a){
     if(a.armNonce!==S.game.armNonce) return;       // ready ze starej rundy — ignoruj
     S.ready.add(a.by);
     const r=countReady(mpExpectedReady(), S.ready);
-    S.game.readyCount=r.count; S.game.readyTotal=r.total;
+    S.game.readyCount=r.count; S.game.readyTotal=r.total; S.game.readyIds=[...S.ready];   // 1.1
     if(r.all){ mpGo(); return; }                   // wszyscy gotowi → start
     mpBroadcast(); mpRender();
     return;
@@ -507,7 +520,7 @@ async function mpHostNewRound(){
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
   S.game.phase=MP.ARMING; S.game.armNonce=(S.game.armNonce||0)+1;
   S.game.endsAt=null; S.game.readyCount=0; S.game.readyTotal=mpExpectedReady().length;
-  S.ready=new Set();
+  S.ready=new Set(); S.game.readyIds=[];   // 1.1
   mpBroadcast(); mpRender();
   mpArm();                                   // host też buforuje i zgłasza swoją gotowość
   // brak twardego timeoutu: pytanie rusza dopiero, gdy WSZYSCY klikną „dalej" (gotowość).
@@ -586,7 +599,9 @@ function mpTickTimer(){
   const rem=Math.max(0, S.game.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
   if(el){ const m=Math.floor(s/60); el.innerHTML=ic('timer')+' '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
-  if(rem<=0 && S.host && !S.autoLocked && S.game.phase===MP.PLAY){ mpLock(); }
+  // 1.4: pod autorytetem serwer ma własny scheduleAutoLock i jest jedynym zegarem prawdy —
+  // klientowy auto-lock po skew zegara ucinałby pytania. Tu tylko relay (?authority=0) auto-lockuje.
+  if(rem<=0 && S.host && !S.autoLocked && S.game.phase===MP.PLAY && !SERVER_AUTH){ mpLock(); }
 }
 function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(S.ch) S.ch.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
 function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
@@ -705,7 +720,7 @@ Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble,
   mpReact, mpSay, mpSend, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput,
-  mpStart, mpAdvance,
+  mpStart, mpAdvance, mpHostRetry, mpHostNextReveal, mpTickTimer,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane

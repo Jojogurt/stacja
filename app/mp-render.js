@@ -137,13 +137,24 @@ const mpRenderArming = (g, head)=>{
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
   const rc=(S.game&&S.game.readyCount)||0, rt=(S.game&&S.game.readyTotal)||mpMembers().length;
-  return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${mpReactsBarHTML()}`;
+  // 1.2: host promowany w REVEAL po swoim „dalej" ma ack===revealNonce → bez przycisku nikt nie wyśle
+  // `next` i mecz zamarza. Daj hostowi jawny przycisk „następne pytanie" (mpHostNextReveal → next).
+  const hostBtn = S.host ? `<button class="mp-next" onclick="mpHostNextReveal()">NASTĘPNE PYTANIE ›</button>` : '';
+  return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${hostBtn}${mpReactsBarHTML()}`;
 };
 const mpRenderNetErr = (g, head)=>{
   const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
-  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">${msg} ${S.host?'<br><button class="mp-btn ghost" onclick="mpHostNewRound()">spróbuj ponownie</button>':''}</div></div>`;
+  // 1.3: host ponawia (autorytet → retry do DO, relay → mpHostNewRound); nie-host czeka na hosta.
+  const action = S.host ? '<br><button class="mp-btn ghost" onclick="mpHostRetry()">spróbuj ponownie</button>'
+                        : '<br><span style="opacity:.7">host próbuje ponownie…</span>';
+  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">${msg} ${action}</div></div>`;
 };
-const mpRenderNoLyric = (head)=> `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">Brak tekstów do lektora w tej kategorii (songs[] w categories.js).</div></div>`;
+const mpRenderNoLyric = (head)=>{
+  // 1.3: dawniej BEZ przycisku = ślepy zaułek. Host przeskakuje slot (autorytet: retry→matchAdvance).
+  const action = S.host ? '<br><button class="mp-btn ghost" onclick="mpHostRetry()">pomiń — następne pytanie</button>'
+                        : '<br><span style="opacity:.7">host próbuje ponownie…</span>';
+  return `${head}<div class="mp-deck"><div class="mp-state" style="color:var(--red)">Brak materiału do tej rundy w tej kategorii (wyczerpana pula). ${action}</div></div>`;
+};
 
 /* --- faza gry: małe budowniki HTML + częściowa aktualizacja (nie czyść pól) --- */
 // pasek osób (design): awatar w kole (kolor = stan) + etykieta stanu pod spodem

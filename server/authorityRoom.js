@@ -212,6 +212,22 @@ export class GameAuthority extends Server {
       case 'next':                                    // tylko host
         if(me && me===this.hostId) await this.next();
         return;
+
+      case 'retry':                                   // tylko host, tylko w NETERR/NOLYRIC (1.3)
+        if(me && me===this.hostId) await this.retry();
+        return;
+    }
+  }
+
+  // 1.3: host ponawia zablokowaną rundę. NETERR (sieć) → ten sam slot od nowa;
+  // NOLYRIC (pula wyczerpana) → przeskocz slot (inaczej kręci się w kółko na pustej puli).
+  async retry(){
+    if(!this.game) return;
+    if(this.game.phase===MP.NETERR){ await this.newRound(); return; }
+    if(this.game.phase===MP.NOLYRIC){
+      const more=matchAdvance(this.game);
+      if(!more){ await this.finish(); return; }
+      await this.nextQuestion();
     }
   }
 
@@ -299,7 +315,7 @@ export class GameAuthority extends Server {
     // FAZA GOTOWOŚCI: roześlij utwór (bez odpowiedzi), czekaj aż wszyscy zbuforują
     this.game.phase=MP.ARMING; this.game.armNonce=(this.game.armNonce||0)+1;
     this.game.endsAt=null; this.game.readyCount=0; this.game.readyTotal=this.expectedReady().length;
-    this.ready=new Set();
+    this.ready=new Set(); this.game.readyIds=[];   // 1.1: kto już zgłosił ready (klient wykrywa zgubione ready po reconnect)
     this.broadcastState(); await this.persist();
     // BRAK timera startu: PLAY rusza dopiero gdy WSZYSCY OBECNI zgłoszą ready. Klient nie zbroi się,
     // póki nie zamknie u siebie ekranu odpowiedzi (reveal) → czekamy aż każdy sam przejdzie do nowego pytania.
@@ -325,6 +341,7 @@ export class GameAuthority extends Server {
     if(!this.game || this.game.phase!==MP.ARMING) return;
     const r=countReady(this.expectedReady(), this.ready);
     this.game.readyCount=r.count; this.game.readyTotal=r.total;
+    this.game.readyIds=[...this.ready];   // 1.1: rozsyłaj listę zgłoszonych — klient dosyła zgubione ready
     if(r.all){ await this.go(); return; }
     this.broadcastState(); await this.persist();
   }

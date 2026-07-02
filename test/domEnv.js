@@ -44,12 +44,13 @@ class FakeWebSocket {
   constructor(url){
     this.url=String(url); this.readyState=0;
     let id='', name=''; try{ const q=new URL(this.url.replace(/^ws/,'http')).searchParams; id=q.get('id')||''; name=q.get('name')||''; }catch(_e){}
-    this._id=id; this._name=name;
+    this._id=id; this._name=name; this.sent=[];   // rejestr wysłanych ramek (testy 1.1/1.4: ready/lock)
     wsInstances.push(this);
     setTimeout(()=>{ this.readyState=1; this.onopen && this.onopen({}); }, 0);
   }
   send(data){
     let m; try{ m=JSON.parse(data); }catch(_e){ return; }
+    this.sent.push(m);
     if(m.t==='track' && m.name) this._name=m.name;
     if(m.t==='hello' || m.t==='track'){
       // jeden członek = ten klient, host = on (hostId===myId → mpHost=true w trybie authority)

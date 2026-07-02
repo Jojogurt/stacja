@@ -397,5 +397,79 @@ await group('MP: faza (audio+timer) startuje DOPIERO po intrze (gating)', async 
   } finally { w.__MP_INTRO_MS__ = 0; }
 });
 
+// —— FAZA 1 audytu: deadlocki multiplayera ——
+await group('MP 1.1: zgubione ready → klient dosyła wg readyIds (anty-deadlock ARMING)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const me = ws._id;
+  const nReady = () => ws.sent.filter(m=>m.t==='action' && m.action && m.action.type==='ready').length;
+  // lektor (bez preview) → mpArm zgłasza ready synchronicznie
+  const arm = (readyIds) => ({ phase:'arming', armNonce:410, mode:'lektor', lyric:'la la', prompt:'',
+    round:1, rounds:4, si:0, qi:0, catKey:'d80', catLabel:'80s', preview:'', playNonce:0,
+    timer:0, endsAt:null, hostId:me, readyCount:0, readyTotal:1, results:[],
+    ...(readyIds!==undefined?{readyIds}:{}) });
+  const c0 = nReady();
+  ws.pushState(arm([])); await settle(4);
+  ok(nReady()===c0+1, 'nowy armNonce → wysłano ready');
+  ws.pushState(arm([])); await settle(4);   // ten sam nonce, serwer nas nie widzi → dosyłka
+  ok(nReady()===c0+2, 'readyIds bez nas @ ten sam nonce → ready ponowione');
+  ws.pushState(arm([me])); await settle(4);  // serwer już nas ma → anty-pętla
+  ok(nReady()===c0+2, 'readyIds z nami → brak dosyłki (anty-pętla)');
+  ws.pushState(arm(undefined)); await settle(4);   // stary serwer bez pola readyIds
+  ok(nReady()===c0+2, 'brak pola readyIds @ ten sam nonce → brak dosyłki (kompat. starego serwera)');
+});
+
+await group('MP 1.2: host promowany w REVEAL po „dalej" ma przycisk „następne" (nie zamrożenie)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const me = ws._id;
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'d80',mode:'music'}],
+    mode:'music', catKey:'d80', catLabel:'80s', answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:'',
+      okTitle:true, okArtist:true, teamOk:true, gained:2, firstBy:'Bob', pewniacy:[], pewniakWin:false, pewniakLose:false,
+      locked:{title:'Hey Jude',artist:'Beatles'} },
+    proposals:[], votes:{}, passed:[], playNonce:520, timer:0, hostId:me });
+  await settle(6);
+  const nNext = ws.sent.filter(m=>m.t==='next').length;
+  w.mpAdvance();   // host „dalej" → ack=revealNonce + next do DO; stan lokalny wciąż REVEAL → waitNext
+  await settle(4);
+  const h=$(w,'mpRoom').innerHTML;
+  ok(/idziesz dalej|gotowych/.test(h), 'host po „dalej" widzi ekran czekania (waitNext)');
+  ok(/mpHostNextReveal/.test(h), '1.2: host ma przycisk „następne pytanie" na ekranie czekania');
+  ok(ws.sent.filter(m=>m.t==='next').length===nNext+1, 'host „dalej" wysłał next do DO');
+});
+
+await group('MP 1.3: NETERR/NOLYRIC — host ma przycisk retry (autorytet → {t:retry})', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const me = ws._id;
+  ws.pushState({ phase:'neterr', netReason:'nocat', round:1, rounds:4, si:0, qi:0, mode:'music',
+    catKey:'d80', catLabel:'80s', hostId:me, results:[] });
+  await settle(4);
+  ok(/mpHostRetry/.test($(w,'mpRoom').innerHTML), '1.3 NETERR: host widzi przycisk „spróbuj ponownie"');
+  const nRetry = ws.sent.filter(m=>m.t==='retry').length;
+  w.mpHostRetry(); await settle(2);
+  ok(ws.sent.filter(m=>m.t==='retry').length===nRetry+1, '1.3: mpHostRetry pod autorytetem wysyła {t:retry}');
+  ws.pushState({ phase:'nolyric', round:1, rounds:4, si:0, qi:0, mode:'lektor',
+    catKey:'d80', catLabel:'80s', hostId:me, results:[] });
+  await settle(4);
+  ok(/mpHostRetry/.test($(w,'mpRoom').innerHTML), '1.3 NOLYRIC: host widzi przycisk „pomiń" (nie ślepy zaułek)');
+});
+
+await group('MP 1.4: pod autorytetem klient NIE auto-lockuje (serwer = zegar prawdy)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const me = ws._id;
+  const nLock = ws.sent.filter(m=>m.t==='lock').length;
+  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'',
+    playNonce:1200, timer:20, endsAt:Date.now()-5000, beerTally:{}, hostId:me, results:[] });
+  await settle(6);
+  w.mpTickTimer(); w.mpTickTimer();   // endsAt w przeszłości → stary kod poleciałby mpLock()
+  await settle(4);
+  ok(ws.sent.filter(m=>m.t==='lock').length===nLock, '1.4: brak {t:lock} od klienta (endsAt w przeszłości, SERVER_AUTH)');
+});
+
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);
