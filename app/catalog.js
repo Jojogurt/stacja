@@ -34,7 +34,7 @@ export const matchHeader = (m)                  => _matchHeader(m, ALL_CATS);
 /* ---- playlisty ze Spotify (localStorage) — dane; UI jest w app/solo.js ---- */
 const PL_PREFIX='pl:';
 export function plLoad(){ try{ return JSON.parse(localStorage.getItem('stacjaPlaylists')||'{}'); }catch(e){ return {}; } }
-export function plSave(o){ localStorage.setItem('stacjaPlaylists', JSON.stringify(o)); }
+export function plSave(o){ try{ localStorage.setItem('stacjaPlaylists', JSON.stringify(o)); }catch(_e){} }   // 5.10: quota/tryb prywatny nie może rzucać
 export function plMerge(){ const pls=plLoad(); Object.keys(pls).forEach(k=>{ ALL_CATS[k]=pls[k]; if(!ALL_KEYS.includes(k)) ALL_KEYS.push(k); }); }
 /* wspólny rdzeń importu — fetch z edge function „spotify", zapis do localStorage, merge do ALL_CATS.
    Zwraca {key,name,count} albo rzuca błędem. Używany przez solo (plImport) i MP (mpPlImport). */

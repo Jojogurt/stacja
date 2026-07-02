@@ -109,7 +109,9 @@ function plRenderTicks(){
 function plRemove(k){
   const pls=plLoad(); delete pls[k]; plSave(pls);
   delete ALL_CATS[k]; const i=ALL_KEYS.indexOf(k); if(i>=0) ALL_KEYS.splice(i,1);
+  soloCats.delete(k);   // 5.10: usuń też z puli meczu (inaczej martwy klucz w picker/buildMatch)
   if(selectedEra===k){ selectedEra=null; document.getElementById('dialNote').textContent='wybierz kategorię'; }
+  updateMatchInfo();
   plRenderTicks();
 }
 document.getElementById('plImport').onclick=()=>document.getElementById('plPanel').classList.toggle('show');

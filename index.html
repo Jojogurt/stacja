@@ -33,7 +33,7 @@
     --purple:#CE82FF;
     /* powierzchnie i tekst */
     --bg:#FFFFFF; --panel:#FFFFFF; --panel2:#F7F7F7;
-    --ink:#3C3C3C; --muted:#AFAFAF; --line:#E5E5E5;
+    --ink:#3C3C3C; --muted:#767676; --line:#E5E5E5;   /* 5.5: #AFAFAF→#767676 (kontrast ≥4.5:1 na białym) */
     /* aliasy semantyczne — używane też w inline-style w JS */
     --amber:#58CC02; --amber-dim:#58A700;
     /* typografia (rounded, friendly) */
@@ -446,6 +446,10 @@
   .mp-knob.loading{background:var(--amber);box-shadow:0 5px 0 #b07d00}
   .mp-knob.loading svg{animation:mpspin .9s linear infinite;transform-origin:center}
   @keyframes mpspin{to{transform:rotate(360deg)}}
+  /* 1.7: baner późnego dołączenia + wyszarzenie/blokada wejścia (akcje i tak odrzucane przez reducer) */
+  .mp-latejoin{background:var(--panel2);border:2px dashed var(--line);border-radius:12px;padding:10px 12px;
+    margin:8px 0;text-align:center;color:var(--muted);font-size:13px;font-weight:700}
+  .mp-play.latejoin .mp-form,.mp-play.latejoin .mp-conf,.mp-play.latejoin .mp-board{opacity:.4;pointer-events:none}
   .mp-form{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;margin-bottom:12px}
   .mp-form input{background:var(--panel2);border:2px solid var(--line);border-radius:12px;color:var(--ink);
     font-family:var(--body);font-weight:700;font-size:16px;padding:11px;outline:none;min-width:0}
@@ -1247,7 +1251,7 @@
         <input class="lb-cell" maxlength="1" autocomplete="off" aria-label="kod 3">
         <input class="lb-cell" maxlength="1" autocomplete="off" aria-label="kod 4">
       </div>
-      <div class="lb-link">…lub wklej link <b>stacja.app/?room=</b></div>
+      <div class="lb-link">…lub wklej link <b id="mpLinkHint">?room=</b></div>
       <div class="mp-err" id="mpErr"></div>
       <button class="lb-join" id="mpJoin">DOŁĄCZ DO POKOJU</button>
     </div>

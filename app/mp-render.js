@@ -136,11 +136,11 @@ const mpRenderArming = (g, head)=>{
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
-  const rc=(S.game&&S.game.readyCount)||0, rt=(S.game&&S.game.readyTotal)||mpMembers().length;
+  // 1.8: NIE pokazuj readyCount/readyTotal z ARMING (nieaktualne w REVEAL — brak licznika „dalej" z serwera).
   // 1.2: host promowany w REVEAL po swoim „dalej" ma ack===revealNonce → bez przycisku nikt nie wyśle
   // `next` i mecz zamarza. Daj hostowi jawny przycisk „następne pytanie" (mpHostNextReveal → next).
   const hostBtn = S.host ? `<button class="mp-next" onclick="mpHostNextReveal()">NASTĘPNE PYTANIE ›</button>` : '';
-  return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej… <b>${rc}/${rt}</b> gotowych</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${hostBtn}${mpReactsBarHTML()}`;
+  return `${head}${mpRosterStrip()}<div class="mp-deck"><div class="mp-state">✓ idziesz dalej…</div><div class="mp-state" style="opacity:.7">następne pytanie ruszy, gdy wszyscy przejdą dalej</div></div>${hostBtn}${mpReactsBarHTML()}`;
 };
 const mpRenderNetErr = (g, head)=>{
   const msg = g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
@@ -354,7 +354,7 @@ function mpHeaderHTML(g){
     <div class="mp-hd-r1">
       <span class="mp-hd-back" onclick="mpRoomBack()">${ic('back')}</span>
       <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(S.code||'')}</span>
-      <span class="mp-hd-timer" id="mpCountdown"></span>
+      <span class="mp-hd-timer" id="mpCountdown" role="status" aria-live="polite"></span>
     </div>
     <div class="mp-hd-chips">
       <span>${escapeHtml(g.catLabel||g.catKey||'—')}</span>
@@ -401,7 +401,7 @@ function mpKombinujKolumnyHTML(g){
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
 function mpKombinujCzatHTML(g){
   return `${mpPromptHTML(g)}<div class="mp-team" id="mpTeam"></div>
-    <div class="mp-chatfeed" id="mpChatFeed"></div>
+    <div class="mp-chatfeed" id="mpChatFeed" aria-live="polite"></div>
     <div class="mp-comp">
       ${mpComposerHTML(g)}
       <div class="mp-conf" id="mpConf">${mpConfHTML(true)}</div>
@@ -412,12 +412,17 @@ function mpKombinujCzatHTML(g){
 function mpScaffoldPlay(g, head){
   const skin=curSkin();
   const rail=mpRailHTML(S.sub==='sluchaj'?'sluchaj':'kombinuj');
+  // 1.7: późny dołączający (jeszcze poza drużynami) — reducer i tak odrzuca jego akcje;
+  // pokaż baner i wyszarz/zablokuj input (klasa .latejoin), by nie „pisał w próżnię".
+  const lateJoin = !mpIsSalonHost() && (g.teams||[]).length>0 && !(g.teams||[]).some(t=>(t.members||[]).includes(mpMe.id));
+  const cls = 'mp-play'+(lateJoin?' latejoin':'');
+  const banner = lateJoin ? `<div class="mp-latejoin" role="status">⏳ Dołączysz od następnego pytania — teraz oglądasz</div>` : '';
   // skórka KOLUMNOWA, faza „kombinuj": własna kolejność (odpowiedź drużyny → profile → kolumny → input);
   // roster jest WEWNĄTRZ ciała, nie w „top" — dlatego osobna gałąź.
-  if(S.sub!=='sluchaj' && skin!=='czat') return `<div class="mp-play">${head}${rail}${mpKombinujKolumnyHTML(g)}</div>`;
+  if(S.sub!=='sluchaj' && skin!=='czat') return `<div class="${cls}">${banner}${head}${rail}${mpKombinujKolumnyHTML(g)}</div>`;
   const top=`${head}${rail}<div class="mp-roster${skin==='czat'?' mp-roster-nb':''}" id="mpRoster"></div>`;
   const body=S.sub==='sluchaj' ? mpSluchajBodyHTML(g) : mpKombinujCzatHTML(g);
-  return `<div class="mp-play">${top}${body}</div>`;
+  return `<div class="${cls}">${banner}${top}${body}</div>`;
 }
 // odśwież dynamiczne części (wspólne) — bez ruszania pól wpisywanych
 function mpRefreshDynamic(g){
@@ -494,7 +499,9 @@ function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
   if(r.kind==='quiz') return mpRenderQuizReveal(snap);
   const rv=mpRevealMine(r);   // ✓/✗ slotów, locked, baner — z perspektywy MOJEJ drużyny
-  const cover = r.art?`<img class="rv-cover" src="${r.art}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">${ic('disc')}</div>`;
+  // 5.2: waliduj URL okładki (tylko http(s)) + escapuj — art pochodzi z zewnętrznego API (iTunes)
+  const artOk = typeof r.art==='string' && /^https?:\/\//.test(r.art);
+  const cover = artOk?`<img class="rv-cover" src="${escapeHtml(r.art)}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">${ic('disc')}</div>`;
   const meta=[r.album,r.year].filter(Boolean).join(' · ');
   const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span><span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
   const locked=rv.locked||{};

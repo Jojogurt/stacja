@@ -8,5 +8,6 @@ export function shuffle(a){
 }
 
 export function escapeHtml(s){
-  return (s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+  // 5.1: escapuj też apostrof (') — bez tego wartości wstrzykiwane w atrybuty w '…' potrafiły uciec
+  return (s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }

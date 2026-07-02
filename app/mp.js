@@ -60,6 +60,8 @@ const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSessi
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
+// 5.8: podpowiedź linku pokoju z REALNEGO origin (nie hardcode „stacja.app")
+try{ const _h=$m('mpLinkHint'); if(_h) _h.textContent=(location.origin+location.pathname).replace(/\/$/,'')+'/?room='; }catch(_e){}
 
 // Sesja LENIWA — tworzona przy geście, który jej potrzebuje (wejście do pokoju MP,
 // koniec meczu, ekran profilu/drużyny). ensureSession() woła Worker i cache'uje token.
@@ -104,6 +106,8 @@ async function mpLeave(){
   audioSession('ambient');                          // wyjście z pokoju → oddaj dźwięk muzyce w tle
   stopSpeech(); mpStopRev();
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
+  if(S.timerInt){ clearInterval(S.timerInt); S.timerInt=null; }   // 1.8: bez tego tick zostaje po wyjściu (re-enter nie tworzy nowego)
+  if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
   S.ready=new Set(); S.lastArmNonce=null;
   advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
@@ -166,9 +170,18 @@ async function mpEnterRoom(code, asHost){
   S.ch.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
   S.ch.on('broadcast',{event:'advanced'},({payload})=>{ mpOnPlayerAdvanced(payload); });   // SALON: gracz kliknął „dalej" na odsłonie
   S.ch.on('presence',{event:'sync'},()=>{
+    const prevHost=S.host;                                          // 1.5: wykryj zmianę roli hosta (promote)
     if(SERVER_AUTH && S.ch.hostId) S.host=(S.ch.hostId===mpMe.id);   // host = autorytatywny hostId z DO
-    mpRenderMembers(); if(!S.game || S.game.phase==null) mpRender();
+    mpRenderMembers();
+    // 1.5: zmiana S.host → ZAWSZE re-render (inaczej awansowany host nie zobaczy przycisków hosta;
+    //      domyka 1.2 — przycisk „następne" po promocie w REVEAL). Dotąd re-render tylko w lobby.
+    if(S.host!==prevHost || !S.game || S.game.phase==null) mpRender();
     if(S.host && !SERVER_AUTH){ mpBroadcast(); mpMaybeGo(); }        // relay: host pcha stan i liczy gotowość (DO robi to sam)
+    if(S.host && S.game && S.game.salon && S.game.phase===MP.REVEAL) mpRecountAdvance();   // 1.8: rozłączenie w REVEAL → przelicz „dalej"
+    // 1.8: relay nie ma promote — gdy host znika w trakcie meczu, chociaż powiedz to graczom
+    if(!SERVER_AUTH && !S.host && S.game && S.game.phase!=null && S.game.hostId && !mpMembers().some(m=>m.id===S.game.hostId)){
+      mpErr('Host się rozłączył — poczekajcie na powrót albo wyjdźcie i stwórzcie nowy pokój.');
+    }
   });
   S.ch.subscribe(async(status)=>{
     if(status==='SUBSCRIBED'){ await S.ch.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
@@ -287,6 +300,13 @@ function mpOnPlayerAdvanced(payload){
   if(!payload || payload.nonce!==S.game.playNonce) return;
   if(advancedNonce!==S.game.playNonce){ advancedSet=new Set(); advancedNonce=S.game.playNonce; }
   advancedSet.add(payload.by);
+  mpRecountAdvance();
+}
+// 1.8: przelicz komplet „dalej" (woła: mpOnPlayerAdvanced ORAZ presence-sync przy rozłączeniu gracza w REVEAL,
+// inaczej odejście ostatniego niegotowego gracza zawieszało salon — nikt już nie przyśle „advanced").
+function mpRecountAdvance(){
+  if(!S.host || !S.game || !S.game.salon || S.game.phase!==MP.REVEAL) return;
+  if(advancedNonce!==S.game.playNonce){ advancedSet=new Set(); advancedNonce=S.game.playNonce; }
   const players=mpPlayers().map(m=>m.id);                 // gracze = obecni bez TV
   S.advCount=players.filter(id=>advancedSet.has(id)).length; S.advTotal=players.length;
   mpRender();                                             // odśwież „X/Y gotowych" na TV
@@ -332,6 +352,7 @@ function mpEnsureAudio(){
       if(S.audio._snipEnd){ mpSetKnob('replay'); mpSetPlayStatus('fragment '+SNIP_SECS+'s · ↻ jeszcze raz'); }   // fragment dograł → replay
       else { mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
     S.audio.addEventListener('ended',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); });
+    S.audio.addEventListener('error',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('brak zajawki — kombinujcie bez niej'); });   // 1.8: 404/stall zajawki nie zawiesza rundy
   }
   return S.audio;
 }
@@ -359,8 +380,12 @@ function mpArm(){
   a.load();
 }
 function mpStopRev(){ if(S.revSrc){ S.revSrc.stop(); S.revSrc=null; } }   // uchwyt z playReverse
-// play() zablokowane przez przeglądarkę (autoplay poza gestem) → poproś o stuknięcie
-function mpPlayBlocked(){ mpSetKnob('play'); mpSetPlayStatus('stuknij ▶, by odtworzyć'); }
+// 1.8: rozróżnij autoplay-block (poproś o gest) od realnego braku zajawki (graj bez niej, bez pętli).
+function mpPlayBlocked(err){
+  mpSetKnob('play');
+  if(err && err.name==='NotAllowedError') mpSetPlayStatus('stuknij ▶, by odtworzyć');   // gest wymagany
+  else mpSetPlayStatus('brak zajawki — kombinujcie bez niej');                          // 404/CORS/uszkodzona
+}
 // gałka = TOGGLE: gra → pauza; pauza → wznów; koniec/świeże → od nowa (#bug2: dotąd zawsze restart)
 function mpKnobTap(){
   if(!S.game) return mpPlayLocal();
