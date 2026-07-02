@@ -582,4 +582,4 @@ function mpRenderDone(g, head){
 // most do HTML: mpFocusTyp żyje w onclick="" generowanym tutaj → musi być na window
 Object.assign(window, { mpFocusTyp });
 
-export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor };
+export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS };

@@ -18,14 +18,15 @@ import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
 import { authorityChannel } from '../adapters-web/roomTransport.js';
 import { ensureSession, setHandle, recordMatch } from '../adapters-web/cf.js';
+import { resolveTrack } from '../adapters-web/itunesRepository.js';
 import { stopAudio } from './audio.js';
-import { stopSpeech, lektorStop, lektorPlay } from './lektor.js';
+import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor } from './mp-render.js';
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS } from './mp-render.js';
 import { ic } from './icons.js';
 
 initMpPicker(mpRender, ()=>mpPlayers());   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
@@ -589,6 +590,7 @@ function mpTickTimer(){
 }
 function mpReact(e){ mpFloatEmoji(e, mpMe.name); if(S.ch) S.ch.send({type:'broadcast',event:'react',payload:{emoji:e, byName:mpMe.name, by:mpMe.id}}); }
 function mpFloatEmoji(emoji, byName){      // #9: pokaż KTO wysłał emotkę
+  if(!REACTIONS.includes(emoji)) return;   // #0.1: whitelist — emotki spoza listy nie trafiają do innerHTML (XSS)
   let fx=$m('mpFx');
   if(!fx){ fx=document.createElement('div'); fx.id='mpFx'; document.body.appendChild(fx); }
   const s=document.createElement('div'); s.className='mp-float';

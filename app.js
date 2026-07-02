@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v42';   // MP: polish druzyn — edytowalne nazwy druzyn + przycisk „rowno" (balans skladu) w pickerze
+const APP_VERSION = 'v43';   // FAZA 0 audytu: XSS emotki (whitelist), import isSpeaking/resolveTrack, quiz-muzyka do manifestu
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
