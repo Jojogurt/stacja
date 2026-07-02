@@ -528,5 +528,16 @@ await (async ()=>{
   ok(r2.preview==='beatit.m4a' && r2.track==='Beat It', 'trafienie → zajawka tego samego utworu co odpowiedź');
 })();
 
+// 2.2: globalny cap czasu na resolveFromArtists — wiszący itunes nie kręci spinnera minutami
+await (async ()=>{
+  console.log('• trackSelect.resolveFromArtists: cap czasu (wiszący itunes → error, nie wieczny spinner)');
+  const hang=()=>new Promise(()=>{});   // nigdy nie rozwiązuje (symulacja zawieszonej sieci/proxy)
+  const t0=Date.now();
+  const r=await resolveTrack({ cat:{artists:['A','B','C']}, seen:new Set(), recent:[], itunes:hang, capMs:120 });
+  const dt=Date.now()-t0;
+  ok(r.error===true, 'po capie → t.error');
+  ok(dt<1500, `zwrot w budżecie czasu (było ${dt}ms) — nie czeka na każdego artystę osobno`);
+})();
+
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

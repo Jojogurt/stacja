@@ -12,10 +12,12 @@ let revSrc = null;       // uchwyt BufferSource trybu „od tyłu" (z playRevers
 // iOS: zajawka quizu PRZEJMUJE dźwięk ('playback'); po stopie wracamy do 'ambient' (UI miksuje, nie pauzuje muzyki)
 const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSession.type = t; }catch(e){} };
 
-// wstrzyknięte zależności (stan gry + wznowienie rundy)
-let getCurrent = () => null, getMode = () => 'music', requestRound = () => {};
-export function initAudio({ current, mode, newRound }){
+// wstrzyknięte zależności (stan gry + wznowienie rundy + token rundy + flaga „strojenie")
+let getCurrent = () => null, getMode = () => 'music', requestRound = () => {}, getGen = () => 0, getBusy = () => false;
+let revDecoding = false;   // 2.1: guard przed podwójnym startem dekodowania „od tyłu"
+export function initAudio({ current, mode, newRound, gen, busy }){
   getCurrent = current; getMode = mode; requestRound = newRound;
+  if(gen) getGen = gen; if(busy) getBusy = busy;
 }
 
 function armControls(){
@@ -28,17 +30,23 @@ function armControls(){
 
 // ikona gałki STEROWANA REALNYM stanem odtwarzacza (nie optymistycznie) —
 // inaczej ikona „pauza" pokazywała się mimo ciszy/buforowania (#1/#3)
+// 2.1: WSZYSTKIE listenery ignorują zdarzenia z elementu, który nie jest już bieżącym `audio`
+// (stary element z poprzedniej rundy dograwa/pauzuje i inaczej nadpisywałby ikonę/status nowej).
 function bindAudioUI(el){
-  el.addEventListener('playing',()=>setIcon('pause'));
-  el.addEventListener('play',   ()=>setIcon('pause'));
-  el.addEventListener('pause',  ()=>{ if(!el.ended) setIcon('play'); });
-  el.addEventListener('waiting',()=>setIcon('wait'));
+  el.addEventListener('playing',()=>{ if(el===audio) setIcon('pause'); });
+  el.addEventListener('play',   ()=>{ if(el===audio) setIcon('pause'); });
+  el.addEventListener('pause',  ()=>{ if(el===audio && !el.ended) setIcon('play'); });
+  el.addEventListener('waiting',()=>{ if(el===audio) setIcon('wait'); });
+  // 2.2: 404/stall zajawki → nie zawieszaj rundy; pokaż komunikat i odblokuj pomiń/sprawdź
+  el.addEventListener('error',  ()=>{ if(el!==audio) return; setIcon('play'); setState('zajawka niedostępna — pomiń albo sprawdź'); armControls(); });
 }
 
 // dyspozytor — wybiera sposób odtwarzania wg trybu
 export function startAudio(){
+  stopAudio();                // 2.1: nigdy dwa utwory naraz (np. klik w gałkę podczas strojenia)
   audioSession('playback');   // quiz przejmuje dźwięk (wszystkie tryby: music/snippet/reverse)
   const mode=getMode(), current=getCurrent();
+  if(!current) return;
   if(mode==='reverse'){ return startReverse(); }
   if(mode==='snippet'){ return startSnippet(); }
   audio=new Audio(current.preview); audio.preload='auto';
@@ -77,14 +85,21 @@ function startSnippet(){
 
 // 🔄 od tyłu — dekoduje zajawkę i odtwarza odwróconą (Web Audio, przez AudioPort)
 async function startReverse(){
+  if(revDecoding) return;   // 2.1: dekodowanie w toku → nie startuj drugiego (dwie odwrócone naraz)
   const current=getCurrent();
+  const gen=getGen();       // 2.1: token rundy — po zdekodowaniu graj tylko, jeśli runda ta sama
   setIcon('wait'); setState('odwracam…');
+  revDecoding=true;
   const ctx=await ensureCtxResumed();
   const r=await playReverse(ctx, current.preview, {
     cfg: window.STACJA_CONFIG,
+    shouldPlay: ()=>getGen()===gen && !!getCurrent(),   // runda mogła się zmienić w trakcie dekodowania
     onProgress: f=>setRing(f),
     onEnded: ()=>{ revSrc=null; setIcon('play'); setRing(1); setState('koniec · ↻ od nowa'); },
   });
+  revDecoding=false;
+  if(r.aborted) return;                                 // runda już inna → cisza, bez fallbacku
+  if(getGen()!==gen || !getCurrent()) return;           // podwójny bezpiecznik po awaitach
   if(r.ok){ revSrc=r; setIcon('pause'); setState('słuchaj — od tyłu!'); armControls(); return; }
   // i proxy i dekodowanie padło → zagraj normalnie, żeby runda działała
   audio=new Audio(current.preview); bindAudioUI(audio);
@@ -99,6 +114,7 @@ export function stopAudio(){
 }
 
 export function toggleAudio(){
+  if(getBusy()) return;   // 2.1: podczas ładowania pytania (strojenie) gałka nieaktywna — spójne z wyłączonymi przyciskami
   unlockCtx();
   const current=getCurrent(), mode=getMode();
   if(!current){ requestRound(); return; }

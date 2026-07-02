@@ -18,7 +18,8 @@ export function speak(text){
   const u=new SpeechSynthesisUtterance(text);
   if(plVoice){ u.voice=plVoice; u.lang=plVoice.lang; } else { u.lang='pl-PL'; }
   u.rate=0.96; u.pitch=0.9;
-  u.onend=()=>{ setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); };
+  const gen=lektorGen;   // 2.1: onend z poprzedniej rundy nie może resetować ikony/statusu nowej
+  u.onend=()=>{ if(gen!==lektorGen) return; setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); };
   setIcon('pause'); setRing(0); setState('lektor czyta…');
   document.getElementById('knob').classList.add('live');
   speechSynthesis.speak(u);
@@ -33,13 +34,15 @@ export function isSpeaking(){
 /* ===== kolejność jakości: pre-gen audio > Piper > głos systemowy ===== */
 let piperOn = localStorage.getItem('stacjaPiper')==='1';
 const PIPER_VOICE = 'pl_PL-gosia-medium';
-let piperMod=null, piperReady=false, lektorAudio=null;
+let piperMod=null, piperReady=false, lektorAudio=null, lektorUrl=null;   // lektorUrl: blob Pipera do zwolnienia
 // token „pokolenia": każde nowe odtworzenie/stop unieważnia poprzednie. Bez tego
 // wolna synteza Piper z poprzedniego pytania kończyła się PO zmianie rundy i czytała
 // stary tekst (oraz nakładała się = brzmiało jak zapętlenie).
 let lektorGen=0;
 
-export function lektorStop(){ lektorGen++; if(lektorAudio){ lektorAudio.pause(); lektorAudio=null; } stopSpeech(); }
+export function lektorStop(){ lektorGen++; if(lektorAudio){ lektorAudio.pause(); lektorAudio=null; }
+  if(lektorUrl){ try{ URL.revokeObjectURL(lektorUrl); }catch(_e){} lektorUrl=null; }   // 2.3: zwolnij blob także przy stopie w połowie
+  stopSpeech(); }
 
 async function piperEnsure(onPct){
   if(!piperMod) piperMod = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
@@ -63,8 +66,8 @@ export async function lektorPlay(text, ttsUrl, onStatus){
       const wav = await Promise.race([ mod.predict({text, voiceId:PIPER_VOICE}),
         new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),60000)) ]);
       if(gen!==lektorGen) return;                // synteza skończyła się po zmianie pytania → NIE graj starego
-      const url=URL.createObjectURL(wav);
-      const a=new Audio(url); a.onended=()=>URL.revokeObjectURL(url);
+      const url=URL.createObjectURL(wav); lektorUrl=url;
+      const a=new Audio(url); a.onended=()=>{ if(lektorUrl===url){ URL.revokeObjectURL(url); lektorUrl=null; } };
       lektorAudio=a; await a.play(); return;
     }catch(e){ if(gen!==lektorGen) return; onStatus && onStatus('Piper niedostępny — głos systemowy'); }
   }

@@ -10,6 +10,16 @@ import { norm, textMatch } from './scoring.js';
 /* filtr coverów/karaoke/tributów */
 export const BAD = /karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
 
+/* 2.2: globalny cap czasu na rozwiązanie utworu z puli wykonawców — bez tego kaskada
+ * per-artysta × 2 próby × proxy potrafiła wisieć minutami (spinner „strojenie…"). */
+export const RESOLVE_CAP_MS = 20000;
+function withTimeout(promise, ms){
+  return new Promise((resolve, reject)=>{
+    const t=setTimeout(()=>reject(new Error('timeout')), ms);
+    promise.then(v=>{ clearTimeout(t); resolve(v); }, e=>{ clearTimeout(t); reject(e); });
+  });
+}
+
 /* wybór utworu z wyników (ten sam artysta, bez coverów, bez powtórki) */
 export function pickTrack(results, artist, seen){
   const na=norm(artist);
@@ -49,14 +59,17 @@ async function resolveFromSongs(cat, seen, itunes){
 }
 
 /* pula wykonawców → szukaj grywalnej zajawki */
-async function resolveFromArtists(cat, seen, recent, itunes){
+async function resolveFromArtists(cat, seen, recent, itunes, capMs=RESOLVE_CAP_MS){
   const pool = recent ? cat.artists.filter(a=>!recent.includes(a)) : cat.artists.slice();
   const tryOrder = shuffle(pool.length?pool:cat.artists);
+  const deadline = Date.now()+capMs;   // 2.2: twardy cap całkowity zamiast sumy per-artysta
   let anyResponse=false;
   for(const artist of tryOrder){
+    if(Date.now()>=deadline) break;    // przekroczony budżet czasu → t.error zamiast wielominutowego spinnera
     let res=null;
     for(let attempt=0; attempt<2 && !res; attempt++){
-      try{ res=await itunes(artist); anyResponse=true; }catch(e){ /* próbujemy dalej */ }
+      const remaining=deadline-Date.now(); if(remaining<=0) break;
+      try{ res=await withTimeout(itunes(artist), remaining); anyResponse=true; }catch(e){ /* timeout/błąd — próbujemy dalej */ }
     }
     if(!res) continue;
     const t=pickTrack(res, artist, seen);
@@ -71,9 +84,9 @@ async function resolveFromArtists(cat, seen, recent, itunes){
 
 /* jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców).
  * `itunes(term) → Promise<results[]>` wstrzyknięty przez warstwę sieci (web/serwer). */
-export function resolveTrack({cat, seen, recent, itunes}){
+export function resolveTrack({cat, seen, recent, itunes, capMs}){
   if((!cat.artists || !cat.artists.length) && cat.songs && cat.songs.length){
     return resolveFromSongs(cat, seen, itunes);
   }
-  return resolveFromArtists(cat, seen, recent, itunes);
+  return resolveFromArtists(cat, seen, recent, itunes, capMs);
 }

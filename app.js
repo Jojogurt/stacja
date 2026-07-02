@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v44';   // FAZA 1 audytu: deadlocki MP — readyIds (zgubione ready), promote host w REVEAL, retry NETERR/NOLYRIC, brak klient. auto-locka pod autorytetem
+const APP_VERSION = 'v45';   // FAZA 2 audytu: token rundy soloGen (zajawka nad summary/dwa utwory/od-tyłu), error zajawki, cap czasu losowania, porządki lektora
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

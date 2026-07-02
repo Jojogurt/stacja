@@ -26,6 +26,8 @@ let recentArtists = [];     // ostatnio użyci, by nie powtarzać
 let seenTracks = new Set(); // już zagrane tytuły
 let score = 0, total = 0, streak = 0;
 let busy = false;
+let soloGen = 0;            // 2.1: token rundy — inkrementowany przy newRound/finishMatch/zmianie trybu;
+                           // async ścieżki (resolveTrack/„od tyłu"/lektor) porzucają wynik, gdy token się zmieni
 let session = null;         // {match, results:[]} podczas meczu solo
 let soloCats = new Set();    // pula kategorii (multi-select)
 let soloModes = new Set(['music']); // pula trybów (multi-select)
@@ -202,6 +204,8 @@ async function newRound(){
   if(isQuiz){ mode='quiz'; return newQuizRound(); }
   if(!session && mode==='quiz') mode='music';   // wyjście z quizu w wolnej grze (kategoria nie-quizowa)
   if(mode==='lektor'){ return newLektorRound(); }
+  soloGen++;   // 2.1: nowa runda — unieważnij ewentualny wcześniejszy async (rozwiązanie/„od tyłu")
+  const gen=soloGen;
   busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
@@ -213,10 +217,14 @@ async function newRound(){
   const cat = ALL_CATS[eraKey];
   const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG});
   busy=false;
+  if(gen!==soloGen) return;   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem
   if(t.error){
+    // 2.2: NIE zostawiaj poprzedniego utworu — inaczej „sprawdź" oceniłoby stare pytanie (duplikat w wynikach)
+    current=null; setIcon('play');
+    document.getElementById('skip').disabled=false;   // pozwól pominąć; ▶ (gałka) z current=null ponawia newRound
     if(t.reason==='offline') flash('Brak połączenia z iTunes. Jeśli to podgląd — otwórz jojogurt.github.io/stacja na telefonie. Na żywo: iTunes ogranicza liczbę zapytań, odczekaj minutę i spróbuj ponownie.');
     else if(cat.songs && cat.songs.length && (!cat.artists||!cat.artists.length)) flash('Brak grających zajawek w tej playliście — wybierz inną kategorię.');
-    else flash('Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.');
+    else flash('Brak zajawek dla tej kategorii — stuknij ▶, by spróbować ponownie, albo pomiń pytanie.');
     return;
   }
   current={...t, era:eraKey, lyric:''};
@@ -225,7 +233,7 @@ async function newRound(){
 
 /* ============ audio (solo) → app/audio.js + app/audioCtx.js ============ */
 // stan gry (current/mode) i wznowienie rundy wstrzykiwane; uchwyty odtwarzacza żyją w module
-initAudio({ current: ()=>current, mode: ()=>mode, newRound });
+initAudio({ current: ()=>current, mode: ()=>mode, newRound, gen: ()=>soloGen, busy: ()=>busy });
 document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
 
@@ -235,6 +243,7 @@ modePick.querySelectorAll('button').forEach(btn=>{
   btn.onclick=()=>{
     unlockCtx();
     if(mode===btn.dataset.mode) return;
+    soloGen++;   // 2.1: zmiana trybu — porzuć async poprzedniego trybu (np. „od tyłu" dekodujące)
     mode=btn.dataset.mode;
     modePick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
     stopAudio(); hideReveal(); resetForm(); hideLyric(); current=null; setIcon('play');
@@ -258,6 +267,7 @@ function lektorPool(){
 }
 
 async function newLektorRound(){
+  soloGen++;   // 2.1: nowa runda lektora — unieważnij wcześniejszą syntezę/rozwiązanie
   busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
@@ -266,7 +276,11 @@ async function newLektorRound(){
   document.getElementById('skip').disabled=true;
 
   let pool=lektorPool();
-  if(!pool.length){ seenTracks.clear(); pool=lektorPool(); } // wyczerpane — zacznij od nowa
+  if(!pool.length){   // 2.3: wyczerpane — kasuj z seenTracks TYLKO tytuły lektorskie (nie muzykę z tego meczu → koniec powtórek utworów)
+    const keys = selectedEra==='rnd' ? ALL_KEYS : [selectedEra];
+    keys.forEach(k=>((ALL_CATS[k]&&ALL_CATS[k].songs)||[]).forEach(s=>{ if(s.lyric) seenTracks.delete(norm(s.title)); }));
+    pool=lektorPool();
+  }
   if(!pool.length){
     busy=false;
     flash('Ta kategoria nie ma tekstów dla lektora. Dodaj songs[] z polem lyric w categories.js (np. „hity dziś").');
@@ -288,6 +302,7 @@ async function newLektorRound(){
 }
 // wiedza ogólna (solo): pytanie z puli kategorii, bez audio — wzorem newLektorRound
 function newQuizRound(){
+  soloGen++;   // 2.1: nowa runda quizu — unieważnij wcześniejszy async
   busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
   if(session) updateSessUI();
   document.getElementById('check').disabled=true;
@@ -387,6 +402,7 @@ function loadSlotQuestion(){
   newRound();
 }
 function endMatch(){
+  soloGen++;   // 2.1: koniec meczu — porzuć ewentualny async ostatniej rundy
   session=null;
   document.getElementById('session').classList.remove('live');
   document.body.classList.remove('playing','quiz-mode');
@@ -405,6 +421,7 @@ function advance(){
   loadSlotQuestion();
 }
 function finishMatch(){
+  soloGen++;   // 2.1: „Zakończ" w trakcie strojenia — porzuć rozwiązanie w locie (bez zajawki nad podsumowaniem)
   const res=session.results;
   const tot=session.match.slots.length*QPC;
   const hits=res.filter(r=>r.okTitle&&r.okArtist).length;
