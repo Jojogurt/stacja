@@ -3,6 +3,26 @@
 import { signToken, verifyToken, newId, friendCode } from './auth.js';
 import { insertMatch } from './recordMatch.js';
 import { verifyIdToken } from './oauth.js';
+import { QPC, CPR } from '../../core/match.js';
+
+// 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
+const MAX_ROUNDS = 10;   // górny bezpieczny limit rund (picker nie przekracza)
+const BONUS_MAX = 10;    // łączny bonus (rok/album) w meczu
+export function validateMatchRecord(p){
+  const qMax = MAX_ROUNDS*CPR*QPC;
+  const qTotal = parseInt(p&&p.total_questions||0,10)||0;
+  const score  = parseInt(p&&p.score||0,10)||0;
+  if(qTotal < 0 || qTotal > qMax) return 'total_questions_out_of_range';
+  if(score < 0 || score > qTotal*2 + BONUS_MAX) return 'score_out_of_range';
+  const parts = Array.isArray(p&&p.participants)?p.participants:[];
+  for(const e of parts){
+    const ps=parseInt(e&&e.score||0,10)||0;
+    const cc=parseInt(e&&e.correct_count||0,10)||0;
+    if(ps < 0 || ps > qTotal*2 + BONUS_MAX) return 'participant_score_out_of_range';
+    if(cc < 0 || cc > qTotal) return 'participant_correct_out_of_range';
+  }
+  return null;   // ok
+}
 
 const json = (obj, status=200) => new Response(JSON.stringify(obj), { status, headers:{ 'content-type':'application/json' } });
 const err  = (msg, status=400) => json({ error: msg }, status);
@@ -214,9 +234,8 @@ export async function handleApi(req, env, url){
 
 // record_match — walidacja (autoryzacja + zakres score), insert deleguje do wspólnego insertMatch.
 async function recordMatch(env, caller, p){
-  const qTotal = parseInt(p.total_questions||0,10)||0;
-  const score  = parseInt(p.score||0,10)||0;
-  if(score < 0 || score > qTotal*2 + 10) return err('score_out_of_range');
+  const bad = validateMatchRecord(p);   // 3.2: odrzuć zawyżony wynik (400)
+  if(bad) return err(bad);
   const host = p.host_id || null;
   const parts = (Array.isArray(p.participants)?p.participants:[]).slice(0, 32);
   if(host !== caller && !parts.some(e=>String(e.profile_id)===caller)) return err('caller_not_in_match', 403);

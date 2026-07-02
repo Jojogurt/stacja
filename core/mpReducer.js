@@ -67,7 +67,7 @@ export function reduceAction(game, a){
     case 'propose': {
       const values = a.values || {};
       const clean = {};
-      slots.forEach(s=>{ const v=(values[s.key]||'').trim(); if(v) clean[s.key]=v; });
+      slots.forEach(s=>{ const v=String(values[s.key]||'').trim().slice(0,120); if(v) clean[s.key]=v; });   // 3.3: cap długości wejścia
       if(!Object.keys(clean).length) return false;          // pusty typ odrzucony
       bkt.proposals = (bkt.proposals||[]).filter(p=>p.by!==a.by);   // JEDNA odpowiedź na gracza — nowa zastępuje poprzednią
       bkt.proposals.push({ id:rid(), aid:a.aid, by:a.by, byName:a.byName, values:clean });
@@ -75,16 +75,19 @@ export function reduceAction(game, a){
       slots.forEach(s=>{ const v=clean[s.key]; if(v){ (bkt.votes[s.key]=bkt.votes[s.key]||{})[a.by]=v; } });
       return true;
     }
-    case 'unpropose':                                        // tylko autor usuwa swoją
+    case 'unpropose': {                                      // tylko autor usuwa swoją
+      const before=(bkt.proposals||[]).length;
       bkt.proposals = (bkt.proposals||[]).filter(p=>!(p.id===a.pid && p.by===a.by));
-      return true;
+      return bkt.proposals.length!==before;                  // 3.5: false gdy nic nie usunął (brak zbędnego broadcastu)
+    }
     case 'vote': {                                           // głos na (slot, wartość); ponowny = wycofanie
-      if(!a.slot) return false;
+      if(!a.slot || !slots.some(s=>s.key===a.slot)) return false;   // 3.5: slot musi istnieć w answerSlots
+      const val = String(a.value==null?'':a.value).slice(0,120);    // 3.3: cap długości wejścia
       const sv = bkt.votes[a.slot] = bkt.votes[a.slot] || {};
       // a.set = jawny WYBÓR (host „wybiera odpowiedź") → zawsze ustaw, bez przełączania.
       // Bez a.set → toggle (klik na własny głos = wycofanie), jak dotąd.
-      if(a.set) sv[a.by] = a.value;
-      else if(sv[a.by] === a.value) delete sv[a.by]; else sv[a.by] = a.value;
+      if(a.set) sv[a.by] = val;
+      else if(sv[a.by] === val) delete sv[a.by]; else sv[a.by] = val;
       return true;
     }
     case 'sure': {                                           // toggle „pewniaka" (zakład ×2) — per gracz, niezależny od typu/głosu

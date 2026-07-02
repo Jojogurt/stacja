@@ -5,7 +5,8 @@
   "description": "Autorytet pokoju STACJA (Cloudflare Durable Object) — Etap 2. Niepodpięty do produkcji.",
   "scripts": {
     "dev": "wrangler dev",
-    "deploy": "wrangler deploy"
+    "deploy": "wrangler deploy",
+    "test": "node --import ./test/register.mjs test/authority.test.js"
   },
   "dependencies": {
     "partyserver": "^0.0.71"

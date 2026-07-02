@@ -22,16 +22,16 @@
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
-import { reduceAction, evaluateAnswer, slotsFor, countReady } from '../core/mpReducer.js';
+import { reduceAction, evaluateAnswer, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance } from '../core/match.js';
 import { buildMpRecord } from '../core/matchRecord.js';
 import { norm } from '../core/scoring.js';
+import { MP_SNIP_WINDOW_S } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu (koniec kopii)
 import { resolveTrackServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 
-const MP_SNIP_WINDOW_S = 16;         // okno losowania startu fragmentu
 const ROOM_TTL_MS = 15*60*1000;      // sprzątanie storage pustego pokoju po 15 min (karencja na reconnect)
 const POOL_MAX_CATS = 24;            // defensywne capy pul (DO nie ufa rozmiarowi od klienta)
 const POOL_MAX_SONGS = 120;
@@ -40,6 +40,10 @@ const POOL_MAX_QUESTIONS = 200;      // cap pytań (wiedza ogólna) na kategori�
 const POOL_MAX_SLOTS = 6;            // cap slotów odpowiedzi na pytanie
 const POOL_MAX_VARIANTS = 12;        // cap wariantów poprawnej odpowiedzi na slot
 const POOL_PROMPT_MAX = 600;         // max długość treści pytania
+const NAME_MAX = 40;                 // 3.3: cap długości nicka (?name= / track / byName)
+const EVENT_PAYLOAD_MAX = 500;       // 3.3: cap rozmiaru payloadu ulotnego eventu (po JSON.stringify)
+const EVENT_RATE_PER_S = 10;         // 3.3: limit ulotnych eventów na sekundę per połączenie
+const REACTIONS = ['😂','🔥','🎉','🤔','😱','🖕'];   // 3.3: whitelist emotek (musi = app/mp-render.js)
 
 // sanityzacja pytania quizu: prompt/sloty/warianty (anty-flood/anty-OOM, tylko klucze slotów)
 function clampQuestion(q){
@@ -123,7 +127,7 @@ export class GameAuthority extends Server {
     let id=null, name='';
     try{
       const q=new URL(ctx.request.url).searchParams;
-      name=q.get('name')||'';
+      name=(q.get('name')||'').slice(0, NAME_MAX);   // 3.3: cap nicka
       const payload=await verifyToken(this.env.TOKEN_SECRET, q.get('t'));   // bez tokenu → null
       if(payload && payload.sub) id=payload.sub;
     }catch(e){ /* zostanie null → odrzut */ }
@@ -136,7 +140,7 @@ export class GameAuthority extends Server {
     else if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && this.game.phase!==MP.DONE){
       this.hostId=id; this.game.hostId=id; await this.persist();
     }
-    conn.send(JSON.stringify({ t:'state', game:this.game }));
+    conn.send(JSON.stringify({ t:'state', game:this.viewFor(id) }));   // 3.1: okrojony widok
     this.pushPresence();
     await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (anty-deadlock, bez timera)
   }
@@ -173,18 +177,24 @@ export class GameAuthority extends Server {
 
     switch(msg.t){
       case 'hello':
-        conn.send(JSON.stringify({ t:'state', game:this.game }));
+        conn.send(JSON.stringify({ t:'state', game:this.viewFor(me) }));   // 3.1: okrojony widok
         this.pushPresence();
         return;
 
       case 'track':                                   // aktualizacja nicka obecności (jak relay)
-        conn.setState({ id:(conn.state&&conn.state.id)||null, name:msg.name||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
+        conn.setState({ id:(conn.state&&conn.state.id)||null, name:String(msg.name||(conn.state&&conn.state.name)||'').slice(0, NAME_MAX), verified:conn.state&&conn.state.verified });
         this.pushPresence();
         return;
 
-      case 'event':                                   // ulotne (emotki/czat/typing) — relay do wszystkich (z nadawcą)
-        this.broadcast(JSON.stringify({ t:'event', event:msg.event, payload:msg.payload }));
+      case 'event': {                                 // ulotne (emotki/czat/typing) — relay do wszystkich (z nadawcą)
+        if(!this.allowEvent(conn)) return;            // 3.3: rate-limit per połączenie
+        const p=msg.payload||{};
+        if(msg.event==='react' && !REACTIONS.includes(p.emoji)) return;   // 3.3: whitelist emotek
+        let raw; try{ raw=JSON.stringify(p); }catch(_e){ return; }
+        if(raw.length>EVENT_PAYLOAD_MAX) return;      // 3.3: cap rozmiaru payloadu (anty-flood)
+        this.broadcast(JSON.stringify({ t:'event', event:msg.event, payload:p }));
         return;
+      }
 
       case 'start':                                   // kto startuje mecz, ten zostaje hostem
         // (host w onConnect jest tylko prowizoryczny do crowna w lobby; start go potwierdza —
@@ -244,7 +254,32 @@ export class GameAuthority extends Server {
     return (s && this.hostId) ? ms.filter(m=>m.id!==this.hostId) : ms;
   }
   pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId })); }
-  broadcastState(){ this.broadcast(JSON.stringify({ t:'state', game:this.game })); }
+  // 3.1: rozsyłka per-połączenie z okrojeniem cudzych bucketów drużyn (wyciek typów rywali w PLAY).
+  broadcastState(){
+    for(const c of this.getConnections()){
+      const id=c.state && c.state.id; if(!id) continue;
+      try{ c.send(JSON.stringify({ t:'state', game:this.viewFor(id) })); }catch(_e){}
+    }
+  }
+  // widok stanu dla odbiorcy: cudze buckety drużyn okrojone do liczników w fazie odpowiedzi.
+  // this.game i persist() bez zmian (pełny stan) — okrajanie TYLKO przy wysyłce.
+  viewFor(id){
+    const g=this.game;
+    if(!g || !g.byTeam || g.phase!==MP.PLAY) return g;         // pełny stan poza PLAY (REVEAL i tak jawny)
+    if(g.salon && id===this.hostId) return g;                  // TV/sędzia widzi wszystko
+    const myTid=teamOf(g, id);                                 // teamOf zwraca ID drużyny (string), nie obiekt
+    const byTeam={};
+    for(const tid of Object.keys(g.byTeam)){
+      const b=g.byTeam[tid];
+      byTeam[tid] = (tid===myTid) ? b : {
+        proposals:[], votes:{}, passed:b.passed,               // kształt zachowany; treść odpowiedzi rywali wycięta
+        sure:b.sure,                                           // pewniak/pas publiczne (statusy, nie odpowiedzi)
+        counts:{ proposals:(b.proposals||[]).length,
+                 votes:Object.keys(b.votes||{}).length },
+      };
+    }
+    return { ...g, byTeam };                                   // płytka kopia — reszta pól współdzielona
+  }
 
   catLabelOf(catKey){ const c=this.pools&&this.pools[catKey]; return c ? (c.range||c.label||catKey) : catKey; }
 
@@ -374,7 +409,7 @@ export class GameAuthority extends Server {
   }
 
   async next(){
-    if(!this.game) return;
+    if(!this.game || this.game.phase!==MP.REVEAL) return;   // 3.4: podwójny „next" hosta → tylko z REVEAL
     const more=matchAdvance(this.game);             // qi++ / si++ po 5 pytaniach
     if(!more){ await this.finish(); return; }
     await this.nextQuestion();
@@ -389,8 +424,17 @@ export class GameAuthority extends Server {
     try{
       const payload=buildMpRecord({ game:this.game, tally:this.game.tally, members:this.members(), hostId:this.hostId, roomCode:this.name });
       await insertMatch(this.env, payload);
-    }catch(e){ /* nieblokujące */ }
+    }catch(e){ try{ console.warn('finish: zapis meczu do D1 nieudany', e&&e.message||e); }catch(_e){} }   // 3.5: nie połykaj po cichu
     await this.persist();
+  }
+
+  // 3.3: prosty rate-limit ulotnych eventów (emotki/czat/typing) — okno 1 s per połączenie
+  allowEvent(conn){
+    const sec=Math.floor(Date.now()/1000);
+    const w=conn._evWin || (conn._evWin={ sec, n:0 });
+    if(w.sec!==sec){ w.sec=sec; w.n=0; }
+    if(w.n>=EVENT_RATE_PER_S) return false;
+    w.n++; return true;
   }
 
   /* ---- serwerowy auto-lock (koniec czasu pytania) ---- */
