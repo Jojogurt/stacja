@@ -1,6 +1,6 @@
 /* test/run.js — lekki runner dla czystego rdzenia (zero zależności).
  * Uruchom: node test/run.js */
-import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess } from '../core/scoring.js';
+import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess, artistMatch } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
 import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
@@ -527,6 +527,32 @@ await (async ()=>{
   const r2=await resolveTrack({ cat:{songs:[song]}, seen:new Set(), itunes:right });
   ok(r2.preview==='beatit.m4a' && r2.track==='Beat It', 'trafienie → zajawka tego samego utworu co odpowiedź');
 })();
+
+// FAZA 4: zasady scoringu 2026-07 (tabele z planu naprawy — źródło prawdy)
+group('scoring.zasady-2026-07: 4.1 duety/feat (człony oczekiwanego wykonawcy)', ()=>{
+  ok(artistMatch('Queen','Queen & David Bowie')===true, 'Queen ✓ Queen & David Bowie');
+  ok(artistMatch('David Bowie','Queen & David Bowie')===true, 'David Bowie ✓ Queen & David Bowie');
+  ok(artistMatch('Bowie','Queen & David Bowie')===false, 'Bowie ✗ (człon to „david bowie")');
+  ok(artistMatch('Sanah','sanah i Vito Bambino')===true, 'Sanah ✓ sanah i Vito Bambino');
+  ok(artistMatch('Vito Bambino','sanah i Vito Bambino')===true, 'Vito Bambino ✓');
+  ok(artistMatch('Queen David','Queen & David Bowie')===false, 'Queen David ✗ (żaden pojedynczy człon)');
+});
+group('scoring.zasady-2026-07: 4.2 lev≤1 od 6 znaków', ()=>{
+  ok(textMatch('Stan','Stay')===false, 'Stan ✗ Stay (regresja luzu)');
+  ok(textMatch('Light','Night')===false, 'Light ✗ Night');
+  ok(textMatch('Bohemian Rapsody','Bohemian Rhapsody')===true, 'Bohemian Rapsody ✓ Rhapsody (≥6)');
+  ok(textMatch('Halo','Halo')===true, 'Halo ✓ Halo (dokładne)');
+});
+group('scoring.zasady-2026-07: 4.3 przedimki tylko przy sensownym rdzeniu', ()=>{
+  eq(norm('De La Soul'),'de la soul','„De La Soul" bez redukcji (rdzeń „soul" za krótki)');
+  eq(norm('The Beatles'),'beatles','„The Beatles" → „beatles" (≥6 znaków)');
+  ok(textMatch('Soul','De La Soul')===false, 'Soul ✗ De La Soul');
+  ok(textMatch('De La Soul','De La Soul')===true, 'De La Soul ✓ De La Soul');
+});
+group('scoring.zasady-2026-07: 4.4 leet warunkowo (strona z cyfrą ≥6 znaków)', ()=>{
+  ok(textMatch('sos','50s')===false, 'sos ✗ 50s (kod <6 znaków — brak de-leet)');
+  ok(textMatch('problem','PRO8L3M')===true, 'istniejący leet ≥6 znaków ✓ (bez regresji)');
+});
 
 // 2.2: globalny cap czasu na resolveFromArtists — wiszący itunes nie kręci spinnera minutami
 await (async ()=>{

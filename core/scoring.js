@@ -16,11 +16,14 @@ export function norm(s){
     .replace(/\s*-\s*(remaster.*|radio edit.*|single version.*|mono|stereo|live.*|.*\bversion\b.*)$/i,' ')
     .replace(/\bfeat\.?\b.*$/i,' ').replace(/\bft\.?\b.*$/i,' ')
     .replace(/&/g,' and ')
-    .replace(/[^a-z0-9 ]/g,' ');
-  const noArt = base.replace(/\b(the|a|an|de|le|la)\b/g,' ').replace(/\s+/g,' ').trim();
-  // nie redukuj do pustego, gdy ca\u0142o\u015b\u0107 to sam przedimek \u2014 np. odpowied\u017a \u201eA" w pytaniu ABCD
-  // (inaczej \u201ea" znormalizowane = '' i nigdy nie trafia litery A)
-  return noArt || base.replace(/\s+/g,' ').trim();
+    .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+  const reduced = base.replace(/\b(the|a|an|de|le|la)\b/g,' ').replace(/\s+/g,' ').trim();
+  // 4.3: usuwaj przedimki TYLKO gdy zostaje sensowny rdze\u0144 \u2014 \u22656 znak\u00f3w (bez spacji) LUB \u22652 tokeny.
+  // Inaczej \u201eDe La Soul" \u2192 \u201esoul" (1 kr\u00f3tki token) fa\u0142szywie zaliczy\u0142oby odpowied\u017a \u201eSoul".
+  // (Uog\u00f3lnienie dawnej ochrony przed redukcj\u0105 \u201eA"\u2192'' w pytaniach ABCD.)
+  const tokens = reduced ? reduced.split(' ') : [];
+  const enough = reduced.replace(/ /g,'').length>=6 || tokens.length>=2;
+  return enough ? reduced : base;
 }
 
 // odległość Levenshteina
@@ -51,7 +54,9 @@ function nearMatch(g,a){
     if(Math.min(g.length,a.length) / Math.max(g.length,a.length) >= 0.6) return true;
   }
   const d=lev(g,a);
-  if(d<=1 && Math.min(g.length,a.length)>=4) return true;  // jedna literówka — ale nie w krótkich (≤3 znaki)
+  // 4.2: jedna literówka dozwolona dopiero od 6 znaków (dłuższego z porównywanych) — inaczej
+  // „Stan"≈„Stay", „Light"≈„Night" fałszywie zaliczały. Dla 4-5 znaków wymagane dokładne dopasowanie.
+  if(d<=1 && Math.max(g.length,a.length)>=6) return true;
   const ratio=1-d/Math.max(g.length,a.length);
   return ratio>=0.84;
 }
@@ -60,10 +65,26 @@ function nearMatch(g,a){
 export function textMatch(guess,actual){
   const g=norm(guess),a=norm(actual);
   if(nearMatch(g,a)) return true;
-  // dodatkowa ścieżka: porównaj wersje „odleetowane" (tylko gdy były cyfry-litery)
-  const gl=deLeet(g),al=deLeet(a);
-  if((gl!==g || al!==a) && nearMatch(gl,al)) return true;
+  // 4.4: de-leet jako DRUGA próba — tylko gdy strona zawierająca cyfrę ma po normalizacji ≥6 znaków.
+  // Krótkie kody typu „50s" nigdy nie wchodzą w de-leet (inaczej „sos"≈„50s").
+  const gHasDigit=/\d/.test(g), aHasDigit=/\d/.test(a);
+  const canLeet = (gHasDigit && g.replace(/ /g,'').length>=6) || (aHasDigit && a.replace(/ /g,'').length>=6);
+  if(canLeet){
+    const gl=deLeet(g),al=deLeet(a);
+    if((gl!==g || al!==a) && nearMatch(gl,al)) return true;
+  }
   return false;
+}
+
+// 4.1: separatory duetu/feat w OCZEKIWANYM wykonawcy (odpowiedź gracza NIE jest dzielona).
+const ARTIST_SEP = /\s*(?:&|,|\bfeat\.?\b|\bft\.?\b|\bx\b|\bi\b)\s*/i;
+// dopasowanie WYKONAWCY: całość LUB którykolwiek człon (≥3 znaki po normalizacji) oczekiwanego duetu.
+// „Queen" ✓ dla „Queen & David Bowie"; „Sanah" ✓ dla „sanah i Vito Bambino"; „Bowie" ✗ (człon to „david bowie").
+export function artistMatch(guess, actual){
+  if(textMatch(guess, actual)) return true;                 // całość (istniejąca tolerancja)
+  const parts = String(actual||'').split(ARTIST_SEP).map(p=>p.trim()).filter(Boolean);
+  if(parts.length<2) return false;                          // brak separatora → nic nowego
+  return parts.some(p => norm(p).length>=3 && textMatch(guess, p));
 }
 
 // rok trafiony, gdy odgadnięto i mieści się w ±2 latach
@@ -74,7 +95,7 @@ export function yearMatch(guessYear, actualYear){
 // jedna ocena odpowiedzi (wspólna solo + MP) — czysta, zwraca komplet flag
 export function evaluateGuess(guess, track){
   const okTitle = textMatch(guess.title, track.track);
-  const okArtist = textMatch(guess.artist, track.artist);
+  const okArtist = artistMatch(guess.artist, track.artist);   // 4.1: duety/feat rozbijane po stronie oczekiwanej
   const okYear = yearMatch(guess.year, track.year);
   const okAlbum = guess.album ? textMatch(guess.album, track.album) : false;
   return { okTitle, okArtist, okYear, okAlbum, roundOk: okTitle && okArtist };
