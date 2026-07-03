@@ -165,6 +165,13 @@ i uniemożliwia poprawianie odpowiedzi).
 
 # CZĘŚĆ B — Edytor własnych kategorii z udostępnianiem
 
+> Status: **B-MVP (B1+B2) ZROBIONE** (v50). Kreator w `app/catEditor.js`: wyszukiwarka
+> iTunes (`searchTracks` w `adapters-web/itunesRepository.js`), koszyk (dedup po
+> norm(tytuł+wykonawca), min 10 / max 100), odsłuch, zapis do „Twoje", edycja istniejącej
+> (przycisk ✎ na ticku), eksport/import JSON. Escape wszędzie. Testy jsdom + weryfikacja
+> w przeglądarce (live iTunes). **Odłożone: B3–B5** (udostępnianie kodem — D1 + `POST/GET
+> /api/category` + deep-link `?cat=`; wymaga Workera, reużyje wzorców z części A).
+
 ## Idea
 
 Kreator: wyszukaj w iTunes → zaznacz 20-50 utworów → zapisz jako kategorię „Twoje"

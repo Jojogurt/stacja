@@ -4,8 +4,9 @@
 > (462 rdzeń + 17836 danych + 28 serwer authorityRoom + 111 integracja jsdom).
 > **Wymaga deployu workera** (`cd server && npm run deploy`) dla FAZY 1.1/1.3/3 — kod klienta
 > jest forward-compatible (stary serwer nie psuje nowego klienta).
-> **Odłożone** (świadomie, poza tym przebiegiem): 1.6 salon promote (salonScreenId — zmiana
-> serwera), 5.3 klawiatura mp-cand→button, 5.6 wskaźnik reconnectu, 5.7 nagłówek solo,
+> **Dorobione później (v50):** 5.3 klawiatura mp-cand/pcz-exit/mp-hd-back→button,
+> 5.6 wskaźnik reconnectu (onStatus w transportach + pasek), 5.7 nagłówek solo w grze.
+> **Nadal odłożone** (świadomie): 1.6 salon promote (salonScreenId — zmiana serwera),
 > 4.5 liczebniki PL/EN (ryzyko regresji), dedup transportów, matchHeader→obiekt, kosmetyka
 > danych (18× answers.a[1]), oauth/auth hardening. P!nk≈Pink (tab. 4.4) niemechaniczne.
 >
