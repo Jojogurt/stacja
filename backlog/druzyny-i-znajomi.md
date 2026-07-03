@@ -1,8 +1,21 @@
 # BACKLOG — Drużyny i znajomi (pełny system)
 
-> Status: **do zrobienia** (osobny etap backendowy). Zastępuje docelowo zakładkę „Liga".
-> Priorytet wg użytkownika: **wyższy niż liga** — ważniejsza możliwość stworzenia drużyny
-> i ekran znajomych niż ranking.
+> Status: **ZROBIONE (MVP‑1 + MVP‑2)** — wdrożone na D1/Worker, nie Supabase.
+> Zakładka „Drużyna i znajomi" **zastąpiła „Ligę"** (`SCR_HEAD.liga='Drużyna i znajomi'`).
+> - **Drużyny (MVP‑1) ✓** — tabele `groups`(name,emoji,code,owner)+`group_members`;
+>   API `/api/group/{create,join,leave,members}` + `/api/groups`; UI `dz{Create,Join,Leave,Play}`
+>   w `app/social.js` + lobby drużyny i „zagraj z drużyną".
+> - **Znajomi (MVP‑2) ✓** — tabela `friend_requests`; API `/api/friend/{add,respond}` +
+>   `/api/friends{,/pending,/sent}`; UI: dodawanie po `friend_code`, zaproszenia
+>   oczekujące/wysłane, wskaźnik online (`dzRenderLobby`).
+> - **Konta ✓** — OAuth Google/Apple (`oauth_identities`, `verifyIdToken`, `/api/auth/oauth`) →
+>   trwała tożsamość cross‑device; dodawanie znajomych **po kodzie** (nie po ksywie).
+> - **Odłożone (MVP‑3)**: dedykowane statystyki drużyn + głębsza integracja z rankingiem
+>   (dziś jest `/api/league`, brak per‑team stats). RLS z pierwotnego szkicu N/D — model to
+>   D1 + walidacja w Workerze (autoryzacja per‑endpoint), nie Supabase RLS.
+>
+> Poniższy tekst to oryginalny plan (kontekst historyczny) — decyzje z „Otwartych pytań"
+> rozstrzygnięte: realne konta (OAuth), dodawanie po kodzie, drużyna = trwały byt.
 
 ## Cel
 
