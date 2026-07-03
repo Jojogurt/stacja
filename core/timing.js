@@ -25,7 +25,7 @@ export function soloSnipStart(dur, rnd = Math.random){
   return Math.max(0.3, rnd() * (Math.min(dur, SOLO_SNIP_MAX) - SNIP_SECS - 1));
 }
 
-// start fragmentu (MP): losowo w oknie [0.5 .. 0.5+MP_SNIP_WINDOW_S]
+// start fragmentu (MP): losowo w oknie [0.5 .. MP_SNIP_WINDOW_S] (np. [0.5 .. 16])
 export function mpSnipStart(rnd = Math.random){
   return Math.max(0.5, rnd() * MP_SNIP_WINDOW_S);
 }

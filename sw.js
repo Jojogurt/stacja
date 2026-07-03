@@ -3,7 +3,7 @@
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v48';
+const CACHE = 'stacja-v49';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -40,10 +40,18 @@ self.addEventListener('install', (e) => {
   })());
 });
 
+// FAZA 6: osobny, OGRANICZONY cache dla odpowiedzi runtime (nie precache) — bez tego rósł bez końca.
+const RUNTIME = CACHE + '-rt';
+const RUNTIME_MAX = 60;                    // max wpisów runtime (LRU-ish: kasuj najstarsze)
+async function trimRuntime(){
+  const c = await caches.open(RUNTIME); const keys = await c.keys();
+  for (const k of keys.slice(0, Math.max(0, keys.length - RUNTIME_MAX))) await c.delete(k);
+}
+
 self.addEventListener('activate', (e) => {
   e.waitUntil((async () => {
     const keys = await caches.keys();
-    await Promise.all(keys.filter((k) => k !== CACHE).map((k) => caches.delete(k)));
+    await Promise.all(keys.filter((k) => k !== CACHE && k !== RUNTIME).map((k) => caches.delete(k)));
     await self.clients.claim();
   })());
 });
@@ -58,8 +66,9 @@ self.addEventListener('fetch', (e) => {
     try {
       const res = await fetch(req);
       if (res && res.ok) {
-        const c = await caches.open(CACHE);
-        c.put(req, res.clone());
+        const c = await caches.open(RUNTIME);        // runtime → cache ograniczony (shell zostaje w CACHE)
+        await c.put(req, res.clone());
+        trimRuntime();                               // fire-and-forget: utrzymaj limit wpisów
       }
       return res;
     } catch (err) {

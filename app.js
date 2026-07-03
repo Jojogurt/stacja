@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v48';   // FAZA 4 audytu: scoring — duety/feat (człony wykonawcy), lev≤1 od 6 znaków, przedimki warunkowo, leet tylko dla ≥6 znaków
+const APP_VERSION = 'v49';   // FAZA 6 audytu: porządki (bez zmiany zachowania) — usunięty martwy JS, S.startTimer w stanie, limit runtime-cache SW, komentarze
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

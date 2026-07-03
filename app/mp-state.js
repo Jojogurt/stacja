@@ -30,6 +30,7 @@ export const S = {
   autoLocked: false,      // czy timer/host już zatwierdził rundę
   playRound: null,        // dla której rundy zbudowany formularz (by nie czyścić pól)
   timerInt: null,         // interwał odliczania
+  startTimer: null,       // opóźniony start fazy PLAY (po intrze) — mpAfterSync
   seenActs: new Set(),    // id zastosowanych akcji — by akcja nie zadziałała dwa razy
   typingSet: new Set(),   // kto „pisze…" (ulotny broadcast „typing")
   typingTimers: {},       // id → timeout wygaszający „pisze" po ~3 s

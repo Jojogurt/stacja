@@ -206,7 +206,6 @@ function mpSlotsHTML(g){
     return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}</div>`;
   }).join('')}</div>`;
 }
-function mpFocusTyp(key){ const el=$m('mpProp_'+key)||$m('mpChatIn'); if(el) el.focus(); }
 // „odpowiedź drużyny" (design): ciemna karta (kolumny) / zielona przypięta (czat) + ×2 gdy pewniak
 function mpTeamHTML(g){
   const tid=myTeamId();
@@ -239,7 +238,6 @@ function mpListenSecs(g){
   return _listenSecs(g.mode, cat && cat.listenSecs);
 }
 const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
-const mpLockBtnHTML = (ghost)=> S.host ? `<button class="mp-btn${ghost?' ghost':''}" style="width:100%;margin-top:6px" onclick="mpLock()">Zatwierdź odpowiedź drużyny ✓</button>` : '';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 // wiedza ogólna: treść pytania w tym samym pudełku co tekst lektora
 const mpPromptHTML = (g)=> g.mode==='quiz'&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">pytanie</span>${escapeHtml(g.prompt)}</div>` : '';
@@ -328,11 +326,6 @@ function mpFormHTML(g){
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
-// kolumny + odpowiedź drużyny + zatwierdź (host) — wspólny blok odpowiedzi
-function mpAnswerBlockHTML(g, ghostLock){
-  return `<div class="mp-board" id="mpBoard"></div>
-    <div class="mp-team" id="mpTeam"></div>`;
-}
 // composer „@odp" (czat): po wpisaniu „@" pole morfuje w pola slotów (tytuł/wykonawca) z szarymi
 // placeholderami — klikalne osobno. Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
 function mpComposerHTML(g){
@@ -363,7 +356,6 @@ function mpHeaderHTML(g){
     </div>
   </div>`;
 }
-const mpReactsOnlyHTML = ()=> `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>`;
 
 // FAZA „słuchaj" — JEDYNE miejsce z audio + pasek odliczania czasu fazy (wspólna).
 // QUIZ: bez audio/gałki — pokaż treść pytania i przejdź do odpowiadania.
@@ -596,8 +588,5 @@ function mpRenderDone(g, head){
     ${body}
     <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">${ic('back')} menu</button>${S.host?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
 }
-
-// most do HTML: mpFocusTyp żyje w onclick="" generowanym tutaj → musi być na window
-Object.assign(window, { mpFocusTyp });
 
 export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS };
