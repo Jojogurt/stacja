@@ -1,6 +1,15 @@
 # PLAN NAPRAWY — audyt 2026-07 (v42)
 
-> Status: **do zrobienia**. Źródło: pełny audyt (architektura + UI/UX) oraz głębokie
+> Status: **WYKONANE** (v43–v49, gałąź `audyt-2026-07`). FAZY 0–6 wdrożone; testy zielone
+> (462 rdzeń + 17836 danych + 28 serwer authorityRoom + 111 integracja jsdom).
+> **Wymaga deployu workera** (`cd server && npm run deploy`) dla FAZY 1.1/1.3/3 — kod klienta
+> jest forward-compatible (stary serwer nie psuje nowego klienta).
+> **Odłożone** (świadomie, poza tym przebiegiem): 1.6 salon promote (salonScreenId — zmiana
+> serwera), 5.3 klawiatura mp-cand→button, 5.6 wskaźnik reconnectu, 5.7 nagłówek solo,
+> 4.5 liczebniki PL/EN (ryzyko regresji), dedup transportów, matchHeader→obiekt, kosmetyka
+> danych (18× answers.a[1]), oauth/auth hardening. P!nk≈Pink (tab. 4.4) niemechaniczne.
+>
+> Źródło: pełny audyt (architektura + UI/UX) oraz głębokie
 > polowanie na bugi rozgrywki (MP + solo/audio/scoring/dane). Wszystkie znaleziska
 > zweryfikowane w kodzie; scoringowe potwierdzone uruchomieniowo w node.
 >
