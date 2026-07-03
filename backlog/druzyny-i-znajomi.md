@@ -10,9 +10,19 @@
 >   oczekujące/wysłane, wskaźnik online (`dzRenderLobby`).
 > - **Konta ✓** — OAuth Google/Apple (`oauth_identities`, `verifyIdToken`, `/api/auth/oauth`) →
 >   trwała tożsamość cross‑device; dodawanie znajomych **po kodzie** (nie po ksywie).
-> - **Odłożone (MVP‑3)**: dedykowane statystyki drużyn + głębsza integracja z rankingiem
->   (dziś jest `/api/league`, brak per‑team stats). RLS z pierwotnego szkicu N/D — model to
->   D1 + walidacja w Workerze (autoryzacja per‑endpoint), nie Supabase RLS.
+> - **MVP‑3 częściowo (v51):**
+>   - **pkt 1 ✓** — mecz „Zagraj z drużyną" tagowany `group_id` (kolumna `matches.group_id`;
+>     `game.groupId` → `buildMpRecord` → `insertMatch`; relay + autorytet). Wymaga deployu
+>     workera dla ścieżki SERVER_AUTH.
+>   - **pkt 3 ✓** — znajomi w grze: osobisty kanał `user-<id>` (relay), przycisk „zaproś"
+>     na liście znajomych → baner zaproszenia „Dołącz →" (ulotny, dociera gdy odbiorca online;
+>     nasłuch aktywny po wejściu na ekran Drużyna).
+>   - **pkt 2 ODŁOŻONE** — dedykowane statystyki/ranking per‑drużyna (agregat po
+>     `matches WHERE group_id=…`, np. `/api/group/stats` + ekran). Dziś tylko globalne
+>     `/api/league`. Dane już się zbierają (pkt 1), brakuje odczytu+UI.
+>   - RLS z pierwotnego szkicu N/D — model to D1 + walidacja w Workerze, nie Supabase RLS.
+>   - Nice‑to‑have pkt 3: nasłuch zaproszeń od boota (dziś od 1. wejścia na Drużynę);
+>     wskaźnik „znajomy online" (wymaga subskrypcji kanałów znajomych).
 >
 > Poniższy tekst to oryginalny plan (kontekst historyczny) — decyzje z „Otwartych pytań"
 > rozstrzygnięte: realne konta (OAuth), dodawanie po kodzie, drużyna = trwały byt.
