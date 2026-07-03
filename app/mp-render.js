@@ -49,7 +49,7 @@ function mpLobbyWaitHTML(){
     : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
   return `<div class="pcz">
     <div class="pcz-hd">
-      <div class="pcz-hd-r1"><span class="pcz-exit" onclick="mpRoomBack()">${ic('back')} wyjdź</span><span class="pcz-lbl">KOD POKOJU</span></div>
+      <div class="pcz-hd-r1"><button type="button" class="pcz-exit" onclick="mpRoomBack()">${ic('back')} wyjdź</button><span class="pcz-lbl">KOD POKOJU</span></div>
       <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(S.code||'····')}</span><button class="pcz-share" onclick="mpShare(this)">${ic('share')} Udostępnij</button></div>
     </div>
     <div class="pcz-team"><span>Drużyna</span><span class="pcz-count">${n} ${word}</span></div>
@@ -197,10 +197,10 @@ function mpSlotsHTML(g){
       const isTop=i===0 && c.votes.length>0;
       const voted = myVal && norm(myVal)===norm(c.value);   // salon: podświetla wybór hosta (nadpisanie)
       const dots = c.votes.slice(0,5).map((v,j)=>`<b class="mp-vdot" style="background:${VOTE_COLORS[j%VOTE_COLORS.length]}"></b>`).join('');
-      return `<div class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">
+      return `<button type="button" class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">
         <span class="cv">${escapeHtml(c.value)}</span>
         <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
-      </div>`;
+      </button>`;
     }).join('') || (ro?`<div class="mp-cand empty"><span class="cv" style="opacity:.5">— czekamy na typy z telefonów —</span></div>`:'');
     // „+ dorzuć typ…" usunięte — wpisywanie jest w sekcji pól (mpFormHTML) pod kolumnami
     return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}</div>`;
@@ -345,7 +345,7 @@ function mpHeaderHTML(g){
   const MODE={music:ic('music')+' muzyka',lektor:ic('mic')+' lektor',reverse:ic('reverse')+' od tyłu',snippet:ic('scissors')+' fragment'};
   return `<div class="mp-hd">
     <div class="mp-hd-r1">
-      <span class="mp-hd-back" onclick="mpRoomBack()">${ic('back')}</span>
+      <button type="button" class="mp-hd-back" onclick="mpRoomBack()">${ic('back')}</button>
       <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(S.code||'')}</span>
       <span class="mp-hd-timer" id="mpCountdown" role="status" aria-live="polite"></span>
     </div>

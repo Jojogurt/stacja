@@ -12,11 +12,12 @@ import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric } from './dom.js';
 import { lektorPlay } from './lektor.js';
 import { playClap } from './sfx.js';
+import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
 import { startAudio, stopAudio, toggleAudio, replay, initAudio } from './audio.js';
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
 import { ERAS, STYLES, READY, LYRICS, QUIZ, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
-  ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, buildMatch, randomPools,
+  ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, catLabel, buildMatch, randomPools,
   plLoad, plSave, plMerge, plFetch } from './catalog.js';
 
 /* ============ stan ============ */
@@ -100,8 +101,9 @@ function plRenderTicks(){
   if(!keys.length){ el.innerHTML='<span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span>'; return; }
   keys.forEach(k=>{
     const b=document.createElement('button'); b.className='tick pl'; b.dataset.era=k;
-    b.innerHTML=escapeHtml(pls[k].label)+'<small>'+pls[k].songs.length+' utw.</small><span class="rm" title="usuń">×</span>';
+    b.innerHTML=escapeHtml(pls[k].label)+'<small>'+pls[k].songs.length+' utw.</small><span class="ed" title="edytuj">✎</span><span class="rm" title="usuń">×</span>';
     b.querySelector('.rm').onclick=(e)=>{ e.stopPropagation(); plRemove(k); };
+    b.querySelector('.ed').onclick=(e)=>{ e.stopPropagation(); openEditor(k); };
     b.onclick=()=>toggleCat(k);
     el.appendChild(b);
   });
@@ -130,6 +132,8 @@ async function plImport(){
   }catch(e){ st.className='pl-status err'; st.textContent='Nie udało się: '+(e.message||e); }
 }
 plMerge(); plRenderTicks();
+// edytor własnych kategorii (B-MVP): po zapisie odśwież ticki i dorzuć nową do puli meczu
+initCatEditor({ onSaved:(key)=>{ plRenderTicks(); soloCats.add(key); syncCatTicks(); updateMatchInfo(); } });
 renderModeChips();
 (function wireRounds(){
   const rp=document.getElementById('roundPick'); if(!rp) return;
@@ -381,7 +385,7 @@ document.getElementById('skip').onclick=()=>{
 
 /* ============ MECZ solo: rundy × kategorie × pytania ============ */
 document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishMatch(); else endMatch(); };
-document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing'); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing'); soloHead('Ułóż mecz'); };
 
 function startMatch(){
   if(!soloCats.size){ updateMatchInfo(); return; }
@@ -395,10 +399,13 @@ function startMatch(){
   document.getElementById('session').classList.add('live');
   loadSlotQuestion();
 }
+// 5.7: nagłówek ekranu solo w grze — zamiast „Ułóż mecz" pokaż rundę + kategorię
+function soloHead(text){ const tt=document.getElementById('scrTitle'); if(tt) tt.textContent=text; }
 function loadSlotQuestion(){
   const s=matchSlot(session.match); if(!s){ finishMatch(); return; }
   selectedEra=s.cat; mode=s.mode;
   document.querySelectorAll('#modePick button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
+  soloHead('Runda '+s.round+'/'+session.match.rounds+' · '+catLabel(s.cat));   // 5.7
   updateSessUI();
   animIn(document.querySelector('.deck'));   // one-shot przejście nowego pytania
   newRound();
@@ -409,6 +416,7 @@ function endMatch(){
   document.getElementById('session').classList.remove('live');
   document.body.classList.remove('playing','quiz-mode');
   hideSummary(); stopAudio(); setIcon('play');
+  soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
 }
 function updateSessUI(){
   if(!session) return;
@@ -455,6 +463,7 @@ function finishMatch(){
     });
   });
   session=null;
+  soloHead('Wynik meczu');   // 5.7
   document.getElementById('session').classList.remove('live');  // body.playing zostaje → summary widoczne
   document.getElementById('summary').classList.add('show');
   document.getElementById('summary').scrollIntoView({behavior:'smooth',block:'nearest'});

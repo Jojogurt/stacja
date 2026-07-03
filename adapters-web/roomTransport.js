@@ -21,8 +21,9 @@ export function authorityChannel(code, cfg = {}) {
   const bcast = {};            // event → [cb]   (sync/react/say/typing)
   let presenceCb = null;
   let presence = {};           // { id:[{name}] }
-  let subCb = null, myName = '';
+  let subCb = null, myName = '', statusCb = null;   // 5.6: onStatus('reconnecting'|'ok')
   let ws = null, closed = false, firstOpen = true, retry = 0, retryTimer = null;
+  const emitStatus = (s)=>{ if(statusCb) try{ statusCb(s); }catch(_e){} };
 
   const api = {
     hostId: null,              // ostatni autorytatywny host (z presence)
@@ -30,6 +31,7 @@ export function authorityChannel(code, cfg = {}) {
     on(kind, opts, cb) {
       if (kind === 'broadcast') { const e = opts && opts.event; (bcast[e] = bcast[e] || []).push(cb); }
       else if (kind === 'presence') { presenceCb = cb; }
+      else if (kind === 'status') { statusCb = cb; }   // 5.6
       return api;
     },
     subscribe(cb) { subCb = cb; connect(); return api; },
@@ -75,6 +77,7 @@ export function authorityChannel(code, cfg = {}) {
       send({ t: 'hello' });
       if (myName) send({ t: 'track', name: myName });
       if (subCb) subCb('SUBSCRIBED');
+      if (!firstOpen) emitStatus('ok');   // 5.6: wróciliśmy po zerwaniu
       firstOpen = false;
     };
     ws.onmessage = (e) => {
@@ -100,6 +103,7 @@ export function authorityChannel(code, cfg = {}) {
 
   function scheduleReconnect() {
     if (closed || retryTimer) return;
+    emitStatus('reconnecting');   // 5.6: pasek „łączę ponownie…"
     const delay = Math.min(1000 * Math.pow(2, retry++), 8000);
     retryTimer = setTimeout(() => { retryTimer = null; connect(); }, delay);
   }

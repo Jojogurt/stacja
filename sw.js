@@ -3,7 +3,7 @@
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v49';
+const CACHE = 'stacja-v50';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -11,7 +11,7 @@ const SHELL = [
   './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
   './core/timing.js', './core/picker.js', './core/chatFeed.js',
   './app/dom.js', './app/lektor.js', './app/audioCtx.js', './app/audio.js',
-  './app/catalog.js', './app/solo.js', './app/social.js',
+  './app/catalog.js', './app/solo.js', './app/social.js', './app/catEditor.js',
   './app/mp-state.js', './app/mp-picker.js', './app/mp-render.js', './app/mp.js', './app/sfx.js', './app/icons.js',
   './click.wav', './clapping.wav',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',

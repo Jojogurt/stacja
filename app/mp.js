@@ -60,6 +60,13 @@ const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSessi
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
+// 5.6: pasek „łączę ponownie…" nad ekranem MP (transport emituje status po zerwaniu/powrocie)
+function mpNetStatus(s){
+  let el=$m('mpNet');
+  if(!el){ el=document.createElement('div'); el.id='mpNet'; el.className='mp-net'; document.body.appendChild(el); }
+  if(s==='reconnecting'){ el.textContent='łączę ponownie…'; el.classList.add('show'); }
+  else { el.classList.remove('show'); }   // 'ok' → schowaj
+}
 // 5.8: podpowiedź linku pokoju z REALNEGO origin (nie hardcode „stacja.app")
 try{ const _h=$m('mpLinkHint'); if(_h) _h.textContent=(location.origin+location.pathname).replace(/\/$/,'')+'/?room='; }catch(_e){}
 
@@ -106,6 +113,7 @@ async function mpLeave(){
   audioSession('ambient');                          // wyjście z pokoju → oddaj dźwięk muzyce w tle
   stopSpeech(); mpStopRev();
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
+  mpNetStatus('ok');   // 5.6: schowaj pasek reconnectu przy wyjściu
   if(S.timerInt){ clearInterval(S.timerInt); S.timerInt=null; }   // 1.8: bez tego tick zostaje po wyjściu (re-enter nie tworzy nowego)
   if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
   S.ready=new Set(); S.lastArmNonce=null;
@@ -169,6 +177,7 @@ async function mpEnterRoom(code, asHost){
   S.ch.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
   S.ch.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
   S.ch.on('broadcast',{event:'advanced'},({payload})=>{ mpOnPlayerAdvanced(payload); });   // SALON: gracz kliknął „dalej" na odsłonie
+  S.ch.on('status',{},(s)=>mpNetStatus(s));   // 5.6: wskaźnik reconnectu
   S.ch.on('presence',{event:'sync'},()=>{
     const prevHost=S.host;                                          // 1.5: wykryj zmianę roli hosta (promote)
     if(SERVER_AUTH && S.ch.hostId) S.host=(S.ch.hostId===mpMe.id);   // host = autorytatywny hostId z DO

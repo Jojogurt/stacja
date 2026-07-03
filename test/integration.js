@@ -471,5 +471,50 @@ await group('MP 1.4: pod autorytetem klient NIE auto-lockuje (serwer = zegar pra
   ok(ws.sent.filter(m=>m.t==='lock').length===nLock, '1.4: brak {t:lock} od klienta (endsAt w przeszłości, SERVER_AUTH)');
 });
 
+// —— Edytor własnych kategorii (B-MVP) ——
+await group('CatEditor: search → koszyk → zapis tworzy kategorię w pickerze', async ()=>{
+  const w = window;
+  w.document.body.className='';               // wróć do menu → solo widoczne
+  $(w,'goSolo').click(); await settle(2);
+  ok($(w,'catNew'), 'przycisk „+ nowa" istnieje');
+  $(w,'catNew').click(); await settle(1);
+  ok($(w,'catPanel').classList.contains('show'), 'panel edytora otwarty');
+  // wyszukaj (fetch zaślepiony w domEnv → 1 wynik „Test Song" per fraza)
+  $(w,'catSearchIn').value='Kler'; $(w,'catSearchGo').click(); await settle(6);
+  ok(/ce-row/.test($(w,'catResults').innerHTML), 'wyniki wyszukiwania wyrenderowane');
+  ok(!$(w,'catSave').disabled===false, 'zapis nieaktywny przy <10 utworach (min gate)');
+  // dobij koszyk do 10 różnych utworów (różna frazą → różny artysta → różny dedupKey)
+  for(let i=0;i<11;i++){
+    $(w,'catSearchIn').value='art'+i; $(w,'catSearchGo').click(); await settle(4);
+    const add=$(w,'catResults').querySelector('.ce-add'); if(add) add.click();
+  }
+  await settle(2);
+  ok(!$(w,'catSave').disabled, 'po ≥10 utworach zapis aktywny');
+  $(w,'catName').value='Impreza Ani';
+  const beforeTicks=$(w,'plTicks').innerHTML;
+  $(w,'catSave').click(); await settle(3);
+  ok(!$(w,'catPanel').classList.contains('show'), 'po zapisie panel zamknięty');
+  ok(/Impreza Ani/.test($(w,'plTicks').innerHTML), 'nowa kategoria widoczna w pickerze „Twoje"');
+  ok($(w,'plTicks').innerHTML!==beforeTicks, 'lista ticków odświeżona');
+});
+
+await group('CatEditor: import JSON — dedup, escape (XSS), błędny JSON nie wysypuje', async ()=>{
+  const w = window;
+  $(w,'catNew').click(); await settle(1);
+  // XSS: tytuł ze skryptem — po renderze koszyka MUSI być escapowany
+  const evil='<img src=x onerror=alert(1)>';
+  const payload={ name:'Zła', tracks:[{title:evil, artist:'A', preview:'p', trackId:1},{title:'B', artist:'A', preview:'p', trackId:2}] };
+  w.prompt=()=>JSON.stringify(payload);
+  $(w,'catImport').click(); await settle(2);
+  const cart=$(w,'catCart').innerHTML;
+  ok(/&lt;img|&amp;lt;img/.test(cart) && !/<img /.test(cart), 'tytuł utworu escapowany w koszyku (brak surowego <img>)');
+  ok(/Zła/.test($(w,'catName').value), 'nazwa z JSON wczytana');
+  // błędny JSON → status err, brak wyjątku
+  let threw=false; w.prompt=()=>'to nie jest json {{{';
+  try{ $(w,'catImport').click(); await settle(1); }catch(_e){ threw=true; }
+  ok(!threw && /err/.test($(w,'catStatus').className), 'błędny JSON → komunikat błędu, bez wyjątku');
+  $(w,'catCancel').click();
+});
+
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

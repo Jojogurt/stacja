@@ -24,7 +24,9 @@ export function cfChannel(code, cfg = {}) {
   let presence = {};           // { id:[{name}] }  (jak Supabase presenceState)
   let subCb = null;            // callback z .subscribe
   let myName = '';             // ostatni nick (do re-track po reconnect)
+  let statusCb = null;         // 5.6: onStatus('reconnecting'|'ok')
   let ws = null, closed = false, firstOpen = true, retry = 0, retryTimer = null;
+  const emitStatus = (s)=>{ if(statusCb) try{ statusCb(s); }catch(_e){} };
 
   function url() {
     const q = new URLSearchParams({ id: myId });
@@ -45,6 +47,7 @@ export function cfChannel(code, cfg = {}) {
       retry = 0;
       if (myName) send({ t: 'track', name: myName });   // odtwórz obecność po reconnect
       if (subCb) subCb('SUBSCRIBED');                    // re-track w app.js jest idempotentny
+      if (!firstOpen) emitStatus('ok');   // 5.6
       firstOpen = false;
     };
     ws.onmessage = (e) => {
@@ -67,6 +70,7 @@ export function cfChannel(code, cfg = {}) {
 
   function scheduleReconnect() {
     if (closed || retryTimer) return;
+    emitStatus('reconnecting');   // 5.6
     const delay = Math.min(1000 * Math.pow(2, retry++), 8000);
     retryTimer = setTimeout(() => { retryTimer = null; connect(); }, delay);
   }
@@ -80,6 +84,7 @@ export function cfChannel(code, cfg = {}) {
     on(kind, opts, cb) {
       if (kind === 'broadcast') { const e = opts && opts.event; (bcast[e] = bcast[e] || []).push(cb); }
       else if (kind === 'presence') { presenceCb = cb; }
+      else if (kind === 'status') { statusCb = cb; }   // 5.6
       return api;            // łańcuchowanie jak w supabase-js
     },
     subscribe(cb) { subCb = cb; connect(); return api; },

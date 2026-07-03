@@ -47,6 +47,35 @@ export function itunes(term, cfg){
     .catch(()=>itunesFetch(term).catch(()=>itunesJsonp(term)));
 }
 
+// ——— wyszukiwarka utworów dla EDYTORA kategorii (ogólny term: tytuł LUB wykonawca) ———
+// Zwraca znormalizowane wiersze z previewUrl (utwór bez zajawki = bezużyteczny → odfiltrowany).
+function itunesSearchJsonp(params){
+  return new Promise((resolve,reject)=>{
+    const cb='its_'+Math.random().toString(36).slice(2);
+    const s=document.createElement('script');
+    const to=setTimeout(()=>{cleanup();reject(new Error('timeout'));},10000);
+    function cleanup(){ delete window[cb]; s.remove(); clearTimeout(to); }
+    window[cb]=d=>{ cleanup(); resolve(d.results||[]); };
+    s.onerror=()=>{ cleanup(); reject(new Error('network')); };
+    s.src='https://itunes.apple.com/search?'+new URLSearchParams({...params, callback:cb}).toString();
+    document.body.appendChild(s);
+  });
+}
+export function searchTracks(term, cfg={}){
+  const t=String(term||'').trim(); if(!t) return Promise.resolve([]);
+  const params={ term:t, media:'music', entity:'song', limit:'40', country:'PL' };   // BEZ artistTerm → tytuł lub wykonawca
+  const ctrl=new AbortController(); const to=setTimeout(()=>ctrl.abort(),10000);
+  const direct=fetch('https://itunes.apple.com/search?'+new URLSearchParams(params).toString(),
+    {signal:ctrl.signal, referrerPolicy:'no-referrer'})
+    .then(r=>{ if(!r.ok) throw new Error('http '+r.status); return r.json(); })
+    .then(d=>(d.results||[])).finally(()=>clearTimeout(to));
+  return direct.catch(()=>itunesSearchJsonp(params)).then(rows=>rows
+    .filter(t=>t.previewUrl && !BAD.test(t.artistName||'') && !BAD.test(t.trackName||''))
+    .map(t=>({ trackId:t.trackId, title:t.trackName||'', artist:t.artistName||'',
+      preview:t.previewUrl, year:(t.releaseDate||'').slice(0,4),
+      art:(t.artworkUrl100||'').replace('100x100','200x200') })));
+}
+
 // re-eksport czystej selekcji (zgodność dla ewentualnych importerów)
 export { pickTrack, BAD };
 

@@ -142,10 +142,52 @@
   .pl-panel #plGo:active{transform:translateY(3px);box-shadow:none}
   .pl-status{grid-column:1/-1;font-family:var(--body);font-weight:700;font-size:11px;letter-spacing:.02em;color:var(--muted);min-height:13px}
   .pl-status.err{color:var(--red)} .pl-status.ok{color:var(--green)}
+  /* 5.6: pasek reconnectu MP */
+  .mp-net{position:fixed;top:0;left:0;right:0;z-index:200;background:var(--amber,#FFC800);color:#000;
+    text-align:center;font-family:var(--display);font-weight:800;font-size:12px;padding:5px;
+    transform:translateY(-100%);transition:transform .2s;pointer-events:none}
+  .mp-net.show{transform:translateY(0)}
+  /* Edytor własnych kategorii (B-MVP) */
+  .cat-editor{display:none;margin-top:10px;border:2px solid var(--line);border-radius:14px;padding:12px;background:var(--panel2)}
+  .cat-editor.show{display:block}
+  .cat-editor input{background:var(--panel);border:2px solid var(--line);border-radius:12px;color:var(--ink);
+    font-family:var(--body);font-weight:700;font-size:16px;padding:10px;outline:none;min-width:0;width:100%}
+  .cat-editor input:focus{border-color:var(--blue)}
+  .ce-head{display:flex;flex-direction:column;gap:6px;margin-bottom:8px}
+  .ce-head b{font-family:var(--display);font-size:14px}
+  .ce-search{display:grid;grid-template-columns:1fr auto;gap:8px;margin-bottom:8px}
+  .ce-search button,.cat-editor #catSave{font-family:var(--display);font-weight:800;color:#fff;background:var(--green);
+    border:none;border-radius:12px;padding:0 16px;min-height:42px;cursor:pointer;text-transform:uppercase;box-shadow:0 3px 0 var(--green-d)}
+  .ce-search button:active,.cat-editor #catSave:active{transform:translateY(3px);box-shadow:none}
+  .cat-editor #catSave:disabled{background:var(--line);color:var(--muted);box-shadow:none;cursor:default}
+  .ce-results{max-height:220px;overflow-y:auto;-webkit-overflow-scrolling:touch;display:flex;flex-direction:column;gap:4px}
+  .ce-row{display:grid;grid-template-columns:36px 1fr auto auto;align-items:center;gap:8px;padding:4px;border-radius:10px}
+  .ce-row:hover{background:var(--panel)}
+  .ce-row img,.ce-ph{width:36px;height:36px;border-radius:7px;object-fit:cover;background:var(--line)}
+  .ce-meta{min-width:0;display:flex;flex-direction:column}
+  .ce-meta b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ce-meta small{font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .ce-prev,.ce-add{width:32px;height:32px;border-radius:50%;border:2px solid var(--line);background:var(--panel);
+    color:var(--ink);font-size:14px;font-weight:800;cursor:pointer;line-height:1}
+  .ce-add.in{background:var(--green);color:#fff;border-color:var(--green)}
+  .ce-cartbar{display:flex;align-items:center;gap:8px;margin:10px 0 6px;flex-wrap:wrap}
+  .ce-count{font-family:var(--mono);font-size:12px;color:var(--muted)} .ce-count.ok{color:var(--green)}
+  .ce-ghost{background:var(--panel);border:2px solid var(--line);border-radius:10px;color:var(--ink);
+    font-family:var(--body);font-weight:700;font-size:12px;padding:6px 10px;cursor:pointer}
+  .ce-cart{display:flex;flex-wrap:wrap;gap:5px}
+  .ce-chip{display:inline-flex;align-items:center;gap:4px;background:var(--panel);border:1px solid var(--line);
+    border-radius:999px;padding:3px 6px 3px 9px;font-size:11px;max-width:100%}
+  .ce-chip b{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+  .ce-chip span{color:var(--muted)}
+  .ce-chip button{width:16px;height:16px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:10px;line-height:14px;cursor:pointer}
+  .ce-empty{font-size:11px;color:var(--muted)}
+  .ce-actions{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
   .tick .rm{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;border:2px solid #fff;
     background:var(--red);color:#fff;font-size:11px;line-height:14px;cursor:pointer;display:none}
+  .tick .ed{position:absolute;top:-7px;right:15px;width:18px;height:18px;border-radius:50%;border:2px solid #fff;
+    background:var(--blue);color:#fff;font-size:10px;line-height:14px;cursor:pointer;display:none}
   .tick.pl{padding-right:18px}
-  .tick.pl:hover .rm,.tick.pl.on .rm{display:block}
+  .tick.pl:hover .rm,.tick.pl.on .rm,.tick.pl:hover .ed,.tick.pl.on .ed{display:block}
 
   /* ---- play deck / gałka ---- */
   .deck{margin-top:16px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r-lg);padding:24px 20px 22px;text-align:center}
@@ -535,6 +577,9 @@
   .mp-pl.you{box-shadow:0 0 0 3px #EAF6FF}
   .mp-slots{display:grid;grid-template-columns:1fr 1fr;gap:8px}
   .mp-slot-h{font-family:var(--display);font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em;color:var(--muted);margin:0 0 6px 2px}
+  /* 5.3: mp-cand/pcz-exit/mp-hd-back to teraz <button> (focus/Enter/Space za darmo) — wyzeruj domyślny wygląd guzika */
+  .mp-cand{appearance:none;-webkit-appearance:none;font:inherit;text-align:left;width:100%;cursor:pointer}
+  .pcz-exit,.mp-hd-back{appearance:none;-webkit-appearance:none;background:none;border:none;padding:0;display:inline-flex;align-items:center;gap:4px}
   .mp-cand{display:flex;align-items:center;gap:5px;background:var(--panel);border:2px solid var(--line);border-radius:11px;padding:8px 9px;margin-bottom:6px}
   .mp-cand.is-top{border-color:var(--green);background:#F0FBE6}
   .mp-cand .cv{flex:1;min-width:0;font-size:13px;font-weight:800;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1287,12 +1332,33 @@
         <div class="ticks" id="quizTicks"></div>
       </div>
       <div class="grp-band" data-band="twoje">
-        <div class="band-sub">twoje playlisty <button class="pl-add" id="plImport">+ ze Spotify</button></div>
+        <div class="band-sub">twoje kategorie <button class="pl-add" id="catNew">+ nowa</button> <button class="pl-add" id="plImport">+ ze Spotify</button></div>
         <div class="ticks" id="plTicks"></div>
         <div class="pl-panel" id="plPanel">
           <input id="plUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify">
           <button id="plGo">Importuj</button>
           <div class="pl-status" id="plStatus"></div>
+        </div>
+        <!-- Edytor własnych kategorii (B-MVP): wyszukiwarka iTunes + koszyk + zapis -->
+        <div class="cat-editor" id="catPanel">
+          <div class="ce-head"><b id="catTitle">Nowa kategoria</b>
+            <input id="catName" maxlength="60" autocomplete="off" placeholder="nazwa (np. Wesele Ani)"></div>
+          <div class="ce-search">
+            <input id="catSearchIn" autocomplete="off" placeholder="szukaj utworu lub wykonawcy…">
+            <button id="catSearchGo">Szukaj</button>
+          </div>
+          <div class="ce-results" id="catResults"></div>
+          <div class="ce-cartbar">
+            <span class="ce-count" id="catCount">0 / min 10</span>
+            <button class="ce-ghost" id="catExport">Kopiuj JSON</button>
+            <button class="ce-ghost" id="catImport">Wklej JSON</button>
+          </div>
+          <div class="ce-cart" id="catCart"></div>
+          <div class="pl-status" id="catStatus"></div>
+          <div class="ce-actions">
+            <button class="ce-ghost" id="catCancel">Anuluj</button>
+            <button id="catSave" disabled>Zapisz kategorię</button>
+          </div>
         </div>
       </div>
     </div>
