@@ -287,6 +287,7 @@ export class GameAuthority extends Server {
   async startMatch(config){
     const { rounds=4, timer=0, modes=[], format='coop', assignments } = config;
     const salon = !!config.salon;                   // tryb salonowy: TV = prowadzący (render+roster), tempo bez zmian
+    const groupId = config.groupId ? String(config.groupId).slice(0,64) : null;   // MVP-3: tag drużyny (sanityzowany)
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
     const catKeys = Object.keys(pools);
     const r = buildMatch(catKeys, modes, rounds, pools);
@@ -301,7 +302,7 @@ export class GameAuthority extends Server {
       catKey:s0.cat, mode:s0.mode, round:s0.round, catLabel:this.catLabelOf(s0.cat),
       answerSlots:slotsFor(s0.mode, s0.cat),
       format, teams, byTeam:emptyByTeam(teams), scores,
-      reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon,
+      reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon, groupId,   // MVP-3: tag drużyny
       timer:timer||0, endsAt:null, beerTally:{}, tally:{},
     };
     await this.nextQuestion();

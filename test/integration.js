@@ -516,5 +516,16 @@ await group('CatEditor: import JSON — dedup, escape (XSS), błędny JSON nie w
   $(w,'catCancel').click();
 });
 
+await group('MVP-3: zaproszenia znajomych — most do HTML + baner', async ()=>{
+  const w = window;
+  ok(['dzInvite','dzAcceptInvite','dzDismissInvite'].every(f=>typeof w[f]==='function'), 'most do HTML: handlery zaproszeń na window');
+  // baner zaproszenia: utwórz ręcznie (odbiór realtime testowany w przeglądarce) i sprawdź dismiss
+  let el=$(w,'dzInviteBanner');
+  if(!el){ el=w.document.createElement('div'); el.id='dzInviteBanner'; el.className='dz-invite-banner show'; el.dataset.code='WXYZ'; w.document.body.appendChild(el); }
+  el.classList.add('show');
+  w.dzDismissInvite(); await settle(1);
+  ok(!el.classList.contains('show'), 'dzDismissInvite chowa baner zaproszenia');
+});
+
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

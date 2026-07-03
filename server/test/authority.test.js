@@ -185,5 +185,18 @@ await group('authority 7: auth sign/verify — podpis, manipulacja, exp (3.6)', 
   ok((await verifyToken(S, expired))===null, 'token wygasły (exp w przeszłości) → null');
 });
 
+/* ==================== MVP-3: config.groupId → game.groupId (tag drużyny) ==================== */
+await group('authority 8: config.groupId taguje mecz (MVP-3)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  await room.msg(a, { t:'start', config:CONFIG({ groupId:'team-42' }) });
+  eq(room.game.groupId, 'team-42', 'game.groupId = config.groupId');
+  // sanityzacja: bardzo długi groupId przycięty do 64 znaków
+  const { room:room2 } = await makeRoom();
+  const b=room2.join('B','Bo');
+  await room2.msg(b, { t:'start', config:CONFIG({ groupId:'x'.repeat(200) }) });
+  ok(room2.game.groupId.length===64, 'groupId sanityzowany do 64 znaków');
+});
+
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

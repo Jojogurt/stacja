@@ -1006,6 +1006,19 @@
   .dz-gamebanner span{flex:1;min-width:0}
   .dz-join-game{font-family:var(--display);font-weight:900;font-size:13px;color:#fff;background:var(--green);border:none;border-radius:11px;padding:9px 14px;cursor:pointer;box-shadow:0 3px 0 var(--green-d);flex:0 0 auto}
   .dz-join-game:active{transform:translateY(3px);box-shadow:none}
+  /* MVP-3: „zaproś do gry" na liście znajomych */
+  .dz-invite{display:inline-flex;align-items:center;gap:5px;font-family:var(--display);font-weight:800;font-size:12px;color:#fff;
+    background:var(--blue);border:none;border-radius:11px;padding:7px 11px;cursor:pointer;box-shadow:0 3px 0 var(--blue-d,#1899D6);flex:0 0 auto}
+  .dz-invite:active{transform:translateY(3px);box-shadow:none}
+  /* MVP-3: globalny baner zaproszenia od znajomego (nad każdym ekranem) */
+  .dz-invite-banner{position:fixed;left:12px;right:12px;bottom:14px;z-index:210;display:none;align-items:center;gap:10px;
+    background:var(--panel,#fff);border:2px solid var(--green);border-radius:16px;padding:12px 14px;
+    box-shadow:0 10px 30px rgba(0,0,0,.18);font-family:var(--display);font-weight:800;font-size:14px;color:var(--ink)}
+  .dz-invite-banner.show{display:flex}
+  .dz-invite-banner span{flex:1;min-width:0}
+  .dz-invite-banner .go{font-weight:900;font-size:13px;color:#fff;background:var(--green);border:none;border-radius:11px;padding:9px 14px;cursor:pointer;box-shadow:0 3px 0 var(--green-d)}
+  .dz-invite-banner .go:active{transform:translateY(3px);box-shadow:none}
+  .dz-invite-banner .x{background:none;border:none;font-size:20px;color:var(--muted);cursor:pointer;padding:0 4px;line-height:1}
   /* badge liczby zaproszeń + tag „wysłano" */
   .dz-badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--red);color:#fff;font-family:var(--display);font-weight:900;font-size:11px;margin-left:4px;vertical-align:middle}
   .pendtag{font-family:var(--display);font-weight:800;font-size:11px;color:#caa200}

@@ -31,6 +31,7 @@ export const S = {
   playRound: null,        // dla której rundy zbudowany formularz (by nie czyścić pól)
   timerInt: null,         // interwał odliczania
   startTimer: null,       // opóźniony start fazy PLAY (po intrze) — mpAfterSync
+  groupId: null,          // MVP-3: id drużyny, gdy pokój wystartowany „Zagraj z drużyną" (tag meczu)
   seenActs: new Set(),    // id zastosowanych akcji — by akcja nie zadziałała dwa razy
   typingSet: new Set(),   // kto „pisze…" (ulotny broadcast „typing")
   typingTimers: {},       // id → timeout wygaszający „pisze" po ~3 s

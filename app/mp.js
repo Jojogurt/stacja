@@ -119,7 +119,7 @@ async function mpLeave(){
   S.ready=new Set(); S.lastArmNonce=null;
   advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
-  S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null;
+  S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
 
@@ -162,11 +162,11 @@ function mpLobbyBack(){ S.roomStage='wait'; mpRender(); }     // picker → pocz
 function mpRoomBack(){ mpLeave(); }                           // wyjdź z pokoju → ekran wejścia
 function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu'); }   // ☰ → menu
 
-async function mpEnterRoom(code, asHost){
+async function mpEnterRoom(code, asHost, groupId){
   mpErr('');
   if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
-  S.code=code; S.host=asHost; S.roomStage='wait';
+  S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null;   // MVP-3: tag drużyny (host)
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
   S.ch=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
@@ -494,7 +494,7 @@ function mpStart(){
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
     // format + przypisania MUSZĄ iść w configu — inaczej DO buduje zawsze coop (Solo/Drużyny „nie działają")
     const assignments = mpPickFormat==='teams' ? mpTeamsFromAssign(mpPlayers()) : undefined;
-    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments });
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments, groupId:S.groupId });
     S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }
@@ -506,7 +506,7 @@ function mpStart(){
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat),
     format:mpPickFormat, teams, byTeam:emptyByTeam(teams), scores,
     reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon,
-    timer:mpPickTimer||0, endsAt:null, beerTally:{}};
+    timer:mpPickTimer||0, endsAt:null, beerTally:{}, groupId:S.groupId};   // MVP-3: tag drużyny (relay)
   S.tally={};
   S.hostSeen.clear();
   S.ack=S.revealNonce=S.revealSnap=null;   // świeży mecz → brak zaległej odsłony

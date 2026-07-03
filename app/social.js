@@ -79,6 +79,7 @@ export async function renderDruzyna(){
 
   // === DRUŻYNA ===
   const team = teams[0] || null;   // jedna „twoja drużyna" w UI (jak makieta)
+  dzActiveTeamId = team ? team.id : null;   // MVP-3: id do tagowania meczu „z drużyną"
   dzTeamSync(team);                // podłącz/odłącz kanał lobby drużyny (#4)
   const teamCard = team ? `
     <div class="dz-team">
@@ -116,7 +117,10 @@ export async function renderDruzyna(){
   const sentRows = sent.map(s=>`
     <div class="dz-fr"><span class="who">${av(s.handle)}${escapeHtml(s.handle||'gracz')}</span>
       <span class="pendtag">⏳ wysłano</span></div>`).join('');
-  const friendRows = friends.map(f=>`<div class="dz-fr"><span class="who">${av(f.handle)}${escapeHtml(f.handle||'gracz')}</span><span class="code">${escapeHtml(f.friend_code||'')}</span></div>`).join('')
+  const friendRows = friends.map(f=>`<div class="dz-fr"><span class="who">${av(f.handle)}${escapeHtml(f.handle||'gracz')}</span>${
+    secured && f.profile_id
+      ? `<button class="dz-invite" data-fid="${escapeHtml(String(f.profile_id))}" data-fh="${escapeHtml(f.handle||'gracz')}" onclick="dzInvite(this.dataset.fid, this.dataset.fh)">${ic('play')} zaproś</button>`
+      : `<span class="code">${escapeHtml(f.friend_code||'')}</span>`}</div>`).join('')
     || '<div class="dz-empty">Brak znajomych — dodaj kogoś po kodzie i zagrajcie razem.</div>';
   const friendAddRow = secured
     ? `<div class="dz-row2"><input id="dzFriend" maxlength="6" placeholder="KOD ZNAJOMEGO" style="text-transform:uppercase"><button class="dz-go" onclick="dzAddFriend()">Dodaj</button></div>`
@@ -132,6 +136,7 @@ export async function renderDruzyna(){
 
   el.innerHTML = notice + kontoSection + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
   dzRenderLobby();   // odśwież wskaźnik online + baner aktywnej gry (jeśli kanał już coś wie)
+  ensureFriendChannel();   // MVP-3: nasłuch zaproszeń od znajomych (raz, po poznaniu tożsamości)
   }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
 }
 function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':err===false?' ok':''); } }
@@ -157,13 +162,13 @@ async function dzPlay(){
   if(dzTeamCh){ try{ dzTeamCh.send({type:'broadcast',event:'gamestart',payload:{code, byName:n, by:mpMe.id}}); }catch(e){} }
   showScreen('mp');
   mpUnlockAudio();
-  mpEnterRoom(code, true);
+  mpEnterRoom(code, true, dzActiveTeamId);   // MVP-3: mecz otagowany drużyną (host)
 }
 
 /* ---- #4: lobby drużyny (kanał realtime per drużyna) ----
    Reuse cfChannel (relay: presence + broadcast). Po wejściu na ekran Drużyna członkowie
    subskrybują kanał „team-<kod>": presence = kto online, event „gamestart" = host ruszył grę. */
-let dzTeamCh=null, dzTeamCode=null, dzOnlineCount=0, dzActiveGame=null;
+let dzTeamCh=null, dzTeamCode=null, dzOnlineCount=0, dzActiveGame=null, dzActiveTeamId=null;
 function dzTeamSync(team){
   const code = team ? team.code : null;
   if(code===dzTeamCode) return;          // bez zmian
@@ -190,6 +195,47 @@ async function dzJoinGame(){
   const code=dzActiveGame.code, n=await ensureHandle(); mpMe.name=n; setHandle(n);
   showScreen('mp'); mpUnlockAudio(); mpEnterRoom(code, false);
 }
+
+/* ---- MVP-3: znajomi W GRZE — osobisty kanał zaproszeń (realtime, relay) ----
+   Każdy klient słucha własnego kanału „user-<id>"; znajomy wysyła tam „invite" z kodem pokoju.
+   Dostarczenie tylko gdy odbiorca online (relay ulotny) — jak „poke". */
+let dzUserCh=null;
+function ensureFriendChannel(){
+  if(dzUserCh || !(mpMe&&mpMe.id)) return;
+  dzUserCh=cfChannel('user-'+mpMe.id, {config:{broadcast:{self:false}, presence:{key:mpMe.id}}});
+  dzUserCh.on('broadcast',{event:'invite'},({payload})=>{ if(payload && payload.by!==mpMe.id) dzShowInvite(payload); });
+  dzUserCh.subscribe(async(st)=>{ if(st==='SUBSCRIBED') await dzUserCh.track({name:mpMe.name||myHandle||'gracz'}); });
+}
+// „zaproś do gry" ze znajomym: utwórz pokój (host) i wyślij kod na kanał znajomego
+async function dzInvite(friendId, handle){
+  const n=await ensureHandle(); mpMe.name=n; setHandle(n);
+  const code=mpRandCode();
+  try{
+    const ch=cfChannel('user-'+friendId, {config:{broadcast:{self:false}, presence:{key:mpMe.id}}});
+    ch.subscribe((st)=>{ if(st==='SUBSCRIBED'){
+      ch.send({type:'broadcast',event:'invite',payload:{code, byName:n, by:mpMe.id}});
+      setTimeout(()=>{ try{ ch.unsubscribe(); }catch(e){} }, 1500);   // ulotny nadawca — daj czas na dostarczenie
+    }});
+  }catch(e){}
+  dzMsg('Zaproszenie wysłane do '+(handle||'znajomego')+' — czekasz w pokoju.', false);
+  showScreen('mp'); mpUnlockAudio(); mpEnterRoom(code, true);
+}
+// globalny baner zaproszenia (fixed) — działa na każdym ekranie
+function dzShowInvite(p){
+  const code=String(p.code||'').replace(/[^A-Za-z0-9]/g,'').slice(0,8); if(!code) return;
+  let el=$m('dzInviteBanner');
+  if(!el){ el=document.createElement('div'); el.id='dzInviteBanner'; el.className='dz-invite-banner'; document.body.appendChild(el); }
+  el.dataset.code=code;
+  el.innerHTML=`<span>🎮 <b>${escapeHtml(p.byName||'Znajomy')}</b> zaprasza do gry</span>
+    <button class="go" onclick="dzAcceptInvite()">Dołącz →</button><button class="x" onclick="dzDismissInvite()" aria-label="Zamknij">×</button>`;
+  el.classList.add('show');
+}
+async function dzAcceptInvite(){
+  const el=$m('dzInviteBanner'); const code=el&&el.dataset.code; dzDismissInvite(); if(!code) return;
+  const n=await ensureHandle(); mpMe.name=n; setHandle(n);
+  showScreen('mp'); mpUnlockAudio(); mpEnterRoom(code, false);
+}
+function dzDismissInvite(){ const el=$m('dzInviteBanner'); if(el) el.classList.remove('show'); }
 
 /* ---- KONTO (Google/Apple) — sekcja w Profilu; wymagane do drużyn/znajomych ---- */
 function dzLoadScript(src){ return new Promise((res,rej)=>{ if(document.querySelector(`script[src="${src}"]`)) return res(); const s=document.createElement('script'); s.src=src; s.async=true; s.onload=()=>res(); s.onerror=()=>rej(new Error('load')); document.head.appendChild(s); }); }
@@ -291,4 +337,5 @@ export async function renderProfil(){
 export async function saveHandle(v){ await setHandle(v); myHandle=v; mpMe.name=mpMe.name||v; }
 
 // most do HTML (onclick="" w generowanych stringach żyje w globalnym scope)
-Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzJoinGame, acLogout });
+Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzJoinGame, acLogout,
+  dzInvite, dzAcceptInvite, dzDismissInvite });   // MVP-3: zaproszenia znajomych

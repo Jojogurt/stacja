@@ -393,6 +393,10 @@ group('matchRecord.buildMpRecord', ()=>{
   eq(rec.participants.find(p=>p.profile_id==='p2').score,1,'wkład gracza = jego trafne typy');
   eq(rec.answers[0].profile_id,null,'odpowiedź drużynowa (profile_id null)');
   eq(rec.answers[0].cat_key,'d80','cat_key z rundy');
+  eq(rec.group_id,null,'brak groupId → group_id null');
+  // MVP-3: mecz „z drużyną" tagowany id drużyny
+  const recG=buildMpRecord({game:{...game, groupId:'team-42'}, tally, members, hostId:'host', roomCode:'ABCD'});
+  eq(recG.group_id,'team-42','game.groupId → record.group_id (tag drużyny)');
 });
 
 /* --- timing --- */

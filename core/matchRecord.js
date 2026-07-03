@@ -34,6 +34,7 @@ export function buildMpRecord({ game, tally, members, hostId, roomCode }){
     mode: 'mp',
     room_code: roomCode || null,
     host_id: hostId || null,
+    group_id: game.groupId || null,   // MVP-3: mecz „z drużyną" jest tagowany id drużyny (inaczej null)
     score,
     total_questions: total,
     config: { rounds: game.rounds },
