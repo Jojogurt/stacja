@@ -11,5 +11,8 @@ jobs:
         with:
           node-version: 20
       - run: node test/run.js          # rdzeń (zero zależności)
+      - run: node test/data.js         # kształt paczek pytań
+      - run: node test/lint-data.js --strict --summary   # jakość paczek (SPEC v2): wycieki, ABCD, duplikaty
       - run: npm ci                     # jsdom pod testy integracyjne
       - run: node test/integration.js   # siatka DOM
+      - run: npm --prefix server test --silent   # autorytet pokoju (partyserver stubowany loaderem)
