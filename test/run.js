@@ -2,8 +2,12 @@
  * Uruchom: node test/run.js */
 import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess, artistMatch, numTokens, parseMC, shuffleMC, quizKey,
   evaluateQuiz, poolOf, freshQuestions, rememberSeen, QUIZ_SEEN_LIMIT, scoreRound, speedFactor, streakMult, SCORE_MAX_PER_Q, PTS, SPEED_CAP_MS } from '../core/scoring.js';
-import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
-import { reduceAction, countReady, evaluateAnswer, applyEvaluation, answerTiming, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
+import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES, matchHeader, matchQLabel } from '../core/match.js';
+import { NEUTRAL_HANDLES, SPICY_HANDLES, pickHandle, isSpicyHandle } from '../core/handles.js';
+import { MP_INTRO_MS, LAST_ROOM_TTL_MS, lastRoomCode, tickSecond } from '../core/timing.js';
+import { REACTIONS } from '../core/chatFeed.js';
+import { reduceAction, countReady, evaluateAnswer, applyEvaluation, answerTiming, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf,
+  answerCredits, audioHostOnly, playsAudioLocally } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
 import { escapeHtml, safeColor, isSlotKey, num, clipText } from '../core/util.js';
 import { clampRounds, sanitizeMpConfig, MAX_ROUNDS, clampQuestions, roundsForQuestions, MAX_QUESTIONS, DEFAULT_QUESTIONS, QUICK_QUESTIONS, MATCH_LENGTHS, matchProgress } from '../core/match.js';
@@ -42,7 +46,7 @@ group('F1 match: clampRounds / clampTimer / sanitizeMpConfig (#5)', ()=>{
   eq(clampRounds(0), 1, 'rounds=0 → 1'); eq(clampRounds('x'), 1, 'rounds śmieci → 1'); eq(clampRounds(3), 3, 'rounds=3 bez zmian');
   eq(clampTimer(9e9), MP_TIMER_MAX_S, 'timer ogromny → max'); eq(clampTimer(-5), 0, 'timer ujemny → 0'); eq(clampTimer(60), 60, 'timer 60 bez zmian');
   const c=sanitizeMpConfig({ rounds:200000, timer:'abc', modes:['music','<x>','music','quiz'], format:'evil', salon:'yes', extra:1 });
-  eq(c, { rounds:MAX_ROUNDS, questions:MAX_QUESTIONS, timer:0, modes:['music','quiz'], format:'coop', salon:false }, 'sanitizeMpConfig: tylko znane pola, przycięte (F6a: + questions z rounds)');
+  eq(c, { rounds:MAX_ROUNDS, questions:MAX_QUESTIONS, timer:0, modes:['music','quiz'], format:'coop', salon:false, audioHostOnly:false }, 'sanitizeMpConfig: tylko znane pola, przycięte (F6a: + questions z rounds; F6b: + audioHostOnly)');
   eq(sanitizeMpConfig(null).rounds, 4, 'brak configu → domyślne 4 rundy');
 });
 group('F1 teams: sanitizeAssignments / buildTeams(teams) (#2)', ()=>{
@@ -1132,6 +1136,75 @@ group('F6a picker: quickPool / restorePick / pickSummary {questions}', ()=>{
   ok(/1 kategoria × 5 pytań = /.test(t5.head) && t5.total==='5 utworów' && /z 2 wybranych/.test(t5.from),'tekst: „1 kategoria × 5 pytań = 5 utworów · losowane z 2 wybranych" — '+t5.head+t5.total+t5.from);
   const t30=pickSummaryText(pickSummary(new Set(['80s']), new Set(['music']), {questions:30}, C));
   ok(/6 bloków/.test(t30.head) && /powtarzane/.test(t30.from),'30 pytań z 1 kategorii → „6 bloków … (powtarzane)" — '+t30.head+t30.from);
+});
+
+/* --- F6b: layout/MP pub (audyt 2026-10) --- */
+group('F6b match: matchQLabel (cały mecz) + matchHeader bez „pyt." (A2)', ()=>{
+  const C={ a:{label:'A',range:'pop świat',artists:['x']}, b:{label:'B',artists:['y']} };
+  const m={ slots:[{round:1,cat:'a',mode:'music'},{round:1,cat:'b',mode:'music'}], rounds:1, si:1, qi:2 };
+  eq(matchQLabel(m), 'pyt. 8/10', 'blok 2, pytanie 3 → 8/10 w meczu (nie 3/5)');
+  eq(matchHeader(m, C), 'B · muzyka · blok 2/2', 'kontekst: kategoria · tryb · blok (runda pominięta przy 1 rundzie)');
+  const m1={ slots:[{round:1,cat:'a',mode:'music'}], rounds:1, si:0, qi:0 };
+  eq(matchHeader(m1, C), 'pop świat · muzyka', '1 blok → bez „blok"');
+  const m2={ slots:[{round:1,cat:'a',mode:'music'},{round:1,cat:'a',mode:'music'},{round:1,cat:'a',mode:'music'},{round:2,cat:'b',mode:'reverse'}], rounds:2, si:3, qi:0 };
+  ok(/^Runda 2\/2 · B · od tyłu · blok 4\/4$/.test(matchHeader(m2, C)), 'mecz 2-rundowy → „Runda 2/2 · …" — '+matchHeader(m2, C));
+  eq(matchQLabel(null), '', 'brak meczu → pusto');
+});
+group('F6b config/stan: audioHostOnly („Jeden głośnik", tryb #6)', ()=>{
+  eq(sanitizeMpConfig({ audioHostOnly:true }).audioHostOnly, true, 'boolean true przechodzi');
+  eq(sanitizeMpConfig({ audioHostOnly:'yes' }).audioHostOnly, false, 'nie-boolean → false');
+  eq(audioHostOnly(null), false, 'brak gry → false');
+  eq(audioHostOnly({ salon:true }), true, 'salon ⇒ audio tylko u hosta (TV)');
+  eq(audioHostOnly({ audioHostOnly:true }), true, 'flaga meczu');
+  eq(playsAudioLocally({ hostId:'h' }, 'p'), true, 'bez flagi: każdy gra u siebie');
+  eq(playsAudioLocally({ hostId:'h', audioHostOnly:true }, 'h'), true, 'flaga: host gra');
+  eq(playsAudioLocally({ hostId:'h', audioHostOnly:true }, 'p'), false, 'flaga: nie-host = pilot');
+  eq(playsAudioLocally({ hostId:'h', salon:true }, 'p'), false, 'salon: telefon nie gra');
+});
+group('F6b teamOf: salon w Solo/Drużynach — TV nie sędziuje drużyny (#6)', ()=>{
+  const teams=[{id:'t0',members:['a']},{id:'t1',members:['b']}];
+  eq(teamOf({ salon:true, hostId:'h', format:'coop', teams:[{id:'all',members:['a']}] }, 'h'), 'all', 'coop: TV sędziuje jedyną drużynę (jak dotąd)');
+  eq(teamOf({ salon:true, hostId:'h', format:'teams', teams }, 'h'), null, 'Drużyny: TV poza drużynami');
+  const g={ phase:'play', salon:true, hostId:'h', format:'solo', teams, byTeam:{t0:{proposals:[],votes:{},sure:[],passed:[]},t1:{proposals:[],votes:{},sure:[],passed:[]}} };
+  eq(reduceAction(g, { type:'vote', by:'h', slot:'title', value:'X' }), false, 'Solo: głos TV ignorowany (nie nadpisuje rywalom)');
+});
+group('F6b answerCredits: „złożona z głosów: kaśka → tytuł, mati → wykonawca" (R8)', ()=>{
+  const g={ phase:'play', format:'coop', teams:[{id:'all',members:['k','m','z']}], byTeam:{ all:{
+    proposals:[ {id:'1',by:'k',byName:'kaśka',values:{title:'Kombinacja',artist:'Lady Pank'}},
+                {id:'2',by:'m',byName:'mati',values:{artist:'Maanam'}} ],
+    votes:{ title:{k:'Kombinacja'}, artist:{m:'Maanam', z:'maanam'} }, sure:[], passed:[] } } };
+  const cr=answerCredits(g, 'all', { title:'Kombinacja', artist:'Maanam' });
+  eq(cr.map(c=>c.name+'→'+c.key), ['kaśka→title','mati→artist'], 'autor pierwszego typu z wartością (norm)');
+  eq(answerCredits(g, 'all', { title:'', artist:'' }), [], 'puste sloty → brak');
+  const g2={ ...g, byTeam:{ all:{ proposals:[{id:'1',by:'k',byName:'kaśka',values:{title:'Inny'}}], votes:{ title:{k:'Zupełnie inny'} }, sure:[], passed:[] } } };
+  eq(answerCredits(g2, 'all', { title:'Zupełnie inny' }).map(c=>c.name), ['kaśka'], 'wartość tylko z głosu → głosujący (znany z typów)');
+  const ev=evaluateAnswer(g, { track:'Kombinacja', artist:'Maanam' });
+  eq((ev.reveal.credits||[]).map(c=>c.name), ['kaśka','mati'], 'credits w odsłonie (coop spłaszczone) — serwer i host relay liczą tak samo');
+});
+group('F6b timing: intro 0,9 s, „wróć do pokoju" 30 min, tik ostatnich 5 s', ()=>{
+  ok(MP_INTRO_MS<=1000 && MP_INTRO_MS>=600, 'intro fazy ~0,9 s (dawniej 2,3 s) — '+MP_INTRO_MS);
+  const now=1e12;
+  eq(lastRoomCode({ code:'abcd', at:now-60000 }, now), 'ABCD', 'świeży rekord → kod (wielkie litery)');
+  eq(lastRoomCode({ code:'ABCD', at:now-LAST_ROOM_TTL_MS-1 }, now), null, 'po 30 min → brak');
+  eq(lastRoomCode({ code:'AB"D', at:now }, now), null, 'zły kod → brak');
+  eq(lastRoomCode(null, now), null, 'brak rekordu → brak');
+  eq(tickSecond(4200, null), 5, '4,2 s → tik „5"');
+  eq(tickSecond(4100, 5), null, 'ta sama sekunda → bez powtórki');
+  eq(tickSecond(3900, 5), 4, 'kolejna sekunda → tik');
+  eq(tickSecond(6000, null), null, '>5 s → cisza');
+  eq(tickSecond(0, null), null, 'koniec czasu → cisza');
+});
+group('F6b ksywy: domyślnie neutralne, pikantne opt-in; 🖕 → 🍺 (U10)', ()=>{
+  ok(NEUTRAL_HANDLES.length>=40 && SPICY_HANDLES.length>0, 'obie pule niepuste');
+  ok(!NEUTRAL_HANDLES.some(isSpicyHandle), 'pule rozłączne');
+  for(const bad of ['Analny Korsarz','Dua Cipa','Mokra Włoszka','Łóżkowy Sprinter','Bruce Wilgotny']) ok(!NEUTRAL_HANDLES.includes(bad) && isSpicyHandle(bad), 'pikantna poza pulą domyślną: '+bad);
+  let spicyHit=false; for(let i=0;i<200;i++){ if(isSpicyHandle(pickHandle({ rnd:()=>i/200 }))) spicyHit=true; }
+  ok(!spicyHit, 'pickHandle() domyślnie nigdy nie zwraca pikantnej');
+  eq(pickHandle({ spicy:true, rnd:()=>0.9999 }), SPICY_HANDLES[SPICY_HANDLES.length-1], 'spicy=true → pula z pikantnymi');
+  ok(!REACTIONS.includes('🖕') && REACTIONS.includes('🍺'), 'pasek reakcji: 🍺 zamiast 🖕');
+  const srv=readFileSync(join(dirname(fileURLToPath(import.meta.url)),'..','server','authorityRoom.js'),'utf8');
+  const rel=readFileSync(join(dirname(fileURLToPath(import.meta.url)),'..','server','gameRoom.js'),'utf8');
+  ok(/import \{ REACTIONS \} from '\.\.\/core\/chatFeed\.js'/.test(srv) && /import \{ REACTIONS \} from '\.\.\/core\/chatFeed\.js'/.test(rel) && !srv.includes("'🖕'") && !rel.includes("'🖕'"), 'serwer (autorytet + relay) używa wspólnej whitelist z rdzenia');
 });
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

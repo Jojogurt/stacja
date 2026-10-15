@@ -15,6 +15,28 @@ export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „rea
 export const MP_ARM_TIMEOUT_MS = 12000;
 // F2b (#6): auto-„dalej" na odsłonie po tylu ms bezczynności (licznik widoczny na karcie)
 export const MP_REVEAL_AUTO_MS = 10000;
+// F6b (F9/R-F9): intro fazy MP (duża ikona „Słuchaj") — tylko przed „słuchaj". Każdy klient po odbiorze
+// PLAY wstrzymuje audio o ten sam czas (wspólny LEAD → równy start). Serwer go NIE zna (endsAt liczy od go()),
+// więc to stała klienta — trzymana w rdzeniu jako jedno źródło (render + testy). Dawniej 2300 ms na KAŻDĄ fazę.
+export const MP_INTRO_MS = 900;
+// F6b (F6): „Wróć do pokoju ABCD" po wyjściu — rekord {code, at} w sessionStorage ważny 30 min
+export const LAST_ROOM_TTL_MS = 30*60*1000;
+const ROOM_CODE_RE = /^[A-Z0-9]{4}$/;
+// rekord ostatniego pokoju → kod (gdy poprawny i świeży) albo null
+export function lastRoomCode(rec, now, ttl = LAST_ROOM_TTL_MS){
+  if(!rec || typeof rec!=='object') return null;
+  const code = typeof rec.code==='string' ? rec.code.toUpperCase() : '';
+  const at = Number(rec.at);
+  if(!ROOM_CODE_RE.test(code) || !Number.isFinite(at) || at > now + 60000 || now - at > ttl) return null;
+  return code;
+}
+// F6b (U4): tik ostatnich sekund timera — która pełna sekunda (5..1) ma właśnie zabrzmieć (null = nic)
+export const TICK_LAST_S = 5;
+export function tickSecond(remMs, lastTicked){
+  if(!(remMs > 0) || remMs > TICK_LAST_S*1000) return null;
+  const s = Math.ceil(remMs/1000);
+  return s !== lastTicked ? s : null;
+}
 // ile pełnych sekund zostało do terminu (0 gdy minął / brak terminu) — liczniki w UI
 export function secsLeft(deadline, now){
   const d = Number(deadline);

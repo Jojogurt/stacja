@@ -4,6 +4,9 @@
 import { slotsFor } from './mpReducer.js';
 
 export const FEED_CAP = 60;   // maks. wpisów w feedzie (ring-buffer)
+// whitelist emotek MP — JEDNO źródło dla klienta (pasek reakcji, XSS-whitelist) i serwera (relay/autorytet).
+// F6b (U10): 🖕 → 🍺 (bezpieczeństwo marki; stary serwer odrzuci 🍺 — emotka widoczna wtedy tylko u nadawcy).
+export const REACTIONS = ['😂','🔥','🎉','🤔','😱','🍺'];
 
 export function createFeed(){
   return { log: [], seenProp: new Set(), seenPass: new Set(), seenSure: new Set() };

@@ -33,8 +33,16 @@ const rid = () => Math.random().toString(36).slice(2,8);
 export function teamOf(game, playerId){
   if(!game || !Array.isArray(game.teams)) return null;
   for(const t of game.teams){ if((t.members||[]).includes(playerId)) return t.id; }
-  if(game.salon && playerId===game.hostId && game.teams.length) return game.teams[0].id;
+  // F6b (#6): salon w formatach Solo/Drużyny — TV nie sędziuje żadnej drużyny (nie nadpisuje rywalom odpowiedzi)
+  if(game.salon && playerId===game.hostId && game.teams.length && (game.format||'coop')==='coop') return game.teams[0].id;
   return null;
+}
+/* F6b (tryb #6 „Jeden głośnik"): zajawka/lektor gra TYLKO u hosta (flaga meczu albo salon — TV gra muzykę).
+ * Nie-host jest „pilotem": nie buforuje i nie odtwarza audio, widzi gałkę „słuchaj z głośnika hosta". */
+export function audioHostOnly(game){ return !!(game && (game.audioHostOnly===true || game.salon)); }
+export function playsAudioLocally(game, myId){
+  if(!audioHostOnly(game)) return true;
+  return !!(game && game.hostId && game.hostId===myId);
 }
 // bucket stanu odpowiedzi drużyny (lazy-init) — jedno źródło prawdy reducer/selektory
 function bucketOf(game, teamId){
@@ -163,6 +171,28 @@ export function rosterState(game, teamId, id, typingSet){
   return 'idle';
 }
 
+/* F6b (R8): kto co wniósł do odpowiedzi drużyny — per slot pierwszy autor typu z tą wartością (norm),
+ * a gdy wartość przyszła tylko głosem (np. host wybrał z czatu) — pierwszy głosujący, którego znamy z typów.
+ * Zwraca [{key,label,name}] tylko dla niepustych slotów z ustalonym autorem. */
+export function answerCredits(game, teamId, locked){
+  const bkt = readBucket(game, teamId);
+  const props = bkt.proposals || [];
+  const nameOf = (id)=>{ const p=props.find(x=>x.by===id); return p ? p.byName : null; };
+  const out = [];
+  slotsOf(game).forEach(s=>{
+    const v = locked && locked[s.key]; const k = norm(v||''); if(!k) return;
+    let name = null;
+    const p = props.find(x=>x.values && norm(x.values[s.key]||'')===k);
+    if(p) name = p.byName;
+    else {
+      const sv = (bkt.votes && bkt.votes[s.key]) || {};
+      for(const [voter,val] of Object.entries(sv)){ if(norm(val)===k){ name = nameOf(voter); if(name) break; } }
+    }
+    if(name) out.push({ key:s.key, label:s.label||s.key, name:String(name).slice(0,40) });
+  });
+  return out;
+}
+
 /* ---- ocena JEDNEJ drużyny (dawne wnętrze mpLock) — czysta ----
  * locked = odpowiedź tej drużyny (górka głosów w jej buckecie). Zwraca per-drużyna wyliczenia. */
 function evaluateTeam(game, teamId, current, match, timing){
@@ -206,7 +236,8 @@ function evaluateTeam(game, teamId, current, match, timing){
   slots.forEach(s=>{ lockedAll[s.key] = locked[s.key]||''; });
   // F3 #4: formy kanoniczne do odsłony (per drużyna — przy `pool` zależą od tego, co drużyna trafiła)
   const display = hasAnswers ? ev.display : undefined, others = hasAnswers ? ev.others : undefined;
-  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others,
+  const credits = answerCredits(game, teamId, lockedAll);   // F6b (R8): „złożona z głosów: kaśka → tytuł…"
+  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits,
     pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
     streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult } };
 }

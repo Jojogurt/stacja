@@ -30,6 +30,7 @@ import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
+import { REACTIONS } from '../core/chatFeed.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm, quizKey, shuffleMC } from '../core/scoring.js';
 import { MP_SNIP_WINDOW_S, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
@@ -50,7 +51,7 @@ const POOL_ALIAS_MAX = 120;          //     max długość aliasu
 const FUN_MAX = 300;                 //     ciekawostka (odsłona)
 const NAME_MAX = 40;                 // 3.3: cap długości nicka (?name= / track / byName)
 const EVENT_PAYLOAD_MAX = 500;       // 3.3: cap rozmiaru payloadu ulotnego eventu (po JSON.stringify)
-const REACTIONS = ['😂','🔥','🎉','🤔','😱','🖕'];   // 3.3: whitelist emotek (musi = app/mp-render.js)
+// 3.3: whitelist emotek — F6b: wspólna z klientem (core/chatFeed.js), 🖕 → 🍺
 // F1 (#1): JEDYNE ulotne eventy przekazywane między klientami (musi = adapters-web/roomTransport.js
 // RELAY_EVENTS). Stan gry NIGDY nie idzie eventem — tylko {t:'state'} od DO ('sync'/'act' odrzucane).
 export const RELAY_EVENTS = ['react','say','typing','advanced'];
@@ -387,7 +388,7 @@ export class GameAuthority extends Server {
   async startMatch(config){
     // F1 (#5): rounds∈[1..MAX_ROUNDS] (rounds=200000 → 25 MB stanu = martwy pokój), timer clamp,
     // modes ⊂ ALL_MODES, format ∈ coop/solo/teams. assignments sanityzuje buildTeams (kolor/nazwa/members).
-    const { questions, timer, modes, format, salon } = sanitizeMpConfig(config);   // F6a: długość w pytaniach (stary klient: z rounds)
+    const { questions, timer, modes, format, salon, audioHostOnly } = sanitizeMpConfig(config);   // F6b: + „Jeden głośnik"   // F6a: długość w pytaniach (stary klient: z rounds)
     const assignments = Array.isArray(config.assignments) ? config.assignments : undefined;
     const groupId = (typeof config.groupId==='string' && config.groupId) ? config.groupId.slice(0,64) : null;   // MVP-3: tag drużyny (sanityzowany)
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
@@ -404,7 +405,7 @@ export class GameAuthority extends Server {
       catKey:s0.cat, mode:s0.mode, round:s0.round, catLabel:this.catLabelOf(s0.cat),
       answerSlots:slotsFor(s0.mode, s0.cat),
       format, teams, byTeam:emptyByTeam(teams), scores,
-      reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon, groupId,   // MVP-3: tag drużyny
+      reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon, audioHostOnly, groupId,   // MVP-3: tag drużyny; F6b: audio tylko u hosta
       timer:timer||0, endsAt:null, beerTally:{}, tally:{}, streaks:{}, playAt:null,
     };
     await this.nextQuestion();

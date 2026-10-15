@@ -25,11 +25,12 @@
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
+import { REACTIONS } from '../core/chatFeed.js';
 
 const NAME_MAX = 40;
 const EVENT_PAYLOAD_MAX = 500;                 // cap ulotnych eventów (nie dotyczy `sync`/`act` hosta)
 const SYNC_PAYLOAD_MAX = 512*1024;             // cap stanu gry od hosta relay (anty-OOM)
-const REACTIONS = ['😂','🔥','🎉','🤔','😱','🖕'];
+// F6b: whitelist emotek wspólna z klientem/autorytetem (core/chatFeed.js) — 🖕 → 🍺
 const HOST_RESET_MS = 2*60*1000;               // pusty pokój dłużej niż to → następny łączący zostaje hostem
 // dozwolone eventy per rodzaj kanału (musi = adapters-web/cfChannel.js)
 export const ROOM_EVENTS = ['sync','act','react','say','typing','advanced'];

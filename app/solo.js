@@ -3,7 +3,7 @@
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
 import { norm, textMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS } from '../core/scoring.js';
-import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
+import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
   syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick } from '../core/picker.js';
@@ -12,7 +12,7 @@ import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet } from './dom.js';
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
-import { playClap } from './sfx.js';
+import { playClap, playSfx } from './sfx.js';
 import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
 import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio } from './audio.js';
@@ -538,7 +538,10 @@ function endMatch(){
 }
 function updateSessUI(){
   if(!session) return;
-  document.getElementById('sessProg').textContent=matchHeader(session.match);
+  // F6b (A1/A2): pasek 2-wierszowy — „Pyt. 7/10" (cały mecz) + kontekst (runda/kategoria/tryb/blok) osobno
+  const q=matchQLabel(session.match);
+  document.getElementById('sessProg').textContent=q ? q.charAt(0).toUpperCase()+q.slice(1) : '';
+  const ctx=document.getElementById('sessCtx'); if(ctx) ctx.textContent=matchHeader(session.match);
   const hits=session.results.filter(r=>r.okTitle&&r.okArtist).length;
   document.getElementById('sessMini').textContent=points+' pkt · '+hits+' trafionych';   // F6a: punkty w nagłówku
 }
@@ -594,6 +597,7 @@ function finishMatch(){
   soloHead('Wynik meczu');   // 5.7
   document.getElementById('session').classList.remove('live');  // body.playing zostaje → summary widoczne
   document.getElementById('summary').classList.add('show');
+  if(played) playSfx('fanfare');   // F6b (U4): fanfara końca meczu (po stopAudio — duck nie blokuje)
   document.getElementById('summary').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function hideSummary(){ document.getElementById('summary').classList.remove('show'); }
@@ -646,6 +650,7 @@ function check(){
   }
   document.getElementById('reveal').classList.add('show');
   if(okTitle && okArtist){ confetti(); playClap(); }   // pełne trafienie → confetti + oklaski
+  else playSfx(okTitle||okArtist ? 'ding' : 'buzz');   // F6b (U4): częściowe → „ding", pudło → „bzzt"
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
@@ -706,7 +711,7 @@ function checkQuiz(){
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':'Pudło'}</b><small>${roundOk?(mc?'dobra odpowiedź':'wszystkie pola trafione'):'sprawdź poprawne odpowiedzi'}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
   document.getElementById('reveal').classList.add('show');
-  if(roundOk){ confetti(); playClap(); }
+  if(roundOk){ confetti(); playClap(); } else playSfx('buzz');   // F6b (U4): pudło → „bzzt"
   document.getElementById('check').disabled=true;
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }

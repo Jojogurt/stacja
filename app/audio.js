@@ -13,6 +13,7 @@ import { lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { ensureCtx, ensureCtxResumed, unlockCtx } from './audioCtx.js';
 import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
 import { SNIP_SECS as SNIP, soloSnipStart } from '../core/timing.js';
+import { registerMusicProbe } from './sfx.js';
 
 let el = null;           // trwały element HTMLAudio (music/snippet/fallback „od tyłu")
 let round = null;        // bieżące odtwarzanie na `el`: {cur, mode, said} — null = element bezczynny
@@ -179,6 +180,9 @@ export function replay(){
   if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; }
   stopAudio(); startAudio();
 }
+
+// F6b (U4): duck — UI-dźwięki milkną, gdy gra zajawka solo (element/„od tyłu") albo lektor
+registerMusicProbe(()=> !!(round && el && !el.paused && !el.ended) || !!revSrc || !!isSpeaking());
 
 // do testów (siatka jsdom): trwały element solo i stan dekodowania „od tyłu"
 export const _soloAudioDebug = () => ({ el, round, revDecodingGen });

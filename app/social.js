@@ -9,6 +9,7 @@ import { ensureSession, setHandle, fetchProfile, loginOAuth, logout,
 import { cfChannel } from '../adapters-web/cfChannel.js';
 import { ic } from './icons.js';
 import { rankCategories } from '../core/matchRecord.js';
+import { pickHandle, isSpicyHandle } from '../core/handles.js';
 
 const $m = id => document.getElementById(id);
 const bbLoader = '<div class="bb-loader"><i></i><i></i><i></i></div>';   // lokalny (bez kruchego współdzielonego importu)
@@ -35,26 +36,23 @@ let dzMe=null;   // {id, handle, emoji, friend_code}
 /* ---- ksywa: jedna tożsamość dla profilu i lobby MP ----
    Brak ksywy → losujemy zabawny nick z listy i zapisujemy (maxlength 32 — input i serwer). */
 let myHandle=null;
-const FUNNY_HANDLES=['Michał Dżemson','Darth Wiesław','Obi-Wan Kebabi','James Bonczur','Analny Korsarz',
-  'Indiana Janusz','James Bondżur','Bruce Wilgotny','Gandalf Biały Ser','Spider-Chłop','Batman z Biedry',
-  'Hulk po Kompocie','Rocky Balbochen','John Wycisk','Robert Lewa Noga','Krzysztof Kieślina','Pudzilla',
-  'Jan Router II','Pan Kleksik','Wiesław Wszechmogący','Pirat z Karaibiedronki','Ojciec Chrzestny Karpia',
-  'Cristiano Rolando','Lionel Messiasty','Kanye Westchnienie','Snoop Pies','Post Malonez','Dua Cipa',
-  'Temu Batman','Taco z Paczkomatu','Betonowy Mnich','Kulturalny Chuligan','Szybki Proboszcz','Młody Janusz',
-  'Szczur z otwarcia kanału','Książę Pasztetu','Szef Parówek','Mokra Włoszka','Drugi Peja','Mądrzejszy Einstein',
-  'Łóżkowy Sprinter','Tłusty Ninja','Zimny Kaloryfer','Zaginiony Teść','Wujek Chaos','Pół Człowiek Pół Główek',
-  'Grzybiarz Olek','Emerytka','Shrek po Krecie','Messi z Temu','Hari Pota','Geralt z Niedrzwicy',
-  'Kapitan Oczywisty','Minionek Alfa','Naczelny Słoik','Mistrz Ceraty','Głuchy Pień','Mała Ale Ja Już',
-  'Bober z Grzywką'];
-function funnyHandle(){ return FUNNY_HANDLES[Math.floor(Math.random()*FUNNY_HANDLES.length)]; }
+// F6b (U10): pule ksyw w core/handles.js — domyślnie NEUTRALNE; „Pikantne ksywy" (menu) = opt-in
+const SPICY_KEY='stacjaSpicy', HANDLE_KEY='stacjaHandle';
+const spicyOn=()=>{ try{ return localStorage.getItem(SPICY_KEY)==='on'; }catch(_e){ return false; } };
+function funnyHandle(){ return pickHandle({ spicy:spicyOn() }); }
+// lokalna kopia ksywy (deep-link `?room=` dołącza od razu, gdy gracz już ją ma — F6b/F5)
+function cacheHandle(h){ try{ if(h) localStorage.setItem(HANDLE_KEY, h); else localStorage.removeItem(HANDLE_KEY); }catch(_e){} }
+export function knownHandle(){ if(myHandle) return myHandle; try{ return localStorage.getItem(HANDLE_KEY)||null; }catch(_e){ return null; } }
+// automatycznie nadana pikantna ksywa przy wyłączonych „Pikantnych ksywach" → podmień na neutralną
+const needsNewHandle=(h)=> !h || h==='gracz' || (isSpicyHandle(h) && !spicyOn());
 // zwróć stabilną ksywę: z profilu, a jak brak — wygeneruj i zapisz (idempotentne, cache w myHandle)
 export async function ensureHandle(){
   if(myHandle) return myHandle;
   await ensureSession();
   const p=await fetchProfile();
   let h=p&&p.handle;
-  if(!h || h==='gracz'){ h=funnyHandle(); setHandle(h); }
-  myHandle=h; return h;
+  if(needsNewHandle(h)){ h=funnyHandle(); setHandle(h); }
+  myHandle=h; cacheHandle(h); return h;
 }
 // lobby MP: wstaw ksywę do pola, jeśli puste (nie nadpisuje tego, co gracz wpisał)
 async function mpPrefillName(){
@@ -69,7 +67,7 @@ export async function renderDruzyna(){
   await Promise.race([ensureSession(), new Promise(r=>setTimeout(r,5000))]);   // nie blokuj w nieskończoność
   const [meR, teamsR, friR, penR, sentR] = await Promise.all([meInfo(), myTeams(), friendsList(), pendingFriends(), sentFriends()]);
   const noAuth = (meR.error && !meR.data);   // brak sesji (Worker nieosiągalny) — pokaż baner, ale NIE chowaj ekranu
-  const notice = noAuth ? `<div class="dz-acct" style="background:#FFF1F1;border-color:var(--red);color:#E63946">⚠️ Brak połączenia z serwerem — drużyny i znajomi chwilowo niedostępne. Spróbuj odświeżyć.</div>` : '';
+  const notice = noAuth ? `<div class="dz-acct err">⚠️ Brak połączenia z serwerem — drużyny i znajomi chwilowo niedostępne. Spróbuj odświeżyć.</div>` : '';
   dzMe = (meR.data&&meR.data[0]) || null;
   const secured = !!(dzMe && dzMe.secured);
   const teams = teamsR.data||[], friends = friR.data||[], pending = penR.data||[], sent = sentR.data||[];
@@ -287,7 +285,7 @@ async function acInitAuthButtons(){
     }
   }catch(e){ /* przycisk się nie pokaże */ } }
 }
-async function acLogout(){ logout(); myHandle=null; await ensureSession(); acAfterLogin(); }
+async function acLogout(){ logout(); myHandle=null; cacheHandle(null); await ensureSession(); acAfterLogin(); }
 
 export async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML=`<div class="profil-empty">${bbLoader}</div>`;
@@ -295,8 +293,8 @@ export async function renderProfil(){
   await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
   const p=await fetchProfile();
   if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Brak połączenia z serwerem — spróbuj odświeżyć.</div>'; return; }
-  if(!p.handle || p.handle==='gracz'){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa
-  myHandle=p.handle;
+  if(needsNewHandle(p.handle)){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa (F6b: neutralna domyślnie)
+  myHandle=p.handle; cacheHandle(p.handle);
   $m('profilHandle').value=p.handle;
   const s=(p.standing && typeof p.standing==='object') ? p.standing : { matches:0, correct:0, points:0 };   // F6a: odporność na niepełną odpowiedź API
   // nagłówek: awatar + ksywa (design)
@@ -340,7 +338,15 @@ export async function renderProfil(){
 }
 
 // zapis ksywy z Profilu (stan ksywy + nazwa w MP żyją tutaj)
-export async function saveHandle(v){ await setHandle(v); myHandle=v; mpMe.name=mpMe.name||v; }
+export async function saveHandle(v){ await setHandle(v); myHandle=v; cacheHandle(v); mpMe.name=mpMe.name||v; }
+
+/* F6b (U10): przełącznik „Pikantne ksywy" w menu (domyślnie WYŁ.) — dotyczy losowanych ksyw */
+(function wireSpicy(){
+  const seg=document.getElementById('spicySeg'); if(!seg) return;
+  const sync=()=>{ const on=spicyOn(); seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.spicy===(on?'on':'off'))); };
+  seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{ try{ localStorage.setItem(SPICY_KEY, b.dataset.spicy==='on'?'on':'off'); }catch(_e){} sync(); });
+  sync();
+})();
 
 // most do HTML (onclick="" w generowanych stringach żyje w globalnym scope)
 Object.assign(window,{ dzCreate, dzJoin, dzLeave, dzAddFriend, dzRespond, dzCopy, dzPlay, dzJoinGame, acLogout,

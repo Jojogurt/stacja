@@ -6,10 +6,10 @@ import { shuffle, escapeHtml } from '../core/util.js';
 import { norm, quizKey } from '../core/scoring.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
-import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
+import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
@@ -21,10 +21,11 @@ import { ensureSession, setHandle, recordMatch } from '../adapters-web/cf.js';
 import { resolveTrack } from '../adapters-web/itunesRepository.js';
 import { stopAudio } from './audio.js';
 import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
-import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
+import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle, knownHandle } from './social.js';
+import { playSfx, registerMusicProbe } from './sfx.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
 import { ic } from './icons.js';
@@ -37,9 +38,20 @@ export function initMp(){
   initSocial({ mpMe, mpEnterRoom, mpRandCode, mpUnlockAudio, mpAvatarColor, catLabel });
 }
 // deep-link ?room= — wołane przez app.js PO initMp (showScreen sięga mpMe wstrzykniętego do social)
+// F6b (F5/R-F5): przy ZNANEJ ksywie (gracz już grał na tym urządzeniu) link od razu wchodzi do pokoju —
+// bez ręcznego „DOŁĄCZ". Nowy gracz (bez ksywy) dostaje wypełniony kod i jeden przycisk, jak dotąd.
 export function mpBootDeepLink(){
   const r=new URLSearchParams(location.search).get('room');
-  if(r){ showScreen('mp'); mpSetCode(r); }
+  if(!r) return;
+  showScreen('mp'); mpSetCode(r);
+  const code=mpReadCode();
+  const h=knownHandle();
+  if(code.length===4 && h){ mpMe.name=h; mpEnterRoom(code, false); mpArmGestureUnlock(); }
+}
+// wejście bez gestu (deep-link, „wróć do pokoju" po przeładowaniu) — odblokuj audio przy PIERWSZYM dotknięciu
+function mpArmGestureUnlock(){
+  const once=()=>{ document.removeEventListener('pointerdown', once, true); mpUnlockAudio(); };
+  document.addEventListener('pointerdown', once, true);
 }
 
 /* ================= MULTIPLAYER (Worker Durable Object — relay) ================= */
@@ -60,6 +72,47 @@ const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSessi
 
 function mpRandCode(){ const c='ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; let s=''; for(let i=0;i<4;i++)s+=c[Math.floor(Math.random()*c.length)]; return s; }
 function mpErr(t){ $m('mpErr').textContent=t||''; }
+/* F6b (F6/R-F6): „Wróć do pokoju ABCD" — rekord {code, at} w sessionStorage (karta przeglądarki), ważny 30 min.
+ * Zapis przy wejściu i wyjściu z pokoju; baner w menu i na ekranie „Ze znajomymi" (jeden tap = ponowne dołączenie). */
+const LAST_ROOM_KEY='stacjaLastRoom';
+function lastRoomSave(code){ try{ if(code) window.sessionStorage.setItem(LAST_ROOM_KEY, JSON.stringify({code, at:Date.now()})); }catch(_e){} }
+function lastRoomGet(){ try{ return lastRoomCode(JSON.parse(window.sessionStorage.getItem(LAST_ROOM_KEY)||'null'), Date.now()); }catch(_e){ return null; } }
+function mpSyncRoomBack(){
+  const code = S.code ? null : lastRoomGet();   // w pokoju — bez banera
+  document.querySelectorAll('[data-room-back]').forEach(b=>{
+    b.hidden=!code;
+    const t=b.querySelector('[data-room-code]'); if(t) t.textContent=code||'';
+  });
+}
+async function mpRejoinLast(){
+  const code=lastRoomGet(); if(!code){ mpSyncRoomBack(); return; }
+  mpUnlockAudio();   // gest — odblokuj audio przed fazą gotowości
+  stopAudio(); stopSpeech();
+  showScreen('mp');
+  const n=await ensureHandle(); mpMe.name=n; setHandle(n);
+  mpEnterRoom(code, false);   // autorytet: rola hosta wróci z presence (hostId), jeśli pokój na nas czekał
+}
+/* potwierdzenie wyjścia (strzałka w nagłówku gry, „wyjdź" w lobby, ☰ w pickerze) — przypadkowy tap kciukiem
+ * w pubie nie wyrzuca z meczu. Własny arkusz (nie window.confirm: blokujący, brzydki na iOS, brak w jsdom). */
+function mpConfirmLeave(kind){
+  if(!S.code){ mpLeave(); return; }
+  let el=$m('mpLeaveDlg');
+  if(!el){ el=document.createElement('div'); el.id='mpLeaveDlg'; el.className='mp-dlg'; document.body.appendChild(el); }
+  const host = S.host && S.game && S.game.phase!=null && S.game.phase!==MP.DONE;
+  el.innerHTML=`<div class="mp-dlg-card" role="dialog" aria-modal="true" aria-labelledby="mpLeaveTitle">
+      <b id="mpLeaveTitle">Opuścić pokój ${escapeHtml(S.code)}?</b>
+      <small>${host?'Jesteś hostem — gra przejdzie na innego gracza (albo stanie, jeśli zostaniesz sam). ':''}Przez 30 min wrócisz jednym tapnięciem z menu.</small>
+      <div class="mp-dlg-btns"><button type="button" class="mp-dlg-stay" onclick="mpLeaveCancel()">Zostań</button><button type="button" class="mp-dlg-go" onclick="mpLeaveConfirmed('${kind==='menu'?'menu':'room'}')">Wyjdź</button></div>
+    </div>`;
+  el.classList.add('show');
+  const stay=el.querySelector('.mp-dlg-stay'); if(stay) try{ stay.focus(); }catch(_e){}
+}
+function mpLeaveCancel(){ const el=$m('mpLeaveDlg'); if(el) el.classList.remove('show'); }
+async function mpLeaveConfirmed(where){
+  mpLeaveCancel();
+  if(where==='menu'){ mpExitMenu(); return; }
+  await mpLeave();
+}
 // 5.6: pasek „łączę ponownie…" nad ekranem MP (transport emituje status po zerwaniu/powrocie)
 function mpNetStatus(s){
   let el=$m('mpNet');
@@ -106,8 +159,13 @@ $m('toMenu').onclick=()=>{
   showScreen('menu');
 };
 $m('mpExit').onclick=()=>{ showScreen('menu'); };
+// F6b (F6): banery „Wróć do pokoju" (menu + ekran wejścia MP) — odśwież przy każdej zmianie ekranu
+document.querySelectorAll('[data-room-back]').forEach(b=> b.onclick=()=>mpRejoinLast());
+window.addEventListener('stacja:screen', ()=>mpSyncRoomBack());
+mpSyncRoomBack();
 
 async function mpLeave(){
+  if(S.code) lastRoomSave(S.code);   // F6b (F6): „Wróć do pokoju ABCD" przez 30 min
   if(S.ch){ try{ await S.ch.unsubscribe(); }catch(e){} S.ch=null; }
   if(S.audio){ try{S.audio.pause();}catch(e){} }   // element trwały — pauza, nie zeruj
   audioSession('ambient');                          // wyjście z pokoju → oddaj dźwięk muzyce w tle
@@ -128,8 +186,10 @@ async function mpLeave(){
   S.ready=new Set(); S.lastArmNonce=null;
   advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
+  S.audioHostOnly=false; S.tickSec=null;
   S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
+  mpLeaveCancel(); mpSyncRoomBack();
 }
 
 // F2b #6: każda interakcja na odsłonie odsuwa auto-„dalej" (liczy się BEZCZYNNOŚĆ, nie czas od odsłony)
@@ -183,6 +243,7 @@ async function mpEnterRoom(code, asHost, groupId){
   if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
   S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null;   // MVP-3: tag drużyny (host)
+  lastRoomSave(code); mpSyncRoomBack();   // F6b (F6): przeładowanie karty w meczu → „Wróć do pokoju" w menu
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
   S.ch=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
@@ -282,7 +343,12 @@ function mpAfterSync(){
   // host-lokalny fallback salonu: serwer (jeszcze) nie odsyła game.salon → wstrzyknij, by
   // teamAnswer (nadpisanie) i widok-monitor działały u hosta bez deployu DO.
   if(S.salon && S.game && !S.game.salon) S.game.salon=true;
+  // F6b (tryb #6): to samo dla „Dźwięk tylko u hosta" — stary serwer wycina flagę z configu; host wie lokalnie.
+  // (Nie-host przy starym serwerze flagi nie dostanie → gra jak dotąd; salon działa, bo game.salon serwer odsyła.)
+  if(S.host && S.audioHostOnly && S.game && S.game.phase!=null && !S.game.audioHostOnly) S.game.audioHostOnly=true;
   const g=S.game;
+  // F6b: audio tylko w fazie słuchania — wejście w ODSŁONĘ ucisza zajawkę/lektora (i nie dusi „ding"/oklasków)
+  if(g && g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce) mpStopAudio();
   // F2b #6: lokalny termin twardego limitu ARMING (serwer wysyła armMs; stary serwer — brak → bez licznika)
   if(g && g.phase===MP.ARMING && g.armMs>0 && S.armSeen!==g.armNonce){ S.armSeen=g.armNonce; S.armDeadlineLocal=Date.now()+g.armMs; }
   // faza gotowości: zbuforuj utwór i zgłoś „ready" — ale TYLKO gdy nie ma odsłony do
@@ -432,8 +498,9 @@ function mpArm(){
   const armNonce=S.game.armNonce;
   S.lastArmNonce=armNonce;   // ta runda już zbrojona przez tego klienta (anty-dublowanie)
   const report=()=>{ S.armPending=null; S.armReported=armNonce; mpSend({type:'ready', armNonce}); mpMaybeSkipArm(armNonce); };
-  // lektor / brak zajawki — nic do buforowania, gotów od razu
-  if(S.game.mode==='lektor' || !S.game.preview){ report(); return; }
+  // lektor / brak zajawki — nic do buforowania, gotów od razu.
+  // F6b (tryb #6): pilot (dźwięk tylko u hosta) nie buforuje zajawki — gotów od razu (oszczędza transfer)
+  if(S.game.mode==='lektor' || !S.game.preview || !playsAudioLocally(S.game, mpMe.id)){ report(); return; }
   const a=mpEnsureAudio(); mpClearSnip(a); mpClearArmWait(a);   // listenery poprzedniej rundy precz (bez kumulacji)
   if(a.src!==S.game.preview) a.src=S.game.preview;
   S.armPending=armNonce;
@@ -453,6 +520,7 @@ function mpPlayBlocked(err){
 // gałka = TOGGLE: gra → pauza; pauza → wznów; koniec/świeże → od nowa (#bug2: dotąd zawsze restart)
 function mpKnobTap(){
   if(!S.game) return mpPlayLocal();
+  if(!playsAudioLocally(S.game, mpMe.id)){ mpSetPlayStatus('🔈 dźwięk gra u hosta — słuchaj z jego głośnika'); return; }   // F6b: pilot
   const mode=S.game.mode;
   if(mode==='lektor'){
     const speaking=isSpeaking();
@@ -471,6 +539,8 @@ function mpKnobTap(){
   return mpPlayLocal();                                                                   // koniec/świeże/fragment-dograł → od nowa
 }
 function mpPlayLocal(){
+  // F6b (tryb #6 „Jeden głośnik"): nie-host nie odtwarza zajawki ani lektora — słucha z głośnika hosta/TV
+  if(S.game && !playsAudioLocally(S.game, mpMe.id)){ mpSetKnob('play'); mpSetPlayStatus('🔈 słuchaj z głośnika hosta'); return; }
   audioSession('playback');   // zajawka przejmuje dźwięk
   lektorStop(); mpStopRev();
   if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}); return; }
@@ -544,13 +614,14 @@ function mpStart(){
   if(r.error||!r.slots){ mpRender(); return; }
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   S.salon=!!mpPickSalon;   // host-lokalny fallback — działa nim serwer odeśle game.salon (i bez deployu DO)
+  S.audioHostOnly=mpPickAudioHostOnly();   // F6b (tryb #6): j.w. dla „Dźwięk tylko u hosta" (salon ⇒ zawsze)
   if(SERVER_AUTH){
     // AUTORYTET: wgraj pule wybranych kategorii i oddaj sterowanie DO (on zbuduje mecz i przyśle stan).
     S.host=true; S.tally={}; S.ack=S.revealNonce=S.revealSnap=null;
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
     // format + przypisania MUSZĄ iść w configu — inaczej DO buduje zawsze coop (Solo/Drużyny „nie działają")
     const assignments = mpPickFormat==='teams' ? mpTeamsFromAssign(mpPlayers()) : undefined;
-    if(S.ch && S.ch.startMatch) S.ch.startMatch({ questions:clampQuestions(mpPickQuestions), rounds:clampRounds(roundsForQuestions(mpPickQuestions)), timer:clampTimer(mpPickTimer), modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments, groupId:S.groupId });
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ questions:clampQuestions(mpPickQuestions), rounds:clampRounds(roundsForQuestions(mpPickQuestions)), timer:clampTimer(mpPickTimer), modes:[...mpPickModes], pools, salon:mpPickSalon, audioHostOnly:S.audioHostOnly, format:mpPickFormat, assignments, groupId:S.groupId });
     S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }
@@ -561,7 +632,7 @@ function mpStart(){
     catKey:r.slots[0].cat, mode:r.slots[0].mode, round:r.slots[0].round, catLabel:catLabel(r.slots[0].cat),
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat),
     format:mpPickFormat, teams, byTeam:emptyByTeam(teams), scores,
-    reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon,
+    reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon, audioHostOnly:S.audioHostOnly,
     timer:mpPickTimer||0, endsAt:null, beerTally:{}, streaks:{}, playAt:null, groupId:S.groupId};   // MVP-3: tag drużyny (relay)
   S.tally={};
   S.hostSeen.clear();
@@ -627,6 +698,7 @@ function mpLock(){
   if(!S.host || !S.game || S.game.phase!==MP.PLAY) return;
   if(SERVER_AUTH){ if(S.ch&&S.ch.lock) S.ch.lock(); return; }   // AUTORYTET: DO ocenia i robi reveal
   S.autoLocked=true;
+  mpStopAudio();   // F6b: relay-host — odsłona ucisza zajawkę (autorytet robi to w mpAfterSync)
   const c=S.hostCurrent;
   noteAnswerers(S.game);                // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
   const ev=evaluateAnswer(S.game, c, undefined, Date.now());   // czysta ocena (core) — KAŻDA drużyna; F6a: punkty + szybkość
@@ -696,6 +768,9 @@ function mpTickTimer(){
   const rem=Math.max(0, S.game.endsAt - Date.now());
   const s=Math.ceil(rem/1000);
   if(el){ const m=Math.floor(s/60); el.innerHTML=ic('timer')+' '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
+  // F6b (U4): tik ostatnich 5 s (raz na sekundę; duck pod zajawką w app/sfx.js); nie na zaległej odsłonie
+  const ts=tickSecond(rem, S.tickSec);
+  if(ts!=null){ S.tickSec=ts; if(!mpRevealPending()) playSfx('tick'); }
   // 1.4: pod autorytetem serwer ma własny scheduleAutoLock i jest jedynym zegarem prawdy —
   // klientowy auto-lock po skew zegara ucinałby pytania. Tu tylko relay (?authority=0) auto-lockuje.
   if(rem<=0 && S.host && !S.autoLocked && S.game.phase===MP.PLAY && !SERVER_AUTH){ mpLock(); }
@@ -813,12 +888,15 @@ function mpClearTyping(){ S.typingSet.clear(); Object.values(S.typingTimers).for
 /* ============ most do HTML: app.js to moduł ES (własny scope), więc handlery
    wstrzykiwane w stringach onclick="" muszą żyć na window. ============ */
 // picker (mpToggleCat/Mode/Grp/RandomPick/PlToggle/PlImport/SetRounds/SetTimer) → window w app/mp-picker.js
+// F6b (U4): duck UI-dźwięków pod zajawką/lektorem MP (trwały element, „od tyłu", synteza)
+registerMusicProbe(()=> !!(S.audio && !S.audio.paused && !S.audio.ended) || !!S.revSrc || (!!S.game && S.game.mode==='lektor' && isSpeaking()));
 Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble,
   mpReact, mpSay, mpSend, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput,
   mpStart, mpAdvance, mpHostRetry, mpHostNextReveal, mpTickTimer, mpHostSkipWait,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
+  mpConfirmLeave, mpLeaveCancel, mpLeaveConfirmed, mpRejoinLast,   // F6b (F6)
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
 initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });

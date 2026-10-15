@@ -703,5 +703,49 @@ await group('F6a: lock liczy PUNKTY (scoreRound) + playAt w PLAY + seria', async
   eq(Object.values(room.game.streaks)[0], 1, 'seria drużyny = 1');
 });
 
+
+await group('F6b: „Jeden głośnik" — audioHostOnly z configu w stanie gry (boolean, sanityzowany)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ audioHostOnly:true }) });
+  eq(room.game.audioHostOnly, true, 'flaga w stanie gry (wysyłana wszystkim)');
+  eq(b.last('state').game.audioHostOnly, true, 'nie-host dostaje flagę w {t:state}');
+  const r2=await makeRoom(); const a2=r2.room.join('A','Ala');
+  await r2.room.msg(a2, { t:'start', config:CONFIG({ audioHostOnly:'1' }) });
+  eq(r2.room.game.audioHostOnly, false, 'nie-boolean → false');
+});
+
+await group('F6b: emotka 🍺 przechodzi, 🖕 odrzucona (whitelist wspólna z klientem)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  const n=a.sent.length;
+  await room.msg(b, { t:'event', event:'react', payload:{ emoji:'🖕' } });
+  ok(!a.sent.slice(n).some(m=>m.t==='event'), '🖕 nie trafia do innych');
+  await room.msg(b, { t:'event', event:'react', payload:{ emoji:'🍺' } });
+  const ev=a.last('event');
+  ok(ev && ev.event==='react' && ev.payload.emoji==='🍺', '🍺 rozsyłane');
+});
+
+await group('F6b (#6): salon w formacie Solo — TV poza drużynami, jej akcje ignorowane, widzi stan wszystkich', async ()=>{
+  const { room } = await makeRoom();
+  const tv=room.join('TV','Telewizor'), p=room.join('P','Pola'), q=room.join('Q','Quba');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true, format:'solo' }) });
+  eq(room.game.teams.length, 2, 'Solo: drużyna na gracza, bez TV');
+  ok(!room.game.teams.some(t=>t.members.includes('TV')), 'TV poza drużynami');
+  for(const c of [p,q]) await room.msg(c, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  eq(room.game.phase, MP.PLAY, 'PLAY po gotowości graczy (TV nie czeka)');
+  await room.msg(p, { t:'action', action:{ type:'propose', values:{ a:'cokolwiek' } } });
+  const before=JSON.stringify(room.game.byTeam);
+  await room.msg(tv, { t:'action', action:{ type:'vote', slot:'a', value:'X', set:true } });
+  eq(JSON.stringify(room.game.byTeam), before, 'głos TV nie zmienia bucketów drużyn');
+  const tvView=tv.last('state').game, qView=q.last('state').game;
+  const pTeam=room.game.teams.find(t=>t.members.includes('P')).id;
+  ok(tvView.byTeam[pTeam].proposals.length===1, 'TV widzi typy (render pokazuje tylko liczniki)');
+  ok(qView.byTeam[pTeam].proposals.length===0, 'rywal nie widzi typów P (izolacja bez zmian)');
+  await room.msg(tv, { t:'lock' });
+  eq(room.game.phase, MP.REVEAL, 'TV (host) zatwierdza wszystkich');
+  ok(Array.isArray(room.game.reveal.ranking) && room.game.reveal.ranking.length===2, 'odsłona z rankingiem drużyn');
+  ok(Array.isArray(room.game.reveal.byTeam[pTeam].credits), 'odsłona: credits per drużyna (R8)');
+});
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

@@ -16,12 +16,15 @@ export function initMpPicker(render, getPlayers){ mpRender = render; if(getPlaye
 let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickQuestions=DEFAULT_QUESTIONS, mpPickTimer=60;   // F6a: długość w pytaniach
 let mpPickSalon=false;   // tryb salonowy: TEN ekran tylko prowadzi i gra muzykę (TV), telefony = kontrolery
 let mpPickFormat='coop'; // format meczu: 'coop' (jedna drużyna) | 'solo' (każdy sam) | 'teams' (podział)
-function mpSetFormat(v){
-  mpPickFormat=v;
-  if(v!=='coop') mpPickSalon=false;       // salon (TV-sędzia) ma sens tylko dla jednej wspólnej drużyny
-  mpRender();
-}
-function mpSetSalon(v){ if(mpPickFormat!=='coop') return; mpPickSalon=!!v; mpRender(); }
+// F6b (tryb #6 „Jeden głośnik"): zajawka/lektor tylko u hosta (pub: jeden telefon/głośnik na stół).
+// W salonie zawsze włączone (TV gra muzykę, telefony to piloty) — przełącznik pokazuje stan, ale jest zablokowany.
+let mpPickAudioHost=false;
+// F6b (#6): salon działa dla WSZYSTKICH formatów (TV w Solo/Drużynach pokazuje status drużyn bez ich odpowiedzi)
+function mpSetFormat(v){ mpPickFormat=v; mpRender(); }
+function mpSetSalon(v){ mpPickSalon=!!v; mpRender(); }
+function mpSetAudioHost(v){ if(mpPickSalon) return; mpPickAudioHost=!!v; mpRender(); }
+// efektywna flaga do configu meczu (salon ⇒ zawsze audio tylko u hosta)
+const mpPickAudioHostOnly = ()=> !!(mpPickAudioHost || mpPickSalon);
 
 /* —— przypisanie graczy do drużyn (format 'teams') —— */
 let mpPickTeamCount=2;                    // ile drużyn (2-4)
@@ -116,7 +119,6 @@ function mpPickerHTML(){
   const fmtBtns=[['coop','Wspólna'],['solo','Solo'],['teams','Drużyny']].map(([v,l])=>
     `<button class="${mpPickFormat===v?'on':''}" onclick="mpSetFormat('${v}')">${l}</button>`).join('');
   const fmtNote = mpPickFormat==='solo' ? 'każdy gra sam (ranking)' : mpPickFormat==='teams' ? 'podział na drużyny' : 'gracie jako jedna drużyna';
-  const salonDis = mpPickFormat!=='coop';
   // sekcja przypisania (format 'teams'): liczba drużyn + chipy graczy (tknięcie = zmiana drużyny)
   let assignSec='', teamsBad=false;
   if(mpPickFormat==='teams'){
@@ -146,7 +148,7 @@ function mpPickerHTML(){
   return `<div class="mpnav">
       <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">${ic('back')}</button>
       <span class="nav-title">Ułóż mecz</span>
-      <button class="nav-menu" onclick="mpExitMenu()" aria-label="menu">${ic('menu')}</button>
+      <button class="nav-menu" onclick="mpConfirmLeave('menu')" aria-label="menu">${ic('menu')}</button>
     </div>
     <div class="mp-deck">
       <div class="um-sec"><div class="um-h"><span>Kategorie</span><span class="note">${catCount}</span></div>
@@ -160,8 +162,12 @@ function mpPickerHTML(){
       <div class="um-sec"><div class="um-h"><span>Format</span><span class="note">${fmtNote}</span></div>
         <div class="um-rounds">${fmtBtns}</div></div>
       ${assignSec}
-      <div class="um-sec um-salon"><button class="um-salon-toggle${mpPickSalon?' on':''}"${salonDis?' disabled style="opacity:.45"':''} onclick="mpSetSalon(${mpPickSalon?'false':'true'})" role="switch" aria-checked="${mpPickSalon}">
-          <span class="um-salon-tx"><b>${ic('tv')} Tryb salonowy</b><small>${salonDis?'dostępny tylko dla formatu Wspólna':'ten ekran tylko prowadzi i gra muzykę — gracze na telefonach'}</small></span>
+      <div class="um-sec um-salon"><button class="um-salon-toggle${mpPickSalon?' on':''}" onclick="mpSetSalon(${mpPickSalon?'false':'true'})" role="switch" aria-checked="${mpPickSalon}">
+          <span class="um-salon-tx"><b>${ic('tv')} Tryb salonowy</b><small>${mpPickFormat==='coop'?'ten ekran tylko prowadzi i gra muzykę — gracze na telefonach':'ten ekran prowadzi, gra muzykę i pokazuje ranking — drużyny grają na telefonach'}</small></span>
+          <span class="um-salon-sw"><i></i></span>
+        </button>
+        <button class="um-salon-toggle um-audiohost${mpPickAudioHostOnly()?' on':''}"${mpPickSalon?' disabled aria-disabled="true"':''} onclick="mpSetAudioHost(${mpPickAudioHost?'false':'true'})" role="switch" aria-checked="${mpPickAudioHostOnly()}">
+          <span class="um-salon-tx"><b>🔈 Dźwięk tylko u hosta</b><small>${mpPickSalon?'w trybie salonowym muzyka gra zawsze tylko na TV':'jeden głośnik na stół — telefony graczy nie grają zajawki ani lektora'}</small></span>
           <span class="um-salon-sw"><i></i></span>
         </button></div>
       <div class="um-summary ${bad?'err':''}">${info}</div>
@@ -205,5 +211,5 @@ function mpBuildPools(cats, modes){
 function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
-Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign };
+Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetAudioHost, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
+export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly };

@@ -83,8 +83,16 @@ export function matchProgress(m){
   if(!m || !m.slots) return { n:0, total:0 };
   return { n: Math.min(m.si*QPC + m.qi + 1, m.slots.length*QPC), total: m.slots.length*QPC };
 }
+// F6b (A2): kontekst bieżącego pytania BEZ numeru (numer meczu osobno — matchQLabel). Runda tylko gdy >1,
+// blok (kategoria × QPC pytań) tylko gdy mecz ma >1 blok — krótko, żeby pasek mieścił się na 320 px.
 export function matchHeader(m, cats){ const s=matchSlot(m); if(!s) return '';
-  return `Runda ${s.round}/${m.rounds} · ${escapeHtml(catLabel(s.cat,cats))} · ${MODE_SHORT[s.mode]||s.mode} · pyt. ${m.qi+1}/${QPC}`; }
+  const parts=[];
+  if((m.rounds||1)>1) parts.push(`Runda ${s.round}/${m.rounds}`);
+  parts.push(escapeHtml(catLabel(s.cat,cats)), MODE_SHORT[s.mode]||s.mode);
+  if(m.slots.length>1) parts.push(`blok ${m.si+1}/${m.slots.length}`);
+  return parts.join(' · '); }
+// F6b (A2): numer pytania w CAŁYM meczu („pyt. 7/10"), nie w bloku („pyt. 2/5")
+export function matchQLabel(m){ const p=matchProgress(m); return p.total ? `pyt. ${p.n}/${p.total}` : ''; }
 
 // F1 (#5): liczba rund z sieci → całkowita w [1..MAX_ROUNDS] (rounds=200000 → MAX_ROUNDS, śmieci → 1)
 export function clampRounds(r){
@@ -94,7 +102,7 @@ export function clampRounds(r){
 export const MP_FORMATS = ['coop','solo','teams'];
 /* F1 (#5): sanityzacja configu `start` od klienta (DO nie ufa hostowi). Zwraca TYLKO znane pola
  * z przyciętymi wartościami: rounds∈[1..MAX_ROUNDS], timer∈[0..MP_TIMER_MAX_S], modes⊂ALL_MODES
- * (bez duplikatów), format∈MP_FORMATS (inaczej coop), salon:boolean. Pule/assignments/groupId
+ * (bez duplikatów), format∈MP_FORMATS (inaczej coop), salon:boolean, audioHostOnly:boolean (F6b). Pule/assignments/groupId
  * sanityzuje wołający (osobne capy).
  * F6a (R-F2): `questions` (długość meczu w pytaniach) ∈ [QPC..MAX_QUESTIONS]; brak → z `rounds` (stary klient:
  * rounds×CPR×QPC). Nowy klient wysyła OBA pola (rounds zgodne ze starym formatem → stary serwer też zbuduje mecz). */
@@ -110,5 +118,6 @@ export function sanitizeMpConfig(config){
     modes,
     format: MP_FORMATS.includes(c.format) ? c.format : 'coop',
     salon: c.salon===true,
+    audioHostOnly: c.audioHostOnly===true,   // F6b (#6 „Jeden głośnik"): zajawka/lektor gra tylko u hosta
   };
 }
