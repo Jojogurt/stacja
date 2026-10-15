@@ -10,6 +10,7 @@ import { cfChannel } from '../adapters-web/cfChannel.js';
 import { ic } from './icons.js';
 import { rankCategories } from '../core/matchRecord.js';
 import { pickHandle, isSpicyHandle } from '../core/handles.js';
+import { dailyInfo } from './daily.js';   // F8b: seria Stacji dnia (localStorage) w profilu
 
 const $m = id => document.getElementById(id);
 const bbLoader = '<div class="bb-loader"><i></i><i></i><i></i></div>';   // lokalny (bez kruchego współdzielonego importu)
@@ -292,7 +293,7 @@ export async function renderProfil(){
   const hd0=$m('profilHead'); if(hd0) hd0.innerHTML=`<div class="profil-empty" style="padding:20px 0">${bbLoader}</div>`;   // głowa też pokazuje loader (nie pustkę)
   await ensureSession();   // gest „Profil" → utwórz sesję/profil, by dało się ustawić ksywkę
   const p=await fetchProfile();
-  if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Brak połączenia z serwerem — spróbuj odświeżyć.</div>'; return; }
+  if(!p){ $m('profilHandle').value=''; el.innerHTML='<div class="profil-empty">Profil niedostępny.<br>Brak połączenia z serwerem — spróbuj odświeżyć.</div>'+dailyProfileHTML(); return; }
   if(needsNewHandle(p.handle)){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa (F6b: neutralna domyślnie)
   myHandle=p.handle; cacheHandle(p.handle);
   $m('profilHandle').value=p.handle;
@@ -330,11 +331,23 @@ export async function renderProfil(){
       <div class="pf-st b"><b>${s.correct}</b><small>TRAFNE</small></div>
       <div class="pf-st y"><b>${s.points}</b><small>PUNKTY</small></div>
     </div>
+    ${dailyProfileHTML()}
     <div class="pf-lbl">Najlepsze kategorie</div>
     ${catRows}
     <div class="pf-lbl">Odznaki <span class="pf-badgecount">${badgeOn} / ${badgeDefs.length}</span></div>
     <div class="pf-badges">${badges}</div>`;
   if(!p.secured) acInitAuthButtons();   // lazy-load GIS + Apple JS → natywne przyciski
+}
+
+// F8b: „Stacja dnia" w profilu — bieżąca i NAJLEPSZA seria dni (lokalnie, bez serwera)
+function dailyProfileHTML(){
+  let d; try{ d=dailyInfo(); }catch(_e){ return ''; }
+  return `<div class="pf-lbl">Stacja dnia</div>
+    <div class="pf-stats" id="pfDaily">
+      <div class="pf-st y"><b>🔥 ${Number(d.streak)||0}</b><small>SERIA DNI</small></div>
+      <div class="pf-st g"><b>${Number(d.best)||0}</b><small>NAJLEPSZA SERIA</small></div>
+      <div class="pf-st b"><b>${Number(d.played)||0}</b><small>ZAGRANE DNI</small></div>
+    </div>`;
 }
 
 // zapis ksywy z Profilu (stan ksywy + nazwa w MP żyją tutaj)

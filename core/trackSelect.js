@@ -154,11 +154,13 @@ export function rankTracks(results, artist, seen, opts={}){
   return { level:-1, list:[] };
 }
 
-/* wybór utworu z wyników (ten sam artysta, bez coverów/live/remiksów, preferuj dekadę i popularne) */
+/* wybór utworu z wyników (ten sam artysta, bez coverów/live/remiksów, preferuj dekadę i popularne).
+ * F8b: `opts.rnd` (alias dawnego `opts.rng`) — wstrzyknięty PRNG (Stacja dnia: ten sam seed + te same wyniki
+ * iTunes ⇒ ten sam utwór); domyślnie Math.random (zachowanie bez zmian). */
 export function pickTrackRanked(results, artist, seen, opts={}){
   const { level, list }=rankTracks(results, artist, seen, opts);
   if(!list.length) return null;
-  const c=weightedPick(list, opts.rng || Math.random);
+  const c=weightedPick(list, opts.rnd || opts.rng || Math.random);
   return { track:c.r, level, key:c.key };
 }
 export function pickTrack(results, artist, seen, opts={}){
@@ -210,12 +212,12 @@ export function matchSong(results, s){
   hits.sort((a,b)=> (versionTier(a.r)-versionTier(b.r)) || (a.idx-b.idx));   // studyjna > remaster > live; potem popularność
   return hits[0].r;
 }
-async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS){
+async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS, rnd=Math.random){
   let pool=(cat.songs||[]).filter(s=>!seen.has(norm(s.title)));
   if(!pool.length){ (cat.songs||[]).forEach(s=>seen.delete(norm(s.title))); pool=(cat.songs||[]).slice(); }
   const deadline=Date.now()+capMs;
   let anyResponse=false;
-  for(const s of shuffle(pool)){
+  for(const s of shuffle(pool, rnd)){
     let preview=s.preview||'', art='';
     if(!preview){
       for(const [term, opts] of [[songQuery(s), {song:true}], [s.artist, undefined]]){
@@ -240,9 +242,9 @@ async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS){
 /* pula wykonawców → szukaj grywalnej zajawki.
  * F5: pierwszy wykonawca z kandydatem poziomu 0 (dekada + wersja studyjna) wygrywa; inaczej
  * zapamiętujemy najlepszy zapasowy i sprawdzamy jeszcze ≤FALLBACK_EXTRA_ARTISTS wykonawców. */
-async function resolveFromArtists(cat, seen, recent, itunes, capMs=RESOLVE_CAP_MS){
+async function resolveFromArtists(cat, seen, recent, itunes, capMs=RESOLVE_CAP_MS, rnd=Math.random){
   const pool = recent ? cat.artists.filter(a=>!recent.includes(a)) : cat.artists.slice();
-  const tryOrder = shuffle(pool.length?pool:cat.artists);
+  const tryOrder = shuffle(pool.length?pool:cat.artists, rnd);   // F8b: seedowany rnd → ta sama kolejność wykonawców
   const deadline = Date.now()+capMs;   // 2.2: twardy cap całkowity zamiast sumy per-artysta
   const range = parseRange(cat.range);
   let anyResponse=false, fallback=null, sinceFallback=0;
@@ -261,7 +263,7 @@ async function resolveFromArtists(cat, seen, recent, itunes, capMs=RESOLVE_CAP_M
     }
     if(fallback) sinceFallback++;
     if(!res) continue;
-    const p=pickTrackRanked(res, artist, seen, { range });
+    const p=pickTrackRanked(res, artist, seen, { range, rnd });
     if(!p) continue;
     if(p.level===0) return take(p, artist);
     if(!fallback || p.level<fallback.p.level) fallback={ p, artist };
@@ -291,7 +293,8 @@ export function displayTitle(title){
     .replace(/\s+/g,' ').trim();
   return cleaned || t;
 }
-// kandydat → {track, artist} (wynik iTunes {trackName,artistName} albo utwór playlisty {title,artist})
+// kandydat → {track, artist, year, idx} (wynik iTunes {trackName,artistName,releaseDate} albo utwór playlisty {title,artist,year}).
+// F8b: `idx` = pozycja w wynikach iTunes wykonawcy (popularność; gatherDistractors dopisuje `_pos`), `year` = rok wydania.
 function asOption(c){
   if(!c || typeof c!=='object') return null;
   const raw=c.trackName!=null ? c : { trackName:c.title!=null?c.title:c.track, artistName:c.artist, collectionName:c.album||'' };
@@ -299,31 +302,57 @@ function asOption(c){
   if(!track || !artist) return null;
   if(BAD.test(track)||BAD.test(artist)||BAD.test(raw.collectionName||'')||NONSONG.test(track)) return null;
   if(raw.trackName!=null && c.trackName!=null && versionTier(c)===2) return null;   // live/remix — nie jako dystraktor
-  return { track, artist, key:titleKey(track) };
+  const y=parseInt(String(c.releaseDate!=null ? c.releaseDate : (c.year||'')).slice(0,4),10);
+  const pos=Number.isInteger(c._pos) ? c._pos : null;
+  return { track, artist, key:titleKey(track), year:Number.isFinite(y) ? y : null, idx:pos };
 }
-/* Czysta: wybierz `n` dystraktorów dla poprawnego utworu `correct` ({track, artist}) z kandydatów.
+/* F8b: dystraktory muszą być WIARYGODNE — z dekady kategorii (±RANGE_TOLERANCE) i popularne (pozycja < DISTRACTOR_TOP
+ * w wynikach iTunes wykonawcy, jak poprawny utwór wybierany z wagą popularności). Utwór spoza okna roku to „odstający"
+ * kafel (hit z 2013 w kategorii 2000–09) — odrzucany. Gdy POPRAWNY utwór sam jest spoza dekady (zapas F5),
+ * okno rozszerzamy o jego rok (±1), żeby to on nie odstawał. Brak roku → nie karzemy (jak inRange). */
+export const DISTRACTOR_TOP = 15;
+export function distractorWindow(range, correctYear){
+  const rng=typeof range==='string' ? parseRange(range) : range;
+  if(!rng) return null;
+  let from=rng.from-RANGE_TOLERANCE, to=rng.to>=9999 ? 9999 : rng.to+RANGE_TOLERANCE;
+  const cy=parseInt(String(correctYear||'').slice(0,4),10);
+  if(Number.isFinite(cy)){ from=Math.min(from, cy-RANGE_TOLERANCE); if(to<9999) to=Math.max(to, cy+RANGE_TOLERANCE); }
+  return { from, to };
+}
+/* Czysta: wybierz `n` dystraktorów dla poprawnego utworu `correct` ({track, artist, year?}) z kandydatów.
  *  • nigdy ten sam utwór (titleKey albo textMatch tytułu — też cover/wersja u INNEGO wykonawcy),
  *  • bez duplikatów między kaflami (titleKey), bez live/remiksów/karaoke,
+ *  • F8b: `opts.range` (zakres kategorii, np. '2000–09') → bez utworów spoza okna roku; w obrębie etapu najpierw
+ *    popularne (idx < DISTRACTOR_TOP lub brak pozycji, np. playlista), potem ŚCIŚLE w dekadzie, potem reszta,
  *  • najpierw INNI wykonawcy (po jednym utworze na wykonawcę, kolejność losowa `rnd`),
  *    potem fallback: inne utwory TEGO SAMEGO wykonawcy, na końcu kolejne utwory innych wykonawców.
  * Zwraca [{track, artist}] (≤ n). */
-export function pickDistractors(candidates, correct, rnd=Math.random, n=3){
+export function pickDistractors(candidates, correct, rnd=Math.random, n=3, opts={}){
   const cTitle=displayTitle(correct && correct.track), cArtist=String((correct && correct.artist)||'');
   const cKey=titleKey(cTitle);
-  const opts=[];
+  const win=distractorWindow(opts && opts.range, correct && correct.year);
+  const strict=typeof (opts && opts.range)==='string' ? parseRange(opts.range) : ((opts && opts.range) || null);
+  const top=(opts && Number.isInteger(opts.top)) ? opts.top : DISTRACTOR_TOP;
+  const byKey=new Map();
   (candidates||[]).forEach(c=>{
     const o=asOption(c); if(!o || !o.key) return;
     if(o.key===cKey || textMatch(o.track, cTitle)) return;
-    opts.push(o);
+    if(win && o.year!=null && (o.year<win.from || o.year>win.to)) return;      // odstający rok
+    // ten sam utwór z kilku wyników (wersje) → najlepsza (najwyższa) pozycja
+    const k=o.key+'\u0000'+norm(o.artist), prev=byKey.get(k);
+    if(!prev || (o.idx!=null && (prev.idx==null || o.idx<prev.idx))) byKey.set(k, o);
   });
-  // tasowanie Fisher–Yates z wstrzykniętym rnd (deterministyczne w testach)
-  for(let i=opts.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [opts[i],opts[j]]=[opts[j],opts[i]]; }
+  const opts2=[...byKey.values()];
+  // tasowanie Fisher–Yates z wstrzykniętym rnd (deterministyczne w testach), potem STABILNE sortowanie wg rangi
+  for(let i=opts2.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [opts2[i],opts2[j]]=[opts2[j],opts2[i]]; }
+  const rank=o=> (o.idx!=null && o.idx>=top ? 2 : 0) + (strict && o.year!=null && (o.year<strict.from || o.year>strict.to) ? 1 : 0);
+  opts2.sort((a,b)=>rank(a)-rank(b));
   const same=o=> sameArtist(o.artist, cArtist) || sameArtist(cArtist, o.artist);
   const picked=[], usedKeys=new Set(), usedArtists=new Set();
   const take=(o)=>{ if(picked.length>=n || usedKeys.has(o.key)) return; picked.push(o); usedKeys.add(o.key); usedArtists.add(norm(o.artist)); };
-  opts.filter(o=>!same(o)).forEach(o=>{ if(!usedArtists.has(norm(o.artist))) take(o); });   // 1) inni wykonawcy, po 1
-  opts.filter(same).forEach(take);                                                          // 2) ten sam wykonawca
-  opts.filter(o=>!same(o)).forEach(take);                                                   // 3) dalsze utwory innych
+  opts2.filter(o=>!same(o)).forEach(o=>{ if(!usedArtists.has(norm(o.artist))) take(o); });   // 1) inni wykonawcy, po 1
+  opts2.filter(same).forEach(take);                                                          // 2) ten sam wykonawca
+  opts2.filter(o=>!same(o)).forEach(take);                                                   // 3) dalsze utwory innych
   return picked.slice(0, n).map(o=>({ track:o.track, artist:o.artist }));
 }
 /* Czysta: pytanie ABCD z utworu + dystraktorów — kształt jak potasowane pytanie quizu (shuffleMC), więc ocenia je
@@ -349,17 +378,19 @@ export function buildTrackMC(correct, distractors, rnd=Math.random, n=3){
   };
 }
 /* Dystraktory z kategorii: playlista → jej utwory (bez sieci); pula wykonawców → wyniki iTunes kilku INNYCH
- * wykonawców z puli (wstrzyknięty `itunes` — w web/serwerze to cache per artysta, F5 #6), równolegle, z capem
+ * wykonawców z puli (F8b: tylko z dekady kategorii, preferencyjnie popularne — pickDistractors({range})) (wstrzyknięty `itunes` — w web/serwerze to cache per artysta, F5 #6), równolegle, z capem
  * czasu; gdy za mało — utwory tego samego wykonawcy. Nigdy nie rzuca: [] przy braku sieci. */
 export const DISTRACTOR_ARTISTS = 4;
 export const DISTRACTOR_CAP_MS = 6000;
 export async function gatherDistractors({ cat, correct, itunes, rnd=Math.random, capMs=DISTRACTOR_CAP_MS, n=3 }){
   if(!cat || !correct) return [];
   const cands=[];
+  // F8b: `_pos` = pozycja w wynikach wykonawcy (popularność) — pickDistractors preferuje top DISTRACTOR_TOP
   const fetchFor=async(artist)=>{
     try{ const res=await withTimeout(Promise.resolve(itunes(artist)), capMs);
-      (res||[]).forEach(r=>{ if(r && sameArtist(r.artistName, artist)) cands.push(r); }); }catch(_e){ /* timeout/błąd — pomiń */ }
+      (res||[]).forEach((r, idx)=>{ if(r && sameArtist(r.artistName, artist)) cands.push({ ...r, _pos:idx }); }); }catch(_e){ /* timeout/błąd — pomiń */ }
   };
+  const pick=()=>pickDistractors(cands, correct, rnd, n, { range:cat.range });
   if(Array.isArray(cat.songs)) cat.songs.forEach(x=>cands.push(x));
   const artists=Array.isArray(cat.artists) ? cat.artists : [];
   if(artists.length && itunes){
@@ -367,19 +398,23 @@ export async function gatherDistractors({ cat, correct, itunes, rnd=Math.random,
     const order=others.slice();
     for(let i=order.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
     await Promise.all(order.slice(0, DISTRACTOR_ARTISTS).map(fetchFor));
-    if(pickDistractors(cands, correct, rnd, n).length<n){
+    if(pick().length<n){
       const own=artists.find(a=>sameArtist(correct.artist, a)) || correct.artist;
       await fetchFor(own);
     }
   }
-  return pickDistractors(cands, correct, rnd, n);
+  return pick();
 }
 
 /* jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców).
- * `itunes(term, opts) → Promise<results[]>` wstrzyknięty przez warstwę sieci (web/serwer). */
-export function resolveTrack({cat, seen, recent, itunes, capMs}){
+ * `itunes(term, opts) → Promise<results[]>` wstrzyknięty przez warstwę sieci (web/serwer).
+ * F8b: `rnd` (opcjonalny) — seedowany PRNG: kolejność wykonawców/utworów playlisty i ważony wybór utworu.
+ * Ograniczenie: determinizm tylko przy tych samych wynikach iTunes (inny kraj/proxy→Deezer/zmiana katalogu)
+ * i bez przekroczenia capu czasu (wolna sieć może przerwać kaskadę wcześniej). */
+export function resolveTrack({cat, seen, recent, itunes, capMs, rnd}){
+  const r = typeof rnd==='function' ? rnd : Math.random;
   if((!cat.artists || !cat.artists.length) && cat.songs && cat.songs.length){
-    return resolveFromSongs(cat, seen, itunes, capMs);
+    return resolveFromSongs(cat, seen, itunes, capMs, r);
   }
-  return resolveFromArtists(cat, seen, recent, itunes, capMs);
+  return resolveFromArtists(cat, seen, recent, itunes, capMs, r);
 }

@@ -279,6 +279,17 @@ export function scoreRound(args = {}){
   return { points, base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult, mult, parts:sc.parts };
 }
 
+/* F8b: stopka-legenda punktacji solo zależna od trybu BIEŻĄCEGO pytania (tekst z tych samych stałych co liczenie):
+ *  • ABCD / quiz: „trafienie 100 · szybkość · seria"; • rok: „dokładnie 100 · ±1 70 · ±2 50 · dekada 20";
+ *  • intro: „im wcześniej, tym więcej: ×2.0 → ×1.0"; • reszta (muzyka/lektor/od tyłu/fragment): tytuł/wykonawca/rok/album. */
+const fmtX = x => '×' + Number(x).toFixed(1);
+export function scoreLegend(mode){
+  if(mode==='abcd' || mode==='quiz') return `trafienie ${PTS.quiz} · szybkość · seria`;
+  if(mode==='year') return `dokładnie ${YEAR_PTS.exact} · ±1 ${YEAR_PTS.off1} · ±2 ${YEAR_PTS.off2} · dekada ${YEAR_PTS.decade}`;
+  if(mode==='intro') return `im wcześniej, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
+  return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok ±2 +${PTS.year} · album +${PTS.album} · szybkość do +${Math.round(SPEED_BONUS_MAX*100)}% · seria ×1,5 / ×2`;
+}
+
 /* ======================= QUIZ (SPEC v2) — wspólne dla solo / MP-host / serwera =======================
  * Kontrakt: backlog/audyt-2026-10/SPEC-paczki-v2.md. Czyste funkcje, rng wstrzykiwany. */
 

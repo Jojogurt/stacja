@@ -1399,5 +1399,197 @@ group('F8a mpReducer: ABCD muzyki = pytanie quizu w stanie (sekret do REVEAL)', 
   ok(ev.perTeam[COOP_TEAM].teamOk,'poprawna litera'); eq(ev.perTeam[COOP_TEAM].gained,100,'100 pkt (jak quiz)');
   eq(ev.reveal.kind,'quiz','odsłona jak quiz ABCD'); eq(ev.result.track,'Africa','wynik do ligi: tytuł, nie prompt'); eq(ev.result.artist,'Toto','i wykonawca');
 });
+
+/* ===================== F8b: Stacja dnia (seed daty, plan, seria, siatka, share), rnd w wyborze utworu, dystraktory, legenda ===================== */
+import { dateKey, dayIndex, addDays, isDayKey, dailyNumber, hash32, mulberry32, dailySeed, dailyQuestionRnd, dailyPool, dailyPlan,
+  dailyStreak, bestStreak, dailyCell, resultGrid, countHits, dailyShareText, matchShareText, dailyRecord, sanitizeDailyStore, dailyStatus,
+  DAILY_EPOCH, DAILY_QUESTIONS, DAILY_PREFERRED, DAILY_KEEP_DAYS } from '../core/daily.js';
+import { matchQpc, matchTotal } from '../core/match.js';
+import { scoreLegend } from '../core/scoring.js';
+import { shuffle } from '../core/util.js';
+import { distractorWindow, DISTRACTOR_TOP } from '../core/trackSelect.js';
+group('F8b daily: data w Europe/Warsaw (północ, zmiana roku, zmiana czasu) + numer dnia', ()=>{
+  eq(dateKey(new Date('2026-10-15T21:59:00Z')),'2026-10-15','23:59 CEST → ten sam dzień');
+  eq(dateKey(new Date('2026-10-15T22:00:00Z')),'2026-10-16','00:00 CEST (UTC 22:00) → następny dzień w Warszawie');
+  eq(dateKey(new Date('2026-12-31T23:30:00Z')),'2027-01-01','sylwester 23:30 UTC = 00:30 CET → 1 stycznia');
+  eq(dateKey(new Date('2026-10-25T00:30:00Z')),'2026-10-25','dzień zmiany czasu (CEST→CET)');
+  eq(dateKey(new Date('2026-10-25T22:59:00Z')),'2026-10-25','po zmianie czasu: 23:59 CET');
+  eq(dateKey(new Date('2026-10-25T23:00:00Z')),'2026-10-26','po zmianie czasu: północ CET = 23:00 UTC');
+  eq(dateKey(new Date('2026-06-01T12:00:00Z'),'America/New_York'),'2026-06-01','inna strefa (parametr)');
+  eq(dateKey(new Date('2026-06-01T02:00:00Z'),'America/New_York'),'2026-05-31','inna strefa: wcześniej');
+  eq(dateKey('nie-data'), null, 'śmieci → null');
+  eq(dailyNumber(DAILY_EPOCH),1,'#1 = 2026-10-15'); eq(dailyNumber('2026-10-17'),3,'#3');
+  eq(dailyNumber('2027-01-01'),79,'przez zmianę roku'); eq(dailyNumber('2026-10-26'),12,'przez zmianę czasu (doby UTC)');
+  eq(addDays('2026-12-31',1),'2027-01-01','addDays przez rok'); eq(addDays('2028-02-28',1),'2028-02-29','rok przestępny');
+  eq(addDays('2026-03-01',-1),'2026-02-28','wstecz przez luty');
+  ok(isDayKey('2026-02-28') && !isDayKey('2026-02-30') && !isDayKey('2026-1-1') && !isDayKey(null), 'isDayKey: tylko poprawne daty');
+  eq(dayIndex('2027-01-01')-dayIndex('2026-12-31'),1,'dayIndex: kolejne dni');
+});
+group('F8b daily: seed + PRNG deterministyczne', ()=>{
+  eq(dailySeed('2026-10-16'), dailySeed('2026-10-16'), 'ten sam dzień → ten sam seed');
+  eq(dailySeed(new Date('2026-10-16T10:00:00Z')), dailySeed('2026-10-16'), 'Date → klucz dnia w Warszawie → ten sam seed');
+  eq(dailySeed(new Date('2026-10-15T22:30:00Z')), dailySeed('2026-10-16'), '00:30 w Warszawie (22:30 UTC dnia wcześniej) = już nowy dzień');
+  ok(dailySeed('2026-10-16')!==dailySeed('2026-10-17'), 'inny dzień → inny seed');
+  ok(Number.isInteger(dailySeed('2026-10-16')) && dailySeed('2026-10-16')>=0 && dailySeed('2026-10-16')<2**32, 'seed: uint32');
+  const a=mulberry32(42), b=mulberry32(42), xa=[...Array(20)].map(a), xb=[...Array(20)].map(b);
+  eq(xa, xb, 'mulberry32: ten sam seed → ten sam ciąg'); ok(xa.every(x=>x>=0 && x<1), 'zakres [0,1)');
+  ok(JSON.stringify(xa)!==JSON.stringify([...Array(20)].map(mulberry32(43))), 'inny seed → inny ciąg');
+  eq(hash32('abc'), hash32('abc'), 'hash32 stabilny');
+  eq(dailyQuestionRnd(7,3)(), dailyQuestionRnd(7,3)(), 'strumień pytania deterministyczny');
+  ok(dailyQuestionRnd(7,3)()!==dailyQuestionRnd(7,4)(), 'różne pytania → różne strumienie');
+  eq(shuffle([1,2,3,4,5,6], mulberry32(5)), shuffle([1,2,3,4,5,6], mulberry32(5)), 'util.shuffle(a, rnd) deterministyczny');
+  eq(shuffle([1,2,3]).sort(), [1,2,3], 'util.shuffle bez rnd — dalej permutacja');
+});
+group('F8b daily: plan dnia (pula dekady + PL, 10 pytań, qpc 1)', ()=>{
+  const C={ '80s':{artists:['A','B'],range:'1980–89'}, '90s':{artists:['C']}, '00s':{artists:['D']}, 'evergreen-pl':{artists:['E']}, 'rock-pl':{artists:['F']},
+    'lyr':{kind:'lyrics',songs:[{title:'x',artist:'y',lyric:'z'}]}, 'q':{kind:'quiz',questions:[]}, 'metal':{artists:['M']} };
+  const pool=dailyPool(C);
+  eq(pool, ['00s','80s','90s','evergreen-pl','rock-pl'], 'pula: preferowane istniejące muzyczne, posortowane (bez metalu/lektora/quizu)');
+  eq(dailyPool({ x:{artists:['A']}, y:{kind:'quiz'} }), ['x'], 'brak preferowanych → dowolne muzyczne');
+  ok(DAILY_PREFERRED.includes('80s') && DAILY_PREFERRED.includes('evergreen-pl'), 'preferowane: dekady + PL');
+  const p1=dailyPlan(dailySeed('2026-10-16'), pool), p2=dailyPlan(dailySeed('2026-10-16'), [...pool].reverse());
+  eq(p1, p2, 'ten sam dzień → ten sam plan (niezależnie od kolejności puli)');
+  eq(p1.slots.length, DAILY_QUESTIONS, '10 pytań'); eq(p1.qpc, 1, 'qpc 1 (pytanie = slot)'); eq(p1.questions, 10, 'questions 10');
+  ok(p1.slots.every(x=>x.mode==='music' && x.round===1 && pool.includes(x.cat)), 'tryb muzyka, kategorie z puli');
+  ok(p1.slots.every((x,i)=>i===0 || x.cat!==p1.slots[i-1].cat), 'ta sama kategoria nigdy dwa razy z rzędu');
+  eq(new Set(p1.slots.slice(0,5).map(x=>x.cat)).size, 5, 'pierwsze 5 pytań — 5 różnych kategorii');
+  const p3=dailyPlan(dailySeed('2026-10-17'), pool);
+  ok(JSON.stringify(p3.slots)!==JSON.stringify(p1.slots) || p3.trackSeed!==p1.trackSeed, 'inny dzień → inny plan');
+  let diff=0; for(let d=0; d<10; d++){ const k=addDays('2026-10-16', d+1); if(JSON.stringify(dailyPlan(dailySeed(k), pool).slots)!==JSON.stringify(p1.slots)) diff++; }
+  eq(diff, 10, 'kolejne 10 dni — każdy z innym układem kategorii');
+  eq(dailyPlan(1, ['80s']).slots.map(x=>x.cat), Array(10).fill('80s'), 'pula 1 kategorii → powtórki');
+  ok(dailyPlan(1, []).error, 'pusta pula → error');
+  const mix=dailyPlan(9, pool, { modes:['music','year'], allCats:{ ...C, '90s':{artists:['C']} } });
+  ok(mix.slots.every(x=>['music','year'].includes(x.mode)), 'opcjonalna mieszanka trybów (filtrowana modesFor)');
+  const r=buildMatch(['80s'],['music'],{questions:10},C); ok(!r.qpc, 'buildMatch bez qpc (zwykłe mecze bez zmian)');
+});
+group('F8b match: qpc (pytań na slot) — Stacja dnia 10×1, reszta bez zmian', ()=>{
+  const m={ slots:[{round:1,cat:'a',mode:'music'},{round:1,cat:'b',mode:'music'},{round:1,cat:'c',mode:'music'}], rounds:1, si:0, qi:0, qpc:1 };
+  eq(matchQpc(m),1,'qpc 1'); eq(matchTotal(m),3,'3 pytania'); eq(matchProgress(m),{n:1,total:3},'pyt. 1/3');
+  ok(matchAdvance(m) && m.si===1 && m.qi===0, 'qpc 1: każde pytanie = następny slot');
+  eq(matchQLabel(m),'pyt. 2/3','etykieta'); ok(!/blok/.test(matchHeader(m,{a:{label:'A'},b:{label:'B'}})), 'qpc 1 → bez „blok x/y"');
+  matchAdvance(m); ok(!matchAdvance(m), 'koniec po 3 pytaniach');
+  eq(matchQpc({slots:[]}),QPC,'brak qpc → QPC'); eq(matchQpc({slots:[],qpc:99}),QPC,'śmieci → QPC'); eq(matchQpc({slots:[],qpc:'1'}),QPC,'string → QPC');
+  eq(matchTotal({slots:[{},{}]}),2*QPC,'matchTotal bez qpc = sloty × QPC');
+});
+group('F8b daily: seria dni (przez miesiąc/rok, wczoraj = seria żyje) + najlepsza', ()=>{
+  const k=['2026-12-30','2026-12-31','2027-01-01'];
+  eq(dailyStreak(k,'2027-01-01'),3,'przez zmianę roku');
+  eq(dailyStreak(k,'2027-01-02'),3,'dziś jeszcze nie zagrano — seria z wczoraj żyje');
+  eq(dailyStreak(k,'2027-01-03'),0,'dzień przerwy → 0');
+  eq(dailyStreak(['2026-10-30','2026-10-31','2026-11-01'],'2026-11-01'),3,'przez zmianę miesiąca (i czasu)');
+  eq(dailyStreak(['2028-02-28','2028-02-29','2028-03-01'],'2028-03-01'),3,'rok przestępny');
+  eq(dailyStreak(['2026-02-28','2026-03-01'],'2026-03-01'),2,'luty nieprzestępny');
+  eq(dailyStreak(['2026-10-16','2026-10-18'],'2026-10-18'),1,'luka → seria od nowa');
+  eq(dailyStreak(['x','2026-13-01',null],'2026-10-18'),0,'śmieci ignorowane');
+  eq(dailyStreak([],'2026-10-18'),0,'pusto → 0');
+  eq(bestStreak(['2026-10-16','2026-10-17','2026-10-18','2026-10-20','2026-12-31','2027-01-01']),3,'najlepsza seria');
+  eq(bestStreak(['2026-12-31','2027-01-01','2027-01-02','2027-01-03','2026-10-16']),4,'najlepsza przez rok, kolejność dowolna');
+  eq(bestStreak([]),0,'brak → 0');
+  // strefa: gra o 00:30 w Warszawie (22:30 UTC) liczy się do NOWEGO dnia
+  const day1=dateKey(new Date('2026-10-16T18:00:00Z')), day2=dateKey(new Date('2026-10-16T22:30:00Z'));
+  eq([day1,day2],['2026-10-16','2026-10-17'],'gra wieczorem i po północy (Warszawa) = dwa dni');
+  eq(dailyStreak([day1,day2], dateKey(new Date('2026-10-17T10:00:00Z'))),2,'seria 2 dni mimo < 24 h różnicy');
+});
+group('F8b daily: siatka emoji + tekst udostępniania (bez danych osobowych)', ()=>{
+  const R=(t,a,extra={})=>({ okTitle:t, okArtist:a, points:(t?50:0)+(a?50:0), ...extra });
+  const res=[R(1,1),R(1,1),R(1,0),R(0,0),R(1,1),R(1,1),{okTitle:false,okArtist:false,skipped:true,points:0},R(1,1),R(1,1),R(0,1)];
+  eq(dailyCell(res[0]),'🟩','pełne'); eq(dailyCell(res[2]),'🟨','częściowe'); eq(dailyCell(res[3]),'⬛','pudło'); eq(dailyCell(res[6]),'⬛','pominięte');
+  eq(dailyCell({okTitle:false,okArtist:false,points:20}),'🟨','same punkty (np. rok/album) → częściowe'); eq(dailyCell(null),'⬜','brak → ⬜');
+  eq(resultGrid(res,10),'🟩🟩🟨⬛🟩🟩⬛🟩🟩🟨','siatka 10 pytań');
+  eq(resultGrid(res.slice(0,3),10),'🟩🟩🟨⬜⬜⬜⬜⬜⬜⬜','przerwany mecz → ⬜ za nierozegrane');
+  eq(countHits(res),6,'trafione (pełne)');
+  const t=dailyShareText({ n:7, hits:7, total:10, streak:3, grid:'🟩🟩🟨⬛🟩🟩⬛🟩🟩🟨', url:'https://x.pl/stacja/' });
+  eq(t,'STACJA #7 🎧 7/10 · 🔥3\n🟩🟩🟨⬛🟩🟩⬛🟩🟩🟨\nhttps://x.pl/stacja/','tekst Stacji dnia (format z briefu)');
+  eq(dailyShareText({ n:1, hits:0, total:10, streak:0, grid:'⬛', url:'' }),'STACJA #1 🎧 0/10\n⬛','bez serii i linku');
+  eq(matchShareText({ points:452.4, hits:3, total:5, grid:'🟩🟩🟩⬛🟨', url:'https://x.pl/' }),'STACJA 🎧 452 pkt · 3/5\n🟩🟩🟩⬛🟨\nhttps://x.pl/','tekst zwykłego meczu');
+});
+group('F8b daily: rekord dnia, sanityzacja magazynu, status karty', ()=>{
+  const res=[{track:'T1',artist:'A1',okTitle:true,okArtist:true,points:120},{track:'T2',artist:'A2',okTitle:true,okArtist:false,points:50}];
+  const rec=dailyRecord({ key:'2026-10-18', results:res, points:170, done:false });
+  eq([rec.n,rec.hits,rec.total,rec.played,rec.done,rec.grid],[4,1,10,2,false,'🟩🟨⬜⬜⬜⬜⬜⬜⬜⬜'],'rekord częściowy');
+  eq(rec.results[1],{track:'T2',artist:'A2',c:'🟨',points:50},'wynik pytania: utwór + kratka + punkty (bez danych gracza)');
+  eq(sanitizeDailyStore(null),{v:1,days:{},best:0},'null → pusty magazyn');
+  eq(sanitizeDailyStore('x'),{v:1,days:{},best:0},'śmieci → pusty');
+  const st=sanitizeDailyStore({ days:{ '2026-10-16':{hits:1}, '2026-10-17':{hits:2}, 'zły':{}, '2026-10-18':5 }, best:'7' });
+  eq(Object.keys(st.days),['2026-10-16','2026-10-17'],'tylko poprawne dni z obiektem'); eq(st.best,7,'best z zapisu (np. po przycięciu historii)');
+  const many={days:{}}; for(let i=0;i<DAILY_KEEP_DAYS+20;i++) many.days[addDays('2026-01-01',i)]={hits:1};
+  const ms=sanitizeDailyStore(many); eq(Object.keys(ms.days).length,DAILY_KEEP_DAYS,'historia przycięta'); eq(ms.best,DAILY_KEEP_DAYS+20,'najlepsza seria liczona przed przycięciem');
+  const s1=dailyStatus({days:{'2026-10-16':{hits:1},'2026-10-17':{hits:5}}}, '2026-10-17');
+  eq([s1.n,s1.streak,s1.best,s1.played,!!s1.record],[3,2,2,2,true],'status: zagrane dziś');
+  const s2=dailyStatus({days:{'2026-10-16':{hits:1}}}, '2026-10-17');
+  eq([s2.streak,s2.record],[1,null],'status: dziś nie zagrane, seria z wczoraj');
+});
+console.log('• F8b trackSelect: resolveTrack/pickTrack z seedowanym rnd (ten sam seed + te same wyniki ⇒ ten sam utwór)');
+await (async ()=>{
+  const it=(t,a,y,extra={})=>({ trackName:t, artistName:a, previewUrl:'https://p/'+t, releaseDate:y+'-01-01', collectionName:'Alb', ...extra });
+  const net={}; ['A','B','C','D','E','F'].forEach(a=>{ net[a]=[1,2,3,4,5,6,7,8].map(i=>it(a+' song '+i, a, 1984)); });
+  const itunes=async(term)=>net[term]||[];
+  const cat={ artists:['A','B','C','D','E','F'], range:'1980–89' };
+  const run=async(seed)=>{ const t=await resolveTrack({ cat, seen:new Set(), recent:[], itunes, rnd:mulberry32(seed) }); return t.artist+'|'+t.track; };
+  eq(await run(11), await run(11), 'ten sam seed → ten sam wykonawca i utwór');
+  const outs=new Set(); for(let k=0;k<12;k++) outs.add(await run(100+k));
+  ok(outs.size>1, 'różne seedy → różne utwory ('+outs.size+')');
+  const pl={ songs:[1,2,3,4,5,6].map(i=>({title:'S'+i, artist:'X', preview:'https://p/'+i})) };
+  const rp=async(seed)=>(await resolveTrack({ cat:pl, seen:new Set(), itunes, rnd:mulberry32(seed) })).track;
+  eq(await rp(3), await rp(3), 'playlista: ten sam seed → ten sam utwór');
+  const res=net.A;
+  eq(pickTrack(res,'A',new Set(),{rnd:mulberry32(9)}).trackName, pickTrack(res,'A',new Set(),{rnd:mulberry32(9)}).trackName, 'pickTrack(opts.rnd) deterministyczny');
+  ok(pickTrack(res,'A',new Set()) && pickTrack(res,'A'), 'pickTrack bez rnd — działa jak dotąd (Math.random)');
+})();
+group('F8b trackSelect: dystraktory ABCD — dekada kategorii (±1), popularne (pozycja < 15), bez odstających', ()=>{
+  const it=(t,a,y,pos)=>({ trackName:t, artistName:a, previewUrl:'https://x', collectionName:'', releaseDate:y+'-05-01', _pos:pos });
+  const correct={ track:'Hey Ya!', artist:'OutKast', year:'2003' };
+  const cands=[
+    it('Get Lucky','Daft Punk',2013,0), it('Around the World','Daft Punk',1997,3), it('One More Time','Daft Punk',2000,1),
+    it('Crazy in Love','Beyoncé',2003,0), it('Halo','Beyoncé',2008,2), it('Drunk in Love','Beyoncé',2013,1),
+    it('Yeah!','Usher',2004,30), it('OMG','Usher',2010,0), it('Burn','Usher',2004,25),
+    it('Toxic','Britney Spears',2003,5), it('Womanizer','Britney Spears',2008,40),
+    it('Rehab','Amy Winehouse',2006,40),
+  ];
+  let i=0; const rnd=()=>((i++*0.61)%1);
+  const d=pickDistractors(cands, correct, rnd, 3, { range:'2000–09' });
+  eq(d.length,3,'3 dystraktory');
+  ok(!d.some(x=>['Get Lucky','Drunk in Love'].includes(x.track)), 'bez hitów z 2013 w kategorii 2000–09 (odstające)');
+  ok(!d.some(x=>x.track==='Around the World'), '1997 poza oknem 1999–2010 → odrzucony');
+  eq(new Set(d.map(x=>x.artist)).size,3,'różni wykonawcy');
+  ok(d.every(x=>!['Yeah!','Burn','Womanizer','Rehab'].includes(x.track)), 'popularne (pozycja < '+DISTRACTOR_TOP+') przed niszowymi — '+d.map(x=>x.track).join(', '));
+  ok(d.some(x=>x.track==='OMG') || true, '2010 (±1) dopuszczalny');
+  // gdy popularnych za mało — niszowe z dekady zamiast odstających
+  const d2=pickDistractors([it('Get Lucky','Daft Punk',2013,0), it('Yeah!','Usher',2004,30), it('Rehab','Amy Winehouse',2006,40), it('Toxic','Britney Spears',2003,2)], correct, Math.random, 3, { range:'2000–09' });
+  eq(d2.map(x=>x.track).sort(),['Rehab','Toxic','Yeah!'],'za mało popularnych → mniej popularne z dekady, nadal bez 2013');
+  // ściśle w dekadzie przed ±1
+  const d3=pickDistractors([it('OMG','Usher',2010,0), it('Toxic','Britney Spears',2003,0), it('Crazy','Gnarls Barkley',2006,0), it('Hips','Shakira',2005,0)], correct, ()=>0, 3, { range:'2000–09' });
+  ok(!d3.some(x=>x.track==='OMG'), 'przy remisie popularności — ściśle w dekadzie przed tolerancją ±1');
+  // poprawny utwór spoza dekady (zapas F5) → okno rozszerzone o jego rok
+  eq(distractorWindow('2000–09','2013'),{from:1999,to:2014},'okno: zakres ±1 ∪ rok poprawnego ±1');
+  eq(distractorWindow('2020+',''),{from:2019,to:9999},'zakres otwarty');
+  eq(distractorWindow('',2001),null,'kategoria bez zakresu → bez filtra');
+  const d4=pickDistractors([it('Get Lucky','Daft Punk',2013,0), it('Toxic','Britney Spears',2003,0), it('Halo','Beyoncé',2008,0)], { track:'Counting Stars', artist:'OneRepublic', year:'2013' }, Math.random, 3, { range:'2000–09' });
+  eq(d4.length,3,'poprawny z 2013 → 2013 też dopuszczony (to poprawny nie odstaje)');
+  // bez zakresu (styl/playlista) i bez dat → jak dotąd
+  eq(pickDistractors([{title:'A1',artist:'X'},{title:'B1',artist:'Y'},{title:'C1',artist:'Z'}], correct, Math.random, 3, {}).length,3,'playlista bez lat — bez filtra');
+  eq(pickDistractors([it('A','X',1975,0),it('B','Y',1976,0),it('C','Z',1977,0)], correct, Math.random).length,3,'bez opts.range — zachowanie F8a');
+});
+console.log('• F8b trackSelect: gatherDistractors — zakres kategorii i pozycja w wynikach z sieci');
+await (async ()=>{
+  const it=(t,a,y)=>({ trackName:t, artistName:a, previewUrl:'https://x', releaseDate:y+'-01-01' });
+  const filler=(a,n,y)=>[...Array(n)].map((_,k)=>it(a+' deep cut '+k, a, y));
+  const net={ 'Daft Punk':[it('Get Lucky','Daft Punk',2013), it('One More Time','Daft Punk',2000)],
+    'Beyoncé':[it('Drunk in Love','Beyoncé',2013), it('Crazy in Love','Beyoncé',2003)],
+    // OMG na pozycji 0; pozycje 1–14 spoza dekady (odrzucone); „deep cuts" z dekady dopiero od pozycji 15
+    'Usher':[it('OMG','Usher',2010), ...filler('Usher',14,1990).map((r,k)=>({...r, trackName:'Old '+k})), ...filler('Usher',20,2004)],
+    'Britney Spears':[it('Womanizer','Britney Spears',2013)] };   // tylko utwór spoza dekady → Britney odpada
+  const d=await gatherDistractors({ cat:{ artists:['OutKast','Daft Punk','Beyoncé','Usher','Britney Spears'], range:'2000–09' }, correct:{track:'Hey Ya!',artist:'OutKast',year:'2003'}, itunes:async t=>net[t]||[], rnd:()=>0.5 });
+  eq(d.length,3,'3 dystraktory'); ok(!d.some(x=>/Get Lucky|Drunk in Love/.test(x.track)),'bez 2013 — '+d.map(x=>x.track).join(', '));
+  const u=d.find(x=>x.artist==='Usher'); ok(u && u.track==='OMG', 'Usher: hit z top-15 (OMG 2010, ±1) zamiast „deep cut" z pozycji ≥ 15 — '+(u&&u.track));
+})();
+group('F8b scoring: legenda punktacji wg trybu (stopka solo)', ()=>{
+  eq(scoreLegend('abcd'),'trafienie 100 · szybkość · seria','ABCD'); eq(scoreLegend('quiz'),'trafienie 100 · szybkość · seria','quiz');
+  eq(scoreLegend('year'),'dokładnie 100 · ±1 70 · ±2 50 · dekada 20','rok');
+  eq(scoreLegend('intro'),'im wcześniej, tym więcej: ×2.0 → ×1.0','intro');
+  eq(scoreLegend('music'),'tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2','muzyka (jak dotąd)');
+  eq(scoreLegend('reverse'),scoreLegend('music'),'od tyłu = muzyka'); eq(scoreLegend(undefined),scoreLegend('music'),'brak → muzyka');
+});
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

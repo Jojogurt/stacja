@@ -364,6 +364,15 @@
   .sum-again{width:100%;font-family:var(--display);font-weight:800;letter-spacing:.03em;font-size:16px;
     color:#fff;background:var(--green);border:none;padding:16px;cursor:pointer;text-transform:uppercase;box-shadow:inset 0 -3px 0 var(--green-d)}
   .sum-again:active{background:var(--green-d);box-shadow:none}
+  /* F8b: siatka wyniku + „Udostępnij" */
+  .sum-grid{text-align:center;font-size:22px;letter-spacing:2px;line-height:1.3;padding:4px 16px 2px;word-break:break-all}
+  .sum-grid[hidden]{display:none}
+  .sum-sharebox{padding:8px 16px 4px;text-align:center}
+  .sum-share{font-family:var(--display);font-weight:800;letter-spacing:.03em;font-size:15px;color:#fff;background:var(--blue);
+    border:none;border-radius:14px;padding:12px 22px;cursor:pointer;box-shadow:0 4px 0 var(--blue-d)}
+  .sum-share:active{transform:translateY(4px);box-shadow:none}
+  .sum-share[hidden]{display:none}
+  .sum-share-st{font-family:var(--body);font-weight:700;font-size:var(--fs-xs);color:var(--muted);min-height:1em;margin-top:6px;word-break:break-word}
 
   /* ---- multiplayer ---- */
   .mp-enter{font-family:var(--display);font-weight:800;font-size:var(--fs-md);letter-spacing:.02em;color:#fff;
@@ -862,6 +871,12 @@
   .mh-card.quick{background:var(--gold);box-shadow:0 5px 0 var(--gold-d)}
   .mh-card.quick .tx b,.mh-card.quick .tx small,.mh-card.quick .ar,.mh-card.quick .ic{color:#4A3500}
   .mh-card.quick .ic{background:rgba(255,255,255,.4)}
+  .mh-card.daily{background:var(--purple);box-shadow:0 5px 0 #9B4DDB}
+  .mh-card.daily .ic{font-size:26px}
+  .mh-card.daily.done{background:var(--panel);border:2px solid var(--purple);box-shadow:0 5px 0 #9B4DDB}
+  .mh-card.daily.done .tx b,.mh-card.daily.done .ar{color:var(--ink)}
+  .mh-card.daily.done .tx small{color:var(--muted)}
+  .mh-card.daily.done .ic{background:rgba(206,130,255,.18)}
   .mh-card.cont{background:var(--panel);border:2px solid var(--green);box-shadow:0 5px 0 var(--green-d)}
   .mh-card.cont .tx b,.mh-card.cont .ar{color:var(--green-d)}
   .mh-card.cont .tx small{color:var(--muted)}
@@ -955,7 +970,7 @@
   .deck-eq{display:none;align-items:flex-end;justify-content:center;gap:4px;height:30px;margin-top:16px}
   body.solo.playing .deck-eq{display:flex}
   /* QUIZ (wiedza ogólna): brak audio → ukryj gałkę, equalizer, „lepszy głos" i „od nowa" */
-  body.quiz-mode .knob-wrap, body.quiz-mode .deck-eq, body.quiz-mode .voice-toggle, body.quiz-mode #replay, body.quiz-mode .foot{display:none !important}
+  body.quiz-mode .knob-wrap, body.quiz-mode .deck-eq, body.quiz-mode .voice-toggle, body.quiz-mode #replay, body.quiz-mode .foot-src{display:none !important}   /* F8b: legenda punktacji quizu zostaje */
   .deck-eq i{width:6px;border-radius:3px;background:var(--blue)}
   .deck-eq i:nth-child(1){height:14px;animation:mpeq .9s ease-in-out infinite}
   .deck-eq i:nth-child(2){height:26px;animation:mpeq .9s .1s ease-in-out infinite}
@@ -1370,6 +1385,8 @@
     <button class="mh-card cont" id="goContinue" hidden><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M234.49 111.07L90.41 22.94A20 20 0 0 0 60 39.87v176.26a20 20 0 0 0 30.41 16.93l144.08-88.13a19.82 19.82 0 0 0 0-33.86M84 208.85V47.15L216.16 128Z"/></svg></span><span class="tx"><b id="goContinueTx">Kontynuuj mecz</b><small id="goContinueSub">wróć do trwającego meczu solo</small></span><span class="ar">›</span></button>
     <!-- F6a (R-F1): „Graj teraz" — mecz solo jednym tapnięciem (10 hitów, muzyka) -->
     <button class="mh-card quick" id="goQuick"><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M234.49 111.07L90.41 22.94A20 20 0 0 0 60 39.87v176.26a20 20 0 0 0 30.41 16.93l144.08-88.13a19.82 19.82 0 0 0 0-33.86M84 208.85V47.15L216.16 128Z"/></svg></span><span class="tx"><b>Graj teraz</b><small>10 hitów · muzyka · bez ustawiania</small></span><span class="ar">›</span></button>
+    <!-- F8b: „Stacja dnia" — te same 10 utworów dla wszystkich (seed = data), jedna próba, seria dni 🔥 -->
+    <button class="mh-card daily" id="goDaily"><span class="ic" aria-hidden="true">🎧</span><span class="tx"><b id="goDailyTx">Stacja dnia</b><small id="goDailySub">zagraj · 10 hitów · jedna próba</small></span><span class="ar">›</span></button>
     <button class="mh-card solo" id="goSolo"><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M204.73 51.85A108.07 108.07 0 0 0 20 128v56a28 28 0 0 0 28 28h16a28 28 0 0 0 28-28v-40a28 28 0 0 0-28-28H44.84A84.05 84.05 0 0 1 128 44h.64a83.7 83.7 0 0 1 82.52 72H192a28 28 0 0 0-28 28v40a28 28 0 0 0 28 28h16a28 28 0 0 0 28-28v-56a107.34 107.34 0 0 0-31.27-76.15M64 140a4 4 0 0 1 4 4v40a4 4 0 0 1-4 4H48a4 4 0 0 1-4-4v-44Zm148 44a4 4 0 0 1-4 4h-16a4 4 0 0 1-4-4v-40a4 4 0 0 1 4-4h20Z"/></svg></span><span class="tx"><b>SOLO</b><small>Własny mecz — kategorie, tryby, długość</small></span><span class="ar">›</span></button>
     <button class="mh-card mp" id="goMp"><span class="ic"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M164.38 181.1a52 52 0 1 0-72.76 0a75.9 75.9 0 0 0-30 28.89a12 12 0 0 0 20.78 12a53 53 0 0 1 91.22 0a12 12 0 1 0 20.78-12a75.9 75.9 0 0 0-30.02-28.89M100 144a28 28 0 1 1 28 28a28 28 0 0 1-28-28m147.21 9.59a12 12 0 0 1-16.81-2.39c-8.33-11.09-19.85-19.59-29.33-21.64a12 12 0 0 1-1.82-22.91a20 20 0 1 0-24.78-28.3a12 12 0 1 1-21-11.6a44 44 0 1 1 73.28 48.35a92.2 92.2 0 0 1 22.85 21.69a12 12 0 0 1-2.39 16.8m-192.28-24c-9.48 2.05-21 10.55-29.33 21.65a12 12 0 0 1-19.19-14.45a92.4 92.4 0 0 1 22.85-21.69a44 44 0 1 1 73.28-48.35a12 12 0 1 1-21 11.6a20 20 0 1 0-24.78 28.3a12 12 0 0 1-1.82 22.91Z"/></svg></span><span class="tx"><b>ZE ZNAJOMYMI</b><small>Mecz w pokoju, na żywo</small></span><span class="ar">›</span></button>
     <div class="mh-row">
@@ -1598,6 +1615,10 @@
       <div class="sum-big" id="sumBig">0 / 10</div>
       <div class="sum-sub" id="sumSub">koniec sesji</div>
     </div>
+    <!-- F8b: siatka emoji wyniku + udostępnianie (navigator.share → schowek) -->
+    <div class="sum-grid" id="sumGrid" aria-label="siatka wyniku" hidden></div>
+    <div class="sum-sharebox"><button class="sum-share" id="sumShare" type="button" hidden>Udostępnij wynik</button>
+      <div class="sum-share-st" id="sumShareSt" role="status" aria-live="polite"></div></div>
     <div class="sum-list" id="sumList"></div>
     <button class="sum-again" id="sumAgain">Nowy mecz</button>
   </section>
@@ -1607,7 +1628,7 @@
     <div class="pts"><span>punkty</span><b id="sPoints">0</b></div>
     <div><span>trafione</span><b id="sScore">0 / 0</b></div>
   </div>
-  <div class="foot">źródło: iTunes Search API · 30 s zajawki<br>tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2</div>
+  <div class="foot"><span class="foot-src">źródło: iTunes Search API · 30 s zajawki<br></span><span id="footLegend">tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2</span></div>
 
 <script type="module" src="quiz-loader.js"></script>
 <script>

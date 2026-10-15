@@ -2,10 +2,12 @@
  * mecz solo (rundy × kategorie × pytania), sprawdzanie odpowiedzi. Self-wiring przy imporcie
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
-import { norm, textMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS } from '../core/scoring.js';
+import { norm, textMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend } from '../core/scoring.js';
 import { introStageSecs, introNextStage } from '../core/timing.js';
 import { buildTrackMC, yearReliable, parseRange } from '../core/trackSelect.js';
-import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
+import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, matchTotal, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
+import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailyShareText, matchShareText, resultGrid, DAILY_QUESTIONS } from '../core/daily.js';
+import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
   syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick } from '../core/picker.js';
@@ -267,7 +269,9 @@ async function newRound(){
 
   const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
   const cat = ALL_CATS[eraKey];
-  const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG});
+  // F8b: Stacja dnia — osobny seedowany strumień rnd per pytanie (ten sam wykonawca/utwór u wszystkich)
+  const rnd = session && session.daily ? dailyQuestionRnd(session.daily.trackSeed, matchProgress(session.match).n-1) : undefined;
+  const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd});
   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem.
   // F2a #3: `busy` należy wtedy już do nowszego stanu (abandonRound je zwolnił, nowa runda mogła je zająć) — nie ruszaj.
   if(gen!==soloGen) return;
@@ -300,6 +304,7 @@ async function newRound(){
   busy=false;
   current=cur;
   renderSoloForm(); syncIntroBtn();
+  dailyTouch();          // F8b: pierwsze grywalne pytanie Stacji dnia = próba dnia wykorzystana
   qStartAt=Date.now();   // F6a: od teraz liczy się czas odpowiedzi
   startAudio();
 }
@@ -455,6 +460,7 @@ function renderSoloForm(){
   const isYear = qm==='year' && !!current;                             // F8a: pole roku zamiast tytułu/wykonawcy
   form.classList.toggle('quiz', isQuiz || isMC || isYear);
   syncModeClasses();   // quiz-mode: ukryj gałkę/audio w decku; lektor-mode: pokaż „lepszy głos"
+  syncLegend();        // F8b: stopka-legenda punktacji wg trybu bieżącego pytania
   const qf=document.getElementById('quizForm'); if(!qf) return;
   if(isYear){ renderYearForm(qf); return; }
   if(isMC){
@@ -497,14 +503,15 @@ document.getElementById('skip').onclick=()=>{
   if(roundDone) return;   // F2a #4: pytanie już ocenione („Sprawdź") — drugi wpis tego samego pytania zablokowany
   roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true; syncIntroBtn();
   unlockSoloAudio({ctx:session?session.hasReverse:false});   // F2a #9: gest → kolejna zajawka zagra bez dodatkowego stuknięcia (iOS)
-  if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, points:0, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
+  // F8b: Stacja dnia — pytanie niewczytane (błąd sieci) i pominięte też ma kratkę (⬛), siatka = 10 pytań
+  if(session && (current || session.daily)){ const s=matchSlot(session.match); pushResult({track:current?current.track:'(nie wczytano)', artist:current?current.artist:'', okTitle:false, okArtist:false, skipped:true, points:0, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
   streak=0; updateScore();
   advance();
 };
 
 /* ============ MECZ solo: rundy × kategorie × pytania ============ */
 document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishMatch(); else endMatch(); };
-document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over'); soloHead('Ułóż mecz'); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over','daily'); soloHead('Ułóż mecz'); };
 
 function startMatch(){
   if(!soloCats.size){ updateMatchInfo(); return; }
@@ -512,13 +519,17 @@ function startMatch(){
   if(startSoloMatch([...soloCats],[...soloModes],soloQuestions)) saveSoloPick();   // F6a: zapamiętaj pulę
 }
 // F6a: wspólny start meczu solo — picker, „Graj teraz" (R-F1) i „Zagraj offline" (R-F10). true = wystartował.
-function startSoloMatch(cats, modes, questions){
-  const r=buildMatch(cats, modes, {questions});
+// F8b: `opts.plan` — gotowy plan (Stacja dnia: core/daily.dailyPlan, qpc 1), `opts.daily` — {key, n, trackSeed}
+function startSoloMatch(cats, modes, questions, opts={}){
+  const r=opts.plan || buildMatch(cats, modes, {questions});
   if(r.error){ const el=document.getElementById('matchInfo'); el.className='um-summary err'; el.textContent=r.error; return false; }
   if(session || busy) abandonRound();   // poprzedni mecz / losowanie w locie → porzuć (busy zwolnione, async unieważniony)
   hideOfflineOffer();
   const hasReverse=r.slots.some(x=>x.mode==='reverse');
-  session={match:{slots:r.slots, rounds:r.rounds, si:0, qi:0}, results:[], hasReverse, cats:[...cats], modes:[...modes], questions:r.questions};
+  const match={slots:r.slots, rounds:r.rounds, si:0, qi:0};
+  if(r.qpc) match.qpc=r.qpc;
+  session={match, results:[], hasReverse, cats:[...cats], modes:[...modes], questions:r.questions, daily:opts.daily||null};
+  document.body.classList.toggle('daily', !!session.daily);
   // F2a #9: gest „Zacznij mecz" odblokowuje trwały element audio (iOS: per-element) i — gdy mecz ma
   // „od tyłu" — AudioContext; inaczej pierwsza zajawka po await kończyła się NotAllowedError
   unlockSoloAudio({ctx:hasReverse});
@@ -563,7 +574,9 @@ function showOfflineOffer(){
   };
 })();
 /* F6a (F12): trwający mecz solo — „Kontynuuj mecz (pyt. X/Y)" w menu; nagłówek ekranu solo = runda, nie „Ułóż mecz" */
-function playHead(){ const s=session && matchSlot(session.match); return s ? 'Runda '+s.round+'/'+session.match.rounds+' · '+catLabel(s.cat) : 'Mecz'; }
+function playHead(){ const s=session && matchSlot(session.match);
+  if(s && session.daily) return 'Stacja dnia #'+session.daily.n+' · '+catLabel(s.cat);   // F8b
+  return s ? 'Runda '+s.round+'/'+session.match.rounds+' · '+catLabel(s.cat) : 'Mecz'; }
 function syncContinue(){
   const b=document.getElementById('goContinue'); if(!b) return;
   if(!session){ b.hidden=true; return; }
@@ -576,7 +589,7 @@ function syncContinue(){
   const b=document.getElementById('goContinue'); if(b) b.onclick=()=>showScreen('solo');
   window.addEventListener('stacja:screen', (e)=>{
     const scr=e && e.detail;
-    if(scr==='menu') syncContinue();
+    if(scr==='menu'){ syncContinue(); syncDailyCard(); }
     else if(scr==='solo'){
       if(session) soloHead(playHead());
       else if(document.body.classList.contains('match-over')) soloHead('Wynik meczu');
@@ -598,7 +611,7 @@ function endMatch(){
   abandonRound();   // 2.1/F2a #3: koniec meczu — porzuć async ostatniej rundy i zwolnij busy
   session=null;
   document.getElementById('session').classList.remove('live');
-  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','match-over');
+  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','match-over','daily');
   hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
   soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
 }
@@ -620,7 +633,7 @@ function advance(){
 function finishMatch(){
   abandonRound();   // 2.1/F2a #3: „Zakończ" w trakcie strojenia — porzuć rozwiązanie w locie i zwolnij busy
   const res=session.results;
-  const tot=session.match.slots.length*QPC;
+  const tot=matchTotal(session.match);   // F8b: qpc meczu (Stacja dnia: 10 slotów × 1)
   const played=res.length;   // F2a #10: przerwany mecz — wynik względem ROZEGRANYCH pytań, nie całego meczu
   const hits=res.filter(r=>r.okTitle&&r.okArtist).length;
   // zapis wyniku (best-effort, nieblokujące) — tylko gdy mamy tożsamość (auth.uid)
@@ -640,6 +653,16 @@ function finishMatch(){
   document.getElementById('sumSub').textContent= cut
     ? `trafione z ${played} ${plPick(played,'rozegranego','rozegranych','rozegranych')} · mecz przerwany (${played} z ${tot})`
     : 'koniec meczu';
+  // F8b: siatka emoji + „Udostępnij" (Stacja dnia: wynik dnia zapisany, seria 🔥)
+  const daily=session.daily;
+  if(daily){
+    saveDailyRecord(dailyRecord({ key:daily.key, results:res, points, total:tot, done:true }));
+    const info=dailyInfo(daily.key);
+    document.getElementById('sumSub').textContent=`Stacja dnia #${daily.n}`+(cut?` · przerwana (${played} z ${tot})`:'')+(info.streak?` · 🔥 seria ${info.streak} ${plPick(info.streak,'dzień','dni','dni')}`:'');
+    setShare(dailyShareText({ n:daily.n, hits, total:tot, streak:info.streak, grid:resultGrid(res, tot), url:shareUrl() }), resultGrid(res, tot), 'Udostępnij');
+  } else {
+    setShare(matchShareText({ points, hits, total:cut?played:tot, grid:resultGrid(res, cut?played:tot), url:shareUrl() }), resultGrid(res, cut?played:tot), 'Udostępnij wynik');
+  }
   const list=document.getElementById('sumList'); list.innerHTML='';
   const byRound={};
   res.forEach(r=>{ (byRound[r.round]=byRound[r.round]||[]).push(r); });
@@ -647,7 +670,7 @@ function finishMatch(){
     const grp=byRound[rd], rh=grp.filter(x=>x.okTitle&&x.okArtist).length;
     const hdr=document.createElement('div'); hdr.className='band-label'; hdr.style.margin='12px 0 4px';
     const rp=grp.reduce((a,x)=>a+(x.points||0),0);
-    hdr.textContent='Runda '+rd+' — '+rh+'/'+grp.length+' · '+rp+' pkt';
+    hdr.textContent=(daily?'Stacja dnia':'Runda '+rd)+' — '+rh+'/'+grp.length+' · '+rp+' pkt';
     list.appendChild(hdr);
     grp.forEach(r=>{
       const ok=r.okTitle&&r.okArtist;
@@ -660,13 +683,100 @@ function finishMatch(){
     });
   });
   session=null;
-  soloHead('Wynik meczu');   // 5.7
+  soloHead(daily ? 'Stacja dnia #'+daily.n : 'Wynik meczu');   // 5.7
   document.getElementById('session').classList.remove('live');  // body.playing zostaje → summary widoczne
   document.getElementById('summary').classList.add('show');
   if(played) playSfx('fanfare');   // F6b (U4): fanfara końca meczu (po stopAudio — duck nie blokuje)
   document.getElementById('summary').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 function hideSummary(){ document.getElementById('summary').classList.remove('show'); }
+
+/* ============ F8b: wyniki meczu — wspólny zapis + udostępnianie ============ */
+function pushResult(r){
+  session.results.push(r);
+  if(session.daily) saveDailyRecord(dailyRecord({ key:session.daily.key, results:session.results, points, total:matchTotal(session.match), done:false }));
+}
+let shareTx='';
+function setShare(text, grid, label){
+  shareTx=text||'';
+  const g=document.getElementById('sumGrid'); if(g){ g.textContent=grid||''; g.hidden=!grid; }
+  const b=document.getElementById('sumShare'); if(b){ b.hidden=!shareTx; b.textContent=label||'Udostępnij wynik'; }
+}
+(function wireShare(){
+  const b=document.getElementById('sumShare'); if(!b) return;
+  b.onclick=async()=>{
+    if(!shareTx) return;
+    const r=await shareText(shareTx);
+    const st=document.getElementById('sumShareSt');
+    if(st) st.textContent = r==='copied' ? 'Skopiowano do schowka ✓' : (r==='shared' ? 'Udostępniono ✓' : (r==='cancelled' ? '' : 'Nie udało się — skopiuj ręcznie: '+shareTx));
+  };
+})();
+
+/* ============ F8b: Stacja dnia — karta w menu, start (jedna próba), wynik z zapisu ============ */
+function dailyTouch(){
+  if(!session || !session.daily) return;
+  const info=dailyInfo(session.daily.key);
+  if(!info.record) saveDailyRecord(dailyRecord({ key:session.daily.key, results:session.results, points, total:matchTotal(session.match), done:false }));
+}
+function syncDailyCard(){
+  const b=document.getElementById('goDaily'); if(!b) return;
+  const info=dailyInfo();
+  const tx=document.getElementById('goDailyTx'); if(tx) tx.textContent='Stacja dnia #'+info.n;
+  const sub=document.getElementById('goDailySub');
+  const fire=info.streak ? ` · 🔥 seria ${info.streak} ${plPick(info.streak,'dzień','dni','dni')}` : '';
+  const rec=info.record;
+  const live=session && session.daily && session.daily.key===info.key;
+  if(sub) sub.textContent = live ? `w trakcie — wróć do gry${fire}`
+    : rec ? `zagrane: ${rec.hits}/${rec.total}${rec.done?'':' (przerwane)'}${fire}`
+    : `zagraj · ${DAILY_QUESTIONS} hitów · jedna próba${fire}`;
+  b.classList.toggle('done', !!rec && !live);
+}
+// wynik dnia z zapisu (karta po zagraniu) — podsumowanie + „Udostępnij"
+function showDailyResult(info){
+  const rec=info.record;
+  if(session || busy) abandonRound();
+  session=null; document.getElementById('session').classList.remove('live');
+  stopAudio(); setIcon('play'); hideReveal(); resetForm(); hideLyric(); hideOfflineOffer();
+  const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
+  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode');
+  document.body.classList.add('playing','match-over','daily');
+  document.getElementById('sumBig').textContent=rec.hits+' / '+rec.total;
+  const sp=document.getElementById('sumPts'); if(sp) sp.textContent=(rec.points||0)+' pkt';
+  document.getElementById('sumSub').textContent=`Stacja dnia #${info.n} · `+(rec.done?'zagrane dziś':`przerwana (${rec.played} z ${rec.total})`)+
+    (info.streak?` · 🔥 seria ${info.streak} ${plPick(info.streak,'dzień','dni','dni')}`:'')+' · kolejna jutro';
+  setShare(dailyShareText({ n:info.n, hits:rec.hits, total:rec.total, streak:info.streak, grid:rec.grid, url:shareUrl() }), rec.grid, 'Udostępnij');
+  const list=document.getElementById('sumList'); list.innerHTML='';
+  (rec.results||[]).forEach(r=>{
+    const d=document.createElement('div'); d.className='sum-row';
+    d.innerHTML='<span class="badge">'+escapeHtml(r.c||'')+'</span><span class="song"><b>'+escapeHtml(r.track)+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>'+
+      '<span class="n" style="opacity:.7;font-size:var(--fs-xs)">'+(r.points?'+'+(r.points|0):'')+'</span>';
+    list.appendChild(d);
+  });
+  soloHead('Stacja dnia #'+info.n);
+  document.getElementById('summary').classList.add('show');
+}
+function startDaily(){
+  unlockCtx();
+  showScreen('solo');
+  const info=dailyInfo();
+  if(session && session.daily && session.daily.key===info.key){ soloHead(playHead()); return; }   // trwa — wróć do gry
+  if(info.record){ showDailyResult(info); return; }                                              // jedna próba dziennie
+  const pool=dailyPool(ALL_CATS);
+  const plan=dailyPlan(dailySeed(info.key), pool);
+  if(plan.error || !pool.length){ flash('Nie udało się wczytać kategorii z muzyką. Sprawdź internet i odśwież stronę.'); return; }
+  startSoloMatch(pool, ['music'], plan.questions, { plan, daily:{ key:info.key, n:info.n, trackSeed:plan.trackSeed } });
+}
+(function wireDaily(){
+  const b=document.getElementById('goDaily'); if(!b) return;
+  b.onclick=startDaily;
+  syncDailyCard();
+})();
+
+/* ============ F8b: stopka-legenda punktacji wg trybu bieżącego pytania ============ */
+function syncLegend(){
+  const el=document.getElementById('footLegend'); if(!el) return;
+  el.textContent=scoreLegend(session || current ? qMode() : 'music');
+}
 
 /* ============ sprawdzanie ============ */
 function check(){
@@ -691,7 +801,7 @@ function check(){
   points+=sc.points;
   if(mode==='intro') current.introFull=true;   // F8a: po ocenie ↻ od nowa gra całą zajawkę (dosłuchanie)
   updateScore();
-  if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle, okArtist, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  if(session){ const s=matchSlot(session.match); pushResult({track:current.track, artist:current.artist, okTitle, okArtist, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
 
   // F6a (R-U2): odsłona edukacyjna — „Ty: …" przy polu + tag, DLACZEGO zaliczone (literówka / człon duetu / rok ±2)
   const r=document.getElementById('rmeta');
@@ -756,7 +866,7 @@ function checkQuiz(){
   points+=sc.points;
   updateScore();
   if(mode==='quiz' && current.statKey) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł
-  if(session){ const s=matchSlot(session.match); session.results.push({track:abcd?current.track:current.prompt, artist:abcd?current.artist:'', okTitle:roundOk, okArtist:roundOk, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  if(session){ const s=matchSlot(session.match); pushResult({track:abcd?current.track:current.prompt, artist:abcd?current.artist:'', okTitle:roundOk, okArtist:roundOk, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   const r=document.getElementById('rmeta'); r.innerHTML='';
   if(mc){
     const correctLetter=mc.correct||'';
@@ -807,7 +917,7 @@ function checkYear(){
   const sc=scoreRound({ yearPts:ys.points, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });
   points+=sc.points;
   updateScore();
-  if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:ok, okArtist:ok, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  if(session){ const s=matchSlot(session.match); pushResult({track:current.track, artist:current.artist, okTitle:ok, okArtist:ok, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   document.querySelectorAll('#quizForm input, #quizForm button').forEach(x=>{ x.disabled=true; });
   const r=document.getElementById('rmeta'); r.innerHTML='';
   const tag = ys.tier==='miss' ? '' : (ys.tier==='exact' ? 'dokładnie' : YEAR_TIER[ys.tier].toLowerCase());

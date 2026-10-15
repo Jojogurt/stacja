@@ -93,9 +93,10 @@ export function searchTracks(term, cfg={}){
 export { pickTrack, BAD };
 
 // jedno wejście: rozwiąż grywalny utwór dla kategorii (web — sieć wstrzyknięta jako itunes(term)).
-export function resolveTrack({cat, seen, recent, cfg}){
+// F8b: `rnd` (opcjonalny) — seedowany PRNG Stacji dnia (ten sam seed + te same wyniki iTunes ⇒ ten sam utwór)
+export function resolveTrack({cat, seen, recent, cfg, rnd}){
   lastCfg=cfg;
-  return coreResolveTrack({ cat, seen, recent, itunes:cachedItunes });
+  return coreResolveTrack({ cat, seen, recent, itunes:cachedItunes, rnd });
 }
 
 // F8a (tryb „abcd"): dystraktory z kategorii — wyniki iTunes innych wykonawców z puli (ten sam cache co resolveTrack)

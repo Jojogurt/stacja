@@ -106,13 +106,17 @@ export function randomPools(allKeys, cats, allowed=ALL_MODES){
   return {cats:catsPick, modes};
 }
 
-// nawigacja po meczu (m = {slots, si, qi, rounds})
+// nawigacja po meczu (m = {slots, si, qi, rounds, qpc?})
+// F8b: `qpc` — pytań na slot (Stacja dnia: 1 → każde pytanie z innej kategorii); brak/śmieci → QPC (solo/MP bez zmian)
+export function matchQpc(m){ const q=m && m.qpc; return Number.isInteger(q) && q>=1 && q<=QPC ? q : QPC; }
+export function matchTotal(m){ return m && m.slots ? m.slots.length*matchQpc(m) : 0; }
 export function matchSlot(m){ return m && m.slots ? m.slots[m.si] : null; }
-export function matchAdvance(m){ m.qi++; if(m.qi>=QPC){ m.qi=0; m.si++; } return m.si < m.slots.length; }
+export function matchAdvance(m){ m.qi++; if(m.qi>=matchQpc(m)){ m.qi=0; m.si++; } return m.si < m.slots.length; }
 // F6a (F12): postęp meczu — numer bieżącego pytania (1-based) i liczba pytań meczu
 export function matchProgress(m){
   if(!m || !m.slots) return { n:0, total:0 };
-  return { n: Math.min(m.si*QPC + m.qi + 1, m.slots.length*QPC), total: m.slots.length*QPC };
+  const q=matchQpc(m);
+  return { n: Math.min(m.si*q + m.qi + 1, m.slots.length*q), total: m.slots.length*q };
 }
 // F6b (A2): kontekst bieżącego pytania BEZ numeru (numer meczu osobno — matchQLabel). Runda tylko gdy >1,
 // blok (kategoria × QPC pytań) tylko gdy mecz ma >1 blok — krótko, żeby pasek mieścił się na 320 px.
@@ -120,7 +124,7 @@ export function matchHeader(m, cats){ const s=matchSlot(m); if(!s) return '';
   const parts=[];
   if((m.rounds||1)>1) parts.push(`Runda ${s.round}/${m.rounds}`);
   parts.push(escapeHtml(catLabel(s.cat,cats)), MODE_SHORT[s.mode]||s.mode);
-  if(m.slots.length>1) parts.push(`blok ${m.si+1}/${m.slots.length}`);
+  if(m.slots.length>1 && matchQpc(m)>1) parts.push(`blok ${m.si+1}/${m.slots.length}`);   // F8b: qpc 1 → bez „bloków"
   return parts.join(' · '); }
 // F6b (A2): numer pytania w CAŁYM meczu („pyt. 7/10"), nie w bloku („pyt. 2/5")
 export function matchQLabel(m){ const p=matchProgress(m); return p.total ? `pyt. ${p.n}/${p.total}` : ''; }

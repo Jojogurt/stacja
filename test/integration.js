@@ -1427,5 +1427,107 @@ await group('F8a MP: picker wg capabilities serwera — stary serwer bez ABCD/ro
   w.mpAdvance && w.mpAdvance();
   w.mpLeaveConfirmed('room'); await settle(4);
 });
+
+/* ===================== F8b: Stacja dnia (karta, start, jedna próba, udostępnianie), share zwykłego meczu, legenda ===================== */
+const dailyCore = await import('../core/daily.js');
+const catalogMod = await import('../app/catalog.js');
+// schowek: przechwyć tekst „Udostępnij" (navigator.share brak w jsdom → fallback do schowka)
+const shared=[];
+const stubClipboard=()=>{ const v={ writeText:(t)=>{ shared.push(t); return Promise.resolve(); } };
+  for(const nav of new Set([window.navigator, globalThis.navigator].filter(Boolean))){ try{ Object.defineProperty(nav,'clipboard',{ value:v, configurable:true }); }catch(_e){} } };
+await group('F8b Stacja dnia: karta w menu → start (plan z seeda daty) → próba zapisana → druga próba zablokowana → udostępnianie', async ()=>{
+  const w=window, d=w.document, body=d.body;
+  stubClipboard();
+  const prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  globalThis.fetch=f8aFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache();
+  try{
+    if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+    $(w,'sumAgain').click();
+    w.__STACJA_TODAY__='2026-10-20';
+    w.localStorage.setItem('stacjaDaily', JSON.stringify({ v:1, days:{ '2026-10-19':{ key:'2026-10-19', hits:5, total:10, grid:'🟩', results:[], done:true } }, best:1 }));
+    $(w,'toMenu').click(); await settle(2);
+    const card=$(w,'goDaily');
+    ok(card && /^Stacja dnia #6/.test(txt(w,'goDailyTx')), 'karta „Stacja dnia #6" (2026-10-15 = #1) — '+txt(w,'goDailyTx'));
+    ok(/zagraj/.test(txt(w,'goDailySub')) && /🔥 seria 1 dzień/.test(txt(w,'goDailySub')), 'stan: „zagraj" + seria z wczoraj żyje — '+txt(w,'goDailySub'));
+    const goQuickIdx=[...$(w,'menu').children].indexOf($(w,'goQuick')), dailyIdx=[...$(w,'menu').children].indexOf(card);
+    ok(dailyIdx===goQuickIdx+1, 'karta pod „Graj teraz"');
+    const plan=dailyCore.dailyPlan(dailyCore.dailySeed('2026-10-20'), dailyCore.dailyPool(catalogMod.ALL_CATS));
+    card.click();
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    ok(body.classList.contains('solo') && body.classList.contains('playing') && body.classList.contains('daily'), 'ekran solo, mecz dnia trwa');
+    ok(/^Pyt\. 1\/10$/.test(txt(w,'sessProg')) && !/blok/.test(txt(w,'sessCtx')), '10 pytań po jednym (bez „bloków") — '+txt(w,'sessProg')+' | '+txt(w,'sessCtx'));
+    ok(txt(w,'scrTitle')==='Stacja dnia #6 · '+catalogMod.catLabel(plan.slots[0].cat), 'pytanie 1 z kategorii planu dnia (seed daty) — '+txt(w,'scrTitle'));
+    ok(!$(w,'check').disabled, 'pytanie 1 gotowe — stan: '+txt(w,'state'));
+    ok(/tytuł 50/.test(txt(w,'footLegend')), 'stopka: legenda muzyki — '+txt(w,'footLegend'));
+    const st=JSON.parse(w.localStorage.getItem('stacjaDaily'));
+    ok(st.days['2026-10-20'] && st.days['2026-10-20'].done===false, 'próba zapisana już przy pierwszym grywalnym pytaniu (przerwanie = wynik częściowy)');
+    // pytanie 1: pudło
+    click(w,'check'); await settle(2);
+    ok(/Pudło/.test(txt(w,'revealHead')), 'pudło w pytaniu 1');
+    // menu w trakcie → karta „w trakcie"
+    $(w,'toMenu').click(); await settle(2);
+    ok(/w trakcie/.test(txt(w,'goDailySub')), 'karta w trakcie meczu dnia — '+txt(w,'goDailySub'));
+    $(w,'goDaily').click(); await settle(2);
+    ok(body.classList.contains('solo') && $(w,'session').classList.contains('live') && /^Pyt\. 1\/10$/.test(txt(w,'sessProg')), 'karta w trakcie → powrót do gry (bez nowego meczu)');
+    // przerwanie meczu → wynik częściowy + udostępnianie
+    click(w,'sessEnd'); await settle(4);
+    ok($(w,'summary').classList.contains('show'), 'podsumowanie po przerwaniu');
+    eq2(txt(w,'sumGrid'), '⬛⬜⬜⬜⬜⬜⬜⬜⬜⬜', 'siatka: pudło + 9 nierozegranych');
+    ok(/Stacja dnia #6/.test(txt(w,'sumSub')) && /🔥 seria 2 dni/.test(txt(w,'sumSub')), 'podtytuł: numer dnia + seria 2 dni — '+txt(w,'sumSub'));
+    const sb=$(w,'sumShare'); ok(sb && !sb.hidden && txt(w,'sumShare')==='Udostępnij', 'przycisk „Udostępnij"');
+    sb.click(); await settle(4);
+    const t=shared[shared.length-1]||'';
+    ok(/^STACJA #6 🎧 0\/10 · 🔥2\n⬛⬜⬜⬜⬜⬜⬜⬜⬜⬜\nhttps?:\/\/[^?#\s]+$/.test(t), 'tekst udostępniania (bez danych osobowych): '+JSON.stringify(t));
+    ok(/Skopiowano/.test(txt(w,'sumShareSt')), 'fallback do schowka → „Skopiowano"');
+    const rec=JSON.parse(w.localStorage.getItem('stacjaDaily')).days['2026-10-20'];
+    ok(rec && rec.played===1 && rec.grid==='⬛⬜⬜⬜⬜⬜⬜⬜⬜⬜' && !('name' in rec), 'zapis dnia: 1 rozegrane, siatka');
+    // druga próba zablokowana
+    $(w,'toMenu').click(); await settle(2);
+    ok(/zagrane: 0\/10/.test(txt(w,'goDailySub')) && /🔥 seria 2 dni/.test(txt(w,'goDailySub')) && card.classList.contains('done'), 'karta po zagraniu: „zagrane: 0/10 · 🔥 seria 2 dni" — '+txt(w,'goDailySub'));
+    const nFetch=fetchCalls.length;
+    card.click(); await settle(6);
+    ok(!$(w,'session').classList.contains('live') && $(w,'summary').classList.contains('show'), 'druga próba zablokowana → wynik dnia zamiast meczu');
+    ok(fetchCalls.length===nFetch, 'bez losowania utworów przy zablokowanej próbie');
+    eq2(txt(w,'sumBig'), '0 / 10', 'wynik z zapisu'); ok(/kolejna jutro/.test(txt(w,'sumSub')), 'informacja „kolejna jutro"');
+    $(w,'sumShare').click(); await settle(4);
+    ok(/^STACJA #6 🎧 0\/10 · 🔥2\n/.test(shared[shared.length-1]||''), 'udostępnianie z ekranu wyniku dnia');
+    // profil: najlepsza seria (lokalnie, także bez serwera)
+    $(w,'toMenu').click(); await settle(2); $(w,'goProfil').click(); await settle(10);
+    const pf=$(w,'pfDaily');
+    ok(pf && /NAJLEPSZA SERIA/.test(pf.textContent) && /🔥 2/.test(pf.textContent), 'profil: seria dni + najlepsza seria — '+(pf&&pf.textContent.replace(/\s+/g,' ')));
+    // nowy dzień → karta znów „zagraj"
+    w.__STACJA_TODAY__='2026-10-21';
+    $(w,'toMenu').click(); await settle(2);
+    ok(/#7/.test(txt(w,'goDailyTx')) && /zagraj/.test(txt(w,'goDailySub')) && !card.classList.contains('done'), 'następny dzień: #7, znów „zagraj" — '+txt(w,'goDailySub'));
+  } finally {
+    delete w.__STACJA_TODAY__; w.localStorage.removeItem('stacjaDaily');
+    if($(w,'session').classList.contains('live')){ $(w,'goSolo').click(); click(w,'sessEnd'); await settle(4); }
+    $(w,'goSolo').click(); await settle(2); $(w,'sumAgain').click();
+    globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
+  }
+});
+await group('F8b zwykły mecz solo: „Udostępnij wynik" (punkty + X/Y + siatka)', async ()=>{
+  const w=window; stubClipboard();
+  const prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  globalThis.fetch=f8aFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache();
+  try{
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    const { audio } = catsByKind(w);
+    await f2aStartMatch(audio, /muzyka/);
+    for(let i=0;i<200 && $(w,'check').disabled;i++) await settle(2);
+    click(w,'check'); await settle(2);
+    click(w,'sessEnd'); await settle(4);
+    ok(!w.document.body.classList.contains('daily'), 'zwykły mecz — bez body.daily');
+    ok(txt(w,'sumShare')==='Udostępnij wynik' && !$(w,'sumShare').hidden, 'przycisk „Udostępnij wynik"');
+    eq2(txt(w,'sumGrid'), '⬛', 'siatka rozegranych pytań');
+    $(w,'sumShare').click(); await settle(4);
+    ok(/^STACJA 🎧 0 pkt · 0\/1\n⬛\nhttps?:\/\//.test(shared[shared.length-1]||''), 'tekst: punkty + X/Y + siatka + link — '+JSON.stringify(shared[shared.length-1]));
+  } finally { $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache(); }
+});
+await group('F8b stopka-legenda punktacji wg trybu pytania (rok / intro / ABCD)', async ()=>{
+  await f8aSolo(/rok/, async (w)=>{ eq2(txt(w,'footLegend'), 'dokładnie 100 · ±1 70 · ±2 50 · dekada 20', 'rok'); });
+  await f8aSolo(/intro/, async (w)=>{ eq2(txt(w,'footLegend'), 'im wcześniej, tym więcej: ×2.0 → ×1.0', 'intro'); });
+  await f8aSolo(/ABCD/, async (w)=>{ eq2(txt(w,'footLegend'), 'trafienie 100 · szybkość · seria', 'ABCD'); });
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);
