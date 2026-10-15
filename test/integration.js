@@ -244,6 +244,7 @@ const F2A = { hold:null, pending:[] };
 const f2aRelease = async () => { F2A.hold=null; while(F2A.pending.length){ F2A.pending.splice(0).forEach(f=>f()); await settle(10); } };
 const soloAudioMod = await import('../app/audio.js');   // ten sam singleton co w app.js (bez cache-bustera)
 const lektorMod = await import('../app/lektor.js');
+const repoMod = await import('../adapters-web/itunesRepository.js');   // F5: cache iTunes per sesja (singleton)
 // start meczu solo: tylko wskazana kategoria + tylko wskazany tryb (chip)
 async function f2aStartMatch(catKey, modeRe){
   resetSelection(window);
@@ -293,11 +294,13 @@ await group('F2a #3: „Zakończ" w trakcie strojenia → „Nowy mecz" startuje
   await f2aStartMatch(audio, /muzyka/);
   click(window,'check'); await settle(2);
   F2A.hold = (u) => /itunes|search/.test(u);   // pytanie 2: iTunes wisi (słaba sieć)
+  repoMod.clearTrackCache();   // F5: bez cache — inaczej wykonawca z pytania 1 rozwiąże się bez sieci
   click(window,'next'); await settle(4);
   ok(/strojenie/.test(txt(window,'state')), 'pytanie 2 stroi się (fetch wisi)');
   click(window,'sessEnd'); await settle(4);
   ok($(window,'summary').classList.contains('show'), 'podsumowanie po Zakończ');
   const pendBefore=F2A.pending.length;
+  repoMod.clearTrackCache();
   await f2aStartMatch(audio, /muzyka/);   // nowy mecz B (sieć nadal wisi)
   ok(F2A.pending.length>pendBefore, '#3: nowy mecz WYSŁAŁ własne zapytanie (newRound nie utknął na busy)');
   await f2aRelease();

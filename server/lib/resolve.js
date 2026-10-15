@@ -2,10 +2,13 @@
  * Reużywa czystej selekcji z `core/trackSelect.js`; wstrzykuje serwerowy `itunes(term)`
  * (bezpośredni fetch iTunes → fallback Deezer — ta sama logika co proxy `/tracks`,
  * ale bez nagłówków CORS, bo to wywołanie serwer→serwer). */
-import { resolveTrack } from '../../core/trackSelect.js';
+import { resolveTrack, cachedFetcher } from '../../core/trackSelect.js';
 
-async function fromItunes(term){
-  const q=new URLSearchParams({term,media:'music',entity:'song',attribute:'artistTerm',limit:'60',country:'PL'});
+// opts.song=true (F5 #5) → „artysta tytuł" bez artistTerm (playlisty); domyślnie po wykonawcy
+async function fromItunes(term, opts){
+  const q=new URLSearchParams(opts && opts.song
+    ? {term,media:'music',entity:'song',limit:'25',country:'PL'}
+    : {term,media:'music',entity:'song',attribute:'artistTerm',limit:'60',country:'PL'});
   const r=await fetch('https://itunes.apple.com/search?'+q.toString());
   if(!r.ok) throw new Error('itunes '+r.status);
   const d=await r.json();
@@ -14,8 +17,8 @@ async function fromItunes(term){
     releaseDate:t.releaseDate||'', previewUrl:t.previewUrl||'', artworkUrl100:t.artworkUrl100||'',
   }));
 }
-async function fromDeezer(term){
-  const q='artist:"'+term.replace(/"/g,'')+'"';
+async function fromDeezer(term, opts){
+  const q=opts && opts.song ? term : 'artist:"'+term.replace(/"/g,'')+'"';
   const r=await fetch('https://api.deezer.com/search?limit=60&q='+encodeURIComponent(q));
   if(!r.ok) throw new Error('deezer '+r.status);
   const d=await r.json();
@@ -26,10 +29,12 @@ async function fromDeezer(term){
   }));
 }
 // serwerowy fetcher: iTunes (często blokuje IP Workera) → fallback Deezer; nigdy nie rzuca
-async function itunes(term){
-  try{ const r=await fromItunes(term); if(r.length) return r; }catch(e){ /* fallback */ }
-  try{ return await fromDeezer(term); }catch(e){ return []; }
+async function itunesRaw(term, opts){
+  try{ const r=await fromItunes(term, opts); if(r.length) return r; }catch(e){ /* fallback */ }
+  try{ return await fromDeezer(term, opts); }catch(e){ return []; }
 }
+// F5 #6: cache per zapytanie na poziomie izolatu (współdzielony przez pokoje w tym izolacie)
+const itunes = cachedFetcher(itunesRaw, { max:300 });
 
 // rozwiąż grywalny utwór dla kategorii (cat = obiekt puli wgrany przez hosta przy starcie)
 export function resolveTrackServer({cat, seen, recent}){

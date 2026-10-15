@@ -10,7 +10,8 @@ import { clampRounds, sanitizeMpConfig, MAX_ROUNDS } from '../core/match.js';
 import { clampTimer, MP_TIMER_MAX_S, secsLeft, MP_ARM_TIMEOUT_MS, MP_REVEAL_AUTO_MS, MP_BUFFER_TIMEOUT_MS } from '../core/timing.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
-import { resolveTrack } from '../core/trackSelect.js';
+import { resolveTrack, sameArtist, versionTier, titleKey, parseRange, inRange, rankTracks, pickTrackRanked,
+  popWeight, cachedFetcher, matchSong } from '../core/trackSelect.js';
 import { buildSoloRecord, buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { listenSecs, soloSnipStart, mpSnipStart, shouldPing, SNIP_SECS, SOLO_SNIP_MAX, MP_SNIP_WINDOW_S } from '../core/timing.js';
 import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary, pickSummaryText } from '../core/picker.js';
@@ -408,6 +409,105 @@ group('repo.pickTrack', ()=>{
   ok(!pickTrack([{trackName:'Z',artistName:'Ktoś',previewUrl:'u'}],'Queen',seen),'inny wykonawca → odrzucony');
 });
 
+/* --- F5: dobór utworu — artysta ściśle, wersje, dekada, popularność (fixture wyników iTunes) --- */
+const it=(trackName, artistName, year, extra={})=>({ trackName, artistName, previewUrl:'p:'+trackName,
+  collectionName:extra.album||'Album', releaseDate: year ? year+'-01-01T08:00:00Z' : '', ...extra });
+group('F5 #1 trackSelect.sameArtist — dokładnie / granica członu kolaboracji', ()=>{
+  ok(sameArtist('Queen','Queen'), 'Queen = Queen');
+  ok(sameArtist('Queen & David Bowie','Queen'), 'Queen & David Bowie ✓ Queen (człon duetu)');
+  ok(sameArtist('David Bowie & Queen','Queen'), 'David Bowie & Queen ✓ Queen');
+  ok(sameArtist('Madonna feat. Justin Timberlake','Madonna'), 'feat. po stronie wyniku ✓');
+  ok(sameArtist('TACONAFIDE, Quebonafide & Taco Hemingway','Quebonafide'), 'lista „A, B & C" ✓ B');
+  ok(sameArtist('Mata x Young Leosia','Mata'), '„x" ✓');
+  ok(sameArtist('The Beatles','Beatles') && sameArtist('Beatles','The Beatles'), 'przedrostek „The" po obu stronach');
+  ok(sameArtist('The Killers','The Killers'), 'The Killers = The Killers');
+  ok(sameArtist('Dzem','Dżem') && sameArtist('KęKę','Kękę'), 'diakrytyki/wielkość liter');
+  ok(sameArtist('Bedoes 2115 & Lanek','Bedoes'), '„Bedoes 2115" (artysta + numer) ✓ Bedoes');
+  ok(sameArtist('AC/DC','AC/DC') && !sameArtist('AC/DC','DC'), 'AC/DC całością, ukośnik bez spacji nie dzieli');
+  ok(!sameArtist('Queen Latifah','Queen'), 'Queen Latifah ✗ Queen');
+  ok(!sameArtist('Queensrÿche','Queen'), 'Queensrÿche ✗ Queen');
+  ok(!sameArtist('Backstreet Boys','Boys'), 'Backstreet Boys ✗ Boys');
+  ok(!sameArtist('Saja Boys','Boys'), 'Saja Boys ✗ Boys');
+  ok(!sameArtist('Toto Cutugno','Toto') && !sameArtist('Hey Violet','Hey') && !sameArtist('Migos','Mig'), 'Toto Cutugno/Hey Violet/Migos ✗');
+  ok(!sameArtist('Taconafide','Taco Hemingway'), 'Taconafide ✗ Taco Hemingway');
+  ok(!sameArtist('Культ','Kult') && !sameArtist('Kult','') && !sameArtist('',''), 'pusty norm (cyrylica/puste) ✗');
+});
+group('F5 #2 trackSelect.versionTier / titleKey — wersje i dedup', ()=>{
+  eq(versionTier(it('Like a Prayer','Madonna',1989)), 0, 'czysty tytuł → 0');
+  eq(versionTier(it('(I Can\'t Get No) Satisfaction','The Rolling Stones',1965)), 0, 'nawias będący tytułem → 0');
+  eq(versionTier(it('Holiday (Single Version)','Madonna',1983)), 0, 'single version → 0');
+  eq(versionTier(it('Holiday (Radio Edit)','Madonna',1983)), 0, 'radio edit → 0');
+  eq(versionTier(it('Ironic (feat. X)','A',1995)), 0, 'feat. w nawiasie → 0');
+  eq(versionTier(it('Take On Me (2015 Remaster)','a-ha',1985)), 1, 'remaster → 1');
+  eq(versionTier(it('Heroes - 2017 Remastered Version','David Bowie',1977)), 1, '„- 2017 Remastered Version" → 1 (remaster, nie alt)');
+  eq(versionTier(it('Crazy Little Thing Called Love (Live in Budapest)','Queen',1986)), 2, 'live → 2');
+  eq(versionTier(it('Song (Live at Wembley / Remastered 2011)','Queen',1986)), 2, 'live + remaster → 2');
+  eq(versionTier(it('Vogue - Live','Madonna',1990)), 2, '„- Live" → 2');
+  eq(versionTier(it('Hung Up (SDP Extended Vocal Remix)','Madonna',2005)), 2, 'remix → 2');
+  eq(versionTier(it('Song (Demo)','X',1990)), 2, 'demo → 2');
+  eq(versionTier(it('Song (Acoustic Version)','X',1990)), 2, 'acoustic → 2');
+  eq(versionTier(it('Song (BBC Session)','X',1990)), 2, 'session → 2');
+  eq(versionTier(it('Radio Ga Ga','Queen',1986,{album:'Live at Wembley \'86'})), 2, 'album koncertowy → 2');
+  eq(versionTier(it('Live and Let Die','Wings',1973)), 0, '„Live" w samym tytule (bez nawiasu) → 0');
+  eq(titleKey('Crazy Little Thing Called Love (Live in Budapest)'), titleKey('Crazy Little Thing Called Love'), 'titleKey bez nawiasu');
+  eq(titleKey('Vogue - 2009 Remaster'), 'vogue', 'titleKey bez sufiksu „ - …"');
+});
+group('F5 #4 trackSelect.parseRange / inRange — format categories.js', ()=>{
+  eq(parseRange('1980–89'), {from:1980,to:1989}, "'1980–89' (półpauza)");
+  eq(parseRange('2000–09'), {from:2000,to:2009}, "'2000–09'");
+  eq(parseRange('1990-1999'), {from:1990,to:1999}, "'1990-1999'");
+  eq(parseRange('2020–'), {from:2020,to:9999}, "'2020–' (otwarta)");
+  eq(parseRange('2020+'), {from:2020,to:9999}, "'2020+'");
+  eq(parseRange(undefined), null, 'brak range → null');
+  const r=parseRange('1980–89');
+  ok(inRange(it('a','b',1979),r) && inRange(it('a','b',1990),r), 'tolerancja ±1 rok');
+  ok(!inRange(it('a','b',1978),r) && !inRange(it('a','b',2024),r), 'poza zakresem');
+  ok(inRange(it('a','b',''),r), 'brak daty (Deezer) → nie karzemy');
+});
+group('F5 #2-#4 trackSelect.rankTracks / pickTrackRanked — dekada > wersja > popularność', ()=>{
+  const range=parseRange('1980–89');
+  const res=[
+    it('L.E.S. Girl','Madonna',2026,{album:'Confessions II'}),
+    it('Like a Prayer','Madonna',1989),
+    it('Like a Prayer (Live)','Madonna',1990),
+    it('Vogue','Madonna',1990),
+    it('Frozen','Madonna',1998),
+    it('Material Girl (Remix)','Madonna',1985),
+    it('Queen Song','Queen Latifah',1989),
+  ];
+  const a=rankTracks(res,'Madonna',new Set(),{range});
+  eq(a.level, 0, 'jest utwór z dekady w wersji studyjnej → poziom 0');
+  eq(a.list.map(c=>c.r.trackName).sort(), ['Like a Prayer','Vogue'], 'tylko dekada+studyjne; „Like a Prayer (Live)" zdeduplikowane; remix i Latifah odrzucone');
+  const b=rankTracks(res.filter(r=>r.releaseDate<'1980'||r.releaseDate>'1991'),'Madonna',new Set(),{range});
+  eq(b.level, 1, 'brak utworów z dekady → poziom 1 (zapas spoza dekady)');
+  const c=rankTracks([it('Material Girl (Remix)','Madonna',1985), it('Vogue - Live','Madonna',2004)],'Madonna',new Set(),{range});
+  eq(c.level, 2, 'tylko remiks z dekady → poziom 2 (gramy tylko w ostateczności)');
+  eq(rankTracks(res,'Madonna',new Set()).level, 0, 'kategoria bez range: wszystkie studyjne na poziomie 0');
+  // dedup + wybór wersji: remaster jedyny → dopuszczalny; gdy są oba → studyjna
+  const d=rankTracks([it('Take On Me (2015 Remaster)','a-ha',1985), it('Take On Me','a-ha',1985)],'a-ha',new Set(),{range});
+  eq(d.list.length, 1, 'dwie wersje → jeden utwór'); eq(d.list[0].r.trackName, 'Take On Me', 'z grupy wersja bez nawiasu');
+  const e=rankTracks([it('Take On Me (2015 Remaster)','a-ha',1985)],'a-ha',new Set(),{range});
+  ok(e.level===0 && e.list.length===1, 'remaster jako jedyna wersja → grywalny (poziom 0)');
+  // seen po titleKey: zagrany „Like a Prayer" blokuje też wersję live
+  const seen=new Set([titleKey('Like a Prayer')]);
+  ok(!rankTracks([it('Like a Prayer (Live)','Madonna',1989)],'Madonna',seen,{range}).list.length, 'seen po titleKey blokuje inne wersje');
+  // popularność: wagi pozycji
+  eq([popWeight(0),popWeight(9),popWeight(10),popWeight(24),popWeight(25),popWeight(59)], [3,3,2,2,1,1], 'wagi 0–9:3, 10–24:2, dalej 1');
+  const many=Array.from({length:40},(_,i)=>it('T'+i,'X',1985));
+  const cnt={top:0,low:0}; let x=0; const rng=()=>{ x=(x+0.61803398875)%1; return x; };
+  for(let i=0;i<1000;i++){ const p=pickTrackRanked(many,'X',new Set(),{range,rng}); if(+p.track.trackName.slice(1)<10) cnt.top++; else if(+p.track.trackName.slice(1)>=25) cnt.low++; }
+  ok(cnt.top>cnt.low*1.5, `top-10 losowane częściej niż pozycje 25+ (${cnt.top} vs ${cnt.low})`);
+  ok(pickTrackRanked([it('A','Madonna',2026)],'Madonna',new Set(),{range}).level===1, 'pickTrackRanked zwraca poziom');
+});
+group('F5 #5 trackSelect.matchSong — tytuł I wykonawca, preferuj studyjną', ()=>{
+  const s={title:'Bohemian Rhapsody', artist:'Queen'};
+  eq(matchSong([it('Bohemian Rhapsody','Queen Latifah',1990)], s), null, 'inny wykonawca (Latifah) ✗');
+  eq(matchSong([it('Killer Queen','Queen',1974)], s), null, 'inny tytuł ✗');
+  const m=matchSong([it('Bohemian Rhapsody (Live Aid)','Queen',1985), it('Bohemian Rhapsody','Queen',1975)], s);
+  eq(m && m.trackName, 'Bohemian Rhapsody', 'z kilku wersji — studyjna');
+  ok(matchSong([it('Under Pressure','Queen & David Bowie',1981)], {title:'Under Pressure',artist:'Queen'}), 'duet po stronie wyniku ✓');
+});
+
 /* --- matchRecord (czysty builder payloadu) --- */
 group('matchRecord.buildSoloRecord', ()=>{
   const slots=[{},{},{}];  // 3 sloty × QPC pytań
@@ -631,6 +731,47 @@ await (async ()=>{
   const right=async()=>[{ trackName:'Beat It', artistName:'Michael Jackson', previewUrl:'beatit.m4a' }];
   const r2=await resolveTrack({ cat:{songs:[song]}, seen:new Set(), itunes:right });
   ok(r2.preview==='beatit.m4a' && r2.track==='Beat It', 'trafienie → zajawka tego samego utworu co odpowiedź');
+})();
+
+// F5: resolveTrack — dekada przez kolejnych wykonawców, playlista po „artysta tytuł", cache per sesja
+await (async ()=>{
+  console.log('• F5 trackSelect.resolveTrack: dekada → inny wykonawca; zapas; playlista „artysta tytuł"; cache');
+  const yr=y=>y+'-01-01T00:00:00Z';
+  const db={
+    'Nowy':  [{trackName:'Nowość', artistName:'Nowy', previewUrl:'n', releaseDate:yr(2024)}],
+    'Stary': [{trackName:'Klasyk', artistName:'Stary', previewUrl:'k', releaseDate:yr(1984)},
+              {trackName:'Klasyk (Live)', artistName:'Stary', previewUrl:'kl', releaseDate:yr(2010)}],
+  };
+  const calls=[]; const net=async(term,opts)=>{ calls.push([term,!!(opts&&opts.song)]); return db[term]||[]; };
+  for(let i=0;i<5;i++){
+    const r=await resolveTrack({ cat:{range:'1980–89', artists:['Nowy','Stary']}, seen:new Set(), recent:[], itunes:net });
+    ok(r.track==='Klasyk' && r.year==='1984', `runda ${i}: utwór z dekady innego wykonawcy (${r.track} ${r.year})`);
+  }
+  const r2=await resolveTrack({ cat:{range:'1980–89', artists:['Nowy']}, seen:new Set(), recent:[], itunes:net });
+  ok(r2.track==='Nowość' && r2.year==='2024', 'brak utworów z dekady u nikogo → zapas spoza dekady z PRAWDZIWYM rokiem');
+  // playlista: najpierw „artysta tytuł" (opts.song), fallback po artyście
+  const songDb={ 's:Queen Bohemian Rhapsody':[{trackName:'Bohemian Rhapsody',artistName:'Queen',previewUrl:'bo'}],
+    'a:Lady Pank':[{trackName:'Mniej niż zero',artistName:'Lady Pank',previewUrl:'mz'}] };
+  const sc=[]; const sNet=async(term,opts)=>{ const k=(opts&&opts.song?'s:':'a:')+term; sc.push(k); return songDb[k]||[]; };
+  const p1=await resolveTrack({ cat:{songs:[{title:'Bohemian Rhapsody',artist:'Queen'}]}, seen:new Set(), itunes:sNet });
+  ok(p1.preview==='bo' && sc[0]==='s:Queen Bohemian Rhapsody' && sc.length===1, 'playlista: trafienie z wyszukiwania „artysta tytuł" (bez zapytania po artyście)');
+  sc.length=0;
+  const p2=await resolveTrack({ cat:{songs:[{title:'Mniej niż zero',artist:'Lady Pank'}]}, seen:new Set(), itunes:sNet });
+  ok(p2.preview==='mz' && sc.join('|')==='s:Lady Pank Mniej niż zero|a:Lady Pank', 'playlista: fallback na wyszukiwanie po artyście');
+  sc.length=0;
+  await resolveTrack({ cat:{songs:[{title:'Can\'t Stop (feat. X)',artist:'Band (PL)'}]}, seen:new Set(), itunes:sNet });
+  eq(sc[0], 's:Band Can\'t Stop', 'zapytanie bez nawiasów i feat.');
+  // cache: jedno zapytanie na termin, puste i błędy nie są cache'owane, TTL
+  let n=0, t=0; const f=cachedFetcher(async term=>{ n++; if(term==='err') throw new Error('x'); return term==='pusty'?[]:[term]; }, {ttlMs:100, now:()=>t});
+  await Promise.all([f('A'), f('a'), f('A ')]); eq(n, 1, 'cache: współbieżne/wielkość liter → 1 zapytanie');
+  await f('A',{song:true}); eq(n, 2, 'cache: tryb song osobnym kluczem');
+  await f('pusty'); await f('pusty'); eq(n, 4, 'cache: pusty wynik nie jest cache\'owany');
+  await f('err').catch(()=>{}); await f('err').catch(()=>{}); eq(n, 6, 'cache: błąd nie jest cache\'owany');
+  t=500; await f('A'); eq(n, 7, 'cache: po TTL ponowne zapytanie');
+  const cf=cachedFetcher(net); calls.length=0;
+  await resolveTrack({ cat:{range:'1980–89', artists:['Stary']}, seen:new Set(), recent:[], itunes:cf });
+  await resolveTrack({ cat:{range:'1980–89', artists:['Stary']}, seen:new Set(), recent:[], itunes:cf });
+  eq(calls.length, 1, 'resolveTrack z cachedFetcher: drugi raz bez sieci');
 })();
 
 // FAZA 4: zasady scoringu 2026-07 (tabele z planu naprawy — źródło prawdy)

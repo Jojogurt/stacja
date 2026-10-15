@@ -1,5 +1,6 @@
 /* server/lib/proxies.js — proxy zewnętrznych źródeł (port z Supabase Edge Functions).
  *   GET /tracks?artist=<term>  → { source, results:[{trackName,artistName,collectionName,releaseDate,previewUrl,artworkUrl100}] }
+ *   GET /tracks?q=<artysta tytuł> → j.w., ale wyszukiwanie utworu (bez attribute=artistTerm) — F5 playlisty
  *   GET /spotify?url=<link>     → { name, count, tracks:[{title,artist,preview}] }
  *   GET /audio?u=<https url>    → bajty audio + CORS + Range (allowlista hostów)
  * Logika identyczna jak w `_ref-supabase/*` — zmienia się tylko opakowanie (Deno.serve → trasa Workera).
@@ -9,8 +10,10 @@ const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 
 /* ---------- /tracks (iTunes → fallback Deezer) ---------- */
-async function fromItunes(artist) {
-  const q = new URLSearchParams({ term: artist, media: 'music', entity: 'song', attribute: 'artistTerm', limit: '60', country: 'PL' });
+async function fromItunes(artist, song = false) {
+  const q = new URLSearchParams(song
+    ? { term: artist, media: 'music', entity: 'song', limit: '25', country: 'PL' }
+    : { term: artist, media: 'music', entity: 'song', attribute: 'artistTerm', limit: '60', country: 'PL' });
   const r = await fetch('https://itunes.apple.com/search?' + q.toString());
   if (!r.ok) throw new Error('itunes ' + r.status);
   const d = await r.json();
@@ -19,8 +22,8 @@ async function fromItunes(artist) {
     releaseDate: t.releaseDate || '', previewUrl: t.previewUrl || '', artworkUrl100: t.artworkUrl100 || '',
   })).filter((t) => t.previewUrl);
 }
-async function fromDeezer(artist) {
-  const q = 'artist:"' + artist.replace(/"/g, '') + '"';
+async function fromDeezer(artist, song = false) {
+  const q = song ? artist : 'artist:"' + artist.replace(/"/g, '') + '"';
   const r = await fetch('https://api.deezer.com/search?limit=60&q=' + encodeURIComponent(q));
   if (!r.ok) throw new Error('deezer ' + r.status);
   const d = await r.json();
@@ -31,11 +34,13 @@ async function fromDeezer(artist) {
   })).filter((t) => t.previewUrl);
 }
 async function handleTracks(url) {
-  const artist = (url.searchParams.get('artist') || '').trim();
+  const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
+  const artist = q || (url.searchParams.get('artist') || '').trim();
+  const song = !!q;
   if (!artist) return json({ source: null, results: [] });
   let results = [], source = '';
-  try { results = await fromItunes(artist); source = 'itunes'; } catch (_e) { /* następne źródło */ }
-  if (!results.length) { try { results = await fromDeezer(artist); source = 'deezer'; } catch (_e) { /* brak */ } }
+  try { results = await fromItunes(artist, song); source = 'itunes'; } catch (_e) { /* następne źródło */ }
+  if (!results.length) { try { results = await fromDeezer(artist, song); source = 'deezer'; } catch (_e) { /* brak */ } }
   return json({ source, results });
 }
 
