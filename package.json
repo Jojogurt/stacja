@@ -8,6 +8,7 @@
     "test": "node test/run.js && node test/data.js && npm --prefix server test --silent",
     "test:dom": "node test/integration.js",
     "test:data": "node test/data.js",
+    "lint:data": "node test/lint-data.js",
     "test:server": "npm --prefix server test --silent",
     "test:all": "node test/run.js && node test/data.js && node test/integration.js && npm --prefix server test --silent"
   },

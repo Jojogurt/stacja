@@ -4,7 +4,8 @@
  *
  * Sprawdza per plik: poprawny kształt (kind:'quiz', label, questions[]), każdy slot ma niepustą
  * listę wariantów, klucze answers ⊆ slotów, brak duplikatów promptów. Dla pytań ABCD: dokładnie
- * 4 opcje A–D, answers.a[0] to litera, a opcja tej litery == answers.a[1] (spójność litera↔opcja). */
+ * 4 opcje A–D, answers.a[0] to litera, a opcja tej litery == answers.a[1] (spójność litera↔opcja).
+ * Pola opcjonalne (SPEC-paczki-v2): pool, difficulty, fun, fact. Reguły jakościowe: `npm run lint:data`. */
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
@@ -49,6 +50,24 @@ for (const f of files) {
         `${at}: answers[${s && s.key}] = niepusta lista niepustych wariantów`);
     }
     for (const k of Object.keys(ans)) ok(q.slots.some(s => s.key === k), `${at}: answers[${k}] ma odpowiadający slot`);
+
+    // pola opcjonalne wg SPEC-paczki-v2: pool / difficulty / fun / fact
+    if (q.pool !== undefined) {
+      const isStrs = (l) => Array.isArray(l) && l.length > 0 && l.every(x => typeof x === 'string' && x.trim());
+      const poolOk = Array.isArray(q.pool) && q.pool.length > 0 && q.pool.every(isStrs);
+      ok(poolOk, `${at}: pool = niepusta lista niepustych list niepustych stringów`);
+      if (poolOk) {
+        ok(q.pool.length >= q.slots.length, `${at}: pool ma ≥ tyle pozycji (${q.pool.length}) co slotów (${q.slots.length})`);
+        const flat = q.pool.flat();
+        for (const s of q.slots) {
+          const have = new Set(Array.isArray(ans[s.key]) ? ans[s.key] : []);
+          const missing = flat.filter(v => !have.has(v));
+          ok(missing.length === 0, `${at}: answers[${s.key}] ⊇ spłaszczona pula (brak: ${missing.slice(0, 3).join(', ')})`);
+        }
+      }
+    }
+    if (q.difficulty !== undefined) ok([1, 2, 3].includes(q.difficulty), `${at}: difficulty ∈ {1,2,3} (jest: ${JSON.stringify(q.difficulty)})`);
+    for (const f2 of ['fun', 'fact']) if (q[f2] !== undefined) ok(typeof q[f2] === 'string' && q[f2].trim(), `${at}: ${f2} to niepusty string`);
 
     // ABCD (multiple-choice): prompt zawiera linie "A) ... D) ..."
     if (/\nA\)/.test(q.prompt)) {
