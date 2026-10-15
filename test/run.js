@@ -12,7 +12,10 @@ import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 import { resolveTrack } from '../core/trackSelect.js';
 import { buildSoloRecord, buildMpRecord } from '../core/matchRecord.js';
 import { listenSecs, soloSnipStart, mpSnipStart, shouldPing, SNIP_SECS, SOLO_SNIP_MAX, MP_SNIP_WINDOW_S } from '../core/timing.js';
-import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary } from '../core/picker.js';
+import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary, pickSummaryText } from '../core/picker.js';
+import { readFileSync, existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join, normalize } from 'node:path';
 import { createFeed, resetFeed, pushChat, ingestFeed, FEED_CAP } from '../core/chatFeed.js';
 
 let pass=0, fail=0;
@@ -508,6 +511,21 @@ group('picker.pickSummary', ()=>{
   eq(ok1.count, 2*CPR*QPC, 'liczba utworów = rundy×CPR×QPC');
   eq(ok1.label,'rundy','etykieta liczby rund');
 });
+group('F2a picker.pickSummary: faktyczna liczba kategorii + „pytań" przy quizie/lektorze', ()=>{
+  const C={ d80:{label:'80s',artists:['A']}, d90:{label:'90s',artists:['B']}, d00:{label:'00s',artists:['C']}, d10:{label:'10s',artists:['D']},
+    lyr:{label:'t',kind:'lyrics',songs:[{title:'d',lyric:'x'}]}, gk:{label:'g',kind:'quiz',questions:[{prompt:'?'}]} };
+  const one=pickSummary(new Set(['d80']),new Set(['music']),2,C);
+  eq([one.cats,one.unit],[1,'utworów'],'1 kategoria audio → cats=1, „utworów"');
+  const t1=pickSummaryText(one);
+  ok(/z 1 kategorii/.test(t1.from) && !/3 kategorie/.test(t1.head), '1 kategoria: nie udaje „3 kategorie" — '+t1.head+t1.total+t1.from);
+  const four=pickSummary(new Set(['d80','d90','d00','d10']),new Set(['music']),1,C);
+  const t4=pickSummaryText(four);
+  ok(/3 kategorie/.test(t4.head) && /z 4 wybranych/.test(t4.from), '4 kategorie → „3 kategorie … z 4 wybranych" — '+t4.head+t4.from);
+  eq(pickSummary(new Set(['d80','gk']),new Set(['music','quiz']),1,C).unit,'pytań','pula z quizem → „pytań"');
+  eq(pickSummary(new Set(['lyr']),new Set(['lektor']),1,C).unit,'pytań','lektor → „pytań"');
+  eq(pickSummary(new Set(['d80','lyr']),new Set(['music']),1,C).cats,1,'kategoria niekompatybilna z trybami nie jest liczona');
+  eq(pickSummaryText({error:'x'}),{head:'',total:'',from:''},'błąd → puste części');
+});
 
 /* --- chatFeed --- */
 group('chatFeed.pushChat / reset', ()=>{
@@ -585,6 +603,23 @@ group('scoring.zasady-2026-07: 4.1 duety/feat (człony oczekiwanego wykonawcy)',
   ok(artistMatch('Vito Bambino','sanah i Vito Bambino')===true, 'Vito Bambino ✓');
   ok(artistMatch('Queen David','Queen & David Bowie')===false, 'Queen David ✗ (żaden pojedynczy człon)');
 });
+group('F2a #12 artistMatch: „&"/przecinek w NAZWIE zespołu nie rozbija na pojedyncze słowa', ()=>{
+  const T=[
+    ['Earth','Earth, Wind & Fire',false], ['Wind','Earth, Wind & Fire',false], ['Fire','Earth, Wind & Fire',false],
+    ['Earth Wind and Fire','Earth, Wind & Fire',true],
+    ['Simon','Simon & Garfunkel',false], ['Garfunkel','Simon & Garfunkel',false], ['Simon and Garfunkel','Simon & Garfunkel',true],
+    ['Sonny','Sonny & Cher',false], ['Cher','Sonny & Cher',false], ['Sonny & Cher','Sonny & Cher',true],
+    ['Ed Sheeran','Ed Sheeran & Justin Bieber',true], ['Justin Bieber','Ed Sheeran & Justin Bieber',true], ['Bieber','Ed Sheeran & Justin Bieber',false],
+    ['Dawid Podsiadło','Dawid Podsiadło x Taco Hemingway',true], ['Taco Hemingway','Dawid Podsiadło x Taco Hemingway',true],
+    ['Kult','Kult',true], ['Kultura','Kult',false],
+    ['Daft Punk','Daft Punk feat. Pharrell Williams',true], ['Pharrell Williams','Daft Punk feat. Pharrell Williams',true], ['Punk','Daft Punk feat. Pharrell Williams',false],
+    ['Sons','Mumford & Sons',false], ['Tyler','Tyler, the Creator',false], ['Young','Crosby, Stills, Nash & Young',false],
+    ['Dwa','Raz, Dwa, Trzy',false], ['News','Huey Lewis and the News',false], ['Papas','The Mamas & the Papas',false],
+    ['Łona','Łona i Webber',true], ['Webber','Łona i Webber',true], ['Cleo','Donatan & Cleo',true],
+    ['Kayah','Kayah i Goran Bregović',true], ['Pono','Sokół feat. Pono',true], ['Sia','David Guetta ft. Sia',true],
+  ];
+  T.forEach(([g,a,want])=>ok(artistMatch(g,a)===want, `${g} ${want?'✓':'✗'} ${a}`));
+});
 group('scoring.zasady-2026-07: 4.2 lev≤1 od 6 znaków', ()=>{
   ok(textMatch('Stan','Stay')===false, 'Stan ✗ Stay (regresja luzu)');
   ok(textMatch('Light','Night')===false, 'Light ✗ Night');
@@ -611,6 +646,59 @@ await (async ()=>{
   const dt=Date.now()-t0;
   ok(r.error===true, 'po capie → t.error');
   ok(dt<1500, `zwrot w budżecie czasu (było ${dt}ms) — nie czeka na każdego artystę osobno`);
+})();
+
+/* --- F2a #1: SW SHELL ⊇ graf modułów (quiz-loader.js → importy ES) + manifest quizów + zasoby index.html --- */
+group('F2a #1 sw.js: SHELL zawiera każdy moduł osiągalny importami, każdy plik z quiz-index.json i zasoby index.html', ()=>{
+  const ROOT=join(dirname(fileURLToPath(import.meta.url)),'..');
+  const sw=readFileSync(join(ROOT,'sw.js'),'utf8');
+  const arr=sw.slice(sw.indexOf('const SHELL'), sw.indexOf('];', sw.indexOf('const SHELL')));
+  const shell=new Set([...arr.matchAll(/'\.\/([^']*)'/g)].map(m=>m[1]));
+  const seen=new Set();
+  const walk=(rel)=>{
+    if(seen.has(rel)) return; seen.add(rel);
+    const src=readFileSync(join(ROOT,rel),'utf8').replace(/\/\*[\s\S]*?\*\//g,'');
+    // statyczne `import … from './x'`, `export … from './x'`, `import './x'` i dynamiczne `import('./x')`
+    const re=/(?:import|export)\s[^'"]*?from\s*['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)|import\s+['"]([^'"]+)['"]/g;
+    let m; while((m=re.exec(src))){ const spec=m[1]||m[2]||m[3]; if(!spec.startsWith('.')) continue;
+      walk(normalize(join(dirname(rel),spec.split('?')[0])).replace(/\\/g,'/')); }
+  };
+  walk('quiz-loader.js'); walk('app.js');
+  const missingMods=[...seen].filter(f=>!shell.has(f));
+  eq(missingMods,[],'moduły osiągalne z quiz-loader.js/app.js brakujące w SHELL');
+  ok(seen.has('core/teams.js') && seen.has('app/solo.js'), 'graf importów faktycznie przeszedł moduły (sanity)');
+  const idx=JSON.parse(readFileSync(join(ROOT,'data/quiz-index.json'),'utf8'));
+  const files=Array.isArray(idx)?idx:idx.files;
+  eq(files.filter(f=>!shell.has('data/'+f)),[],'pliki z data/quiz-index.json brakujące w SHELL');
+  ok(shell.has('data/quiz-index.json'),'sam manifest quizów w SHELL');
+  const html=readFileSync(join(ROOT,'index.html'),'utf8');
+  const local=[...html.matchAll(/<(?:script|link)\b[^>]*?\b(?:src|href)="([^"#:?]+)"/g)].map(m=>m[1].replace(/^\.\//,''));
+  eq(local.filter(f=>!shell.has(f)),[],'lokalne <script>/<link> z index.html brakujące w SHELL');
+  eq([...shell].filter(f=>f && !existsSync(join(ROOT,f))),[],'wpisy SHELL wskazujące na nieistniejące pliki');
+});
+
+/* --- F2a #8: quiz-loader nie blokuje bootu na zawieszonym fetchu; spóźnione kategorie → zdarzenie --- */
+await (async ()=>{
+  console.log('• F2a #8 quiz-loader: wiszący fetch → app.js startuje po budżecie; spóźniona kategoria ogłaszana');
+  const ROOT=join(dirname(fileURLToPath(import.meta.url)),'..');
+  const src=readFileSync(join(ROOT,'quiz-loader.js'),'utf8');
+  ok(src.includes("import('./app.js')"), 'loader importuje app.js');
+  const pending={};
+  const fetchFake=(u)=>{ const f=String(u).split('/').pop();
+    if(f==='quiz-index.json') return Promise.resolve({ ok:true, json:()=>Promise.resolve({ files:['quiz-a.json','quiz-b.json'] }) });
+    if(f==='quiz-a.json') return Promise.resolve({ ok:true, json:()=>Promise.resolve({ kind:'quiz', label:'A', questions:[{prompt:'?'}] }) });
+    return new Promise(r=>{ pending.b=()=>r({ ok:true, json:()=>Promise.resolve({ kind:'quiz', label:'B', questions:[{prompt:'?'}] }) }); });   // wisi
+  };
+  const events=[]; let bootAt=0; const t0=Date.now();
+  const win={ __QUIZ_BOOT_MS__:60, dispatchEvent:(e)=>events.push(e.type) };
+  const run=new Function('window','document','fetch','CustomEvent','__boot', src.replace("import('./app.js')", '__boot()'));
+  run(win, { baseURI:'https://stacja.test/' }, fetchFake, class { constructor(t){ this.type=t; } }, async ()=>{ bootAt=Date.now()-t0; });
+  await new Promise(r=>setTimeout(r,150));
+  ok(bootAt>0 && bootAt<1000, `app.js zaimportowany mimo wiszącego pliku (po ${bootAt}ms; budżet 60ms)`);
+  ok(win.CATEGORIES.quiz.a && !win.CATEGORIES.quiz.b, 'szybka kategoria wczytana przed bootem, wisząca jeszcze nie');
+  const before=events.length;
+  pending.b && pending.b(); await new Promise(r=>setTimeout(r,20));
+  ok(win.CATEGORIES.quiz.b && events.length>before && events.every(t=>t==='stacja:quiz'), 'spóźniona kategoria dociągnięta w tle + zdarzenie stacja:quiz');
 })();
 
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);

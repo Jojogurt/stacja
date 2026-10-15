@@ -31,9 +31,11 @@ function silentWav(){
 // Dlatego MP używa JEDNEGO trwałego elementu (ten odblokowany), zmienianego przez .src.
 export function unlockAudioElement(el){
   try{
-    el.muted=true; el.src=silentWav();
+    const silent=silentWav();
+    el.muted=true; el.src=silent;
     const p=el.play();
-    const done=()=>{ try{ el.pause(); el.currentTime=0; }catch(e){} el.muted=false; };
+    // F2a #9: jeśli w międzyczasie na elemencie wystartowała prawdziwa zajawka (.src zmieniony) — NIE pauzuj jej
+    const done=()=>{ try{ if(el.src===silent){ el.pause(); el.currentTime=0; } }catch(e){} el.muted=false; };
     if(p&&p.then) p.then(done).catch(()=>{ el.muted=false; });
     else done();
   }catch(e){ try{ el.muted=false; }catch(_){} }

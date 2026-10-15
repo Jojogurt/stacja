@@ -3,12 +3,21 @@
  * (poza flash→setIcon). Dzięki temu można je importować bez ryzyka cykli. */
 import { escapeHtml } from '../core/util.js';
 
+/* F2a #11: bezpieczny dostęp do localStorage. Safari/Firefox z zablokowanymi danymi witryn (i iframe
+   sandbox) RZUCA SecurityError już przy odczycie `localStorage` — moduł, który dotknie go przy imporcie
+   bez try, wywraca cały boot. Każdy odczyt/zapis w app/ idzie przez te helpery. */
+export function lsGet(key, def=null){ try{ const v=localStorage.getItem(key); return v==null ? def : v; }catch(_e){ return def; } }
+export function lsSet(key, value){ try{ localStorage.setItem(key, String(value)); return true; }catch(_e){ return false; } }
+
 // ikona pokrętła odtwarzania: play / pause / wait (spinner)
 export function setIcon(mode){
   const i=document.getElementById('knobIcon');
   if(mode==='pause') i.innerHTML='<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
   else if(mode==='wait') i.innerHTML='<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>';
   else i.innerHTML='<path d="M8 5v14l11-7z"/>';
+  // F2a #20: etykieta dla czytnika ekranu zgodna ze stanem gałki (wcześniej zawsze „Odtwórz")
+  const k=document.getElementById('knob');
+  if(k) k.setAttribute('aria-label', mode==='pause' ? 'Pauza' : (mode==='wait' ? 'Ładowanie…' : 'Odtwórz'));
 }
 
 // pierścień postępu (0..1) wokół pokrętła

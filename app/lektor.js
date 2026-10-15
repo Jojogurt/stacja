@@ -1,7 +1,7 @@
 /* app/lektor.js — synteza mowy (tryb „lektor"): pre-gen audio > Piper (opcjonalny) > głos systemowy.
  * Stan zamknięty w module; wejścia (tekst/url/callback) idą argumentami.
  * Zależy tylko od app/dom.js (status w UI) + Web Speech/Audio. */
-import { flash, setIcon, setRing, setState } from './dom.js';
+import { flash, setIcon, setRing, setState, lsGet, lsSet } from './dom.js';
 
 let plVoice = null;   // głos pl-PL do syntezatora systemowego
 
@@ -20,6 +20,8 @@ export function speak(text){
   u.rate=0.96; u.pitch=0.9;
   const gen=lektorGen;   // 2.1: onend z poprzedniej rundy nie może resetować ikony/statusu nowej
   u.onend=()=>{ if(gen!==lektorGen) return; setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); };
+  // F2a #16: błąd syntezy (Chrome „synthesis-failed", iOS „interrupted", brak głosu) → stan wraca do „odtwórz"
+  u.onerror=()=>{ if(gen!==lektorGen) return; setIcon('play'); setRing(0); setState('lektor przerwany · ▶ odtwórz ponownie'); };
   setIcon('pause'); setRing(0); setState('lektor czyta…');
   document.getElementById('knob').classList.add('live');
   speechSynthesis.speak(u);
@@ -32,7 +34,7 @@ export function isSpeaking(){
 }
 
 /* ===== kolejność jakości: pre-gen audio > Piper > głos systemowy ===== */
-let piperOn = localStorage.getItem('stacjaPiper')==='1';
+let piperOn = lsGet('stacjaPiper')==='1';   // F2a #11: bez rzucania przy zablokowanym storage
 const PIPER_VOICE = 'pl_PL-gosia-medium';
 let piperMod=null, piperReady=false, lektorAudio=null, lektorUrl=null;   // lektorUrl: blob Pipera do zwolnienia
 // token „pokolenia": każde nowe odtworzenie/stop unieważnia poprzednie. Bez tego
@@ -50,12 +52,27 @@ async function piperEnsure(onPct){
   return piperMod;
 }
 
+// F2a #16: pre-gen/Piper audio — ikona/status zgodne z REALNYM stanem; koniec/błąd → „odtwórz ponownie"
+function playLektorAudio(a, gen, onStatus, label){
+  const live=()=>gen===lektorGen && lektorAudio===a;
+  a.addEventListener('ended',()=>{ if(!live()) return; lektorAudio=null; setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); });
+  a.addEventListener('error',()=>{ if(!live()) return; lektorAudio=null; setIcon('play'); setRing(0); setState('nagranie lektora niedostępne · ▶ spróbuj ponownie'); });
+  setIcon('wait'); setRing(0);
+  document.getElementById('knob').classList.add('live');
+  const p=a.play();
+  (p && p.then ? p : Promise.resolve()).then(()=>{ if(!live()) return; setIcon('pause'); onStatus && onStatus(label); })
+    .catch(()=>{ if(!live()) return; setIcon('play'); onStatus && onStatus('stuknij ▶, by odtworzyć'); });
+}
+
 // odtwarza lektora RAZ; callback onStatus(tekst) do pokazania postępu w UI.
 // Powtórka tylko ręcznie (gałka / przycisk ↻) — tu nie ma żadnej pętli.
 export async function lektorPlay(text, ttsUrl, onStatus){
   lektorStop();
   const gen=lektorGen;                          // to odtworzenie; jeśli zmieni się — przerwij
-  if(ttsUrl){ const a=new Audio(ttsUrl); if(gen!==lektorGen) return; lektorAudio=a; a.play().catch(()=>{}); return; }
+  if(ttsUrl){
+    const a=new Audio(ttsUrl); if(gen!==lektorGen) return; lektorAudio=a;
+    playLektorAudio(a, gen, onStatus, 'lektor czyta…'); return;
+  }
   if(piperOn){
     try{
       onStatus && onStatus('przygotowuję lepszy głos…');
@@ -67,8 +84,9 @@ export async function lektorPlay(text, ttsUrl, onStatus){
         new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),60000)) ]);
       if(gen!==lektorGen) return;                // synteza skończyła się po zmianie pytania → NIE graj starego
       const url=URL.createObjectURL(wav); lektorUrl=url;
-      const a=new Audio(url); a.onended=()=>{ if(lektorUrl===url){ URL.revokeObjectURL(url); lektorUrl=null; } };
-      lektorAudio=a; await a.play(); return;
+      const a=new Audio(url);
+      a.addEventListener('ended',()=>{ if(lektorUrl===url){ URL.revokeObjectURL(url); lektorUrl=null; } });
+      lektorAudio=a; playLektorAudio(a, gen, onStatus, 'lektor czyta (Piper)…'); return;
     }catch(e){ if(gen!==lektorGen) return; onStatus && onStatus('Piper niedostępny — głos systemowy'); }
   }
   if(gen!==lektorGen) return;
@@ -80,7 +98,7 @@ const piperToggleBtn=document.getElementById('piperToggle');
 function piperLabel(){ piperToggleBtn.textContent='🎙 lepszy głos: '+(piperOn?'wł. (Piper)':'wył.'); piperToggleBtn.classList.toggle('on',piperOn); }
 piperLabel();
 piperToggleBtn.onclick=()=>{
-  piperOn=!piperOn; localStorage.setItem('stacjaPiper', piperOn?'1':'0'); piperLabel();
+  piperOn=!piperOn; lsSet('stacjaPiper', piperOn?'1':'0'); piperLabel();
   if(piperOn){ setState('lepszy głos wł. — pierwsze użycie pobierze ~60 MB (raz)'); piperEnsure(p=>setState('pobieram głos… '+p+'%')).then(()=>setState('lepszy głos gotowy ✓')).catch(()=>{}); }
   else setState('głos systemowy');
 };

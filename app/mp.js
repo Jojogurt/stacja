@@ -12,7 +12,7 @@ import { buildMpRecord } from '../core/matchRecord.js';
 import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
-import { animIn, confetti, val } from './dom.js';
+import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
 import { ensureCtxResumed, unlockCtx } from './audioCtx.js';
 import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
@@ -49,7 +49,7 @@ export function mpBootDeepLink(){
 const SERVER_AUTH = (()=>{ try{
   const q=new URLSearchParams(location.search).get('authority');
   if(q==='1') return true; if(q==='0') return false;
-  const ls=localStorage.getItem('stacjaAuthority');
+  const ls=lsGet('stacjaAuthority');   // F2a #11: zablokowany storage nie wymusza relay
   if(ls==='1') return true; if(ls==='0') return false;
   return !!(window.STACJA_CONFIG && window.STACJA_CONFIG.serverAuthority);
 }catch(e){ return false; } })();
@@ -79,7 +79,7 @@ $m('goSolo').onclick=()=>{ showScreen('solo'); };
 // przełącznik układu gry MP (kolumny/czat) — przeniesiony na ekran główny (ustawienie)
 (function wireSkinSeg(){
   const seg=document.getElementById('skinSeg'); if(!seg) return;
-  const sync=()=>{ const cur=localStorage.getItem('stacjaUI')==='czat'?'czat':'kolumny'; seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.skin===cur)); };
+  const sync=()=>{ const cur=lsGet('stacjaUI')==='czat'?'czat':'kolumny'; seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.skin===cur)); };
   seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{ mpSetSkin(b.dataset.skin); sync(); });
   sync();
 })();
@@ -612,8 +612,8 @@ function mpNewGame(){
 
 /* ---- render sceny ---- */
 // skórka = preferencja klienta (czysty render); obie mają fazy, różnią się fazą „kombinuj"
-const mpSkin = ()=> localStorage.getItem('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
-function mpSetSkin(v){ localStorage.setItem('stacjaUI', v); S.playSkin=null; S.playRound=null; mpRender(); }
+const mpSkin = ()=> lsGet('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
+function mpSetSkin(v){ lsSet('stacjaUI', v); S.playSkin=null; S.playRound=null; mpRender(); }
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
 function mpStopAudio(){ lektorStop(); mpStopRev(); if(S.audio){ try{S.audio.pause();}catch(e){} } audioSession('ambient'); }
 function mpGoKombinuj(){ if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; } mpStopAudio(); S.sub='kombinuj'; mpRender(); }

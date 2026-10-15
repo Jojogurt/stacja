@@ -6,6 +6,7 @@ import { bootApp, $, txt, click } from './domEnv.js';
 
 let pass=0, fail=0;
 const ok=(c,m)=>{ if(c){pass++;} else {fail++; console.error('  ✗ '+m);} };
+const eq2=(a,b,m)=>ok(a===b, `${m} — oczekiwano ${JSON.stringify(b)}, było ${JSON.stringify(a)}`);
 const tick=()=>new Promise(r=>setTimeout(r,0));
 const settle=async(n=4)=>{ for(let i=0;i<n;i++) await tick(); };
 async function group(name, fn){ console.log('• '+name); try{ await fn(); }catch(e){ fail++; console.error('  ✗ WYJĄTEK: '+(e&&e.stack||e)); } }
@@ -147,6 +148,193 @@ await group('quiz ABC (solo): 3 opcje też renderują się jako przyciski', asyn
 await group('ekrany: nawigacja menu → body class (showScreen)', async ()=>{
   $(window,'goSolo').click();
   ok(window.document.body.classList.contains('solo'), 'goSolo → body.solo');
+});
+
+/* ======== F2a: solo — wyścigi rund, blokady, a11y, audio (jeden boot, ten sam DOM) ======== */
+// fetch z „zawieszaniem" wybranych żądań (iTunes / bajty zajawki) — moduły app/ wołają gołe `fetch` (globalThis)
+const F2A = { hold:null, pending:[] };
+{
+  const base = globalThis.fetch;
+  globalThis.fetch = (u, o) => {
+    if(F2A.hold && F2A.hold(String(u))) return new Promise(r => F2A.pending.push(() => r(base(u, o))));
+    return base(u, o);
+  };
+}
+const f2aRelease = async () => { F2A.hold=null; while(F2A.pending.length){ F2A.pending.splice(0).forEach(f=>f()); await settle(10); } };
+const soloAudioMod = await import('../app/audio.js');   // ten sam singleton co w app.js (bez cache-bustera)
+const lektorMod = await import('../app/lektor.js');
+// start meczu solo: tylko wskazana kategoria + tylko wskazany tryb (chip)
+async function f2aStartMatch(catKey, modeRe){
+  resetSelection(window);
+  $(window,'sumAgain').click();   // zamknij ewentualne podsumowanie (match-over)
+  const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===catKey);
+  if(tk && !tk.classList.contains('on')) tk.click();
+  const chip=modeRe && modeChip(window, modeRe); if(chip && !chip.classList.contains('on')) chip.click();
+  click(window,'matchStart');
+  await settle(10);
+}
+const sessQ = () => (txt(window,'sessProg')||'').match(/pyt\. (\d+)/)?.[1];
+
+await group('F2a #4: „pomiń" po „Sprawdź" zablokowane (bez podwójnego wpisu) + Enter → następne pytanie', async ()=>{
+  const { audio } = catsByKind(window);
+  await f2aStartMatch(audio, /muzyka/);
+  ok(!$(window,'check').disabled, 'pytanie 1 gotowe (Sprawdź aktywne)');
+  ok(!window.document.body.classList.contains('lektor-mode'), 'UI: „lepszy głos" ukryty poza lektorem (brak body.lektor-mode)');
+  $(window,'fTitle').value='zzz';
+  click(window,'check'); await settle(2);
+  ok($(window,'reveal').classList.contains('show'), 'odsłona po Sprawdź');
+  ok($(window,'skip').disabled, '#4: po ocenie „pomiń" wyłączone');
+  $(window,'skip').onclick();   // nawet wymuszony handler (np. stary DOM) nie dopisze drugiego wiersza
+  await settle(4);
+  eq2(sessQ(), '1', '#4: wymuszony skip po ocenie nie przechodzi dalej / nie dubluje');
+  const ev=new window.KeyboardEvent('keydown',{ key:'Enter', bubbles:true, cancelable:true });
+  $(window,'fTitle').dispatchEvent(ev); await settle(10);
+  eq2(sessQ(), '2', 'Enter po Sprawdź (odsłona widoczna) → pytanie 2');
+  ok(!$(window,'reveal').classList.contains('show'), 'odsłona schowana na nowym pytaniu');
+  // #10: „Zakończ" w trakcie pytania 2 → podsumowanie; deck/formularz wyłączone; wynik względem rozegranych
+  const scoreBefore=txt(window,'sScore');
+  click(window,'sessEnd'); await settle(4);
+  const rows=window.document.querySelectorAll('#sumList .sum-row');
+  ok(rows.length===1, '#4: podsumowanie ma 1 wiersz dla 1 ocenionego pytania (jest '+rows.length+')');
+  ok(window.document.body.classList.contains('match-over'), '#10: body.match-over (deck/formularz schowane CSS)');
+  ok($(window,'check').disabled && $(window,'skip').disabled && $(window,'replay').disabled, '#10: Sprawdź/pomiń/od nowa wyłączone po Zakończ');
+  ok(!$(window,'knob').classList.contains('live'), '#10: gałka nieaktywna');
+  $(window,'fTitle').value='Test Song';
+  const ev2=new window.KeyboardEvent('keydown',{ key:'Enter', bubbles:true, cancelable:true });
+  $(window,'fTitle').dispatchEvent(ev2); $(window,'check').onclick(); await settle(2);
+  ok(txt(window,'sScore')===scoreBefore && !$(window,'reveal').classList.contains('show'), '#10: Sprawdź po Zakończ nic nie ocenia');
+  ok(/^0 \/ 1$/.test(txt(window,'sumBig')), '#10: wynik względem rozegranych: '+txt(window,'sumBig'));
+  ok(/rozegran/.test(txt(window,'sumSub')) && /przerwany/.test(txt(window,'sumSub')), '#10: podpis „z N rozegranych · mecz przerwany": '+txt(window,'sumSub'));
+});
+
+await group('F2a #3: „Zakończ" w trakcie strojenia → „Nowy mecz" startuje (busy zwolnione)', async ()=>{
+  const { audio } = catsByKind(window);
+  await f2aStartMatch(audio, /muzyka/);
+  click(window,'check'); await settle(2);
+  F2A.hold = (u) => /itunes|search/.test(u);   // pytanie 2: iTunes wisi (słaba sieć)
+  click(window,'next'); await settle(4);
+  ok(/strojenie/.test(txt(window,'state')), 'pytanie 2 stroi się (fetch wisi)');
+  click(window,'sessEnd'); await settle(4);
+  ok($(window,'summary').classList.contains('show'), 'podsumowanie po Zakończ');
+  const pendBefore=F2A.pending.length;
+  await f2aStartMatch(audio, /muzyka/);   // nowy mecz B (sieć nadal wisi)
+  ok(F2A.pending.length>pendBefore, '#3: nowy mecz WYSŁAŁ własne zapytanie (newRound nie utknął na busy)');
+  await f2aRelease();
+  ok(!$(window,'check').disabled, '#3: po zwolnieniu sieci mecz B ma aktywne Sprawdź');
+  ok(!/strojenie/.test(txt(window,'state')), '#3: stan nie „strojenie…" ('+txt(window,'state')+')');
+  eq2(sessQ(), '1', 'mecz B na pytaniu 1');
+});
+
+await group('F2a #9/#15: solo gra na JEDNYM trwałym elemencie audio; zdarzenia po stopie nic nie ruszają', async ()=>{
+  const { audio } = catsByKind(window);
+  await f2aStartMatch(audio, /muzyka/);
+  const el1=soloAudioMod._soloAudioDebug().el;
+  ok(el1 && /preview/.test(el1.src) && !el1.paused, 'zajawka gra na trwałym elemencie');
+  const n0=audioInstances.length;
+  click(window,'check'); click(window,'next'); await settle(10);
+  click(window,'check'); click(window,'next'); await settle(10);
+  ok(soloAudioMod._soloAudioDebug().el===el1, '#9: ten sam element w kolejnych rundach');
+  ok(audioInstances.length===n0, '#9: brak nowych `new Audio()` per runda (było '+n0+', jest '+audioInstances.length+')');
+  click(window,'sessEnd'); await settle(4);
+  const st=txt(window,'state');
+  let threw=false; try{ ['loadedmetadata','timeupdate','error','ended','playing'].forEach(t=>el1.emit(t)); }catch(_e){ threw=true; }
+  ok(!threw && txt(window,'state')===st, '#15: spóźnione zdarzenia starego odtwarzania nie zmieniają stanu/nie rzucają');
+});
+
+await group('F2a #14: „od tyłu" — dekodowanie porzuconej rundy nie blokuje nowej', async ()=>{
+  const { audio } = catsByKind(window);
+  F2A.hold = (u) => /preview\.m4a/.test(u);    // bajty zajawki do odwrócenia wiszą
+  await f2aStartMatch(audio, /od tyłu/);
+  ok(/odwracam|stuknij/.test(txt(window,'state')), 'runda „od tyłu" dekoduje ('+txt(window,'state')+')');
+  ok(soloAudioMod._soloAudioDebug().revDecodingGen!=null, 'dekodowanie w toku (token rundy)');
+  const p0=F2A.pending.length;
+  click(window,'sessEnd'); await settle(4);      // brak wyników → endMatch
+  await f2aStartMatch(audio, /od tyłu/);
+  ok(F2A.pending.length>p0, '#14: nowa runda „od tyłu" zaczęła własne dekodowanie (było '+p0+', jest '+F2A.pending.length+')');
+  await f2aRelease();
+  ok(!$(window,'check').disabled, 'po zwolnieniu: runda grywalna (fallback/odtwarzanie)');
+  ok(soloAudioMod._soloAudioDebug().revDecodingGen==null, 'token dekodowania zwolniony');
+  click(window,'sessEnd'); await settle(2);
+});
+
+await group('F2a #16: lektor — błąd syntezy / koniec i błąd pre-gen audio → „odtwórz ponownie"', async ()=>{
+  const ss=globalThis.speechSynthesis; const origSpeak=ss.speak; let utt=null;
+  ss.speak=(u)=>{ utt=u; };
+  try{
+    lektorMod.speak('test');
+    ok(utt && typeof utt.onerror==='function', 'wypowiedź ma onerror');
+    utt.onerror({ error:'synthesis-failed' });
+    ok(/przerwany|ponownie/.test(txt(window,'state')), 'onerror → stan „odtwórz ponownie": '+txt(window,'state'));
+    ok(/Odtwórz/.test($(window,'knob').getAttribute('aria-label')), 'gałka wraca do „Odtwórz"');
+  } finally { ss.speak=origSpeak; }
+  const n=audioInstances.length;
+  await lektorMod.lektorPlay('tekst', 'https://x/tts-err.mp3', (t)=>{ $(window,'state').textContent=t; }); await settle(4);
+  const a=audioInstances[n]; ok(a && /tts-err/.test(a.src), 'pre-gen: element audio lektora');
+  ok(lektorMod.isSpeaking(), 'pre-gen gra → isSpeaking');
+  a.paused=true; a.emit('error'); await settle(1);
+  ok(/niedostępne|ponownie/.test(txt(window,'state')) && !lektorMod.isSpeaking(), 'pre-gen error → stan „spróbuj ponownie", nie „czyta"');
+  await lektorMod.lektorPlay('tekst', 'https://x/tts-ok.mp3', (t)=>{ $(window,'state').textContent=t; }); await settle(4);
+  const b=audioInstances[audioInstances.length-1]; b.paused=true; b.emit('ended'); await settle(1);
+  ok(/koniec/.test(txt(window,'state')), 'pre-gen ended → „koniec · ↻ powtórz"');
+  lektorMod.lektorStop();
+});
+
+await group('F2a #20: ABCD — aria-pressed + ✓/✗ tekstem; gałka z aria-label wg stanu', async ()=>{
+  const C=window.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  if(!qKey){ ok(true,'(brak kategorii quizu)'); return; }
+  const cat=C.quiz[qKey]; const orig=cat.questions;
+  cat.questions=[{ prompt:'A11y?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta', slots:[{key:'a',label:'x'}], answers:{ a:['B','Beta'] } }];
+  try{
+    await f2aStartMatch(qKey, null);
+    const opts=[...window.document.querySelectorAll('#quizForm .mc-opt')];
+    ok(opts.every(b=>b.getAttribute('aria-pressed')==='false'), 'opcje startują z aria-pressed=false');
+    const A=opts.find(b=>b.dataset.letter==='A'), B=opts.find(b=>b.dataset.letter==='B');
+    A.click();
+    ok(A.getAttribute('aria-pressed')==='true' && B.getAttribute('aria-pressed')==='false', 'wybór → aria-pressed=true tylko na wybranej');
+    click(window,'check'); await settle(2);
+    ok((B.querySelector('.mc-mark')||{}).textContent==='✓' && /poprawna/.test(B.getAttribute('aria-label')||''), 'poprawna: ✓ w treści + aria-label');
+    ok((A.querySelector('.mc-mark')||{}).textContent==='✗' && /błędny/.test(A.getAttribute('aria-label')||''), 'błędny wybór: ✗ w treści + aria-label');
+    ok(!(opts.find(b=>b.dataset.letter==='C').querySelector('.mc-mark')), 'pozostałe opcje bez znacznika');
+  } finally { cat.questions=orig; }
+  click(window,'sessEnd'); await settle(2);
+  const { audio } = catsByKind(window);
+  await f2aStartMatch(audio, /muzyka/);
+  ok($(window,'knob').getAttribute('aria-label')==='Pauza', 'gałka gra → aria-label „Pauza" (jest: '+$(window,'knob').getAttribute('aria-label')+')');
+  click(window,'sessEnd'); await settle(2);
+});
+
+await group('F2a UI: podsumowanie pickera (faktyczne kategorie, „pytań") + chipy o stałej szerokości + lektor-mode', async ()=>{
+  const { audio, quiz, lyrics } = catsByKind(window);
+  resetSelection(window); $(window,'sumAgain').click();
+  const tk=k=>[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===k);
+  tk(audio).click(); const mu=modeChip(window,/muzyka/); if(!mu.classList.contains('on')) mu.click();
+  ok(/z 1 kategorii/.test(txt(window,'matchInfo')) && /utworów/.test(txt(window,'matchInfo')), '1 kategoria audio: „z 1 kategorii", „utworów" — '+txt(window,'matchInfo'));
+  if(quiz){ tk(quiz).click(); ok(/pytań$|pytań ·/.test(txt(window,'matchInfo').replace(/\s+/g,' ')) && !/utworów/.test(txt(window,'matchInfo')), 'z quizem: „pytań" — '+txt(window,'matchInfo')); tk(quiz).click(); }
+  const css=[...window.document.querySelectorAll('style')].map(x=>x.textContent).join('\n');
+  ok(/\.grp-chip::after\{[^}]*visibility:hidden/.test(css) && /\.grp-chip\.on::after\{visibility:visible\}/.test(css), 'chip: ✓ ma zarezerwowane miejsce (visibility, nie content) — bez skoku szerokości');
+  ok(/body:not\(\.lektor-mode\) \.voice-toggle\{display:none\}/.test(css), '„lepszy głos" ukrywany poza lektorem (CSS)');
+  if(lyrics){
+    await f2aStartMatch(lyrics, /lektor/);
+    ok(window.document.body.classList.contains('lektor-mode'), 'mecz lektora → body.lektor-mode („lepszy głos" widoczny)');
+    click(window,'sessEnd'); await settle(2);
+  }
+  resetSelection(window); $(window,'sumAgain').click();
+});
+
+await group('F2a #11: boot z localStorage rzucającym SecurityError → aplikacja startuje (osobny proces)', async ()=>{
+  const { execFileSync } = await import('node:child_process');
+  const envUrl = new URL('./domEnv.js', import.meta.url).href;
+  const code = `import { bootApp } from ${JSON.stringify(envUrl)};
+    const { window } = await bootApp({ storageThrows:true });
+    const d=window.document; const pt=d.getElementById('piperToggle');
+    pt.click(); pt.click();   // zapis ustawienia (lsSet) też nie rzuca
+    console.log(JSON.stringify({ v:window.STACJA_VERSION, ticks:d.querySelectorAll('#ticks .tick').length,
+      piper:/lepszy głos/.test(pt.textContent), denied:window.__lsThrows }));
+    process.exit(0);`;
+  const out = execFileSync(process.execPath, ['--input-type=module','-e',code], { encoding:'utf8', timeout:90000, stdio:['ignore','pipe','pipe'] });
+  const r = JSON.parse(out.trim().split('\n').pop());
+  ok(r.v && r.ticks>0 && r.piper, 'app.js zamontowany mimo SecurityError (wersja '+r.v+', ticki '+r.ticks+')');
+  ok(r.denied>0, 'storage faktycznie rzucał (odczyty: '+r.denied+')');
 });
 
 await group('social: liga/profil renderują (wariant wylogowany, bez backendu)', async ()=>{
@@ -590,6 +778,17 @@ await group('F1 #4: czat/emotki — nadawca z serwera (`from`) ma pierwszeństwo
   ws._emit({ t:'event', event:'say', payload:{ by:ws._id, byName:'Ja', text:'echo-F1' } });   // stary serwer: by=ja → echo pominięte
   await settle(2);
   ok(!/echo-F1/.test(fx()), 'kompat. starego serwera: by=ja (bez from) → własne echo pominięte');
+});
+
+await group('F2a #8: kategoria quizu dociągnięta PO starcie (zdarzenie stacja:quiz) pojawia się w pickerze', async ()=>{
+  const w=window;
+  w.CATEGORIES.quiz['f2a-late']={ kind:'quiz', label:'Spóźniona', questions:[{ prompt:'?', slots:[{key:'a',label:'a'}], answers:{a:['x']} }] };
+  w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(2);
+  const t=[...w.document.querySelectorAll('#quizTicks .tick')].find(x=>x.dataset.era==='f2a-late');
+  ok(t && /Spóźniona/.test(t.textContent), 'tick spóźnionej kategorii w #quizTicks');
+  ok(!$(w,'grpWiedza').hidden, 'chip „Wiedza" widoczny');
+  w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(1);
+  ok([...w.document.querySelectorAll('#quizTicks .tick')].filter(x=>x.dataset.era==='f2a-late').length===1, 'idempotentne (bez duplikatu ticka)');
 });
 
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

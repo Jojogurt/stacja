@@ -1,15 +1,20 @@
 /* sw.js — service worker STACJA (PWA).
    Strategia: NETWORK-FIRST dla zasobów własnych (online zawsze świeży deploy,
    brak pułapki starego cache), z fallbackiem do cache, gdy offline.
+   F2a #8: sieć ma NET_TIMEOUT_MS — przy „lie-fi" (fetch wisi) po timeoucie oddajemy kopię z cache,
+   a odpowiedź sieci (gdy w końcu dojdzie) i tak odświeża runtime-cache w tle.
+   F2a #18: żądania z nagłówkiem Range (audio/wideo) NIE są przechwytywane, a do cache trafia tylko 200
+   (Cache.put odrzuca 206).
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
-   Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v52';
+   SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
+   (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
+const CACHE = 'stacja-v53';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
   './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
   './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
-  './core/timing.js', './core/picker.js', './core/chatFeed.js',
+  './core/timing.js', './core/picker.js', './core/chatFeed.js', './core/teams.js',
   './app/dom.js', './app/lektor.js', './app/audioCtx.js', './app/audio.js',
   './app/catalog.js', './app/solo.js', './app/social.js', './app/catEditor.js',
   './app/mp-state.js', './app/mp-picker.js', './app/mp-render.js', './app/mp.js', './app/sfx.js', './app/icons.js',
@@ -28,7 +33,7 @@ const SHELL = [
   './data/quiz-sport.json', './data/quiz-star-wars.json', './data/quiz-sztuka.json',
   './data/quiz-wladca-pierscieni.json', './data/quiz-zwierzeta.json',
   './data/quiz-krolowie-polscy.json', './data/quiz-informatyka.json', './data/quiz-lotnictwo.json',
-  './data/quiz-medycyna.json', './data/quiz-wiedzmin.json',
+  './data/quiz-medycyna.json', './data/quiz-wiedzmin.json', './data/quiz-muzyka.json',
 ];
 
 self.addEventListener('install', (e) => {
@@ -56,30 +61,54 @@ self.addEventListener('activate', (e) => {
   })());
 });
 
+const NET_TIMEOUT_MS = 3000;   // F2a #8: po tylu ms bez odpowiedzi sieci → fallback do cache (jeśli jest)
+
+async function putRuntime(req, res){
+  // F2a #18: tylko pełne 200 (206/opaque/błędy nie trafiają do cache; Cache.put rzuca dla 206)
+  if (!res || res.status !== 200) return;
+  try {
+    const c = await caches.open(RUNTIME);         // runtime → cache ograniczony (shell zostaje w CACHE)
+    await c.put(req, res);
+    trimRuntime();                                // fire-and-forget: utrzymaj limit wpisów
+  } catch (_e) {}
+}
+
+async function cachedFor(req){
+  const cached = await caches.match(req);
+  if (cached) return cached;
+  // nawigacja offline → podaj powłokę
+  if (req.mode === 'navigate') return caches.match('./index.html');
+  return undefined;
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
+  if (req.headers.has('range')) return;              // F2a #18: Range (audio) → wprost do sieci
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // cross-origin → sieć (domyślnie)
 
+  const net = fetch(req);
+  // klon PRZED oddaniem odpowiedzi stronie (ciało jeszcze nieprzeczytane); waitUntil synchronicznie,
+  // żeby zapis do cache dokończył się także wtedy, gdy stronie oddaliśmy już kopię z cache (timeout)
+  e.waitUntil(net.then((res) => putRuntime(req, res.clone())).catch(() => {}));
+
   e.respondWith((async () => {
+    let timer;
+    const timeout = new Promise((r) => { timer = setTimeout(() => r('timeout'), NET_TIMEOUT_MS); });
     try {
-      const res = await fetch(req);
-      if (res && res.ok) {
-        const c = await caches.open(RUNTIME);        // runtime → cache ograniczony (shell zostaje w CACHE)
-        await c.put(req, res.clone());
-        trimRuntime();                               // fire-and-forget: utrzymaj limit wpisów
-      }
-      return res;
-    } catch (err) {
-      const cached = await caches.match(req);
+      const first = await Promise.race([net, timeout]);
+      if (first !== 'timeout') return first;
+      // sieć wisi → kopia z cache (sieć dalej dociąga w tle i odświeży runtime-cache)
+      const cached = await cachedFor(req);
       if (cached) return cached;
-      // nawigacja offline → podaj powłokę
-      if (req.mode === 'navigate') {
-        const shell = await caches.match('./index.html');
-        if (shell) return shell;
-      }
+      return await net;                              // brak kopii → czekaj na sieć do skutku
+    } catch (err) {
+      const cached = await cachedFor(req);
+      if (cached) return cached;
       throw err;
+    } finally {
+      clearTimeout(timer);
     }
   })());
 });

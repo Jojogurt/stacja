@@ -24,6 +24,21 @@ export const ALL_CATS = {...ERAS, ...STYLES, ...READY, ...LYRICS, ...QUIZ};
 export const ALL_KEYS = [...ERA_KEYS, ...STYLE_KEYS, ...READY_KEYS, ...LYRICS_KEYS, ...QUIZ_KEYS];
 export const CATS_OK = (ERA_KEYS.length + STYLE_KEYS.length) > 0;
 
+/* F2a #8: kategorie quizu dociągnięte przez quiz-loader.js PO starcie (wolna sieć) — dopnij je do
+   żywych tablic/map (ten sam obiekt we wszystkich importach). Idempotentne; zwraca NOWE klucze. */
+export function addLateQuizCats(src = (window.CATEGORIES && window.CATEGORIES.quiz) || {}){
+  const added = [];
+  Object.keys(src).forEach(k => {
+    const data = src[k];
+    if(!data || data.kind !== 'quiz' || !Array.isArray(data.questions)) return;
+    if(ALL_CATS[k] === data && QUIZ_KEYS.includes(k)) return;
+    QUIZ[k] = data; ALL_CATS[k] = data;
+    if(!QUIZ_KEYS.includes(k)){ QUIZ_KEYS.push(k); added.push(k); }
+    if(!ALL_KEYS.includes(k)) ALL_KEYS.push(k);
+  });
+  return added;
+}
+
 /* ---- model meczu (rdzeń w core/match.js) — lokalne wrappery wiążą ALL_CATS ---- */
 export const modesFor    = (catKey)             => _modesFor(catKey, ALL_CATS);
 export const catLabel    = (catKey)             => _catLabel(catKey, ALL_CATS);

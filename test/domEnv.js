@@ -65,7 +65,8 @@ FakeWebSocket.OPEN=1; FakeWebSocket.CLOSED=3;
 
 function installGlobals(window){
   // app.js używa „gołych" referencji (document/location/...) → muszą być na globalThis
-  for(const k of ['window','document','location','navigator','localStorage','fetch','WebSocket',
+  const storage = window.__lsThrows===undefined ? ['localStorage'] : [];   // storageThrows: getter rzucający już na globalThis
+  for(const k of ['window','document','location','navigator',...storage,'fetch','WebSocket',
     'speechSynthesis','SpeechSynthesisUtterance','matchMedia','Audio','AudioContext','webkitAudioContext','URL','getComputedStyle']){
     try{ Object.defineProperty(globalThis, k, { value: window[k], configurable:true, writable:true }); }
     catch(_e){ try{ globalThis[k]=window[k]; }catch(_e2){} }
@@ -75,11 +76,20 @@ function installGlobals(window){
   globalThis.cancelAnimationFrame = window.cancelAnimationFrame || ((id)=>clearTimeout(id));
 }
 
-export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='' } = {}){
+export async function bootApp({ fetchImpl, serverAuthority=false, roomsBase='', storageThrows=false } = {}){
   const dom = new JSDOM(read('index.html'), {
     url: 'https://stacja.test/', runScripts: 'outside-only', pretendToBeVisual: true,
   });
   const { window } = dom;
+  // F2a #11: Safari „blokuj wszystkie cookies"/iframe sandbox — SAM odczyt `localStorage` rzuca SecurityError
+  if(storageThrows){
+    window.__lsThrows = 0;
+    const deny = { configurable:true, get(){ window.__lsThrows++; throw new window.DOMException('The operation is insecure.', 'SecurityError'); } };
+    for(const k of ['localStorage','sessionStorage']){
+      Object.defineProperty(window, k, deny);
+      Object.defineProperty(globalThis, k, deny);
+    }
+  }
 
   // —— zaślepki Web API (zanim app.js się załaduje) ——
   window.STACJA_CONFIG = { roomsBase, serverAuthority, googleClientId:'', appleServicesId:'' };

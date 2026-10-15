@@ -6,7 +6,7 @@ import { norm, evaluateGuess, textMatch } from '../core/scoring.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance } from '../core/match.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
-  syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
+  syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText } from '../core/picker.js';
 import { resolveTrack } from '../adapters-web/itunesRepository.js';
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric } from './dom.js';
@@ -14,11 +14,11 @@ import { lektorPlay } from './lektor.js';
 import { playClap } from './sfx.js';
 import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
-import { startAudio, stopAudio, toggleAudio, replay, initAudio } from './audio.js';
+import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio } from './audio.js';
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
 import { ERAS, STYLES, READY, LYRICS, QUIZ, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, catLabel, buildMatch, randomPools,
-  plLoad, plSave, plMerge, plFetch } from './catalog.js';
+  plLoad, plSave, plMerge, plFetch, addLateQuizCats } from './catalog.js';
 
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
@@ -27,6 +27,7 @@ let recentArtists = [];     // ostatnio użyci, by nie powtarzać
 let seenTracks = new Set(); // już zagrane tytuły
 let score = 0, total = 0, streak = 0;
 let busy = false;
+let roundDone = false;      // F2a #4: bieżące pytanie już ocenione („Sprawdź") albo pominięte — drugi wpis zablokowany
 let soloGen = 0;            // 2.1: token rundy — inkrementowany przy newRound/finishMatch/zmianie trybu;
                            // async ścieżki (resolveTrack/„od tyłu"/lektor) porzucają wynik, gdy token się zmieni
 let session = null;         // {match, results:[]} podczas meczu solo
@@ -80,16 +81,26 @@ LYRICS_KEYS.forEach(k=>{
 });
 
 const quizTicksEl = document.getElementById('quizTicks');
-if(QUIZ_KEYS.length){
+function renderQuizTicks(keys){
+  if(!QUIZ_KEYS.length) return;
   const band=document.getElementById('quizBand'); if(band) band.hidden=false;
-  QUIZ_KEYS.forEach(k=>{
+  const gw=document.getElementById('grpWiedza'); if(gw) gw.hidden=false;
+  keys.forEach(k=>{
+    [...quizTicksEl.children].forEach(c=>{ if(c.dataset.era===k) c.remove(); });
     const b=document.createElement('button');
-    b.className='tick gen'; b.dataset.era=k;
+    b.className='tick gen'+(soloCats.has(k)?' on':''); b.dataset.era=k;
     b.innerHTML = escapeHtml(QUIZ[k].label) + '<small>'+(QUIZ[k].questions||[]).length+' pytań</small>';
     b.onclick=()=>toggleCat(k);
     quizTicksEl.appendChild(b);
   });
 }
+renderQuizTicks(QUIZ_KEYS);
+// F2a #8: kategorie quizu dociągnięte w tle przez quiz-loader.js (wolna sieć) → dopnij do pickera
+window.addEventListener('stacja:quiz', ()=>{
+  const added=addLateQuizCats();
+  if(!added.length) return;
+  renderQuizTicks(added); updateGrpChips(); updateMatchInfo();
+});
 
 if(!CATS_OK){ setTimeout(()=>flash('Brak pliku categories.js obok index.html — kategorie się nie wczytały. Trzymaj oba pliki razem.'),0); }
 
@@ -178,7 +189,7 @@ function updateGrpChips(){
     };
   });
   const gw=document.getElementById('grpWiedza');
-  if(gw){ if(QUIZ_KEYS.length) gw.hidden=false; else gw.remove(); }
+  if(gw) gw.hidden=!QUIZ_KEYS.length;   // F2a #8: nie usuwaj — kategorie quizu mogą dojść później
   updateGrpChips();
 })();
 function toggleMode(m){ _togglePick(soloModes,m); renderModeChips(); updateMatchInfo(); }
@@ -197,7 +208,8 @@ function updateMatchInfo(){
   const s=pickSummary(soloCats, soloModes, soloRounds, ALL_CATS);
   if(s.error){ el.className= (!soloCats.size||!soloModes.size) ? 'um-summary' : 'um-summary err'; el.textContent=s.error; return; }
   el.className='um-summary';
-  el.innerHTML=`${s.rounds} ${s.label} × ${CPR} kategorie × ${QPC} pytań = <b>${s.count} utworów</b>`;
+  const t=pickSummaryText(s);   // F2a: faktyczna liczba kategorii + „pytań" przy quizie/lektorze
+  el.innerHTML=`${escapeHtml(t.head)}<b>${escapeHtml(t.total)}</b>${escapeHtml(t.from)}`;
 }
 
 /* ============ losowanie rundy (źródło utworów → TrackRepository) ============ */
@@ -212,18 +224,19 @@ async function newRound(){
   if(mode==='lektor'){ return newLektorRound(); }
   soloGen++;   // 2.1: nowa runda — unieważnij ewentualny wcześniejszy async (rozwiązanie/„od tyłu")
   const gen=soloGen;
-  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm();
+  busy=true; roundDone=false; current=null;   // F2a #3: gałka w trakcie strojenia nie zagra utworu poprzedniego pytania
+  stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
-  document.getElementById('check').disabled=true;
-  document.getElementById('replay').disabled=true;
-  document.getElementById('skip').disabled=true;
+  disableRoundControls();
 
   const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
   const cat = ALL_CATS[eraKey];
   const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG});
+  // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem.
+  // F2a #3: `busy` należy wtedy już do nowszego stanu (abandonRound je zwolnił, nowa runda mogła je zająć) — nie ruszaj.
+  if(gen!==soloGen) return;
   busy=false;
-  if(gen!==soloGen) return;   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem
   if(t.error){
     // 2.2: NIE zostawiaj poprzedniego utworu — inaczej „sprawdź" oceniłoby stare pytanie (duplikat w wynikach)
     current=null; setIcon('play');
@@ -243,21 +256,36 @@ initAudio({ current: ()=>current, mode: ()=>mode, newRound, gen: ()=>soloGen, bu
 document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
 
+function disableRoundControls(){
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=true;
+  document.getElementById('skip').disabled=true;
+}
+/* F2a #3: porzucenie rundy (Zakończ / koniec meczu / zmiana trybu) — unieważnij async ORAZ zwolnij `busy`
+   i bieżące pytanie. Bez tego „Zakończ" w trakcie strojenia zostawiał busy=true i nowy mecz utykał
+   na `if(busy) return` (a gałka grała utwór z poprzedniego meczu). */
+function abandonRound(){
+  soloGen++; busy=false; current=null; roundDone=true;
+  disableRoundControls();
+}
+// klasy trybu na body: quiz-mode (bez gałki) i lektor-mode („lepszy głos" tylko dla lektora)
+function syncModeClasses(){
+  document.body.classList.toggle('quiz-mode', mode==='quiz');
+  document.body.classList.toggle('lektor-mode', mode==='lektor');
+}
+
 /* ============ przełącznik trybu muzyka/lektor ============ */
 const modePick=document.getElementById('modePick');
 modePick.querySelectorAll('button').forEach(btn=>{
   btn.onclick=()=>{
     unlockCtx();
     if(mode===btn.dataset.mode) return;
-    soloGen++;   // 2.1: zmiana trybu — porzuć async poprzedniego trybu (np. „od tyłu" dekodujące)
-    mode=btn.dataset.mode;
+    abandonRound();   // 2.1/F2a #3: zmiana trybu — porzuć async poprzedniego trybu (np. „od tyłu" dekodujące) i zwolnij busy
+    mode=btn.dataset.mode; syncModeClasses();
     modePick.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b===btn));
-    stopAudio(); hideReveal(); resetForm(); hideLyric(); current=null; setIcon('play');
+    stopAudio(); hideReveal(); resetForm(); hideLyric(); setIcon('play');
     const hint={lektor:'lektor', reverse:'od tyłu', snippet:'fragment'}[mode];
     setState((hint?hint+' · ':'')+'naciśnij, żeby wylosować');
-    document.getElementById('check').disabled=true;
-    document.getElementById('replay').disabled=true;
-    document.getElementById('skip').disabled=true;
   };
 });
 
@@ -274,12 +302,10 @@ function lektorPool(){
 
 async function newLektorRound(){
   soloGen++;   // 2.1: nowa runda lektora — unieważnij wcześniejszą syntezę/rozwiązanie
-  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  busy=true; roundDone=false; current=null; stopAudio(); hideReveal(); hideSummary(); resetForm();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
-  document.getElementById('check').disabled=true;
-  document.getElementById('replay').disabled=true;
-  document.getElementById('skip').disabled=true;
+  disableRoundControls();
 
   let pool=lektorPool();
   if(!pool.length){   // 2.3: wyczerpane — kasuj z seenTracks TYLKO tytuły lektorskie (nie muzykę z tego meczu → koniec powtórek utworów)
@@ -309,11 +335,9 @@ async function newLektorRound(){
 // wiedza ogólna (solo): pytanie z puli kategorii, bez audio — wzorem newLektorRound
 function newQuizRound(){
   soloGen++;   // 2.1: nowa runda quizu — unieważnij wcześniejszy async
-  busy=true; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  busy=true; roundDone=false; current=null; stopAudio(); hideReveal(); hideSummary(); resetForm();
   if(session) updateSessUI();
-  document.getElementById('check').disabled=true;
-  document.getElementById('replay').disabled=true;
-  document.getElementById('skip').disabled=true;
+  disableRoundControls();
   const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
   const cat = ALL_CATS[eraKey];
   let pool=((cat&&cat.questions)||[]).filter(q=>q.prompt && !seenTracks.has(norm(q.prompt)));
@@ -354,19 +378,19 @@ function parseMC(prompt){
 // zaznacz opcję ABCD (jedna na raz); ocena dopiero przy „Sprawdź"
 function selectMC(btn){
   if(!btn || btn.disabled) return;
-  document.querySelectorAll('#quizForm .mc-opt').forEach(b=>b.classList.remove('sel'));
-  btn.classList.add('sel');
+  document.querySelectorAll('#quizForm .mc-opt').forEach(b=>{ b.classList.remove('sel'); b.setAttribute('aria-pressed','false'); });
+  btn.classList.add('sel'); btn.setAttribute('aria-pressed','true');   // F2a #20: stan wyboru dla czytnika ekranu
 }
 // przełącz formularz solo między muzyką (statyczne pola), quizem otwartym (sloty) a ABCD (przyciski)
 function renderSoloForm(){
   const form=document.getElementById('form'); if(!form) return;
   const isQuiz = mode==='quiz';
   form.classList.toggle('quiz', isQuiz);
-  document.body.classList.toggle('quiz-mode', isQuiz);   // ukryj gałkę/audio w decku dla quizu
+  syncModeClasses();   // quiz-mode: ukryj gałkę/audio w decku; lektor-mode: pokaż „lepszy głos"
   const qf=document.getElementById('quizForm'); if(!qf) return;
   if(isQuiz && current && current.mc){
     qf.innerHTML='<div class="mc-opts">'+current.mc.options.map(o=>
-      `<button type="button" class="mc-opt" data-letter="${o.letter}"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span></button>`).join('')+'</div>';
+      `<button type="button" class="mc-opt" aria-pressed="false" data-letter="${o.letter}"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span></button>`).join('')+'</div>';
     qf.querySelectorAll('.mc-opt').forEach(b=>{ b.onclick=()=>selectMC(b); });
   } else if(isQuiz && current && current.slots){
     qf.innerHTML = current.slots.map(s=>
@@ -378,6 +402,9 @@ function renderSoloForm(){
 function showPrompt(text){ const b=document.getElementById('lyricBox'); if(!b) return;
   b.innerHTML='<span class="lyric-cap">pytanie</span>'+escapeHtml(text||''); b.classList.add('quiz'); b.hidden=false; }
 document.getElementById('skip').onclick=()=>{
+  if(roundDone) return;   // F2a #4: pytanie już ocenione („Sprawdź") — drugi wpis tego samego pytania zablokowany
+  roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true;
+  unlockSoloAudio({ctx:session?session.hasReverse:false});   // F2a #9: gest → kolejna zajawka zagra bez dodatkowego stuknięcia (iOS)
   if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
   streak=0; updateScore();
   advance();
@@ -385,16 +412,23 @@ document.getElementById('skip').onclick=()=>{
 
 /* ============ MECZ solo: rundy × kategorie × pytania ============ */
 document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishMatch(); else endMatch(); };
-document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing'); soloHead('Ułóż mecz'); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over'); soloHead('Ułóż mecz'); };
 
 function startMatch(){
   if(!soloCats.size){ updateMatchInfo(); return; }
   if(!soloModes.size){ updateMatchInfo(); return; }
   const r=buildMatch([...soloCats],[...soloModes],soloRounds);
   if(r.error){ const el=document.getElementById('matchInfo'); el.className='um-summary err'; el.textContent=r.error; return; }
-  session={match:{slots:r.slots, rounds:r.rounds, si:0, qi:0}, results:[]};
-  seenTracks.clear(); recentArtists=[]; score=0; total=0; streak=0; updateScore();
+  const hasReverse=r.slots.some(x=>x.mode==='reverse');
+  session={match:{slots:r.slots, rounds:r.rounds, si:0, qi:0}, results:[], hasReverse};
+  // F2a #9: gest „Zacznij mecz" odblokowuje trwały element audio (iOS: per-element) i — gdy mecz ma
+  // „od tyłu" — AudioContext; inaczej pierwsza zajawka po await kończyła się NotAllowedError
+  unlockSoloAudio({ctx:hasReverse});
+  // nowy Set (nie clear): porzucone w locie losowanie poprzedniego meczu dopisuje do STAREGO zbioru,
+  // a nie „zużywa" utworów nowego meczu (F2a #3)
+  seenTracks=new Set(); recentArtists=[]; score=0; total=0; streak=0; updateScore();
   hideSummary(); hideReveal(); resetForm();
+  document.body.classList.remove('match-over');
   document.body.classList.add('playing');
   document.getElementById('session').classList.add('live');
   loadSlotQuestion();
@@ -403,7 +437,7 @@ function startMatch(){
 function soloHead(text){ const tt=document.getElementById('scrTitle'); if(tt) tt.textContent=text; }
 function loadSlotQuestion(){
   const s=matchSlot(session.match); if(!s){ finishMatch(); return; }
-  selectedEra=s.cat; mode=s.mode;
+  selectedEra=s.cat; mode=s.mode; syncModeClasses();
   document.querySelectorAll('#modePick button').forEach(b=>b.classList.toggle('on', b.dataset.mode===mode));
   soloHead('Runda '+s.round+'/'+session.match.rounds+' · '+catLabel(s.cat));   // 5.7
   updateSessUI();
@@ -411,10 +445,10 @@ function loadSlotQuestion(){
   newRound();
 }
 function endMatch(){
-  soloGen++;   // 2.1: koniec meczu — porzuć ewentualny async ostatniej rundy
+  abandonRound();   // 2.1/F2a #3: koniec meczu — porzuć async ostatniej rundy i zwolnij busy
   session=null;
   document.getElementById('session').classList.remove('live');
-  document.body.classList.remove('playing','quiz-mode');
+  document.body.classList.remove('playing','quiz-mode','lektor-mode','match-over');
   hideSummary(); stopAudio(); setIcon('play');
   soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
 }
@@ -431,9 +465,10 @@ function advance(){
   loadSlotQuestion();
 }
 function finishMatch(){
-  soloGen++;   // 2.1: „Zakończ" w trakcie strojenia — porzuć rozwiązanie w locie (bez zajawki nad podsumowaniem)
+  abandonRound();   // 2.1/F2a #3: „Zakończ" w trakcie strojenia — porzuć rozwiązanie w locie i zwolnij busy
   const res=session.results;
   const tot=session.match.slots.length*QPC;
+  const played=res.length;   // F2a #10: przerwany mecz — wynik względem ROZEGRANYCH pytań, nie całego meczu
   const hits=res.filter(r=>r.okTitle&&r.okArtist).length;
   // zapis wyniku (best-effort, nieblokujące) — tylko gdy mamy tożsamość (auth.uid)
   const slots=session.match.slots;
@@ -442,8 +477,15 @@ function finishMatch(){
     config:{ categories:[...soloCats], modes:[...soloModes], rounds:soloRounds },
   })); })();
   stopAudio(); setIcon('play'); hideReveal();
-  document.getElementById('sumBig').textContent=hits+' / '+tot;
-  document.getElementById('sumSub').textContent='koniec meczu';
+  // F2a #10: deck/formularz pod podsumowaniem wyłączone (nic do sprawdzenia/odtworzenia z zakończonego meczu)
+  resetForm(); hideLyric(); const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
+  document.body.classList.remove('quiz-mode','lektor-mode'); document.body.classList.add('match-over');
+  setState('mecz zakończony');
+  const cut = played < tot;
+  document.getElementById('sumBig').textContent=hits+' / '+(cut?played:tot);
+  document.getElementById('sumSub').textContent= cut
+    ? `trafione z ${played} ${plPick(played,'rozegranego','rozegranych','rozegranych')} · mecz przerwany (${played} z ${tot})`
+    : 'koniec meczu';
   const list=document.getElementById('sumList'); list.innerHTML='';
   const byRound={};
   res.forEach(r=>{ (byRound[r.round]=byRound[r.round]||[]).push(r); });
@@ -472,7 +514,9 @@ function hideSummary(){ document.getElementById('summary').classList.remove('sho
 
 /* ============ sprawdzanie ============ */
 function check(){
-  if(!current) return;
+  if(!current || roundDone) return;   // F2a #4/#10: brak pytania / już ocenione / pominięte
+  roundDone=true;
+  document.getElementById('skip').disabled=true;   // F2a #4: po ocenie „pomiń" nieaktywne (tylko „Następny →")
   if(mode==='quiz'){ return checkQuiz(); }
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
@@ -536,8 +580,14 @@ function checkQuiz(){
     const correctLetter=(current.answers.a[0]||'').toUpperCase();
     document.querySelectorAll('#quizForm .mc-opt').forEach(b=>{   // zielona = poprawna, czerwona = błędny wybór
       const wasSel=b.classList.contains('sel'); b.disabled=true; b.classList.remove('sel');
-      if(b.dataset.letter===correctLetter) b.classList.add('ok');
-      else if(wasSel) b.classList.add('no');
+      b.setAttribute('aria-pressed', wasSel?'true':'false');
+      // F2a #20: wynik także TEKSTEM (✓/✗ + aria-label), nie tylko kolorem
+      const tx=(b.querySelector('.mc-tx')||{}).textContent||'';
+      let mark='', desc='';
+      if(b.dataset.letter===correctLetter){ b.classList.add('ok'); mark='✓'; desc=wasSel?'poprawna odpowiedź, twój wybór':'poprawna odpowiedź'; }
+      else if(wasSel){ b.classList.add('no'); mark='✗'; desc='twój błędny wybór'; }
+      if(mark){ const m=document.createElement('span'); m.className='mc-mark'; m.textContent=mark; b.appendChild(m);
+        b.setAttribute('aria-label', `${b.dataset.letter}) ${tx} — ${desc}`); }
     });
     const correctTxt=current.answers.a[1]||current.answers.a[0]||'';
     r.appendChild(line(roundOk,'odpowiedź', correctLetter+') '+correctTxt + (guessLabel?` (Ty: ${guessLabel})`:' (nie wybrano)')));
@@ -559,14 +609,26 @@ function checkQuiz(){
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 document.getElementById('check').onclick=check;
-document.getElementById('next').onclick=advance;
+document.getElementById('next').onclick=()=>{ unlockSoloAudio({ctx:session?session.hasReverse:false}); advance(); };   // F2a #9: gest → odblokuj
 document.getElementById('form').addEventListener('keydown',e=>{
   // ABCD: klawisze A–D zaznaczają opcję (wygodne na desktopie)
   if(mode==='quiz' && current && current.mc && /^[a-dA-D]$/.test(e.key)){
     const b=document.querySelector(`#quizForm .mc-opt[data-letter="${e.key.toUpperCase()}"]`);
     if(b && !b.disabled){ selectMC(b); e.preventDefault(); return; }
   }
-  if(e.key==='Enter' && !document.getElementById('check').disabled) check();
+  if(e.key==='Enter' && !document.getElementById('check').disabled){ e.preventDefault(); check(); }
+});
+// F2a: Enter po „Sprawdź" (odsłona widoczna) → następne pytanie. Pomija przyciski/linki (natywna aktywacja)
+// i zdarzenie, które samo wywołało „Sprawdź" (preventDefault powyżej).
+document.addEventListener('keydown',e=>{
+  if(e.key!=='Enter' || e.repeat || e.defaultPrevented || e.isComposing) return;
+  if(!session || !roundDone || !document.body.classList.contains('solo')) return;
+  if(!document.getElementById('reveal').classList.contains('show')) return;
+  const t=e.target;
+  if(t && t.closest && (t.closest('button, a, textarea, select, [contenteditable="true"]') || (t.matches('input') && !t.closest('#form')))) return;
+  e.preventDefault();
+  unlockSoloAudio({ctx:session.hasReverse});
+  advance();
 });
 
 /* ===== #3: tryb trenera (solo quiz) — statystyki trafień + faworyzowanie oblanych ===== */

@@ -76,14 +76,41 @@ export function textMatch(guess,actual){
   return false;
 }
 
-// 4.1: separatory duetu/feat w OCZEKIWANYM wykonawcy (odpowiedź gracza NIE jest dzielona).
-const ARTIST_SEP = /\s*(?:&|,|\bfeat\.?\b|\bft\.?\b|\bx\b|\bi\b)\s*/i;
-// dopasowanie WYKONAWCY: całość LUB którykolwiek człon (≥3 znaki po normalizacji) oczekiwanego duetu.
-// „Queen" ✓ dla „Queen & David Bowie"; „Sanah" ✓ dla „sanah i Vito Bambino"; „Bowie" ✗ (człon to „david bowie").
+// 4.1 + F2a #12: dopasowanie WYKONAWCY: całość LUB człon oczekiwanego DUETU/feat (odpowiedź gracza NIE jest dzielona).
+// Decyzja F2a: „&", „,", „ i ", „ and " bywają CZĘŚCIĄ NAZWY zespołu („Earth, Wind & Fire", „Simon & Garfunkel",
+// „Mumford & Sons", „Tyler, the Creator"), więc dzielimy po nich tylko, gdy wygląda to na zestawienie osobnych
+// wykonawców:
+//   • separatory TWARDE (zawsze kolaboracja): feat. / ft. / featuring / „ x " — dzielimy zawsze;
+//   • separatory MIĘKKIE (&, przecinek, i, and) — dzielimy, gdy (a) całość jest na liście KNOWN_COLLABS
+//     (duety jednowyrazowych ksyw z danych), albo (b) choć jeden człon ma ≥2 słowa (imię+nazwisko: „Queen &
+//     David Bowie", „sanah i Vito Bambino", „Ed Sheeran & Justin Bieber") I żaden człon po separatorze nie zaczyna
+//     się od przedimka („Nick Cave & the Bad Seeds", „Huey Lewis and the News" = nazwa zespołu).
+//   Same jednowyrazowe człony („Simon & Garfunkel", „Sonny & Cher", „Earth, Wind & Fire") = nazwa aktu → tylko całość.
+// Człon musi mieć ≥3 znaki po normalizacji.
+const HARD_SEP = /\s+(?:feat\.?|ft\.?|featuring|x)\s+/i;
+const SOFT_SEP = /\s*(?:&|,)\s*|\s+(?:i|and)\s+/i;
+const ARTICLE = /^(?:the|a|an)\s+/i;
+// kolaboracje jednowyrazowych wykonawców obecne w danych (klucz = norm całości)
+const KNOWN_COLLABS = new Set(['lona and webber', 'lona i webber', 'donatan and cleo', 'bialas and lanek']);
+const words = p => p.replace(ARTICLE, '').trim().split(/\s+/).filter(Boolean).length;
+
+function artistParts(actual){
+  const out = [];
+  String(actual||'').split(HARD_SEP).map(p=>p.trim()).filter(Boolean).forEach(piece=>{
+    out.push(piece);
+    const soft = piece.split(SOFT_SEP).map(p=>p.trim()).filter(Boolean);
+    if(soft.length < 2) return;
+    const known = KNOWN_COLLABS.has(norm(piece));
+    const personLike = soft.some(p=>words(p)>=2) && !soft.slice(1).some(p=>ARTICLE.test(p));
+    if(known || personLike) out.push(...soft);
+  });
+  return out;
+}
+
 export function artistMatch(guess, actual){
   if(textMatch(guess, actual)) return true;                 // całość (istniejąca tolerancja)
-  const parts = String(actual||'').split(ARTIST_SEP).map(p=>p.trim()).filter(Boolean);
-  if(parts.length<2) return false;                          // brak separatora → nic nowego
+  const parts = artistParts(actual);
+  if(parts.length<2) return false;                          // brak rozbicia → nic nowego
   return parts.some(p => norm(p).length>=3 && textMatch(guess, p));
 }
 
