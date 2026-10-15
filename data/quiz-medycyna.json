@@ -3,7 +3,7 @@
   "kind": "quiz",
   "desc": "50 pytań",
   "questions": [
-    {"prompt":"Jaki numer alarmowy obowiązuje w całej Unii Europejskiej?","slots":[{"key":"a","label":"numer"}],"answers":{"a":["112"]},"difficulty":1,"fun":"Pod 112 zgłosisz pożar, wypadek i zagrożenie życia — także z telefonu bez karty SIM."},
+    {"prompt":"Jaki numer alarmowy obowiązuje w całej Unii Europejskiej?","slots":[{"key":"a","label":"numer"}],"answers":{"a":["112"]},"difficulty":1,"fun":"Pod 112 zgłosisz pożar, wypadek i zagrożenie życia — w każdym kraju Unii."},
     {"prompt":"Jak nazywa się zestaw działań ratunkowych — uciskanie klatki piersiowej i oddechy ratownicze — przy nagłym zatrzymaniu krążenia?","slots":[{"key":"a","label":"procedura"}],"answers":{"a":["RKO","resuscytacja krążeniowo-oddechowa","resuscytacja","reanimacja","CPR"]},"difficulty":1},
     {"prompt":"W jakim stosunku liczby uciśnięć klatki piersiowej do oddechów ratowniczych prowadzi się resuscytację dorosłego?","slots":[{"key":"a","label":"stosunek"}],"answers":{"a":["30:2","30 do 2","30 uciśnięć i 2 oddechy","30 na 2"]},"difficulty":2,"fun":"Uciskać należy w tempie 100–120 uciśnięć na minutę."},
     {"prompt":"Jaka jest prawidłowa temperatura ciała zdrowego dorosłego człowieka w stopniach Celsjusza?","slots":[{"key":"a","label":"temperatura"}],"answers":{"a":["36,6","36,6°C","36,6 stopnia","36,6 stopni","37"]},"difficulty":1},
@@ -42,7 +42,7 @@
     {"prompt":"Jaka choroba genetyczna jest spowodowana dodatkowym chromosomem 21?","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["zespół Downa","Down","Downa","trisomia 21"]},"difficulty":2},
     {"prompt":"Jaka choroba dziedziczna, zwana „chorobą królów”, polega na nieprawidłowym krzepnięciu krwi?\nA) Talasemia\nB) Hemofilia\nC) Anemia sierpowata\nD) Białaczka","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["B","Hemofilia","krwawiączka"]},"difficulty":2,"fun":"Chorował na nią carewicz Aleksy, syn ostatniego cara Rosji."},
     {"prompt":"Jaka wada wzroku polega na nierozróżnianiu niektórych barw, najczęściej czerwieni i zieleni?","slots":[{"key":"a","label":"wada wzroku"}],"answers":{"a":["daltonizm"]},"difficulty":2,"fun":"Nazwa pochodzi od chemika Johna Daltona, który sam miał tę wadę."},
-    {"prompt":"Jakie ciśnienie krwi, w mm Hg, uważa się za optymalne u dorosłego człowieka?","slots":[{"key":"a","label":"ciśnienie"}],"answers":{"a":["120/80","120 na 80"]},"difficulty":2},
+    {"prompt":"Poniżej jakiej wartości ciśnienia krwi (w mm Hg) ciśnienie u dorosłego uznaje się za optymalne?","slots":[{"key":"a","label":"ciśnienie"}],"answers":{"a":["120/80","120 na 80"]},"difficulty":2},
     {"prompt":"Jaki parametr krwi mierzy się glukometrem?","slots":[{"key":"a","label":"parametr"}],"answers":{"a":["poziom glukozy","glukoza","cukier","poziom cukru","stężenie glukozy"]},"difficulty":1},
     {"prompt":"Jak brzmi po polsku zasada etyki lekarskiej „primum non nocere”?","slots":[{"key":"a","label":"zasada"}],"answers":{"a":["po pierwsze nie szkodzić","nie szkodzić"]},"difficulty":2},
     {"prompt":"Którego greckiego boga medycyny symbolizuje laska z owiniętym wokół niej wężem?\nA) Hermesa\nB) Asklepiosa\nC) Apollina\nD) Hefajstosa","slots":[{"key":"a","label":"bóg"}],"answers":{"a":["B","Asklepiosa","Asklepios","Eskulap","Eskulapa","Aesculapius"]},"difficulty":2,"fun":"Dwa węże i skrzydła to kaduceusz Hermesa — symbol handlu, nie medycyny."},
