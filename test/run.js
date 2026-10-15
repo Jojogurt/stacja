@@ -3,7 +3,10 @@
 import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess, artistMatch } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
 import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
-import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
+import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
+import { escapeHtml, safeColor, isSlotKey, num, clipText } from '../core/util.js';
+import { clampRounds, sanitizeMpConfig, MAX_ROUNDS } from '../core/match.js';
+import { clampTimer, MP_TIMER_MAX_S } from '../core/timing.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 import { resolveTrack } from '../core/trackSelect.js';
@@ -16,6 +19,47 @@ let pass=0, fail=0;
 function ok(cond, msg){ if(cond){ pass++; } else { fail++; console.error('  ✗ '+msg); } }
 function eq(a,b,msg){ ok(JSON.stringify(a)===JSON.stringify(b), `${msg} — oczekiwano ${JSON.stringify(b)}, było ${JSON.stringify(a)}`); }
 function group(name,fn){ console.log('• '+name); fn(); }
+
+/* --- F1: bezpieczeństwo MP — walidatory i sanityzacja configu/drużyn --- */
+group('F1 util: safeColor / isSlotKey / num / escapeHtml(nie-string)', ()=>{
+  eq(safeColor('#58CC02','#000'),'#58CC02','poprawny hex przechodzi');
+  eq(safeColor('red" onmouseover="alert(1)','#000'),'#000','#2: kolor z wstrzyknięciem → fallback');
+  eq(safeColor('red','#000'),'#000','nazwa koloru (nie hex) → fallback');
+  eq(safeColor({},'#111'),'#111','obiekt → fallback');
+  ok(isSlotKey('title') && isSlotKey('a') && isSlotKey('rok_2'), 'klucze slotów z danych przechodzą');
+  ok(!isSlotKey('a" autofocus onfocus="x()') && !isSlotKey('') && !isSlotKey('A') && !isSlotKey('x'.repeat(13)) && !isSlotKey(5), '#2: zły klucz slotu odrzucony');
+  eq(num('<img src=x>'),'0','num: HTML → 0'); eq(num(7),'7','num: liczba'); eq(num('3'),'3','num: liczba w stringu');
+  eq(escapeHtml(5),'5','escapeHtml(liczba) nie rzuca'); eq(escapeHtml(0),'','escapeHtml(0) → \'\' (jak dotąd)');
+  eq(clipText({x:1},5),'','clipText: obiekt → pusty'); eq(clipText('  abcdefgh ',4),'abcd','clipText: trim + cap');
+});
+group('F1 match: clampRounds / clampTimer / sanitizeMpConfig (#5)', ()=>{
+  eq(clampRounds(200000), MAX_ROUNDS, 'rounds=200000 → MAX_ROUNDS');
+  eq(clampRounds(0), 1, 'rounds=0 → 1'); eq(clampRounds('x'), 1, 'rounds śmieci → 1'); eq(clampRounds(3), 3, 'rounds=3 bez zmian');
+  eq(clampTimer(9e9), MP_TIMER_MAX_S, 'timer ogromny → max'); eq(clampTimer(-5), 0, 'timer ujemny → 0'); eq(clampTimer(60), 60, 'timer 60 bez zmian');
+  const c=sanitizeMpConfig({ rounds:200000, timer:'abc', modes:['music','<x>','music','quiz'], format:'evil', salon:'yes', extra:1 });
+  eq(c, { rounds:MAX_ROUNDS, timer:0, modes:['music','quiz'], format:'coop', salon:false }, 'sanitizeMpConfig: tylko znane pola, przycięte');
+  eq(sanitizeMpConfig(null).rounds, 4, 'brak configu → domyślne 4 rundy');
+});
+group('F1 teams: sanitizeAssignments / buildTeams(teams) (#2)', ()=>{
+  const ps=[{id:'u1',name:'Ala'},{id:'u2',name:'Bob'},{id:'u3',name:'Cyd'}];
+  const evil=[
+    { id:'t0', name:'<b>Rekiny</b> i bardzo długa nazwa', color:'red" onmouseover="alert(1)', members:['u1','u2','ghost'] },
+    { id:'t0', name:{x:1}, color:'#CE82FF', members:['u2','u3'] },   // u2 już w t0 → tylko u3; id kolizja
+    { id:'t9', name:'Pusta', color:'#fff', members:['ghost'] },        // nikt obecny → odpada
+  ];
+  const t=sanitizeAssignments(evil, ps);
+  eq(t.length, 2, 'pusta drużyna odrzucona');
+  eq(t[0].color, teamColor(0), '#2: kolor z wstrzyknięciem → kolor z palety');
+  eq(t[0].members, ['u1','u2'], 'members ∩ obecni (ghost wycięty)');
+  eq(t[1].members, ['u3'], 'gracz w max jednej drużynie');
+  ok(t[0].id!==t[1].id, 'id drużyn unikalne');
+  ok(t[0].name.length<=14, 'nazwa przycięta (14)');
+  eq(t[1].name, 'Drużyna 2', 'nazwa nie-string → domyślna');
+  eq(t[1].color, '#CE82FF', 'poprawny hex zachowany');
+  const bt=buildTeams('teams', ps, evil);
+  ok(bt.every(x=>/^#[0-9a-fA-F]{3,8}$/.test(x.color)), 'buildTeams(teams) też sanityzuje kolor');
+  eq(buildTeams('teams', ps, [{id:'t0',members:['ghost']}]).length, 1, 'same puste przypisania → fallback coop (1 drużyna)');
+});
 
 /* --- scoring --- */
 group('scoring.norm', ()=>{

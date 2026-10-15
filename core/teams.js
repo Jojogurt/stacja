@@ -6,6 +6,8 @@
  * Reszta rdzenia (reducer/selektory/ocena) pracuje JEDNOLICIE na `teamId` — nie zna formatu. */
 
 // paleta kolorów drużyn (te same odcienie co awatary w widoku — VOTE_COLORS)
+import { safeColor, clipText } from './util.js';
+
 const TEAM_COLORS = ['#58CC02','#CE82FF','#FFC800','#FF4B4B','#1CB0F6','#1899D6','#FF9600','#2EC4B6'];
 export const teamColor = (i)=> TEAM_COLORS[((i%TEAM_COLORS.length)+TEAM_COLORS.length)%TEAM_COLORS.length];
 
@@ -19,9 +21,36 @@ export function buildTeams(format, players, assignments){
     return ps.map((p,i)=>({ id:p.id, name:p.name||'gracz', color:teamColor(i), members:[p.id] }));
   }
   if(format==='teams' && Array.isArray(assignments) && assignments.length){   // Faza 2
-    return assignments.map((a,i)=>({ id:a.id, name:a.name||('Drużyna '+(i+1)), color:a.color||teamColor(i), members:(a.members||[]).slice() }));
+    const teams = sanitizeAssignments(assignments, ps);
+    if(teams.length) return teams;
   }
   return [{ id:COOP_TEAM, name:'Drużyna', color:teamColor(0), members:ps.map(p=>p.id) }];   // coop (domyślny)
+}
+
+/* F1 (#2): podział hosta z sieci → bezpieczne drużyny. Host NIE jest zaufany (dowolny klient może
+ * wysłać `start`): kolor tylko hex (inaczej paleta teamColor(i) — `red" onmouseover=…` nie trafi do
+ * style=), nazwa = tekst przycięty do TEAM_NAME_MAX, id = /^t\d{1,2}$/ (unikalne), members = tylko
+ * OBECNI gracze, każdy gracz w max JEDNEJ drużynie (pierwsze przypisanie wygrywa). Puste drużyny
+ * i nadmiar ponad TEAMS_MAX odpadają. */
+export const TEAMS_MAX = 8;
+export const TEAM_NAME_MAX = 14;
+export function sanitizeAssignments(assignments, players){
+  const present = new Set((players||[]).map(p=>p && p.id).filter(Boolean));
+  const taken = new Set(), ids = new Set(), out = [];
+  for(const a of (Array.isArray(assignments)?assignments:[]).slice(0, TEAMS_MAX)){
+    if(!a || typeof a!=='object') continue;
+    const i = out.length;
+    let id = (typeof a.id==='string' && /^t\d{1,2}$/.test(a.id)) ? a.id : 't'+i;
+    if(ids.has(id)) id = 't'+i+'_';                   // kolizja id → wymuś unikalny
+    if(ids.has(id)) continue;
+    const members = (Array.isArray(a.members)?a.members:[])
+      .filter(m=>typeof m==='string' && present.has(m) && !taken.has(m));
+    if(!members.length) continue;
+    members.forEach(m=>taken.add(m)); ids.add(id);
+    out.push({ id, name: clipText(a.name, TEAM_NAME_MAX) || ('Drużyna '+(i+1)),
+               color: safeColor(a.color, teamColor(i)), members });
+  }
+  return out;
 }
 
 /* puste buckety stanu odpowiedzi per drużyna — wołane przy starcie meczu i resecie rundy */

@@ -88,8 +88,8 @@ export async function renderDruzyna(){
         <span class="dz-online" id="dzOnline"></span></div>
       <div class="dz-team-btns">
         <button class="dz-play" onclick="dzPlay()">${ic('play')} Zagraj</button>
-        <button class="dz-mini" onclick="dzCopy('${escapeHtml(team.code)}')">${ic('copy')} kod</button>
-        <button class="dz-mini red" onclick="dzLeave('${team.id}')">wyjdź</button>
+        <button class="dz-mini" data-v="${escapeHtml(team.code)}" onclick="dzCopy(this.dataset.v)">${ic('copy')} kod</button>
+        <button class="dz-mini red" data-v="${escapeHtml(String(team.id||''))}" onclick="dzLeave(this.dataset.v)">wyjdź</button>
       </div>
       <div class="dz-gamebanner" id="dzGameBanner" style="display:none"></div>
     </div>` : '';
@@ -113,7 +113,7 @@ export async function renderDruzyna(){
   const myCode = dzMe?.friend_code || '—';
   const pendRows = pending.map(p=>`
     <div class="dz-fr"><span class="who">${av(p.handle)}${escapeHtml(p.handle||'gracz')}</span>
-      <span class="acts"><button class="dz-yes" onclick="dzRespond(${p.req_id},true)">✓</button><button class="dz-no" onclick="dzRespond(${p.req_id},false)">✗</button></span></div>`).join('');
+      <span class="acts"><button class="dz-yes" data-v="${escapeHtml(String(p.req_id))}" onclick="dzRespond(+this.dataset.v,true)">✓</button><button class="dz-no" data-v="${escapeHtml(String(p.req_id))}" onclick="dzRespond(+this.dataset.v,false)">✗</button></span></div>`).join('');
   const sentRows = sent.map(s=>`
     <div class="dz-fr"><span class="who">${av(s.handle)}${escapeHtml(s.handle||'gracz')}</span>
       <span class="pendtag">⏳ wysłano</span></div>`).join('');
@@ -127,7 +127,7 @@ export async function renderDruzyna(){
     : `<div class="dz-hint">${ic('lock')} zaloguj się w Profilu, żeby dodawać znajomych</div>`;
   const friendSection = `
     <div class="dz-lbl">Twój kod znajomego</div>
-    <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" onclick="dzCopy('${escapeHtml(myCode)}')">${ic('copy')} kopiuj</button></div>
+    <div class="dz-mycode"><b>${escapeHtml(myCode)}</b><button class="dz-mini" data-v="${escapeHtml(myCode)}" onclick="dzCopy(this.dataset.v)">${ic('copy')} kopiuj</button></div>
     ${friendAddRow}
     ${pending.length?`<div class="dz-lbl">Zaproszenia <span class="dz-badge">${pending.length}</span></div>${pendRows}`:''}
     ${sent.length?`<div class="dz-lbl">Wysłane zaproszenia</div>${sentRows}`:''}

@@ -3,10 +3,10 @@
 import { signToken, verifyToken, newId, friendCode } from './auth.js';
 import { insertMatch } from './recordMatch.js';
 import { verifyIdToken } from './oauth.js';
-import { QPC, CPR } from '../../core/match.js';
+import { QPC, CPR, MAX_ROUNDS } from '../../core/match.js';
 
 // 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
-const MAX_ROUNDS = 10;   // górny bezpieczny limit rund (picker nie przekracza)
+// F1: MAX_ROUNDS z core/match.js (to samo źródło co picker i clamp `start` w DO).
 const BONUS_MAX = 10;    // łączny bonus (rok/album) w meczu
 export function validateMatchRecord(p){
   const qMax = MAX_ROUNDS*CPR*QPC;
@@ -232,13 +232,60 @@ export async function handleApi(req, env, url){
   return err('not_found', 404);
 }
 
-// record_match — walidacja (autoryzacja + zakres score), insert deleguje do wspólnego insertMatch.
+// F1 (#9): limity zapisu meczu przez KLIENTA (per profil z tokena; D1 — liczniki w pamięci
+// isolate'u nie działają na Workers). Mecz ma ≥15 pytań, więc 2 / 2 min i 60 / dobę to z zapasem.
+export const RECORD_LIMITS = [ { window:'-2 minutes', max:2 }, { window:'-1 day', max:60 } ];
+const clip = (v, n) => (v==null ? null : String(v).slice(0, n));
+// obiekt z sieci → ten sam, gdy jego JSON ≤ max znaków; inaczej {} (config meczu w D1)
+function smallObj(o, max){
+  if(!o || typeof o!=='object') return {};
+  try{ return JSON.stringify(o).length<=max ? o : {}; }catch(_e){ return {}; }
+}
+
+/* record_match — zapis meczu zgłoszonego przez KLIENTA.
+ * F1 (#9) DECYZJA: klient zapisuje WYŁĄCZNIE siebie (profil z tokena). Uczestnicy spoza tokena są
+ * IGNOROWANI (nie odrzucamy całego meczu — host relay dalej zapisze swój wynik). Punkty/mecze INNYM
+ * profilom dopisuje tylko autorytatywny DO (`server/authorityRoom.js` → `insertMatch` wprost,
+ * z wynikiem policzonym na serwerze, sekret serwera = brak ścieżki przez to API). Pod
+ * `serverAuthority:true` klient MP w ogóle tu nie pisze; w rollbacku relay (?authority=0) mecz MP
+ * zalicza się tylko hostowi — świadomy koszt za zamknięcie dopisywania wyników cudzym profilom.
+ * Plus: rate-limit per profil (RECORD_LIMITS), cap długości stringów (anty-puchnięcie D1),
+ * host_id = wołający, group_id tylko gdy wołający jest członkiem drużyny. */
 async function recordMatch(env, caller, p){
+  p = (p && typeof p==='object') ? p : {};
   const bad = validateMatchRecord(p);   // 3.2: odrzuć zawyżony wynik (400)
   if(bad) return err(bad);
-  const host = p.host_id || null;
   const parts = (Array.isArray(p.participants)?p.participants:[]).slice(0, 32);
-  if(host !== caller && !parts.some(e=>String(e.profile_id)===caller)) return err('caller_not_in_match', 403);
-  const id = await insertMatch(env, p);                    // wspólny zapis (cap + bez N+1)
+  const mine = parts.find(e => e && String(e.profile_id)===caller);
+  if(!mine) return err('caller_not_in_match', 403);
+  for(const l of RECORD_LIMITS){
+    const r = await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM matches WHERE host_id=? AND finished_at > datetime('now', ?)`
+    ).bind(caller, l.window).first();
+    if(r && (r.n|0) >= l.max) return err('rate_limited', 429);
+  }
+  let groupId = null;
+  if(p.group_id){
+    const g = String(p.group_id).slice(0, 64);
+    const member = await env.DB.prepare(`SELECT 1 FROM group_members WHERE group_id=? AND profile_id=?`).bind(g, caller).first();
+    if(member) groupId = g;
+  }
+  const qMax = MAX_ROUNDS*CPR*QPC;
+  const safe = {
+    mode: p.mode==='mp' ? 'mp' : 'solo',
+    room_code: clip(p.room_code, 8), host_id: caller, group_id: groupId,
+    config: smallObj(p.config, 2000),
+    score: p.score, total_questions: p.total_questions, started_at: clip(p.started_at, 40),
+    participants: [{
+      profile_id: caller, display_name: clip(mine.display_name || 'gracz', 32),
+      role: mine.role==='host' ? 'host' : 'player', score: mine.score, correct_count: mine.correct_count,
+    }],
+    answers: (Array.isArray(p.answers)?p.answers:[]).slice(0, qMax).filter(a=>a && typeof a==='object').map(a=>({
+      q_no: a.q_no, cat_key: clip(a.cat_key, 64), mode: clip(a.mode, 16),
+      track: clip(a.track, 200), artist: clip(a.artist, 200), ok: !!a.ok,
+      profile_id: (a.profile_id!=null && String(a.profile_id)===caller) ? caller : null,
+    })),
+  };
+  const id = await insertMatch(env, safe);                 // wspólny zapis (cap + bez N+1)
   return json({ id });
 }

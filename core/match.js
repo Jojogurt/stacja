@@ -1,8 +1,10 @@
 /* core/match.js — model meczu (czysty, zero DOM / Web API).
  * Dane kategorii (`cats`) wstrzykiwane parametrem → moduł nie zna `window`. */
 import { shuffle, escapeHtml } from './util.js';
+import { clampTimer } from './timing.js';
 
 export const QPC=5, CPR=3;   // pytań na kategorię, kategorii na rundę (jak prawdziwy quiz)
+export const MAX_ROUNDS=4;   // F1 (#5): max rund meczu (picker solo/MP: 1..4) — serwer przycina `start` do tego
 export const ALL_MODES=['music','lektor','reverse','snippet','quiz'];
 export const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment', quiz:'🧠 wiedza'};
 export const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment', quiz:'wiedza'};
@@ -55,3 +57,25 @@ export function matchSlot(m){ return m && m.slots ? m.slots[m.si] : null; }
 export function matchAdvance(m){ m.qi++; if(m.qi>=QPC){ m.qi=0; m.si++; } return m.si < m.slots.length; }
 export function matchHeader(m, cats){ const s=matchSlot(m); if(!s) return '';
   return `Runda ${s.round}/${m.rounds} · ${escapeHtml(catLabel(s.cat,cats))} · ${MODE_SHORT[s.mode]||s.mode} · pyt. ${m.qi+1}/${QPC}`; }
+
+// F1 (#5): liczba rund z sieci → całkowita w [1..MAX_ROUNDS] (rounds=200000 → MAX_ROUNDS, śmieci → 1)
+export function clampRounds(r){
+  const n = Math.floor(Number(r));
+  return Number.isFinite(n) ? Math.max(1, Math.min(MAX_ROUNDS, n)) : 1;
+}
+export const MP_FORMATS = ['coop','solo','teams'];
+/* F1 (#5): sanityzacja configu `start` od klienta (DO nie ufa hostowi). Zwraca TYLKO znane pola
+ * z przyciętymi wartościami: rounds∈[1..MAX_ROUNDS], timer∈[0..MP_TIMER_MAX_S], modes⊂ALL_MODES
+ * (bez duplikatów), format∈MP_FORMATS (inaczej coop), salon:boolean. Pule/assignments/groupId
+ * sanityzuje wołający (osobne capy). */
+export function sanitizeMpConfig(config){
+  const c = (config && typeof config==='object') ? config : {};
+  const modes = Array.isArray(c.modes) ? [...new Set(c.modes.filter(m=>ALL_MODES.includes(m)))] : [];
+  return {
+    rounds: clampRounds(c.rounds==null ? 4 : c.rounds),
+    timer: clampTimer(c.timer),
+    modes,
+    format: MP_FORMATS.includes(c.format) ? c.format : 'coop',
+    salon: c.salon===true,
+  };
+}

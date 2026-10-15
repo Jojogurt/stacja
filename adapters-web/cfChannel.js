@@ -6,7 +6,8 @@
  * bez build-stepu). Protokół zgodny z `server/gameRoom.js` (relay).
  *
  * Wspierane (tyle używa app.js):
- *   .on('broadcast',{event:E}, cb)   cb({payload})        E ∈ sync|act|react|say|typing
+ *   .on('broadcast',{event:E}, cb)   cb({payload, from})  E ∈ sync|act|react|say|typing|advanced|gamestart|invite
+ *                                    `from` = id nadawcy wstawione przez serwer (F1; stary serwer → null)
  *   .on('presence',{event:'sync'}, cb)  cb()  → potem .presenceState()
  *   .subscribe(cb)                   cb('SUBSCRIBED' | 'CHANNEL_ERROR')
  *   .track({name})                   ustaw nick obecności
@@ -14,6 +15,9 @@
  *   .presenceState()                 → { id:[{name}], ... }
  *   .unsubscribe()                   zamknij i posprzątaj
  */
+// F1: eventy znane klientowi (musi ⊇ ROOM/TEAM/USER_EVENTS z server/gameRoom.js)
+export const CHANNEL_EVENTS = ['sync', 'act', 'react', 'say', 'typing', 'advanced', 'gamestart', 'invite'];
+
 export function cfChannel(code, cfg = {}) {
   const base = (window.STACJA_CONFIG && window.STACJA_CONFIG.roomsBase) || '';
   const wss = base.replace(/^http/, 'ws').replace(/\/+$/, '');
@@ -53,7 +57,10 @@ export function cfChannel(code, cfg = {}) {
     ws.onmessage = (e) => {
       let msg; try { msg = JSON.parse(e.data); } catch { return; }
       if (msg.t === 'b') {
-        (bcast[msg.event] || []).forEach((cb) => { try { cb({ payload: msg.payload }); } catch (_e) {} });
+        // F1: tylko znane eventy; `from` (nadawca z tokenu) z koperty — klient sprawdza go dla `sync` (relay)
+        if (!CHANNEL_EVENTS.includes(msg.event)) return;
+        const from = msg.from || null;
+        (bcast[msg.event] || []).forEach((cb) => { try { cb({ payload: msg.payload, from }); } catch (_e) {} });
       } else if (msg.t === 'presence') {
         presence = {};
         (msg.members || []).forEach((m) => { if (m && m.id) presence[m.id] = [{ name: m.name || '' }]; });
@@ -89,7 +96,7 @@ export function cfChannel(code, cfg = {}) {
     },
     subscribe(cb) { subCb = cb; connect(); return api; },
     track({ name } = {}) { myName = name || myName; return send({ t: 'track', name: myName }); },
-    send({ event, payload } = {}) { return send({ t: 'b', event, payload }); },
+    send({ event, payload } = {}) { if (!CHANNEL_EVENTS.includes(event)) return false; return send({ t: 'b', event, payload }); },
     presenceState() { return presence; },
     unsubscribe() {
       closed = true;

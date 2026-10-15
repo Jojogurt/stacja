@@ -4,12 +4,12 @@
  * Powiązania zwrotne MP↔social: initMp woła initSocial; mp importuje showScreen/render* z social. */
 import { shuffle, escapeHtml } from '../core/util.js';
 import { norm } from '../core/scoring.js';
-import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance } from '../core/match.js';
+import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, slotsFor, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord } from '../core/matchRecord.js';
-import { mpSnipStart, listenSecs as _listenSecs, shouldPing, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
+import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val } from './dom.js';
@@ -171,12 +171,19 @@ async function mpEnterRoom(code, asHost, groupId){
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
   S.ch=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
   // pod autorytetem KAŻDY (też host) bierze stan z DO; w relay tylko nie-host (host jest źródłem).
-  S.ch.on('broadcast',{event:'sync'},({payload})=>{ if(SERVER_AUTH || !S.host){ S.game=payload; mpAfterSync(); } });
-  S.ch.on('broadcast',{event:'act'},({payload})=>{ if(S.host && !SERVER_AUTH) mpHandleAct(payload); });   // relay-only
-  S.ch.on('broadcast',{event:'react'},({payload})=>{ if(payload.by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
-  S.ch.on('broadcast',{event:'say'},({payload})=>{ if(payload.by!==mpMe.id){ mpClearTypingFor(payload.by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
-  S.ch.on('broadcast',{event:'typing'},({payload})=>{ if(payload.by!==mpMe.id) mpMarkTyping(payload.by); });
-  S.ch.on('broadcast',{event:'advanced'},({payload})=>{ mpOnPlayerAdvanced(payload); });   // SALON: gracz kliknął „dalej" na odsłonie
+  // AUTORYTET: 'sync' przychodzi WYŁĄCZNIE z {t:'state'} (roomTransport nie mapuje eventów na stan — F1 #1).
+  // RELAY: stan tylko od hosta — gdy serwer podaje nadawcę (`from`), sync od kogoś innego niż host gry odrzucony.
+  S.ch.on('broadcast',{event:'sync'},({payload, from})=>{
+    if(!(SERVER_AUTH || !S.host) || !payload || typeof payload!=='object') return;
+    if(!SERVER_AUTH && from && S.game && S.game.hostId && from!==S.game.hostId) return;   // F1: relay — tylko host
+    S.game=payload; mpAfterSync();
+  });
+  S.ch.on('broadcast',{event:'act'},({payload})=>{ if(S.host && !SERVER_AUTH && payload) mpHandleAct(payload); });   // relay-only (serwer wymusza payload.by)
+  // F1 (#4): nadawca = `from` wstawione przez serwer z tokenu (stary serwer → fallback na `by`)
+  S.ch.on('broadcast',{event:'react'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
+  S.ch.on('broadcast',{event:'say'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id){ mpClearTypingFor(by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
+  S.ch.on('broadcast',{event:'typing'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id) mpMarkTyping(by); });
+  S.ch.on('broadcast',{event:'advanced'},({payload})=>{ const by=mpSender(payload); if(by) mpOnPlayerAdvanced({ ...payload, by }); });   // SALON: gracz kliknął „dalej" na odsłonie
   S.ch.on('status',{},(s)=>mpNetStatus(s));   // 5.6: wskaźnik reconnectu
   S.ch.on('presence',{event:'sync'},()=>{
     const prevHost=S.host;                                          // 1.5: wykryj zmianę roli hosta (promote)
@@ -199,6 +206,8 @@ async function mpEnterRoom(code, asHost, groupId){
   if(!S.timerInt) S.timerInt=setInterval(mpTickTimer, 500);
 }
 
+// F1 (#4): nadawca ulotnego eventu — `from` (serwer, z tokenu) ma pierwszeństwo przed `by` (klient)
+function mpSender(p){ return (p && typeof p==='object' && (p.from || p.by)) || null; }
 function mpMembers(){
   if(!S.ch) return [];
   const st=S.ch.presenceState(); const out=[];
@@ -494,7 +503,7 @@ function mpStart(){
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
     // format + przypisania MUSZĄ iść w configu — inaczej DO buduje zawsze coop (Solo/Drużyny „nie działają")
     const assignments = mpPickFormat==='teams' ? mpTeamsFromAssign(mpPlayers()) : undefined;
-    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:mpPickRounds, timer:mpPickTimer||0, modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments, groupId:S.groupId });
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:clampRounds(mpPickRounds), timer:clampTimer(mpPickTimer), modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments, groupId:S.groupId });
     S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }

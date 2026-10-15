@@ -12,7 +12,13 @@
  *   event 'react/say/typing' → {t:'event', event, payload}       (ulotne — DO przekazuje)
  * Odbiór: {t:'state',game} → cb 'sync' ({payload:game}); {t:'event',event,payload} → cb event;
  *         {t:'presence',members,hostId} → presence cb + zapis hostId/presenceState.
+ *
+ * F1 (#1): STAN gry wyłącznie z {t:'state'}. {t:'event'} trafia do callbacków TYLKO dla nazw
+ * z RELAY_EVENTS — nigdy 'sync'/'act' (inaczej gracz podmieniałby stan u wszystkich, nawet przez
+ * stary serwer bez whitelisty). Nowy serwer dokłada `payload.from` (nadawca z tokenu).
  */
+// ulotne eventy przekazywane przez DO (musi = server/authorityRoom.js RELAY_EVENTS)
+export const RELAY_EVENTS = ['react', 'say', 'typing', 'advanced'];
 export function authorityChannel(code, cfg = {}) {
   const base = (window.STACJA_CONFIG && window.STACJA_CONFIG.roomsBase) || '';
   const wss = base.replace(/^http/, 'ws').replace(/\/+$/, '');
@@ -41,7 +47,8 @@ export function authorityChannel(code, cfg = {}) {
     send({ event, payload } = {}) {
       if (event === 'sync') return false;                       // stan należy do DO
       if (event === 'act')  return send({ t: 'action', action: payload });
-      return send({ t: 'event', event, payload });             // react/say/typing
+      if (!RELAY_EVENTS.includes(event)) return false;          // F1: tylko znane ulotne eventy
+      return send({ t: 'event', event, payload });             // react/say/typing/advanced
     },
 
     // komendy hosta (dodatkowe wobec cfChannel)
@@ -85,7 +92,11 @@ export function authorityChannel(code, cfg = {}) {
       if (msg.t === 'state') {
         (bcast['sync'] || []).forEach((cb) => { try { cb({ payload: msg.game }); } catch (_e) {} });
       } else if (msg.t === 'event') {
-        (bcast[msg.event] || []).forEach((cb) => { try { cb({ payload: msg.payload }); } catch (_e) {} });
+        // F1 (#1): event ≠ stan — 'sync'/'act'/nieznane nazwy odrzucane (stan tylko z t:'state')
+        if (!RELAY_EVENTS.includes(msg.event)) return;
+        const p = (msg.payload && typeof msg.payload === 'object') ? msg.payload : {};
+        if (msg.from && !p.from) p.from = msg.from;              // nadawca z koperty (nowy serwer)
+        (bcast[msg.event] || []).forEach((cb) => { try { cb({ payload: p, from: p.from || null }); } catch (_e) {} });
       } else if (msg.t === 'presence') {
         api.hostId = msg.hostId || null;
         presence = {};

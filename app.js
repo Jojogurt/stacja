@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v51';   // MVP-3 drużyn: tag meczu group_id (Zagraj z drużyną) + zaproszenia znajomych do gry (kanał user-<id> + baner)
+const APP_VERSION = 'v52';   // audyt 2026-10 F1: bezpieczeństwo MP (whitelista eventów, nadawca z tokenu, sanityzacja, start tylko host, rate-limit)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

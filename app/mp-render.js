@@ -3,7 +3,7 @@
  * Czyta współdzielony stan S (app/mp-state.js). Logika sterująca (transport/audio/host) zostaje
  * w app/mp.js i jest wstrzykiwana przez initMpRender — bez statycznego cyklu render↔logika. */
 import { S, mpMe } from './mp-state.js';
-import { escapeHtml } from '../core/util.js';
+import { escapeHtml, safeColor, isSlotKey, num } from '../core/util.js';
 import { norm } from '../core/scoring.js';   // mpSlotsHTML: porównanie głosów (mój głos == kandydat)
 import { QPC } from '../core/match.js';
 import { MP } from '../core/phases.js';
@@ -29,6 +29,9 @@ const mpIsSalonHost = ()=> !!(S.host && S.game && S.game.phase!=null && (S.game.
 // salon wymusza skórkę KOLUMNY (host nadpisuje przez klik w board; czat nie pokazuje kolumn)
 const curSkin = ()=> mpIsSalonHost() ? 'kolumny' : mpSkin();
 // bucket stanu odpowiedzi MOJEJ drużyny (proposals/votes/sure/passed) — izolacja widoku
+// F1 (#2): sloty odpowiedzi do RENDERU — tylko z bezpiecznym kluczem (klucz idzie w id="mpProp_<key>"
+// i data-k). Zły klucz z sieci (np. `a" autofocus onfocus=…`) po prostu nie dostaje pola.
+const renderSlots = (g)=> ((g && g.answerSlots) || slotsFor()).filter(s=>s && isSlotKey(s.key));
 const myBucket = ()=>{ const g=S.game, tid=myTeamId&&myTeamId(); return (g && g.byTeam && tid && g.byTeam[tid]) || {}; };
 
 function mpLobbyWaitHTML(){
@@ -131,7 +134,7 @@ const bbLoader = `<div class="bb-loader"><i></i><i></i><i></i></div>`;
 const mpRenderLoading = (head)=> `${head}<div class="mp-deck">${bbLoader}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
 const mpRenderArming = (g, head)=>{
-  const rc=g.readyCount||0, rt=g.readyTotal||mpMembers().length;
+  const rc=num(g.readyCount||0), rt=num(g.readyTotal||mpMembers().length);
   return `${head}${mpRosterStrip(g)}<div class="mp-deck">${bbLoader}<div class="mp-state">czekamy aż wszyscy będą gotowi… <b>${rc}/${rt}</b></div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
@@ -187,7 +190,7 @@ function mpRosterHTML(g){
 // tablica kolumnami (design): karta kandydata = wartość + ▲głosy + awatary + TOP; klik = głos
 const VOTE_COLORS=['#58CC02','#CE82FF','#FFC800','#FF4B4B','#1CB0F6','#1899D6'];
 function mpSlotsHTML(g){
-  const slots=g.answerSlots||slotsFor();
+  const slots=renderSlots(g);
   const tid=myTeamId();   // kolumny TYLKO mojej drużyny
   const ro=mpIsSalonHost();   // TV-sędzia: może KLIKNĄĆ propozycję (nadpisuje górkę głosów), ale nie dorzuca własnych typów
   return `<div class="mp-slots">${slots.map(s=>{
@@ -197,7 +200,7 @@ function mpSlotsHTML(g){
       const isTop=i===0 && c.votes.length>0;
       const voted = myVal && norm(myVal)===norm(c.value);   // salon: podświetla wybór hosta (nadpisanie)
       const dots = c.votes.slice(0,5).map((v,j)=>`<b class="mp-vdot" style="background:${VOTE_COLORS[j%VOTE_COLORS.length]}"></b>`).join('');
-      return `<button type="button" class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-v="${escapeHtml(c.value)}" onclick="mpVote('${s.key}', this.dataset.v)">
+      return `<button type="button" class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-k="${escapeHtml(s.key)}" data-v="${escapeHtml(c.value)}" onclick="mpVote(this.dataset.k, this.dataset.v)">
         <span class="cv">${escapeHtml(c.value)}</span>
         <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
       </button>`;
@@ -209,7 +212,7 @@ function mpSlotsHTML(g){
 // „odpowiedź drużyny" (design): ciemna karta (kolumny) / zielona przypięta (czat) + ×2 gdy pewniak
 function mpTeamHTML(g){
   const tid=myTeamId();
-  const ta=teamAnswer(g, tid), slots=g.answerSlots||slotsFor();
+  const ta=teamAnswer(g, tid), slots=renderSlots(g);
   const any=slots.some(s=>ta[s.key]);
   const val = any ? slots.map(s=> ta[s.key]?escapeHtml(ta[s.key]):'—').join(' — ') : '— wrzućcie i przegłosujcie —';
   const sure = (myBucket().sure||[]).length>0;
@@ -321,7 +324,7 @@ function mpLegendHTML(){
 }
 // formularz typowania per slot (wspólny dla fazy/kombinuj)
 function mpFormHTML(g){
-  const slots=g.answerSlots||slotsFor();
+  const slots=renderSlots(g);
   const inputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()">`).join('');
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
@@ -329,7 +332,7 @@ function mpFormHTML(g){
 // composer „@odp" (czat): po wpisaniu „@" pole morfuje w pola slotów (tytuł/wykonawca) z szarymi
 // placeholderami — klikalne osobno. Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
 function mpComposerHTML(g){
-  const slots=g.answerSlots||slotsFor();
+  const slots=renderSlots(g);
   const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
       <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
@@ -346,13 +349,13 @@ function mpHeaderHTML(g){
   return `<div class="mp-hd">
     <div class="mp-hd-r1">
       <button type="button" class="mp-hd-back" onclick="mpRoomBack()">${ic('back')}</button>
-      <span class="mp-hd-title">Runda ${g.round||1} · 🍺 ${escapeHtml(S.code||'')}</span>
+      <span class="mp-hd-title">Runda ${num(g.round||1)} · 🍺 ${escapeHtml(S.code||'')}</span>
       <span class="mp-hd-timer" id="mpCountdown" role="status" aria-live="polite"></span>
     </div>
     <div class="mp-hd-chips">
       <span>${escapeHtml(g.catLabel||g.catKey||'—')}</span>
-      <span>${MODE[g.mode]||g.mode||''}</span>
-      <span>Pyt. ${(g.qi||0)+1}/${QPC}</span>
+      <span>${MODE[g.mode]||escapeHtml(g.mode)}</span>
+      <span>Pyt. ${num((Number(g.qi)||0)+1)}/${QPC}</span>
     </div>
   </div>`;
 }
@@ -465,15 +468,15 @@ function mpRevealStandingsHTML(ranking){
   const tid=myTeamId&&myTeamId();
   const rows=ranking.map((t,i)=>{
     const av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
-    return `<div class="rv-stand-row${t.teamId===tid?' me':''}"><span class="rk">${i+1}</span><b class="av" style="background:${t.color||mpAvatarColor(t.name)}">${av}</b><span class="nm">${escapeHtml(t.name||'drużyna')}${t.teamId===tid?' (Ty)':''}</span><span class="mk ${t.teamOk?'ok':'no'}">${t.teamOk?'✓':'✗'}</span><span class="pts">${t.score}</span></div>`;
+    return `<div class="rv-stand-row${t.teamId===tid?' me':''}"><span class="rk">${i+1}</span><b class="av" style="background:${safeColor(t.color, mpAvatarColor(t.name))}">${av}</b><span class="nm">${escapeHtml(t.name||'drużyna')}${t.teamId===tid?' (Ty)':''}</span><span class="mk ${t.teamOk?'ok':'no'}">${t.teamOk?'✓':'✗'}</span><span class="pts">${num(t.score)}</span></div>`;
   }).join('');
   return `<div class="rv-standings"><div class="rv-stand-h">RANKING DRUŻYN</div>${rows}</div>`;
 }
 // baner wyniku rundy (wspólny: muzyka + quiz) — pewniak/trafienie/pudło. r = wynik MOJEJ drużyny.
 function mpRevealBanner(r){
-  if(r.pewniakWin) return `<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${r.gained}</span></div>`;
+  if(r.pewniakWin) return `<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${num(r.gained)}</span></div>`;
   if(r.pewniakLose) return `<div class="rv-banner lose"><span class="ic">🍺</span><span class="tx"><b>Pewniak przepalony</b><small>stawia: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} — odbiór na żywo 😏</small></span></div>`;
-  if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+r.gained+' pkt'}</small></span><span class="pts">+${r.gained}</span></div>`;
+  if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+num(r.gained)+' pkt'}</small></span><span class="pts">+${num(r.gained)}</span></div>`;
   return `<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
 }
 // przycisk „dalej" na odsłonie. SALON-host (TV): nie gra → pokaż ile GRACZY kliknęło „dalej"
@@ -539,7 +542,8 @@ function mpRenderQuizReveal(snap){
 // przeżywa re-render (innerHTML się zmienia, element nie), więc nie restartuje przy każdym mpRender.
 // ranking drużyn na koniec meczu (z game.scores) — zwycięzca na górze
 function mpTeamRanking(g){
-  return (g.teams||[]).map(t=>({ id:t.id, name:t.name, color:t.color||mpAvatarColor(t.name), score:(g.scores&&g.scores[t.id])||0 }))
+  // F1 (#2): kolor drużyny z sieci tylko jako hex (inaczej `red" onmouseover=…` w style=)
+  return (g.teams||[]).map(t=>({ id:t.id, name:t.name, color:safeColor(t.color, mpAvatarColor(t.name)), score:Number((g.scores&&g.scores[t.id])||0)||0 }))
     .sort((a,b)=>b.score-a.score);
 }
 const mpWinnerScore = (g)=>{ const tr=mpTeamRanking(g); return tr.length?tr[0].score:0; };
@@ -562,11 +566,11 @@ function mpRenderDone(g, head){
   const max=Math.max(1,...tally.map(t=>t.correct));
   const rows=tally.map((t,i)=>{
     const col=mpAvatarColor(t.name), pct=Math.round(t.correct/max*100), av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
-    return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${col}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${pct}%;background:${i===0?'var(--green)':(t.correct?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${t.correct}</span></div>`;
+    return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${col}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${num(pct)}%;background:${i===0?'var(--green)':(t.correct?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${num(t.correct)}</span></div>`;
   }).join('')||'<div class="mp-state">brak trafnych typów</div>';
-  const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${g.mvp.correct} trafnych typów</small></span></div>`:'';
+  const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${num(g.mvp.correct)} trafnych typów</small></span></div>`:'';
   const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
-  const stawia = beer.length?`<div class="dn-stawia"><span class="ic">🍺</span><span class="tx"><span class="l">STAWIA KOLEJKĘ</span><b>${beer.map(([n,c])=>escapeHtml(n)+(c>1?` (${c}×)`:'')).join(', ')}</b><small>przepalone pewniaki 🟡💥</small></span></div>`:'';
+  const stawia = beer.length?`<div class="dn-stawia"><span class="ic">🍺</span><span class="tx"><span class="l">STAWIA KOLEJKĘ</span><b>${beer.map(([n,c])=>escapeHtml(n)+(c>1?` (${num(c)}×)`:'')).join(', ')}</b><small>przepalone pewniaki 🟡💥</small></span></div>`:'';
   // KONKURENCJA (solo/drużyny): hero = zwycięzca, główna lista = ranking drużyn (pkt).
   // WSPÓLNA (coop): hero = wynik jedynej drużyny, lista = wkład graczy (jak dotąd).
   const isComp=(g.format||'coop')!=='coop';
@@ -577,13 +581,13 @@ function mpRenderDone(g, head){
   if(isComp){
     const tmax=Math.max(1,...tr.map(t=>t.score));
     const trows=tr.map((t,i)=>{ const av=escapeHtml((t.name||'?').slice(0,1).toUpperCase()), pct=Math.round(t.score/tmax*100);
-      return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${t.color}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${pct}%;background:${i===0?'var(--green)':(t.score?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${t.score}</span></div>`;
+      return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${t.color}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${num(pct)}%;background:${i===0?'var(--green)':(t.score?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${num(t.score)}</span></div>`;
     }).join('');
     body=`<div class="dn-lbl">Ranking drużyn</div><div class="dn-wk">${trows}</div>`;
   } else {
     body=`<div class="dn-lbl">Wkład drużyny</div><div class="dn-wk">${rows}</div>`;
   }
-  return `<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc">${mpWinnerScore(g)}</div></div>
+  return `<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc">${num(mpWinnerScore(g))}</div></div>
     ${mvp}${stawia}
     ${body}
     <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">${ic('back')} menu</button>${S.host?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;

@@ -10,6 +10,14 @@ export const MP_SNIP_WINDOW_S = 16;       // okno losowania startu fragmentu (mu
 export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
+// F1 (#5): opcje timera pytania MP (picker) + clamp na serwerze — jedno źródło
+export const MP_TIMER_OPTIONS = [0, 30, 60, 90];
+export const MP_TIMER_MAX_S = 90;
+// timer z sieci → liczba całkowita s w [0..MP_TIMER_MAX_S] (śmieci/ujemne → 0 = bez timera)
+export function clampTimer(t){
+  const n = Math.floor(Number(t));
+  return Number.isFinite(n) && n > 0 ? Math.min(n, MP_TIMER_MAX_S) : 0;
+}
 export const EMOJI_TTL_MS = 2400;         // jak długo leci emotka po ekranie
 export const SAY_TTL_MS = 4400;           // jak długo wisi dymek wiadomości
 export const TYPING_PING_MS = 1500;       // throttle własnego sygnału „pisze…"

@@ -2,7 +2,8 @@
  * Stan pickera zamknięty w module (czytany przez mpStart w mp.js). mpRender wstrzykiwany (initMpPicker)
  * — re-render po zmianie wyboru bez cyklu z mp.js. */
 import { ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, ALL_CATS, randomPools, plLoad, plFetch } from './catalog.js';
-import { ALL_MODES, MODE_LABEL, CPR, QPC } from '../core/match.js';
+import { ALL_MODES, MODE_LABEL, CPR, QPC, MAX_ROUNDS } from '../core/match.js';
+import { MP_TIMER_OPTIONS } from '../core/timing.js';
 import { escapeHtml } from '../core/util.js';
 import { pickSummary, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive } from '../core/picker.js';
 import { teamColor } from '../core/teams.js';
@@ -98,8 +99,9 @@ function mpPickerHTML(){
     grpBands+=`<div class="grp-band open">${inner}</div>`;
   });
   const modeChips=ALL_MODES.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
-  const roundsBtns=[1,2,3,4].map(r=>`<button class="${mpPickRounds===r?'on':''}" onclick="mpSetRounds(${r})">${r}</button>`).join('');
-  const timerBtns=[[0,'bez'],[30,'30s'],[60,'60s'],[90,'90s']].map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
+  // F1 (#5): te same limity co clamp `start` w DO (core: MAX_ROUNDS, MP_TIMER_OPTIONS)
+  const roundsBtns=Array.from({length:MAX_ROUNDS},(_,i)=>i+1).map(r=>`<button class="${mpPickRounds===r?'on':''}" onclick="mpSetRounds(${r})">${r}</button>`).join('');
+  const timerBtns=MP_TIMER_OPTIONS.map(v=>[v, v?v+'s':'bez']).map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
   // format meczu: jak punktujemy (jedna drużyna / każdy sam / podział na drużyny).
   const fmtBtns=[['coop','Wspólna'],['solo','Solo'],['teams','Drużyny']].map(([v,l])=>
     `<button class="${mpPickFormat===v?'on':''}" onclick="mpSetFormat('${v}')">${l}</button>`).join('');
@@ -117,7 +119,7 @@ function mpPickerHTML(){
       `<input class="um-tname" style="border-color:${teamColor(i)}" maxlength="14" value="${escapeHtml(mpPickTeamNames[i]||'')}" placeholder="Drużyna ${i+1}" oninput="mpSetTeamName(${i}, this.value)">`).join('');
     const chips = players.length ? players.map(p=>{
       const ti=mpAssignOf(p.id), col=teamColor(ti), av=escapeHtml((p.name||'?').slice(0,1).toUpperCase());
-      return `<button class="um-assign-chip" style="border-color:${col}" onclick="mpCycleAssign('${escapeHtml(p.id)}')"><b style="background:${col}">${av}</b><span>${escapeHtml(p.name||'gracz')}</span><i style="background:${col}">D${ti+1}</i></button>`;
+      return `<button class="um-assign-chip" style="border-color:${col}" data-pid="${escapeHtml(p.id)}" onclick="mpCycleAssign(this.dataset.pid)"><b style="background:${col}">${av}</b><span>${escapeHtml(p.name||'gracz')}</span><i style="background:${col}">D${ti+1}</i></button>`;
     }).join('') : `<div class="um-assign-empty">czekamy na graczy w pokoju…</div>`;
     assignSec=`<div class="um-sec"><div class="um-h"><span>Drużyny</span><span class="note">tknij gracza = zmień drużynę</span></div>
         <div class="um-teamrow"><div class="um-rounds">${tcBtns}</div><button class="um-balance" onclick="mpBalance()">⚖️ równo</button></div>

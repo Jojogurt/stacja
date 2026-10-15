@@ -527,5 +527,70 @@ await group('MVP-3: zaproszenia znajomych — most do HTML + baner', async ()=>{
   ok(!el.classList.contains('show'), 'dzDismissInvite chowa baner zaproszenia');
 });
 
+
+// —— F1 audytu 2026-10: bezpieczeństwo MP (klient) ——
+const playState=(ws, over={})=>({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+  answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}], format:'coop',
+  teams:[{id:'all',name:'Drużyna',members:[ws._id]}], scores:{all:0},
+  byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } }, preview:'https://x/p.m4a', lyric:'', prompt:'',
+  timer:0, endsAt:null, beerTally:{}, hostId:ws._id, results:[], ...over });
+
+await group('F1 #1: event „sync" od gracza NIE zmienia stanu u klienta (stan tylko z t:state)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  ws.pushState(playState(ws, { playNonce:1300 })); await settle(6);
+  ok(!/dn-hero/.test($(w,'mpRoom').innerHTML), 'start: faza gry (nie wynik)');
+  ws._emit({ t:'event', event:'sync', from:'ATTACKER', payload:{ phase:'done', format:'teams', hostId:'ATTACKER',
+    teams:[{ id:'x', name:'Hacker', color:'red"><img src=x onerror="window.__f1xss=1">' }], scores:{ x:9 }, tallyList:[], beerTally:{} } });
+  await settle(6);
+  const h=$(w,'mpRoom').innerHTML;
+  ok(!/dn-hero/.test(h) && !/Hacker/.test(h), '#1: event sync zignorowany — brak podmienionego ekranu wyniku');
+  ok(!w.document.querySelector('#mpStage img[onerror]'), '#1: brak wstrzykniętego <img onerror>');
+  ws._emit({ t:'event', event:'act', payload:{ type:'pass', by:ws._id } }); await settle(2);
+  ok(true, 'event act od gracza nie rzuca');
+});
+
+await group('F1 #2: kolor drużyny `red" onmouseover=…` nie trafia do DOM jako atrybut', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  ws.pushState({ phase:'done', format:'teams', hostId:ws._id, playNonce:1300,
+    teams:[{ id:'x', name:'Zli', color:'red" onmouseover="window.__f1xss=1" x="' }, { id:'y', name:'Dobrzy', color:'#1CB0F6' }],
+    scores:{ x:'<b>2</b>', y:1 }, tallyList:[{ name:'Ala', correct:'<i>3</i>' }], mvp:{ name:'Ala', correct:'<u>3</u>' }, beerTally:{} });
+  await settle(6);
+  const st=$(w,'mpStage');
+  ok(/dn-hero/.test(st.innerHTML), 'wynik (Drużyny) wyrenderowany');
+  ok(!st.querySelector('[onmouseover]'), '#2: brak atrybutu onmouseover z koloru drużyny');
+  ok(!st.querySelector('b b, .pts i, small u'), 'liczby z sieci jako tekst (bez wstrzykniętych tagów)');
+  ok([...st.querySelectorAll('.wk-row .av')].some(e=>/#1CB0F6|rgb\(28, 176, 246\)/i.test(e.getAttribute('style')||'')), 'poprawny kolor hex zachowany');
+});
+
+await group('F1 #2: klucz slotu `a" autofocus onfocus=…` nie trafia do DOM (id/inline JS)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const evil='a" autofocus onfocus="window.__f1xss=1" x="';
+  ws.pushState(playState(ws, { playNonce:1301, answerSlots:[{ key:evil, label:'odp' }, { key:'title', label:'tytuł' }],
+    byTeam:{ all:{ proposals:[{ id:'p1', aid:'a1', by:ws._id, byName:'Ja', values:{ [evil]:'X', title:'Y' } }],
+      votes:{ [evil]:{ [ws._id]:'X' } }, sure:[], passed:[] } } }));
+  await settle(6);
+  w.mpGoKombinuj && w.mpGoKombinuj(); await settle(4);
+  const st=$(w,'mpStage');
+  ok(!st.querySelector('[autofocus],[onfocus]'), '#2: brak autofocus/onfocus z klucza slotu');
+  ok(!!$(w,'mpProp_title'), 'poprawny slot (title) nadal ma pole');
+  ok(![...st.querySelectorAll('[onclick]')].some(e=>/autofocus|__f1xss/.test(e.getAttribute('onclick'))), '#2: klucz slotu nie trafia do inline onclick');
+  ok(w.__f1xss===undefined, 'żaden wstrzyknięty handler się nie wykonał');
+});
+
+await group('F1 #4: czat/emotki — nadawca z serwera (`from`) ma pierwszeństwo przed `by`', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const fx=()=>($(w,'mpFx')||{}).innerHTML||'';
+  ws._emit({ t:'event', event:'say', from:'OTHER', payload:{ by:ws._id, from:'OTHER', byName:'Ola', text:'cześć-F1' } });
+  await settle(2);
+  ok(/cześć-F1/.test(fx()), 'wiadomość od innego gracza (from≠ja) pokazana mimo sfałszowanego by=ja');
+  ws._emit({ t:'event', event:'say', payload:{ by:ws._id, byName:'Ja', text:'echo-F1' } });   // stary serwer: by=ja → echo pominięte
+  await settle(2);
+  ok(!/echo-F1/.test(fx()), 'kompat. starego serwera: by=ja (bez from) → własne echo pominięte');
+});
+
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

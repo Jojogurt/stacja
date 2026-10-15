@@ -25,7 +25,8 @@ import { verifyToken } from './lib/auth.js';
 import { reduceAction, evaluateAnswer, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
-import { buildMatch, matchAdvance } from '../core/match.js';
+import { buildMatch, matchAdvance, sanitizeMpConfig } from '../core/match.js';
+import { isSlotKey, clipText } from '../core/util.js';
 import { buildMpRecord } from '../core/matchRecord.js';
 import { norm } from '../core/scoring.js';
 import { MP_SNIP_WINDOW_S } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu (koniec kopii)
@@ -42,16 +43,36 @@ const POOL_MAX_VARIANTS = 12;        // cap wariantów poprawnej odpowiedzi na s
 const POOL_PROMPT_MAX = 600;         // max długość treści pytania
 const NAME_MAX = 40;                 // 3.3: cap długości nicka (?name= / track / byName)
 const EVENT_PAYLOAD_MAX = 500;       // 3.3: cap rozmiaru payloadu ulotnego eventu (po JSON.stringify)
-const EVENT_RATE_PER_S = 10;         // 3.3: limit ulotnych eventów na sekundę per połączenie
 const REACTIONS = ['😂','🔥','🎉','🤔','😱','🖕'];   // 3.3: whitelist emotek (musi = app/mp-render.js)
+// F1 (#1): JEDYNE ulotne eventy przekazywane między klientami (musi = adapters-web/roomTransport.js
+// RELAY_EVENTS). Stan gry NIGDY nie idzie eventem — tylko {t:'state'} od DO ('sync'/'act' odrzucane).
+export const RELAY_EVENTS = ['react','say','typing','advanced'];
+// F1 (#14): token bucket per połączenie dla wszystkich typów wiadomości (rate/s, burst)
+const RATE = {
+  event:  { rate:10, burst:10 },   // emotki/czat/typing/advanced (dawny allowEvent 10/s)
+  action: { rate:8,  burst:20 },   // propose/vote/sure/pass/ready — każda = broadcast + persist
+  meta:   { rate:1,  burst:4  },   // hello/track — każda = pushPresence do wszystkich
+  start:  { rate:0.2, burst:3 },   // start (host) — buildMatch + pełny broadcast; lock/next/retry są
+                                   // strzeżone fazą (no-op poza PLAY/REVEAL/NETERR) → bez limitu
+};
+const SLOT_LABEL_MAX = 40;
+const CAT_TEXT_MAX = 80;             // label/range/kind kategorii
+const SONG_TEXT_MAX = 200;           // title/artist/album/year utworu
+const URL_MAX = 500;
+// F1: preview tylko https (audio pobiera KAŻDY klient — bez http/javascript:/data:); tts: https albo ścieżka względna
+const okPreview = (u)=> typeof u==='string' && u.length<=URL_MAX && /^https:\/\//.test(u);
+const okTts = (u)=> typeof u==='string' && u.length<=URL_MAX && (/^https:\/\//.test(u) || (/^[\w-][\w\-./]*$/.test(u) && !u.includes('..')));
 
 // sanityzacja pytania quizu: prompt/sloty/warianty (anty-flood/anty-OOM, tylko klucze slotów)
 function clampQuestion(q){
   if(!q || typeof q!=='object') return null;
   const prompt=String(q.prompt||'').slice(0, POOL_PROMPT_MAX);
-  const slots=(Array.isArray(q.slots)?q.slots:[]).slice(0, POOL_MAX_SLOTS)
-    .map(s=>({ key:String(s&&s.key||''), label:String((s&&s.label)||(s&&s.key)||'') }))
-    .filter(s=>s.key);
+  const raw=(Array.isArray(q.slots)?q.slots:[]).slice(0, POOL_MAX_SLOTS);
+  // F1 (#2): klucz slotu trafia do id="mpProp_<key>" u KAŻDEGO klienta → tylko /^[a-z0-9_]{1,12}$/.
+  // Jeden zły klucz → odrzuć całe pytanie (nie zgaduj intencji hosta).
+  if(raw.some(s=>!s || !isSlotKey(s.key))) return null;
+  const slots=raw.map(s=>({ key:s.key, label:clipText(s.label, SLOT_LABEL_MAX) || s.key }));
+  if(new Set(slots.map(s=>s.key)).size!==slots.length) return null;   // duplikat klucza
   if(!prompt || !slots.length) return null;
   const answers={};
   const src=(q.answers&&typeof q.answers==='object')?q.answers:{};
@@ -69,12 +90,14 @@ function clampPools(pools){
   if(!pools || typeof pools!=='object') return out;
   for(const k of Object.keys(pools).slice(0, POOL_MAX_CATS)){
     const c=pools[k]; if(!c || typeof c!=='object') continue;
-    const o={ label:c.label, range:c.range, kind:c.kind };
-    if(Array.isArray(c.artists)) o.artists=c.artists.slice(0, POOL_MAX_SONGS).map(String);
-    if(Array.isArray(c.songs)) o.songs=c.songs.slice(0, POOL_MAX_SONGS).map(s=>{
-      const r={ title:s&&s.title, artist:s&&s.artist };
-      if(s&&s.preview) r.preview=s.preview; if(s&&s.year) r.year=s.year; if(s&&s.album) r.album=s.album;
-      if(s&&s.lyric) r.lyric=String(s.lyric).slice(0, POOL_LYRIC_MAX); if(s&&s.tts) r.tts=s.tts;
+    // F1: wszystko z hosta jako TEKST z capem (catLabel/utwór lecą do stanu u wszystkich)
+    const o={ label:clipText(c.label, CAT_TEXT_MAX), range:clipText(c.range, CAT_TEXT_MAX), kind:clipText(c.kind, 16) };
+    if(Array.isArray(c.artists)) o.artists=c.artists.slice(0, POOL_MAX_SONGS).map(a=>clipText(a, SONG_TEXT_MAX)).filter(Boolean);
+    if(Array.isArray(c.songs)) o.songs=c.songs.slice(0, POOL_MAX_SONGS).filter(s=>s && typeof s==='object').map(s=>{
+      const r={ title:clipText(s.title, SONG_TEXT_MAX), artist:clipText(s.artist, SONG_TEXT_MAX) };
+      if(okPreview(s.preview)) r.preview=s.preview;
+      if(s.year) r.year=clipText(s.year, 16); if(s.album) r.album=clipText(s.album, SONG_TEXT_MAX);
+      if(s.lyric) r.lyric=String(s.lyric).slice(0, POOL_LYRIC_MAX); if(okTts(s.tts)) r.tts=s.tts;
       return r;
     });
     if(Array.isArray(c.questions)) o.questions=c.questions.slice(0, POOL_MAX_QUESTIONS).map(clampQuestion).filter(Boolean);
@@ -173,7 +196,13 @@ export class GameAuthority extends Server {
 
   async onMessage(conn, raw){
     let msg; try{ msg=JSON.parse(raw); }catch{ return; }
+    if(!msg || typeof msg!=='object') return;
     const me = conn.state && conn.state.id;
+    if(!me) return;                                   // połączenie bez tożsamości (odrzucone w onConnect)
+    // F1 (#14): token bucket per połączenie — flood dowolnym typem nie wzmacnia broadcastów/persist
+    const kind = msg.t==='event' ? 'event' : msg.t==='action' ? 'action'
+      : (msg.t==='hello' || msg.t==='track') ? 'meta' : msg.t==='start' ? 'start' : null;
+    if(kind && !this.allowRate(conn, kind)) return;
 
     switch(msg.t){
       case 'hello':
@@ -182,34 +211,42 @@ export class GameAuthority extends Server {
         return;
 
       case 'track':                                   // aktualizacja nicka obecności (jak relay)
-        conn.setState({ id:(conn.state&&conn.state.id)||null, name:String(msg.name||(conn.state&&conn.state.name)||'').slice(0, NAME_MAX), verified:conn.state&&conn.state.verified });
+        conn.setState({ id:(conn.state&&conn.state.id)||null, name:clipText(msg.name, NAME_MAX)||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
         this.pushPresence();
         return;
 
-      case 'event': {                                 // ulotne (emotki/czat/typing) — relay do wszystkich (z nadawcą)
-        if(!this.allowEvent(conn)) return;            // 3.3: rate-limit per połączenie
-        const p=msg.payload||{};
+      case 'event': {                                 // ulotne (emotki/czat/typing/„dalej") — relay do wszystkich
+        // F1 (#1): TYLKO whitelista nazw. Dawniej dowolna nazwa (np. 'sync') szła do wszystkich i klient
+        // brał ją za stan gry → podmiana stanu/XSS przez każdego gracza.
+        if(!RELAY_EVENTS.includes(msg.event)) return;
+        const src=msg.payload;
+        const p=(src && typeof src==='object' && !Array.isArray(src)) ? { ...src } : {};
         if(msg.event==='react' && !REACTIONS.includes(p.emoji)) return;   // 3.3: whitelist emotek
+        // F1 (#4): nadawca WYMUSZONY z tożsamości połączenia (nadpisuje by/byName/from klienta) —
+        // koniec podszywania się na czacie / „dalej" w salonie / emotkach.
+        p.from=me; p.by=me; p.byName=(conn.state && conn.state.name) || '';
         let raw; try{ raw=JSON.stringify(p); }catch(_e){ return; }
         if(raw.length>EVENT_PAYLOAD_MAX) return;      // 3.3: cap rozmiaru payloadu (anty-flood)
-        this.broadcast(JSON.stringify({ t:'event', event:msg.event, payload:p }));
+        this.broadcast(JSON.stringify({ t:'event', event:msg.event, payload:p, from:me }));
         return;
       }
 
-      case 'start':                                   // kto startuje mecz, ten zostaje hostem
-        // (host w onConnect jest tylko prowizoryczny do crowna w lobby; start go potwierdza —
-        //  deterministyczne „twórca = host", odporne na wyścig verifyToken przy łączeniu)
-        if(me && (!this.game || this.game.phase==null || this.game.phase===MP.DONE)){
-          this.hostId=me; this.starterId=me; this.pushPresence();   // twórca = host; zapamiętany do reclaim po reconnect
-          await this.startMatch(msg.config||{});
-        }
+      case 'start': {
+        // F1 (#5): start TYLKO od aktualnego hosta pokoju (lobby: host z onConnect/promote; po DONE: host).
+        // Dawniej dowolny gracz startował mecz i przejmował hosta. Starter = host (reclaim po reconnect).
+        const idle = !this.game || this.game.phase==null || this.game.phase===MP.DONE;
+        if(!idle || me!==this.hostId) return;
+        this.starterId=me; this.pushPresence();
+        await this.startMatch((msg.config && typeof msg.config==='object') ? msg.config : {});
         return;
+      }
 
       case 'action': {
         if(!this.game) return;
-        const a = { ...(msg.action||{}) };
+        if(!msg.action || typeof msg.action!=='object') return;
+        const a = { ...msg.action };
         a.by = me;                                    // WYMUSZONE z tożsamości połączenia (anty-spoof)
-        a.byName = (conn.state && conn.state.name) || a.byName || '';
+        a.byName = (conn.state && conn.state.name) || clipText(a.byName, NAME_MAX);
         if(a.type==='ready'){ await this.onReady(me, a.armNonce); return; }
         if(reduceAction(this.game, a)){ this.broadcastState(); await this.persist(); }
         return;
@@ -285,9 +322,11 @@ export class GameAuthority extends Server {
 
   /* ---- start meczu (host wgrywa pule) ---- */
   async startMatch(config){
-    const { rounds=4, timer=0, modes=[], format='coop', assignments } = config;
-    const salon = !!config.salon;                   // tryb salonowy: TV = prowadzący (render+roster), tempo bez zmian
-    const groupId = config.groupId ? String(config.groupId).slice(0,64) : null;   // MVP-3: tag drużyny (sanityzowany)
+    // F1 (#5): rounds∈[1..MAX_ROUNDS] (rounds=200000 → 25 MB stanu = martwy pokój), timer clamp,
+    // modes ⊂ ALL_MODES, format ∈ coop/solo/teams. assignments sanityzuje buildTeams (kolor/nazwa/members).
+    const { rounds, timer, modes, format, salon } = sanitizeMpConfig(config);
+    const assignments = Array.isArray(config.assignments) ? config.assignments : undefined;
+    const groupId = (typeof config.groupId==='string' && config.groupId) ? config.groupId.slice(0,64) : null;   // MVP-3: tag drużyny (sanityzowany)
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
     const catKeys = Object.keys(pools);
     const r = buildMatch(catKeys, modes, rounds, pools);
@@ -429,14 +468,18 @@ export class GameAuthority extends Server {
     await this.persist();
   }
 
-  // 3.3: prosty rate-limit ulotnych eventów (emotki/czat/typing) — okno 1 s per połączenie
-  allowEvent(conn){
-    const sec=Math.floor(Date.now()/1000);
-    const w=conn._evWin || (conn._evWin={ sec, n:0 });
-    if(w.sec!==sec){ w.sec=sec; w.n=0; }
-    if(w.n>=EVENT_RATE_PER_S) return false;
-    w.n++; return true;
+  // F1 (#14): token bucket per połączenie i rodzaj wiadomości (event/action/meta/start). Stan na
+  // obiekcie połączenia (ulotny — po hibernacji/reconnect bucket startuje pełny, co jest OK).
+  allowRate(conn, kind, now=Date.now()){
+    const cfg=RATE[kind] || RATE.event;
+    const all=conn._tb || (conn._tb={});
+    const b=all[kind] || (all[kind]={ tokens:cfg.burst, ts:now });
+    b.tokens=Math.min(cfg.burst, b.tokens + (now-b.ts)/1000*cfg.rate); b.ts=now;
+    if(b.tokens<1) return false;
+    b.tokens-=1; return true;
   }
+  // 3.3 (zgodność wsteczna): dawny limiter eventów — teraz token bucket 'event'
+  allowEvent(conn){ return this.allowRate(conn, 'event'); }
 
   /* ---- serwerowy auto-lock (koniec czasu pytania) ---- */
   scheduleAutoLock(ms){ this.clearAutoLock(); this._autoLock=setTimeout(()=>{ this.lock().catch(()=>{}); }, ms); }
