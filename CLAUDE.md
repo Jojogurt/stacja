@@ -12,7 +12,9 @@ gra jako jedna drużyna). Czysty **HTML/JS, bez budowania** — ES modules łado
 ## Komendy
 
 ```bash
-npm test            # testy jednostkowe rdzenia (node test/run.js, zero zależności)
+npm test            # rdzeń + kształt danych + ścisły lint paczek + serwer
+npm run test:dom    # siatka jsdom (app/ + index.html)
+npm run lint:data   # raport jakości paczek pytań wg SPEC v2 (--file quiz-x.json, --strict)
 python3 -m http.server 8123   # lokalny podgląd (hosting prod: GitHub Pages)
 ```
 
@@ -30,14 +32,18 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   Przenośny 1:1 na inną platformę i w pełni testowalny. Tu trafia logika gry:
   `match.js` (model meczu), `scoring.js` (dopasowanie odpowiedzi), `mpReducer.js`
   (host-authority MP: akcje → stan), `phases.js` (FSM), `picker.js` (wybór kategorii/trybów,
-  wspólny solo+MP), `chatFeed.js` (feed czatu MP), `timing.js` (stałe/obliczenia czasowe), `util.js`.
+  wspólny solo+MP), `chatFeed.js` (feed czatu MP + whitelist REACTIONS), `timing.js` (stałe/obliczenia
+  czasowe, etapy intro), `trackSelect.js` (wybór utworu iTunes: dekada, wersje, popularność, dystraktory ABCD),
+  `daily.js` (Stacja dnia: seed daty, plan, seria, siatka do udostępnienia), `handles.js` (pule ksyw),
+  `teams.js`, `matchRecord.js` (rekord meczu do ligi), `util.js` (+ walidatory safeColor/isSlotKey/num/clipText).
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
 - **`adapters-web/`** — webowe implementacje portów + transport (iTunes, Cloudflare, Realtime).
 - **`app.js`** — **entry point (~27 linii)**: montaż modułów + bootstrap (wersja, motyw). Bez logiki.
 - **`app/`** — warstwa DOM/sieć, wyłuskana z dawnego god-objectu (zależy od `core/`, **nie** od `app.js`):
   `catalog.js` (dane kategorii z `window.CATEGORIES` + wrappery `ALL_CATS` + playlisty — importowany
   przez solo i mp), `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js`
-  (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `social.js` (router ekranów
+  (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `daily.js` (Stacja dnia:
+  zapis, udostępnianie), `sfx.js` (dźwięki WebAudio), `catEditor.js` (własne kategorie), `social.js` (router ekranów
   `showScreen` + Drużyna/Znajomi/Profil/OAuth). **Multiplayer w 4 plikach**: `mp-state.js` (współdzielony
   obiekt stanu `S` + tożsamość `mpMe`), `mp-render.js` (widok: dyspozytor `mpRender` + buildery HTML),
   `mp-picker.js` (host-picker „ułóż mecz"), `mp.js` (transport/host/audio/czat; logika gry w `core/mpReducer`).
@@ -70,6 +76,17 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   (service worker) — inaczej PWA serwuje stary kod.
 - **MP serwer-autorytet**: `config.js → serverAuthority`. Rollback do relay bez deployu:
   `?authority=0` lub `localStorage 'stacjaAuthority'='0'`.
+- **Paczki pytań** (`data/quiz-*.json`): format i zasady w `backlog/audyt-2026-10/SPEC-paczki-v2.md`
+  (`answers[k][0]` = forma kanoniczna pokazywana w odsłonie, `pool` dla „wymień N", ABCD tasowane w runtime,
+  `difficulty`, `fun`). `npm test` odpala `lint-data --strict` — wyciek odpowiedzi w treści, ABCD ≠ 4 opcje,
+  duplikaty itd. blokują CI. Nowe pytania: tylko fakty pewne; po generacji — weryfikacja faktów (patrz
+  `backlog/audyt-2026-10/weryfikacja-faktow-*.md`).
+- **Bezpieczeństwo MP**: serwer przekazuje tylko eventy z whitelisty (`RELAY_EVENTS`), nadawca z tokenu;
+  stan gry wyłącznie z `{t:'state'}`. Wartości z serwera w atrybutach HTML → `escapeHtml`/`safeColor`.
+  Inline `onclick="f('${…}')"` zakazane — `data-*` + delegacja.
+- **Kolejność wydania** przy zmianach serwera: najpierw deploy Workera (`cd server && npm run deploy`),
+  potem merge klienta na `main` (GitHub Pages). Klient jest wstecznie kompatybilny, ale np. limity ligi
+  i pola `pool`/`modes` działają w pełni dopiero z nowym serwerem.
 
 ## Status refaktoru
 

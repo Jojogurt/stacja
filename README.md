@@ -5,11 +5,15 @@ Webowy trener do nauki tytułów i wykonawców piosenek przed muzycznym pubquize
 
 ## Tryby
 
-- **Solo** — losowanie utworu z wybranej kategorii (dekady / style i gatunki),
-  30-sekundowe zajawki z iTunes Search API, zgadywanie tytułu + wykonawcy
-  (rok i album = bonus). Tryb sesyjny: 5/10/15 rund + wynik końcowy.
-- **Lektor** — zamiast muzyki lektor czyta fragment tekstu (Web Speech API,
-  offline). Teksty w polu `lyric` w `categories.js`.
+- **Graj teraz** — 10 hitów jednym tapnięciem, bez ustawiania.
+- **Stacja dnia** — codziennie te same 10 utworów dla wszystkich (seed daty), jedna próba,
+  seria dni 🔥 i wynik do udostępnienia (siatka 🟩🟨⬛).
+- **Solo** — mecz 5/15/30 pytań z wybranych kategorii (dekady / style / playlisty / teksty /
+  wiedza / własne). Tryby pytań: muzyka (30-s zajawka iTunes), od tyłu, fragment 2 s,
+  intro 1-2-4-8-16 s, ABCD (4 kafle), rok wydania, lektor, quiz wiedzy (ABCD i otwarte).
+  Punkty: częściowe trafienia, rok/album, szybkość, seria ×1,5/×2.
+- **Lektor** — zamiast muzyki lektor czyta autorski opis utworu (bez cytowania tekstów) —
+  `lyrics.js`.
 - **Ze znajomymi** — pokój online (Supabase Realtime): host tworzy pokój,
   reszta dołącza kodem/linkiem, gracie jako jedna drużyna — propozycje,
   głosowanie 👍, pisarz zatwierdza odpowiedź, na końcu wynik + MVP stołu.
