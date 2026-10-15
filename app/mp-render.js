@@ -490,7 +490,9 @@ function mpRevealStandingsHTML(ranking){
 function mpRevealBanner(r){
   if(r.pewniakWin) return `<div class="rv-banner win"><span class="ic">🟡</span><span class="tx"><b>PEWNIAK trafiony!</b><small>${(r.pewniacy||[]).map(escapeHtml).join(', ')} — podwójne punkty</small></span><span class="pts">+${num(r.gained)}</span></div>`;
   if(r.pewniakLose) return `<div class="rv-banner lose"><span class="ic">🍺</span><span class="tx"><b>Pewniak przepalony</b><small>stawia: ${(r.pewniacy||[]).map(escapeHtml).join(', ')} — odbiór na żywo 😏</small></span></div>`;
-  if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+num(r.gained)+' pkt'}</small></span><span class="pts">+${num(r.gained)}</span></div>`;
+  if(r.teamOk) return `<div class="rv-banner ok"><span class="ic">✓</span><span class="tx"><b>Drużyna trafiła!</b><small>${r.firstBy?'pierwszy: '+escapeHtml(r.firstBy):'+'+num(r.gained)+' pkt'}${Number(r.streak)>=3?' · 🔥 seria '+num(r.streak):''}</small></span><span class="pts">+${num(r.gained)}</span></div>`;
+  // F6a: częściowe trafienie (np. sam tytuł) też punktuje
+  if(Number(r.gained)>0) return `<div class="rv-banner ok"><span class="ic">≈</span><span class="tx"><b>Prawie!</b><small>częściowe trafienie · +${num(r.gained)} pkt</small></span><span class="pts">+${num(r.gained)}</span></div>`;
   return `<div class="rv-banner no"><span class="ic">✗</span><span class="tx"><b>Tym razem nie</b><small>0 pkt</small></span></div>`;
 }
 // przycisk „dalej" na odsłonie. SALON-host (TV): nie gra → pokaż ile GRACZY kliknęło „dalej"
@@ -599,7 +601,7 @@ function mpRenderDone(g, head){
   const isComp=(g.format||'coop')!=='coop';
   const tr=mpTeamRanking(g), winner=tr[0];
   const heroT = isComp && winner ? escapeHtml(winner.name)+' wygrywa!' : 'Mecz zakończony!';
-  const heroS = isComp ? 'zwycięska drużyna' : 'wynik drużyny';
+  const heroS = isComp ? 'zwycięska drużyna · punkty' : 'punkty drużyny';   // F6a: wynik w punktach (core/scoring.scoreRound)
   let body;
   if(isComp){
     const tmax=Math.max(1,...tr.map(t=>t.score));

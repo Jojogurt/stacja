@@ -1,7 +1,7 @@
 /* core/picker.js — czysta logika „ułóż mecz" (zero DOM).
  * Wspólna dla pickera solo i hosta MP: wybór kategorii/trybów + podsumowanie.
  * Stan (które Set, jak renderować) zostaje w app.js — tu są decyzje. */
-import { buildMatch, modesFor, QPC, CPR } from './match.js';
+import { buildMatch, modesFor, QPC, CPR, clampQuestions } from './match.js';
 
 // polska liczba mnoga: 1 → one, 2–4 (poza 12–14) → few, reszta → many
 export function plPick(n, one, few, many){
@@ -45,26 +45,57 @@ const AUDIO_MODES = ['music', 'reverse', 'snippet'];
 
 // podsumowanie meczu: {error} przy braku/niekompatybilności, inaczej liczba pytań.
 // F2a: `cats` = FAKTYCZNIE grywalne wybrane kategorie (kompatybilne z którymś trybem), `unit` =
-// „utworów" tylko gdy cała pula to audio; z quizem/lektorem → „pytań". Rund×CPR×QPC bez zmian
-// (buildMatch zawsze układa CPR bloków na rundę — przy małej puli kategorie się powtarzają).
-export function pickSummary(cats, modes, rounds, allCats){
+// „utworów" tylko gdy cała pula to audio; z quizem/lektorem → „pytań".
+// `len` = liczba rund (stary format: rundy×CPR×QPC) ALBO F6a {questions} (długość meczu w pytaniach).
+export function pickSummary(cats, modes, len, allCats){
   if(!cats.size || !modes.size) return { error: 'zaznacz kategorie i tryby' };
-  const r = buildMatch([...cats], [...modes], rounds, allCats);
+  const r = buildMatch([...cats], [...modes], len, allCats);
   if(r.error) return { error: r.error };
   const playable = [...cats].filter(k => modesFor(k, allCats).some(m => modes.has(m)));
   const usedModes = new Set();
   playable.forEach(k => modesFor(k, allCats).forEach(m => { if(modes.has(m)) usedModes.add(m); }));
   const audioOnly = [...usedModes].every(m => AUDIO_MODES.includes(m));
+  const unit = audioOnly ? 'utworów' : 'pytań';
+  if(len && typeof len==='object'){
+    const questions = clampQuestions(len.questions);
+    return { count: questions, questions, blocks: questions/QPC, rounds: r.rounds, cats: playable.length, unit };
+  }
+  const rounds = len;
   return { count: rounds * CPR * QPC, rounds, label: plPick(rounds, 'runda', 'rundy', 'rund'),
-    cats: playable.length, unit: audioOnly ? 'utworów' : 'pytań' };
+    cats: playable.length, unit };
 }
 
 // F2a: tekst podsumowania pickera (bez HTML) — wspólny kształt; liczba wybranych kategorii jest prawdziwa
 // („z 1 kategorii" przy powtórkach zamiast udawania 3 różnych kategorii)
 export function pickSummaryText(s){
   if(!s || s.error) return { head: '', total: '', from: '' };
+  if(s.questions){   // F6a: długość w pytaniach — N bloków (kategorii) po QPC pytań
+    const b = s.blocks;
+    const blocks = s.cats >= b ? `${b} ${plPick(b, 'kategoria', 'kategorie', 'kategorii')}` : `${b} ${plPick(b, 'blok', 'bloki', 'bloków')}`;
+    const from = s.cats > b ? ` · losowane z ${s.cats} wybranych`
+      : s.cats < b ? ` · z ${s.cats} ${plPick(s.cats, 'kategorii', 'kategorii', 'kategorii')} (powtarzane)` : '';
+    return { head: `${blocks} × ${QPC} pytań = `, total: `${s.count} ${s.unit}`, from };
+  }
   const blocks = s.cats >= CPR ? `${CPR} ${plPick(CPR, 'kategoria', 'kategorie', 'kategorii')}` : `${CPR} bloki`;
   const from = s.cats > CPR ? ` · losowane z ${s.cats} wybranych`
     : s.cats < CPR ? ` · z ${s.cats} ${plPick(s.cats, 'kategorii', 'kategorii', 'kategorii')} (powtarzane)` : '';
   return { head: `${s.rounds} ${s.label} × ${blocks} × ${QPC} pytań = `, total: `${s.count} ${s.unit}`, from };
+}
+
+/* F6a (R-F1): pula „hitów" do „Graj teraz" — preferowane klucze, które ISTNIEJĄ w runtime i grają muzykę
+ * (dane rozbudowywane równolegle — fallback: dekady z muzyką, potem dowolne kategorie muzyczne). */
+export const QUICK_PREFERRED = ['80s', '90s', '00s', 'evergreen-pl', 'rock-pl', 'pop-world'];
+export function quickPool(allCats, preferred = QUICK_PREFERRED, fallbackKeys = null){
+  const musical = k => modesFor(k, allCats).includes('music');
+  const pref = preferred.filter(k => allCats[k] && musical(k));
+  if(pref.length) return pref;
+  const fb = (fallbackKeys || Object.keys(allCats)).filter(k => allCats[k] && musical(k));
+  return fb.slice(0, 6);
+}
+/* F6a: zapamiętana pula pickera (localStorage robi app/) — sanityzacja: tylko istniejące klucze/znane tryby */
+export function restorePick(saved, allCats, allModes){
+  const o = (saved && typeof saved==='object') ? saved : {};
+  const cats = Array.isArray(o.cats) ? o.cats.filter(k => typeof k==='string' && allCats[k]) : [];
+  const modes = Array.isArray(o.modes) ? o.modes.filter(m => allModes.includes(m)) : [];
+  return { cats, modes, questions: o.questions==null ? null : clampQuestions(o.questions) };
 }

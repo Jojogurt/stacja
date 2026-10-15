@@ -1,20 +1,20 @@
 /* test/run.js — lekki runner dla czystego rdzenia (zero zależności).
  * Uruchom: node test/run.js */
 import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess, artistMatch, numTokens, parseMC, shuffleMC, quizKey,
-  evaluateQuiz, poolOf, freshQuestions, rememberSeen, QUIZ_SEEN_LIMIT } from '../core/scoring.js';
+  evaluateQuiz, poolOf, freshQuestions, rememberSeen, QUIZ_SEEN_LIMIT, scoreRound, speedFactor, streakMult, SCORE_MAX_PER_Q, PTS, SPEED_CAP_MS } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
-import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, applyEvaluation, answerTiming, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
 import { escapeHtml, safeColor, isSlotKey, num, clipText } from '../core/util.js';
-import { clampRounds, sanitizeMpConfig, MAX_ROUNDS } from '../core/match.js';
+import { clampRounds, sanitizeMpConfig, MAX_ROUNDS, clampQuestions, roundsForQuestions, MAX_QUESTIONS, DEFAULT_QUESTIONS, QUICK_QUESTIONS, MATCH_LENGTHS, matchProgress } from '../core/match.js';
 import { clampTimer, MP_TIMER_MAX_S, secsLeft, MP_ARM_TIMEOUT_MS, MP_REVEAL_AUTO_MS, MP_BUFFER_TIMEOUT_MS } from '../core/timing.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 import { resolveTrack, sameArtist, versionTier, titleKey, parseRange, inRange, rankTracks, pickTrackRanked,
   popWeight, cachedFetcher, matchSong } from '../core/trackSelect.js';
-import { buildSoloRecord, buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
+import { buildSoloRecord, buildMpRecord, noteAnswerers, rankCategories } from '../core/matchRecord.js';
 import { listenSecs, soloSnipStart, mpSnipStart, shouldPing, SNIP_SECS, SOLO_SNIP_MAX, MP_SNIP_WINDOW_S } from '../core/timing.js';
-import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary, pickSummaryText } from '../core/picker.js';
+import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary, pickSummaryText, quickPool, restorePick, QUICK_PREFERRED } from '../core/picker.js';
 import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
@@ -42,7 +42,7 @@ group('F1 match: clampRounds / clampTimer / sanitizeMpConfig (#5)', ()=>{
   eq(clampRounds(0), 1, 'rounds=0 → 1'); eq(clampRounds('x'), 1, 'rounds śmieci → 1'); eq(clampRounds(3), 3, 'rounds=3 bez zmian');
   eq(clampTimer(9e9), MP_TIMER_MAX_S, 'timer ogromny → max'); eq(clampTimer(-5), 0, 'timer ujemny → 0'); eq(clampTimer(60), 60, 'timer 60 bez zmian');
   const c=sanitizeMpConfig({ rounds:200000, timer:'abc', modes:['music','<x>','music','quiz'], format:'evil', salon:'yes', extra:1 });
-  eq(c, { rounds:MAX_ROUNDS, timer:0, modes:['music','quiz'], format:'coop', salon:false }, 'sanitizeMpConfig: tylko znane pola, przycięte');
+  eq(c, { rounds:MAX_ROUNDS, questions:MAX_QUESTIONS, timer:0, modes:['music','quiz'], format:'coop', salon:false }, 'sanitizeMpConfig: tylko znane pola, przycięte (F6a: + questions z rounds)');
   eq(sanitizeMpConfig(null).rounds, 4, 'brak configu → domyślne 4 rundy');
 });
 group('F1 teams: sanitizeAssignments / buildTeams(teams) (#2)', ()=>{
@@ -293,8 +293,8 @@ group('mpReducer.evaluateAnswer (coop — wsteczna zgodność reveal)', ()=>{
   const cur={track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:''};
   const ev=evaluateAnswer(g, cur);   // ocenia drużynę 'all'
   ok(ev.reveal.teamOk,'drużyna trafiła (oba sloty)');
-  eq(ev.reveal.gained,2,'pewniak + trafienie = 2 pkt (reveal coop-flat)');
-  eq(ev.perTeam.all.gained,2,'perTeam.all.gained == reveal.gained (spread)');
+  eq(ev.reveal.gained,200,'F6a: pewniak + trafienie (tytuł 50 + wykonawca 50) ×2 = 200 pkt (reveal coop-flat)');
+  eq(ev.perTeam.all.gained,200,'perTeam.all.gained == reveal.gained (spread)');
   eq(ev.reveal.pewniacy,['Zoe'],'pewniacy z bucketu drużyny');
   eq(ev.reveal.firstBy,'Zoe','pierwszy trafny = Zoe');
   eq(ev.perTeam.all.firstById,'u9','firstById per drużyna (do tally)');
@@ -320,7 +320,7 @@ group('mpReducer.evaluateAnswer: solo = wiele drużyn + ranking', ()=>{
   const ev=evaluateAnswer(g, cur);
   ok(ev.perTeam.u1.teamOk,'drużyna u1 trafiła');
   ok(!ev.perTeam.u2.teamOk,'drużyna u2 pudłuje');
-  eq(ev.perTeam.u1.gained,1,'u1 +1');
+  eq(ev.perTeam.u1.gained,100,'F6a: u1 +100 (tytuł+wykonawca, bez czasu → bez bonusu)');
   eq(ev.perTeam.u2.gained,0,'u2 +0');
   eq(ev.ranking[0].teamId,'u1','ranking: zwycięzca u1');
   ok(!('teamOk' in ev.reveal) || ev.reveal.byTeam,'solo: reveal niesie byTeam (bez coop-spread)');
@@ -1004,5 +1004,134 @@ await (async ()=>{
   ok(win.CATEGORIES.quiz.b && events.length>before && events.every(t=>t==='stacja:quiz'), 'spóźniona kategoria dociągnięta w tle + zdarzenie stacja:quiz');
 })();
 
+
+/* ===================== F6a: długość meczu, kostka, punktacja, liga ===================== */
+group('F6a match: długość w pytaniach (buildMatch {questions}) + clampQuestions/roundsForQuestions', ()=>{
+  const C={ d80:{label:'80s',artists:['A']}, d90:{label:'90s',artists:['B']}, d00:{label:'00s',artists:['C']}, d10:{label:'10s',artists:['D']} };
+  const keys=Object.keys(C);
+  const m5=buildMatch(keys,['music'],{questions:5},C);
+  eq([m5.slots.length, m5.rounds, m5.questions],[1,1,5],'5 pytań → 1 slot, 1 runda');
+  const m10=buildMatch(keys,['music'],{questions:QUICK_QUESTIONS},C);
+  eq([m10.slots.length, m10.rounds],[2,1],'10 pytań („Graj teraz") → 2 sloty, 1 runda');
+  ok(new Set(m10.slots.map(x=>x.cat)).size===2,'10 pytań: różne kategorie w rundzie');
+  const m15=buildMatch(keys,['music'],{questions:15},C);
+  eq([m15.slots.length, m15.rounds],[3,1],'15 pytań → 3 sloty (CPR), 1 runda');
+  const m30=buildMatch(keys,['music'],{questions:30},C);
+  eq([m30.slots.length, m30.rounds],[6,2],'30 pytań → 6 slotów, 2 rundy');
+  eq(m30.slots.map(x=>x.round),[1,1,1,2,2,2],'sloty grupowane po CPR w rundy');
+  eq(buildMatch(keys,['music'],2,C).slots.length, 2*CPR,'stary format (rundy) bez zmian: 2 × CPR');
+  ok(buildMatch(['d80'],['music'],{questions:30},C).slots.every(x=>x.cat==='d80'),'mała pula → powtórki kategorii');
+  eq(clampQuestions(7),10,'7 → zaokrąglone w górę do wielokrotności QPC'); eq(clampQuestions(1e9),MAX_QUESTIONS,'ogromne → MAX_QUESTIONS');
+  eq(clampQuestions('x'),DEFAULT_QUESTIONS,'śmieci → domyślne'); eq(clampQuestions(-3),DEFAULT_QUESTIONS,'ujemne → domyślne');
+  eq(MAX_QUESTIONS, MAX_ROUNDS*CPR*QPC,'MAX_QUESTIONS = dawny cap rund × CPR × QPC');
+  eq([5,10,15,30].map(roundsForQuestions),[1,1,1,2],'rounds dla starego serwera: 5/10/15 → 1, 30 → 2');
+  eq(MATCH_LENGTHS.map(l=>l.q),[5,15,30],'segment: Krótki 5 · Standard 15 · Długi 30'); eq(DEFAULT_QUESTIONS,15,'domyślnie 15');
+  const p=matchProgress({slots:[{},{}], si:1, qi:2});
+  eq([p.n,p.total],[QPC+3, 2*QPC],'matchProgress: pyt. 8/10');
+});
+group('F6a match: sanitizeMpConfig — questions z sieci przycięte, stary klient (tylko rounds)', ()=>{
+  eq(sanitizeMpConfig({ questions:5, rounds:1 }).questions, 5,'nowy klient: questions=5');
+  eq(sanitizeMpConfig({ questions:1e7, rounds:1 }).questions, MAX_QUESTIONS,'questions ogromne → MAX_QUESTIONS (cap stanu DO)');
+  eq(sanitizeMpConfig({ questions:'<x>' }).questions, DEFAULT_QUESTIONS,'questions śmieci → domyślne');
+  eq(sanitizeMpConfig({ rounds:2 }).questions, 2*CPR*QPC,'stary klient bez questions → rounds×CPR×QPC');
+  eq(sanitizeMpConfig({ questions:30, rounds:roundsForQuestions(30) }).rounds, 2,'nowy klient wysyła też rounds zgodne ze starym formatem');
+});
+group('F6a (R-F3) randomPools: kostka bez wiedzy ogólnej (bez kind:quiz i trybu quiz)', ()=>{
+  const C={ ...CATS, gk2:{label:'wiedza2', kind:'quiz', questions:[{prompt:'q'}]} };
+  for(let i=0;i<200;i++){
+    const {cats,modes}=randomPools(Object.keys(C),C);
+    ok(!modes.includes('quiz'),'kostka: brak trybu quiz');
+    ok(!cats.some(k=>C[k].kind==='quiz'),'kostka: brak kategorii kind:quiz');
+    ok(cats.length>0 && cats.every(c=>modesFor(c,C).some(m=>modes.includes(m))),'kostka: ≥1 kompatybilna kategoria');
+  }
+  const onlyQuiz={ gk:{label:'g',kind:'quiz',questions:[{prompt:'q'}]} };
+  eq(randomPools(Object.keys(onlyQuiz), onlyQuiz).cats,[],'same paczki wiedzy → kostka nic nie losuje (bez quizu)');
+});
+group('F6a (R2) scoring.scoreRound: częściowe, rok/album, szybkość, seria, pewniak', ()=>{
+  eq(scoreRound({okTitle:true}).points, 50,'sam tytuł = 50 (częściowe trafienie punktuje)');
+  eq(scoreRound({okArtist:true}).points, 50,'sam wykonawca = 50');
+  eq(scoreRound({okTitle:true, okArtist:true}).points, 100,'tytuł + wykonawca = 100');
+  eq(scoreRound({okTitle:true, okArtist:true, okYear:true, okAlbum:true}).points, 140,'+ rok ±2 +20 + album +20 = 140');
+  eq(scoreRound({okYear:true}).points, 20,'sam rok = 20 (bonus realny)');
+  eq(scoreRound({}).points, 0,'pudło = 0');
+  eq(scoreRound({quizOk:true}).points, PTS.quiz,'quiz trafiony = 100');
+  eq(scoreRound({quizOk:false, okTitle:true}).points, 0,'quiz nietrafiony = 0 (pola muzyki ignorowane)');
+  // szybkość: liniowo, do +50%; bez czasu brak bonusu; cap 30 s (bez timera)
+  eq(speedFactor(0, 30000), 1.5,'odpowiedź natychmiast → ×1.5'); eq(speedFactor(15000, 30000), 1.25,'połowa limitu → ×1.25');
+  eq(speedFactor(45000, 30000), 1,'po limicie → ×1'); eq(speedFactor(null, 30000), 1,'brak czasu → ×1');
+  eq(speedFactor(5000, 0), speedFactor(5000, SPEED_CAP_MS),'bez timera → limit 30 s');
+  eq(scoreRound({okTitle:true, okArtist:true, elapsedMs:0}).points, 150,'trafienie od razu = 150');
+  eq(scoreRound({okTitle:true, elapsedMs:15000, limitMs:30000}).points, 63,'częściowe + szybkość (50×1.25 → 63)');
+  // seria: tylko przy pełnym trafieniu; ×1.5 od 3, ×2 od 5
+  eq([1,2,3,4,5,9].map(streakMult),[1,1,1.5,1.5,2,2],'streakMult progi 3/5');
+  eq(scoreRound({okTitle:true, okArtist:true, streak:3}).points, 150,'seria 3 → ×1.5');
+  eq(scoreRound({okTitle:true, okArtist:true, streak:5}).points, 200,'seria 5 → ×2');
+  eq(scoreRound({okTitle:true, streak:7}).points, 50,'częściowe trafienie bez mnożnika serii');
+  eq(scoreRound({quizOk:true, streak:5}).points, 200,'quiz: seria 5 → ×2');
+  // pewniak (MP): trafienie ×2, nietrafiony = 0 (zakład przegrany)
+  eq(scoreRound({okTitle:true, okArtist:true, sure:true}).points, 200,'pewniak trafiony ×2');
+  eq(scoreRound({okTitle:true, sure:true}).points, 0,'pewniak przy częściowym = 0 (przegrany zakład)');
+  eq(SCORE_MAX_PER_Q, 840,'max za pytanie: 140 × 1.5 × 2 × 2 = 840 (cap ligi)');
+  const r=scoreRound({okTitle:true, okArtist:true, okYear:true, elapsedMs:0, streak:3});
+  eq([r.base, r.speed, r.streakMult, r.sureMult],[120,1.5,1.5,1],'rozbicie: baza × szybkość × seria × pewniak');
+});
+group('F6a mpReducer: punkty drużyny (scoreRound), szybkość od PLAY, seria per drużyna, applyEvaluation', ()=>{
+  const mk=(over={})=>({ phase:MP.PLAY, round:1, format:'coop', answerSlots:slotsFor(), timer:over.timer||0, playAt:over.playAt,
+    teams:[{id:COOP_TEAM,name:'D',members:['u1']}], scores:{[COOP_TEAM]:0}, streaks:over.streaks||{}, results:[],
+    byTeam:{ [COOP_TEAM]:{ proposals:[{by:'u1',byName:'Ala',values:over.values||{title:'Hey Jude',artist:'Beatles'}}],
+      votes:{ title:{u1:(over.values||{}).title||'Hey Jude'}, artist:{u1:(over.values||{}).artist||'Beatles'} }, sure:over.sure||[], passed:[] } } });
+  const cur={track:'Hey Jude', artist:'Beatles'};
+  eq(evaluateAnswer(mk(), cur).reveal.gained, 100,'bez playAt/now → bez bonusu: 100');
+  eq(evaluateAnswer(mk({playAt:1000}), cur, undefined, 1000).reveal.gained, 150,'zatwierdzone od razu po PLAY → ×1.5 = 150');
+  eq(evaluateAnswer(mk({playAt:0, timer:60}), cur, undefined, 30000).reveal.gained, 125,'timer 60 s, lock po 30 s → ×1.25');
+  eq(answerTiming({timer:0, playAt:5}, 8).limitMs, SPEED_CAP_MS,'bez timera limit = 30 s zajawki');
+  eq(answerTiming({}, 8).elapsedMs, null,'brak playAt → elapsed null');
+  const part=evaluateAnswer(mk({values:{title:'Hey Jude', artist:'Złe'}}), cur);
+  ok(!part.reveal.teamOk && part.reveal.gained===50,'MP: częściowe (sam tytuł) = 50 pkt, teamOk=false');
+  const sureLose=evaluateAnswer(mk({values:{title:'Hey Jude', artist:'Złe'}, sure:[{id:'u1',name:'Ala'}]}), cur);
+  ok(sureLose.reveal.pewniakLose && sureLose.reveal.gained===0,'pewniak przy częściowym → 0 pkt + „stawia kolejkę"');
+  const g=mk({streaks:{[COOP_TEAM]:2}});
+  const ev=evaluateAnswer(g, cur);
+  eq([ev.reveal.streak, ev.reveal.gained],[3,150],'seria drużyny 2→3 → ×1.5');
+  const tally={};
+  applyEvaluation(g, ev, tally);
+  eq(g.scores[COOP_TEAM],150,'applyEvaluation: punkty dopisane'); eq(g.streaks[COOP_TEAM],3,'seria zapisana');
+  eq(tally.u1 && tally.u1.correct,1,'tally: pierwszy trafny gracz +1'); eq(g.results.length,1,'wynik pytania do ligi');
+  ok(g.reveal===ev.reveal,'reveal ustawiony');
+  const g2=mk({streaks:{[COOP_TEAM]:4}, values:{title:'Złe',artist:'Złe'}, sure:[{id:'u1',name:'Ala'}]});
+  const ev2=evaluateAnswer(g2, cur); applyEvaluation(g2, ev2, {});
+  eq(g2.streaks[COOP_TEAM],0,'pudło zeruje serię'); eq(g2.beerTally.Ala,1,'przepalony pewniak → beerTally');
+  // quiz w MP: 100 za komplet
+  const gq={ phase:MP.PLAY, format:'coop', answerSlots:[{key:'a',label:'x'}], teams:[{id:COOP_TEAM,members:['u1']}], scores:{}, results:[],
+    byTeam:{ [COOP_TEAM]:{ proposals:[{by:'u1',byName:'A',values:{a:'Warszawa'}}], votes:{a:{u1:'Warszawa'}}, sure:[], passed:[] } } };
+  eq(evaluateAnswer(gq, {prompt:'Stolica?', slots:[{key:'a'}], answers:{a:['Warszawa']}}).reveal.gained, 100,'MP quiz trafiony = 100');
+});
+group('F6a matchRecord: solo w punktach (correct_count = trafienia) + rankCategories (profil)', ()=>{
+  const results=[ {track:'A',artist:'X',okTitle:true,okArtist:true,points:150}, {track:'B',artist:'Y',okTitle:true,okArtist:false,points:50},
+    {track:'C',artist:'Z',okTitle:false,okArtist:false,skipped:true,points:0} ];
+  const rec=buildSoloRecord({results, slots:[{}], profileId:'u'});
+  eq([rec.score, rec.participants[0].score, rec.participants[0].correct_count],[200,200,1],'score = suma punktów, correct_count = pełne trafienia');
+  eq(buildSoloRecord({results:[{okTitle:true,okArtist:true}], slots:[{}], profileId:'u'}).score, 1,'stary format bez points → trafienia');
+  const rc=rankCategories({ a:{n:10,ok:5}, b:{n:5,ok:5}, c:{n:4,ok:4}, d:{n:20,ok:10} });
+  eq(rc.map(x=>x.key),['b','d','a'],'po skuteczności; <5 pytań pominięte; remis → więcej pytań wyżej');
+  eq(rankCategories(null),[],'brak danych → pusto');
+  eq(buildMpRecord({ game:{ slots:[{},{}], rounds:1, scores:{all:420}, results:[] }, tally:{}, members:[], hostId:'h' }).config.questions, 2*QPC,'MP record: config.questions');
+});
+group('F6a picker: quickPool / restorePick / pickSummary {questions}', ()=>{
+  const C={ '80s':{label:'80',artists:['A']}, '90s':{label:'90',artists:['B']}, lyr:{label:'t',kind:'lyrics',songs:[{title:'x',lyric:'y'}]},
+    gk:{label:'g',kind:'quiz',questions:[{prompt:'q'}]} };
+  eq(quickPool(C),['80s','90s'],'hity: preferowane klucze istniejące w runtime');
+  ok(QUICK_PREFERRED.includes('80s') && QUICK_PREFERRED.includes('evergreen-pl'),'preferowane: dekady + polskie');
+  eq(quickPool({ x:{label:'x',artists:['A']}, gk:C.gk }),['x'],'fallback: dowolna kategoria z muzyką (bez wiedzy/lektora)');
+  eq(quickPool({ x:{label:'x',artists:['A']}, y:{label:'y',artists:['B']} }, undefined, ['y']),['y'],'fallback: najpierw wskazane klucze (dekady)');
+  eq(restorePick({cats:['80s','zniknęła',5], modes:['music','<x>'], questions:31}, C, ALL_MODES),{cats:['80s'],modes:['music'],questions:35},'restorePick: tylko istniejące klucze, znane tryby, clamp długości');
+  eq(restorePick(null, C, ALL_MODES),{cats:[],modes:[],questions:null},'restorePick(null) → pusto');
+  const s5=pickSummary(new Set(['80s','90s']), new Set(['music']), {questions:5}, C);
+  eq([s5.count, s5.blocks, s5.unit],[5,1,'utworów'],'pickSummary {questions:5}');
+  const t5=pickSummaryText(s5);
+  ok(/1 kategoria × 5 pytań = /.test(t5.head) && t5.total==='5 utworów' && /z 2 wybranych/.test(t5.from),'tekst: „1 kategoria × 5 pytań = 5 utworów · losowane z 2 wybranych" — '+t5.head+t5.total+t5.from);
+  const t30=pickSummaryText(pickSummary(new Set(['80s']), new Set(['music']), {questions:30}, C));
+  ok(/6 bloków/.test(t30.head) && /powtarzane/.test(t30.from),'30 pytań z 1 kategorii → „6 bloków … (powtarzane)" — '+t30.head+t30.from);
+});
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

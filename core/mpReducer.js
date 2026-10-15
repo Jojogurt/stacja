@@ -17,10 +17,12 @@
  * DRUŻYNY (tryby konkurencyjne) — stan odpowiedzi jest PER-DRUŻYNA:
  *   - teams:   [{id,name,color,members:[playerId]}]   — skład (coop=1 drużyna, solo=N×1)
  *   - byTeam:  {[teamId]: {proposals, votes, sure, passed}}   — izolowany bucket każdej drużyny
- *   - scores:  {[teamId]: liczba}                              — wynik per drużyna
+ *   - scores:  {[teamId]: liczba}                              — wynik per drużyna (F6a: PUNKTY z core/scoring.scoreRound)
+ *   - streaks: {[teamId]: liczba}                              — F6a: seria pełnych trafień drużyny (mnożnik ×1.5/×2)
+ *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, evaluateQuiz } from './scoring.js';
+import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS } from './scoring.js';
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -163,7 +165,7 @@ export function rosterState(game, teamId, id, typingSet){
 
 /* ---- ocena JEDNEJ drużyny (dawne wnętrze mpLock) — czysta ----
  * locked = odpowiedź tej drużyny (górka głosów w jej buckecie). Zwraca per-drużyna wyliczenia. */
-function evaluateTeam(game, teamId, current, match){
+function evaluateTeam(game, teamId, current, match, timing){
   const locked = teamAnswer(game, teamId);
   const bkt = readBucket(game, teamId);
   const slots = slotsOf(game);
@@ -187,7 +189,14 @@ function evaluateTeam(game, teamId, current, match){
   // pewniacy = gracze drużyny, którzy postawili „pewniaka" (bkt.sure)
   const pewniacy = (bkt.sure||[]).map(p=>p.name);
   const anySure = pewniacy.length>0;
-  const gained = teamOk ? (anySure?2:1) : 0;
+  // F6a: punkty ze wspólnej funkcji (muzyka: tytuł/wykonawca częściowo; quiz: 100). Seria per drużyna (game.streaks),
+  // szybkość = czas od startu PLAY do zatwierdzenia (wspólny dla drużyn — reducer nie zna czasu zgłoszenia per drużyna).
+  const prevStreak = (game.streaks && game.streaks[teamId]) || 0;
+  const streak = teamOk ? prevStreak+1 : 0;
+  const sc = hasAnswers
+    ? scoreRound({ quizOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
+    : scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure });
+  const gained = sc.points;
   // kto PIERWSZY w drużynie zaproponował komplet trafnych slotów (bonus/MVP)
   let firstBy=null, firstById=null;
   for(const p of (bkt.proposals||[])){
@@ -198,18 +207,26 @@ function evaluateTeam(game, teamId, current, match){
   // F3 #4: formy kanoniczne do odsłony (per drużyna — przy `pool` zależą od tego, co drużyna trafiła)
   const display = hasAnswers ? ev.display : undefined, others = hasAnswers ? ev.others : undefined;
   return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others,
-    pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure };
+    pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
+    streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult } };
 }
 /* ---- ocena CAŁEGO pytania: każda drużyna osobno + ranking — czysta ----
  * reveal niesie wspólne fakty utworu + `byTeam` (wynik każdej drużyny) + `ranking`.
  * Dla coop (1 drużyna) pola jedynej drużyny są SPŁASZCZONE na top-level reveal →
  * mpRenderRevealCard działa bez zmian (wsteczna zgodność). app.js nakłada scores/tally w pętli. */
-export function evaluateAnswer(game, current, match=textMatch){
+export function answerTiming(game, now){
+  const limitMs = (game && game.timer>0) ? game.timer*1000 : SPEED_CAP_MS;
+  const elapsedMs = (game && Number.isFinite(game.playAt) && Number.isFinite(now)) ? Math.max(0, now-game.playAt) : null;
+  return { elapsedMs, limitMs };
+}
+// `now` (ms) — chwila zatwierdzenia (lock); bez niej (albo bez game.playAt) punkty bez bonusu za szybkość
+export function evaluateAnswer(game, current, match=textMatch, now=null){
   const hasAnswers = !!(current && current.answers && typeof current.answers==='object');
   const slots = slotsOf(game);
   const teams = (game.teams && game.teams.length) ? game.teams : [{ id:COOP_TEAM, name:'Drużyna' }];
+  const timing = answerTiming(game, now);
   const perTeam = {};
-  teams.forEach(t=>{ perTeam[t.id] = evaluateTeam(game, t.id, current, match); });
+  teams.forEach(t=>{ perTeam[t.id] = evaluateTeam(game, t.id, current, match, timing); });
   const ranking = teams.map(t=>({ teamId:t.id, name:t.name, color:t.color,
       gained: perTeam[t.id].gained, teamOk: perTeam[t.id].teamOk,
       score: ((game.scores&&game.scores[t.id])||0) + perTeam[t.id].gained }))
@@ -232,4 +249,19 @@ export function evaluateAnswer(game, current, match=textMatch){
       track: hasAnswers ? (current.prompt||'') : current.track,
       artist: hasAnswers ? '' : current.artist, ok:anyOk },
   };
+}
+
+/* F6a: nałóż ocenę pytania na stan gry (wspólne: serwer-autorytet `lock` i host relay `mpLock`) —
+ * punkty drużyn, serie, wkład graczy (tally: {id:{name,correct}}), przegrane pewniaki, wynik do ligi, reveal. */
+export function applyEvaluation(game, ev, tally){
+  game.scores = game.scores || {}; game.streaks = game.streaks || {}; game.beerTally = game.beerTally || {};
+  for(const t of (game.teams||[])){
+    const rr=ev.perTeam[t.id]; if(!rr) continue;
+    game.scores[t.id]=(game.scores[t.id]||0)+rr.gained;
+    game.streaks[t.id]=rr.streak||0;
+    if(rr.firstById && tally){ tally[rr.firstById]=tally[rr.firstById]||{name:rr.firstBy,correct:0}; tally[rr.firstById].correct++; }
+    if(!rr.teamOk && rr.anySure){ rr.pewniacy.forEach(n=>{ game.beerTally[n]=(game.beerTally[n]||0)+1; }); }
+  }
+  (game.results = game.results || []).push(ev.result);
+  game.reveal = ev.reveal;
 }

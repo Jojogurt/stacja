@@ -9,23 +9,28 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v56';   // audyt 2026-10 F5: dobór utworów (dekada, wersje studyjne, popularność, dokładny wykonawca, playlisty po tytule)
+const APP_VERSION = 'v57';   // audyt 2026-10 F6a: Graj teraz, długość w pytaniach, punktacja (częściowe, szybkość, seria), typografia pub, motyw systemowy
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
-/* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);
-   klasa html.dark, wczesny skrypt w <head> ustawia ją przed renderem ---- */
+/* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).
+   Brak wyboru (albo 'system') → decyduje prefers-color-scheme (też na żywo, gdy system zmieni motyw).
+   Klasa html.dark; wczesny skrypt w <head> ustawia ją przed renderem ---- */
 (function wireTheme(){
-  const seg=document.getElementById('themeSeg'); if(!seg) return;
-  const sync=()=>{ const dark=document.documentElement.classList.contains('dark');
-    seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.theme===(dark?'dark':'light')));
+  const seg=document.getElementById('themeSeg');
+  let mq=null; try{ mq=window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null; }catch(e){}
+  const pref=()=>{ let t=null; try{ t=localStorage.getItem('stacjaTheme'); }catch(e){} return (t==='dark'||t==='light') ? t : 'system'; };
+  const apply=()=>{
+    const p=pref(), dark = p==='dark' || (p==='system' && !!(mq && mq.matches));
+    document.documentElement.classList.toggle('dark', dark);
+    if(seg) seg.querySelectorAll('button').forEach(b=>b.classList.toggle('on', b.dataset.theme===p));
     const m=document.querySelector('meta[name="theme-color"]'); if(m) m.setAttribute('content', dark?'#15121E':'#58CC02');
   };
-  seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{
-    const dark=b.dataset.theme==='dark';
-    document.documentElement.classList.toggle('dark', dark);
-    try{ localStorage.setItem('stacjaTheme', dark?'dark':'light'); }catch(e){} sync();
+  if(seg) seg.querySelectorAll('button').forEach(b=> b.onclick=()=>{
+    try{ localStorage.setItem('stacjaTheme', b.dataset.theme); }catch(e){}
+    apply();
   });
-  sync();
+  try{ if(mq){ const on=()=>{ if(pref()==='system') apply(); }; if(mq.addEventListener) mq.addEventListener('change', on); else if(mq.addListener) mq.addListener(on); } }catch(e){}
+  apply();
 })();
 
 /* ---- dźwięki UI (klik + oklaski) wł/wył — segment w ustawieniach. NIE dotyka muzyki quizu

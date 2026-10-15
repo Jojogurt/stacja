@@ -1,11 +1,11 @@
-/* app/mp-picker.js — host-picker MP („ułóż mecz"): wybór kategorii/trybów/rund/timera + budowa puli.
+/* app/mp-picker.js — host-picker MP („ułóż mecz"): wybór kategorii/trybów/długości/timera + budowa puli.
  * Stan pickera zamknięty w module (czytany przez mpStart w mp.js). mpRender wstrzykiwany (initMpPicker)
  * — re-render po zmianie wyboru bez cyklu z mp.js. */
 import { ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, ALL_CATS, randomPools, plLoad, plFetch } from './catalog.js';
-import { ALL_MODES, MODE_LABEL, CPR, QPC, MAX_ROUNDS } from '../core/match.js';
+import { ALL_MODES, MODE_LABEL, MATCH_LENGTHS, DEFAULT_QUESTIONS } from '../core/match.js';
 import { MP_TIMER_OPTIONS } from '../core/timing.js';
 import { escapeHtml } from '../core/util.js';
-import { pickSummary, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive } from '../core/picker.js';
+import { pickSummary, pickSummaryText, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive } from '../core/picker.js';
 import { teamColor } from '../core/teams.js';
 import { ic } from './icons.js';
 
@@ -13,7 +13,7 @@ let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render 
 let mpGetPlayers = () => [];             // [{id,name}] obecni gracze (z mp.js) — do przypisania do drużyn
 export function initMpPicker(render, getPlayers){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; }
 
-let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickRounds=4, mpPickTimer=60;
+let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickQuestions=DEFAULT_QUESTIONS, mpPickTimer=60;   // F6a: długość w pytaniach
 let mpPickSalon=false;   // tryb salonowy: TEN ekran tylko prowadzi i gra muzykę (TV), telefony = kontrolery
 let mpPickFormat='coop'; // format meczu: 'coop' (jedna drużyna) | 'solo' (każdy sam) | 'teams' (podział)
 function mpSetFormat(v){
@@ -70,7 +70,7 @@ function mpToggleCat(k){ _togglePick(mpPickCats,k); mpRender(); }
   });
 })();
 function mpToggleMode(m){ _togglePick(mpPickModes,m); mpRender(); }
-function mpSetRounds(r){ mpPickRounds=r; mpRender(); }
+function mpSetQuestions(q){ mpPickQuestions=q; mpRender(); }
 function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
 // chipy-grup (host-picker MP) — analogicznie do solo (ekran 02). Stan rozwinięcia trwa między re-renderami.
 let mpPickOpenGrp=new Set();
@@ -109,8 +109,8 @@ function mpPickerHTML(){
     grpBands+=`<div class="grp-band open">${inner}</div>`;
   });
   const modeChips=ALL_MODES.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
-  // F1 (#5): te same limity co clamp `start` w DO (core: MAX_ROUNDS, MP_TIMER_OPTIONS)
-  const roundsBtns=Array.from({length:MAX_ROUNDS},(_,i)=>i+1).map(r=>`<button class="${mpPickRounds===r?'on':''}" onclick="mpSetRounds(${r})">${r}</button>`).join('');
+  // F6a (R-F2): długość meczu w pytaniach (Krótki 5 · Standard 15 · Długi 30); DO przycina do MAX_QUESTIONS
+  const lenBtns=MATCH_LENGTHS.map(L=>`<button class="um-len${mpPickQuestions===L.q?' on':''}" onclick="mpSetQuestions(${L.q})"><b>${L.label}</b><small>${L.q} pyt.</small></button>`).join('');
   const timerBtns=MP_TIMER_OPTIONS.map(v=>[v, v?v+'s':'bez']).map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
   // format meczu: jak punktujemy (jedna drużyna / każdy sam / podział na drużyny).
   const fmtBtns=[['coop','Wspólna'],['solo','Solo'],['teams','Drużyny']].map(([v,l])=>
@@ -136,11 +136,12 @@ function mpPickerHTML(){
         <div class="um-tnames">${nameInputs}</div>
         <div class="um-assign">${chips}</div></div>`;
   }
-  const s=pickSummary(mpPickCats, mpPickModes, mpPickRounds, ALL_CATS);
+  const s=pickSummary(mpPickCats, mpPickModes, {questions:mpPickQuestions}, ALL_CATS);
+  const st=pickSummaryText(s);
   const bad=!!s.error || teamsBad;
   const info= s.error ? escapeHtml(s.error)
     : teamsBad ? 'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju).'
-    : `${s.rounds} ${s.label} × ${CPR} kategorie × ${QPC} pytań = <b>${s.count} utworów</b>`;
+    : `${escapeHtml(st.head)}<b>${escapeHtml(st.total)}</b>${escapeHtml(st.from)}`;
   const catCount=nSel+' '+plPick(nSel,'wybrana','wybrane','wybranych');
   return `<div class="mpnav">
       <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">${ic('back')}</button>
@@ -152,8 +153,8 @@ function mpPickerHTML(){
         <div class="um-chips">${grpChips}</div>${grpBands}</div>
       <div class="um-sec"><div class="um-h"><span>Tryby pytań</span><span class="note">jak słyszysz utwór</span></div>
         <div class="um-chips">${modeChips}</div></div>
-      <div class="um-sec"><div class="um-h"><span>Liczba rund</span><span class="note val">${mpPickRounds}</span></div>
-        <div class="um-rounds">${roundsBtns}</div></div>
+      <div class="um-sec"><div class="um-h"><span>Długość meczu</span><span class="note val">${mpPickQuestions} pytań</span></div>
+        <div class="um-rounds um-lens">${lenBtns}</div></div>
       <div class="um-sec"><div class="um-h"><span>Timer pytania</span></div>
         <div class="um-rounds">${timerBtns}</div></div>
       <div class="um-sec"><div class="um-h"><span>Format</span><span class="note">${fmtNote}</span></div>
@@ -204,5 +205,5 @@ function mpBuildPools(cats, modes){
 function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
-Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetRounds, mpSetTimer, mpSetSalon, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign };
+Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
+export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign };

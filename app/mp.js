@@ -4,9 +4,9 @@
  * Powiązania zwrotne MP↔social: initMp woła initSocial; mp importuje showScreen/render* z social. */
 import { shuffle, escapeHtml } from '../core/util.js';
 import { norm, quizKey } from '../core/scoring.js';
-import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds } from '../core/match.js';
+import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
-import { reduceAction, countReady, evaluateAnswer, slotsFor, teamOf } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
@@ -24,7 +24,7 @@ import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
 import { ic } from './icons.js';
@@ -514,6 +514,7 @@ function mpGo(){
   if(!S.host || !S.game || S.game.phase!==MP.ARMING) return;
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
   S.game.phase=assertMp(S.game.phase, MP.PLAY, console.warn); S.game.playNonce=(S.game.playNonce||0)+1;
+  S.game.playAt=Date.now();   // F6a: start PLAY → bonus za szybkość (do zatwierdzenia)
   if(S.game.timer>0) S.game.endsAt=Date.now()+S.game.timer*1000;
   mpBroadcast(); mpAfterSync();   // host gra lokalnie
 }
@@ -539,7 +540,7 @@ function mpHandleAct(a){
 /* ---- host: start gry / runda ---- */
 /* ---- host: ekran układania meczu (multi-select, jak solo) ---- */
 function mpStart(){
-  const r=buildMatch([...mpPickCats],[...mpPickModes],mpPickRounds);
+  const r=buildMatch([...mpPickCats],[...mpPickModes],{questions:mpPickQuestions});   // F6a: długość w pytaniach
   if(r.error||!r.slots){ mpRender(); return; }
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
   S.salon=!!mpPickSalon;   // host-lokalny fallback — działa nim serwer odeśle game.salon (i bez deployu DO)
@@ -549,7 +550,7 @@ function mpStart(){
     const pools=mpBuildPools([...mpPickCats], [...mpPickModes]);
     // format + przypisania MUSZĄ iść w configu — inaczej DO buduje zawsze coop (Solo/Drużyny „nie działają")
     const assignments = mpPickFormat==='teams' ? mpTeamsFromAssign(mpPlayers()) : undefined;
-    if(S.ch && S.ch.startMatch) S.ch.startMatch({ rounds:clampRounds(mpPickRounds), timer:clampTimer(mpPickTimer), modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments, groupId:S.groupId });
+    if(S.ch && S.ch.startMatch) S.ch.startMatch({ questions:clampQuestions(mpPickQuestions), rounds:clampRounds(roundsForQuestions(mpPickQuestions)), timer:clampTimer(mpPickTimer), modes:[...mpPickModes], pools, salon:mpPickSalon, format:mpPickFormat, assignments, groupId:S.groupId });
     S.game={hostId:mpMe.id, phase:MP.LOADING}; mpRender();   // optymistyczne „ładowanie" do czasu stanu z DO
     return;
   }
@@ -561,7 +562,7 @@ function mpStart(){
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat),
     format:mpPickFormat, teams, byTeam:emptyByTeam(teams), scores,
     reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon,
-    timer:mpPickTimer||0, endsAt:null, beerTally:{}, groupId:S.groupId};   // MVP-3: tag drużyny (relay)
+    timer:mpPickTimer||0, endsAt:null, beerTally:{}, streaks:{}, playAt:null, groupId:S.groupId};   // MVP-3: tag drużyny (relay)
   S.tally={};
   S.hostSeen.clear();
   S.ack=S.revealNonce=S.revealSnap=null;   // świeży mecz → brak zaległej odsłony
@@ -578,7 +579,7 @@ async function mpHostNewRound(){
   S.seenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
   reconcileTeams(S.game, mpPlayers());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
   S.game.phase=MP.LOADING; S.game.byTeam=emptyByTeam(S.game.teams);   // czyste buckety; scores KUMULUJĄ się przez mecz
-  S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.autoLocked=false;
+  S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.game.playAt=null; S.autoLocked=false;
   mpBroadcast(); mpRender();
   const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
   if(S.game.mode==='quiz'){
@@ -628,17 +629,8 @@ function mpLock(){
   S.autoLocked=true;
   const c=S.hostCurrent;
   noteAnswerers(S.game);                // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
-  const ev=evaluateAnswer(S.game, c);   // czysta ocena (core) — ocenia KAŻDĄ drużynę (ev.perTeam)
-  // nałóż wyliczenia per-drużyna: punkty drużyny + wkład gracza (tally, globalny) + przegrane pewniaki
-  S.game.beerTally=S.game.beerTally||{};
-  for(const t of S.game.teams){
-    const r=ev.perTeam[t.id]; if(!r) continue;
-    S.game.scores[t.id]=(S.game.scores[t.id]||0)+r.gained;
-    if(r.firstById){ S.tally[r.firstById]=S.tally[r.firstById]||{name:r.firstBy,correct:0}; S.tally[r.firstById].correct++; }
-    if(!r.teamOk && r.anySure){ r.pewniacy.forEach(n=>{ S.game.beerTally[n]=(S.game.beerTally[n]||0)+1; }); }
-  }
-  S.game.results.push(ev.result);
-  S.game.reveal=ev.reveal;
+  const ev=evaluateAnswer(S.game, c, undefined, Date.now());   // czysta ocena (core) — KAŻDA drużyna; F6a: punkty + szybkość
+  applyEvaluation(S.game, ev, S.tally);   // F6a: punkty/serie/tally/pewniaki/wynik/reveal — wspólne z serwerem-autorytetem
   S.game.phase=assertMp(S.game.phase, MP.REVEAL, console.warn); S.game.endsAt=null;
   mpBroadcast(); mpRender();
 }

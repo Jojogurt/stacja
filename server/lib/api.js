@@ -3,22 +3,25 @@
 import { signToken, verifyToken, newId, friendCode } from './auth.js';
 import { insertMatch } from './recordMatch.js';
 import { verifyIdToken } from './oauth.js';
-import { QPC, CPR, MAX_ROUNDS } from '../../core/match.js';
+import { MAX_QUESTIONS } from '../../core/match.js';
+import { SCORE_MAX_PER_Q } from '../../core/scoring.js';
 
 // 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
-// F1: MAX_ROUNDS z core/match.js (to samo źródło co picker i clamp `start` w DO).
-const BONUS_MAX = 10;    // łączny bonus (rok/album) w meczu
+// F1: limit pytań z core/match.js (to samo źródło co picker i clamp `start` w DO).
+// F6a: wynik to PUNKTY (core/scoring.scoreRound) → cap = total_questions × SCORE_MAX_PER_Q (pełna baza × szybkość ×
+// seria ×2 × pewniak ×2 = 840/pyt.). Stare klienty (wynik = trafienia ≤ 2/pyt.) mieszczą się w nowym capie.
 export function validateMatchRecord(p){
-  const qMax = MAX_ROUNDS*CPR*QPC;
+  const qMax = MAX_QUESTIONS;
   const qTotal = parseInt(p&&p.total_questions||0,10)||0;
   const score  = parseInt(p&&p.score||0,10)||0;
+  const sMax = qTotal*SCORE_MAX_PER_Q;
   if(qTotal < 0 || qTotal > qMax) return 'total_questions_out_of_range';
-  if(score < 0 || score > qTotal*2 + BONUS_MAX) return 'score_out_of_range';
+  if(score < 0 || score > sMax) return 'score_out_of_range';
   const parts = Array.isArray(p&&p.participants)?p.participants:[];
   for(const e of parts){
     const ps=parseInt(e&&e.score||0,10)||0;
     const cc=parseInt(e&&e.correct_count||0,10)||0;
-    if(ps < 0 || ps > qTotal*2 + BONUS_MAX) return 'participant_score_out_of_range';
+    if(ps < 0 || ps > sMax) return 'participant_score_out_of_range';
     if(cc < 0 || cc > qTotal) return 'participant_correct_out_of_range';
   }
   return null;   // ok
@@ -270,7 +273,7 @@ async function recordMatch(env, caller, p){
     const member = await env.DB.prepare(`SELECT 1 FROM group_members WHERE group_id=? AND profile_id=?`).bind(g, caller).first();
     if(member) groupId = g;
   }
-  const qMax = MAX_ROUNDS*CPR*QPC;
+  const qMax = MAX_QUESTIONS;
   const safe = {
     mode: p.mode==='mp' ? 'mp' : 'solo',
     room_code: clip(p.room_code, 8), host_id: caller, group_id: groupId,

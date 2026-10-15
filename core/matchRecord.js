@@ -2,7 +2,8 @@
  * Reużywany: klient w Etapie 1, Durable Object w Etapie 2 (host pisze mecz). */
 import { QPC } from './match.js';
 
-// SOLO: wynik = liczba w pełni trafionych (tytuł+wykonawca)
+// SOLO: wynik = PUNKTY (F6a: suma `points` z core/scoring.scoreRound); correct_count = w pełni trafione.
+// Wyniki bez pola `points` (stary format) → wynik = liczba trafień (jak dawniej).
 // F2b (liga): total_questions = ROZEGRANE pytania (każde sprawdzone/pominięte pytanie = 1 wynik).
 // Przerwany mecz („Zakończ" po 3 z 15) nie zapisuje pełnej długości meczu — inaczej zaniżał średnią.
 // Cap: nigdy więcej niż sloty × QPC (gdy znamy sloty).
@@ -11,14 +12,16 @@ export function buildSoloRecord({ results, slots, config, profileId, displayName
   const played = (results || []).length;
   const total = full ? Math.min(played, full) : played;
   const hits = results.filter(r => r.okTitle && r.okArtist).length;
+  const hasPts = results.some(r => r && typeof r.points==='number');
+  const score = hasPts ? results.reduce((a, r) => a + (Math.max(0, Math.round(+r.points)) || 0), 0) : hits;
   return {
     mode: 'solo',
-    score: hits,
+    score,
     total_questions: total,
     config: config || {},
     participants: [{
       profile_id: profileId, display_name: displayName || 'ja',
-      role: 'player', score: hits, correct_count: hits,
+      role: 'player', score, correct_count: hits,
     }],
     answers: results.map((r, i) => ({
       q_no: i + 1, cat_key: r.cat || '', mode: r.mode || '',
@@ -68,7 +71,7 @@ export function buildMpRecord({ game, tally, members, hostId, roomCode }){
     group_id: game.groupId || null,   // MVP-3: mecz „z drużyną" jest tagowany id drużyny (inaczej null)
     score,
     total_questions: total,
-    config: { rounds: game.rounds },
+    config: { rounds: game.rounds, questions: total },   // F6a: długość meczu w pytaniach
     participants: [...ids].map(id => ({
       profile_id: id, display_name: nameOf(id),
       role: id === hostId ? 'host' : 'player',
@@ -80,4 +83,14 @@ export function buildMpRecord({ game, tally, members, hostId, roomCode }){
       track: r.track, artist: r.artist, ok: !!r.ok, profile_id: null,
     })),
   };
+}
+
+/* F6a (U12): ranking kategorii profilu — po SKUTECZNOŚCI (ok/n), tylko kategorie z ≥ minN pytaniami;
+ * remis → więcej pytań wyżej. byCat = {catKey:{n, ok}} (z /api/profile). Zwraca [{key, n, ok, pct}]. */
+export function rankCategories(byCat, minN=5){
+  return Object.entries((byCat && typeof byCat==='object') ? byCat : {})
+    .map(([key, v])=>({ key, n: Math.max(0, +(v&&v.n)||0), ok: Math.max(0, +(v&&v.ok)||0) }))
+    .filter(c=>c.n>=minN)
+    .map(c=>({ ...c, pct: Math.min(1, c.ok/c.n) }))
+    .sort((a,b)=> (b.pct-a.pct) || (b.n-a.n));
 }

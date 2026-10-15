@@ -190,6 +190,43 @@ export function evaluateGuess(guess, track){
   return { okTitle, okArtist, okYear, okAlbum, roundOk: okTitle && okArtist };
 }
 
+/* ======================= PUNKTACJA (F6a: R2 / R-U3, propozycja #4) — wspólna solo + MP + serwer =======================
+ * Czysta funkcja: punkty za JEDNO pytanie.
+ *  • muzyka/lektor/od tyłu/fragment: tytuł 50 + wykonawca 50 (częściowe trafienie też punktuje), rok ±2 +20, album +20;
+ *  • quiz (wiedza): 100 za trafienie (wszystkie pola), inaczej 0;
+ *  • szybkość: do +50% bazy — liniowo od czasu odpowiedzi względem limitu (timer pytania; bez timera SPEED_CAP_MS = 30 s
+ *    zajawki). elapsedMs nieznany (null) → bez bonusu;
+ *  • seria (tylko przy PEŁNYM trafieniu; `streak` = seria pełnych trafień WŁĄCZNIE z tym pytaniem): ×1.5 od 3, ×2 od 5;
+ *  • pewniak (MP): trafienie ×2; pewniak przy nie-pełnym trafieniu = zakład przegrany → 0 pkt (plus „stawia kolejkę").
+ * Zwraca { points, base, speed (mnożnik ≥1), streakMult, sureMult, parts:{title,artist,year,album,quiz} }. */
+export const PTS = { title:50, artist:50, year:20, album:20, quiz:100 };
+export const SPEED_BONUS_MAX = 0.5;
+export const SPEED_CAP_MS = 30000;
+export const SURE_MULT = 2;
+export function streakMult(streak){ const n=+streak||0; return n>=5 ? 2 : (n>=3 ? 1.5 : 1); }
+export function speedFactor(elapsedMs, limitMs){
+  if(elapsedMs==null || !Number.isFinite(+elapsedMs)) return 1;
+  const lim = (+limitMs>0) ? Math.min(+limitMs, 10*60*1000) : SPEED_CAP_MS;
+  const left = 1 - Math.max(0, +elapsedMs)/lim;
+  return 1 + SPEED_BONUS_MAX*Math.max(0, Math.min(1, left));
+}
+export function scoreRound({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk,
+  elapsedMs=null, limitMs=0, streak=0, sure=false } = {}){
+  const isQuiz = quizOk!==undefined && quizOk!==null;
+  const parts = isQuiz
+    ? { title:0, artist:0, year:0, album:0, quiz: quizOk ? PTS.quiz : 0 }
+    : { title: okTitle?PTS.title:0, artist: okArtist?PTS.artist:0, year: okYear?PTS.year:0, album: okAlbum?PTS.album:0, quiz:0 };
+  const full = isQuiz ? !!quizOk : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
+  const base = parts.title + parts.artist + parts.year + parts.album + parts.quiz;
+  const speed = base>0 ? speedFactor(elapsedMs, limitMs) : 1;
+  const sMult = full ? streakMult(streak) : 1;
+  const sureMult = sure ? (full ? SURE_MULT : 0) : 1;
+  const points = Math.round(base * speed * sMult * sureMult);
+  return { points, base, speed, streakMult:sMult, sureMult, parts };
+}
+// górny limit punktów za JEDNO pytanie (walidacja ligi na serwerze): pełna baza × max szybkość × max seria × pewniak
+export const SCORE_MAX_PER_Q = scoreRound({ okTitle:true, okArtist:true, okYear:true, okAlbum:true, elapsedMs:0, streak:99, sure:true }).points;
+
 /* ======================= QUIZ (SPEC v2) — wspólne dla solo / MP-host / serwera =======================
  * Kontrakt: backlog/audyt-2026-10/SPEC-paczki-v2.md. Czyste funkcje, rng wstrzykiwany. */
 

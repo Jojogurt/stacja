@@ -446,7 +446,8 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   ok(typeof w.mpLobbyStart==='function', 'most do HTML: mpLobbyStart na window');
   w.mpLobbyStart(); await settle(4);
   const html=$(w,'mpRoom').innerHTML;
-  ok(/Kategorie/.test(html) && /Tryby pytań/.test(html) && /Liczba rund/.test(html), 'picker MP: sekcje Kategorie/Tryby/Rundy');
+  ok(/Kategorie/.test(html) && /Tryby pytań/.test(html) && /Długość meczu/.test(html), 'picker MP: sekcje Kategorie/Tryby/Długość meczu (F6a)');
+  ok(/Krótki/.test(html) && /Standard/.test(html) && /Długi/.test(html) && /um-len on[^>]*mpSetQuestions\(15\)/.test(html), 'F6a: segment długości (Krótki 5 · Standard 15 · Długi 30), domyślnie 15');
   ok(/um-start/.test(html), 'picker MP: przycisk startu meczu');
   // FORMAT (Wspólna/Solo/Drużyny) — wybór trybu konkurencyjnego
   ok(/Format/.test(html) && /Wspólna/.test(html) && /Solo/.test(html), 'picker MP: sekcja Format (Wspólna/Solo)');
@@ -477,6 +478,17 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   w.mpSetSalon(true); await settle(2);
   ok(/um-salon-toggle on/.test($(w,'mpRoom').innerHTML) && /Tryb salonowy/.test($(w,'mpRoom').innerHTML), 'picker MP: toggle „Tryb salonowy" zaznaczony');
   w.mpSetSalon(false); await settle(2);   // wyłącz — kolejne testy pushują stan bez salonu
+  // F6a (R-F2): długość w pytaniach → start wysyła `questions` ORAZ `rounds` zgodne ze starym serwerem
+  ok(typeof w.mpSetQuestions==='function', 'most do HTML: mpSetQuestions na window');
+  w.mpSetQuestions(5); await settle(2);
+  const { audio:mpAudio } = catsByKind(w);
+  w.mpToggleCat(mpAudio); await settle(2);
+  ok(/um-len on[^>]*mpSetQuestions\(5\)/.test($(w,'mpRoom').innerHTML) && /= <b>5 utworów<\/b>/.test($(w,'mpRoom').innerHTML), 'F6a: Krótki → podsumowanie „= 5 utworów"');
+  const wsP = wsInstances[wsInstances.length-1];
+  w.mpStart(); await settle(4);
+  const st = wsP.sent.filter(m=>m.t==='start').pop();
+  ok(st && st.config && st.config.questions===5 && st.config.rounds===1, 'F6a: start {questions:5, rounds:1} (stary serwer zbuduje 1 rundę) — '+JSON.stringify(st&&{q:st.config.questions,r:st.config.rounds}));
+  w.mpToggleCat(mpAudio); w.mpSetQuestions(15); await settle(2);
 });
 
 await group('MP: faza gry (play/kombinuj) renderuje (warstwa renderu app/mp.js)', async ()=>{
@@ -1030,5 +1042,110 @@ await group('F2b #13: wyjście w trakcie pytania i wejście do nowego pokoju →
   ok(/mp-intro(ing|done)/.test($(w,'mpStage').className) || $(w,'mpListenBar'), '#13: intro/okno słuchania od nowa');
 });
 
+
+/* ======== F6a: „Graj teraz", „Kontynuuj mecz", długość meczu, punkty, odsłona edukacyjna, offline, motyw, profil ======== */
+await group('F6a (R-F1/F12/R2/R-U2): menu „Graj teraz" → 10 pytań; punkty + „Ty:"/„literówka OK"; „Kontynuuj mecz"', async ()=>{
+  const d=window.document, body=d.body;
+  repoMod.clearTrackCache();
+  const prevBase=window.STACJA_CONFIG.roomsBase; window.STACJA_CONFIG.roomsBase='';   // solo bez proxy Workera (zaślepka iTunes echo)
+  $(window,'toMenu').click(); await settle(4);
+  if($(window,'session').classList.contains('live')){ $(window,'goSolo').click(); click(window,'sessEnd'); await settle(4); $(window,'toMenu').click(); await settle(2); }
+  ok(body.classList.contains('menu') && $(window,'goContinue').hidden, 'menu bez trwającego meczu → „Kontynuuj" ukryte');
+  ok($(window,'goQuick') && /Graj teraz/.test(txt(window,'goQuick')), 'menu: przycisk „Graj teraz"');
+  $(window,'goQuick').click();
+  for(let i=0;i<300 && $(window,'check').disabled;i++) await settle(2);   // pula hitów: dekady → kilka wykonawców (fallback)
+  ok(body.classList.contains('solo') && body.classList.contains('playing'), '„Graj teraz" → ekran solo, mecz trwa (1 tapnięcie)');
+  ok(/pyt\. 1\/5/.test(txt(window,'sessProg')) && /^Runda 1\/1/.test(txt(window,'scrTitle')), 'mecz 10 pytań = 2 bloki × 5, 1 runda — '+txt(window,'sessProg'));
+  ok(!$(window,'check').disabled, 'pytanie 1 gotowe — stan: '+txt(window,'state'));
+  $(window,'fTitle').value='Tes Song'; $(window,'fArtist').value='zzz'; $(window,'fYear').value='1986';
+  click(window,'check'); await settle(2);
+  const rm=txt(window,'rmeta');
+  ok(/Ty: Tes Song/.test(rm) && /literówka OK/.test(rm), 'R-U2: „Ty: …" przy tytule + tag „literówka OK" — '+rm.replace(/\s+/g,' '));
+  ok(/rok ±2 OK/.test(rm), 'R-U2: rok 1986 vs 1985 → „rok ±2 OK"');
+  ok(/\+\d+/.test(txt(window,'revealHead')) && $(window,'revealHead').className.includes('part'), 'odsłona: „+N" punktów, częściowe trafienie (Prawie!)');
+  const pts=+txt(window,'sPoints');
+  ok(pts>=70 && pts<=105, 'R2: tytuł 50 + rok 20 (+ szybkość ≤50%) = '+pts+' pkt (częściowe trafienie punktuje)');
+  ok(new RegExp('^'+pts+' pkt').test(txt(window,'sessMini')), 'nagłówek meczu: suma punktów — '+txt(window,'sessMini'));
+  // F12: menu w trakcie meczu → „Kontynuuj mecz (pyt. X/Y)"; powrót = nagłówek rundy, nie „Ułóż mecz"
+  $(window,'toMenu').click(); await settle(2);
+  ok(!$(window,'goContinue').hidden && /Kontynuuj mecz \(pyt\. 1\/10\)/.test(txt(window,'goContinue')), 'F12: menu pokazuje „Kontynuuj mecz (pyt. 1/10)" — '+txt(window,'goContinue'));
+  $(window,'goContinue').click(); await settle(2);
+  ok(body.classList.contains('solo') && /^Runda 1\/1 · /.test(txt(window,'scrTitle')), 'F12: powrót do meczu — nagłówek rundy: '+txt(window,'scrTitle'));
+  click(window,'sessEnd'); await settle(4);
+  ok(new RegExp('^'+pts+' pkt$').test(txt(window,'sumPts')) && /^0 \/ 1$/.test(txt(window,'sumBig')), 'wynik końcowy: punkty obok X/Y trafień — '+txt(window,'sumPts')+' · '+txt(window,'sumBig'));
+  $(window,'toMenu').click(); await settle(2);
+  ok($(window,'goContinue').hidden, 'po zakończeniu meczu „Kontynuuj" znika');
+  $(window,'goSolo').click(); await settle(2); $(window,'sumAgain').click();
+  window.STACJA_CONFIG.roomsBase=prevBase;
+});
+
+await group('F6a (R-F2/R-F1/R-F3): długość meczu 5/15/30, zapamiętana pula, kostka bez wiedzy', async ()=>{
+  const { audio, quiz } = catsByKind(window);
+  resetSelection(window); $(window,'sumAgain').click();
+  const lens=[...window.document.querySelectorAll('#lenPick button')].map(b=>b.dataset.q);
+  eq2(lens.join(','), '5,15,30', 'segment Krótki 5 · Standard 15 · Długi 30');
+  ok(window.document.querySelector('#lenPick button.on').dataset.q==='15', 'domyślnie Standard 15');
+  const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===audio); tk.click();
+  const mu=modeChip(window,/muzyka/); if(!mu.classList.contains('on')) mu.click();
+  window.document.querySelector('#lenPick button[data-q="5"]').click();
+  ok(/= 5 utworów/.test(txt(window,'matchInfo').replace(/\s+/g,' ')) && /5 pytań/.test(txt(window,'lenVal')), 'Krótki → „… = 5 utworów" — '+txt(window,'matchInfo'));
+  click(window,'matchStart'); await settle(10);
+  ok(/pyt\. 1\/5/.test(txt(window,'sessProg')), 'mecz 5 pytań (1 blok)');
+  const saved=JSON.parse(window.localStorage.getItem('stacjaSoloPick')||'null');
+  ok(saved && saved.questions===5 && saved.cats.includes(audio) && saved.modes.includes('music'), 'R-F1: picker zapamiętał pulę + długość — '+JSON.stringify(saved));
+  click(window,'sessEnd'); await settle(4); $(window,'sumAgain').click();
+  window.document.querySelector('#lenPick button[data-q="15"]').click();
+  // R-F3: kostka nigdy nie zaznacza wiedzy ogólnej
+  let quizHit=0;
+  for(let i=0;i<40;i++){ click(window,'matchRandom'); if(window.document.querySelector('#quizTicks .tick.on')) quizHit++; }
+  ok(quizHit===0 && (!quiz || true), 'R-F3: 40× kostka — 0 razy kategoria wiedzy');
+  resetSelection(window);
+});
+
+await group('F6a (R-F10/F11): brak sieci w solo → komunikat dla gracza + „Zagraj offline: Lektor / Wiedza"', async ()=>{
+  const { audio } = catsByKind(window);
+  repoMod.clearTrackCache();
+  const prevFetch=globalThis.fetch, prevBase=window.STACJA_CONFIG.roomsBase, body=window.document.body, prevAppend=body.appendChild;
+  // offline: proxy Workera, bezpośredni fetch i JSONP iTunes — wszystko pada od razu
+  window.STACJA_CONFIG.roomsBase='';
+  globalThis.fetch=(u,o)=> /itunes|search|tracks/.test(String(u)) ? Promise.reject(new TypeError('Failed to fetch')) : prevFetch(u,o);
+  body.appendChild=function(n){ if(n && n.tagName==='SCRIPT' && /itunes/.test(n.src||'')){ setTimeout(()=>n.onerror && n.onerror(),0); return n; } return prevAppend.call(this,n); };
+  try{
+    await f2aStartMatch(audio, /muzyka/);
+    for(let i=0;i<300 && !/Brak internetu/.test(txt(window,'state'));i++) await settle(2);
+    const st=txt(window,'state');
+    ok(/Brak internetu/.test(st) && !/jojogurt|podgląd|categories\.js/.test(st), 'komunikat w języku gracza: '+st);
+    const off=$(window,'offlinePlay');
+    ok(off && !off.hidden, 'przycisk „Zagraj offline: Lektor / Wiedza" widoczny');
+    off.click(); await settle(10);
+    const b=window.document.body.classList;
+    ok(b.contains('playing') && (b.contains('quiz-mode') || b.contains('lektor-mode')), 'offline: mecz lektor/wiedza wystartował');
+    ok(off.hidden, 'po starcie offline przycisk schowany');
+  } finally { globalThis.fetch=prevFetch; window.STACJA_CONFIG.roomsBase=prevBase; body.appendChild=prevAppend; }
+  click(window,'sessEnd'); await settle(4); $(window,'sumAgain').click();
+  const src=(await import('node:fs')).readFileSync(new URL('../app/solo.js', import.meta.url),'utf8')+(await import('node:fs')).readFileSync(new URL('../app/social.js', import.meta.url),'utf8');
+  ok(!/jojogurt|Dodaj songs\[\]|Brak pliku categories\.js|prześlij mi ten komunikat/.test(src), 'R-F10: brak deweloperskich komunikatów w solo/social');
+});
+
+await group('F6a (R-U7/R-U1/U12): motyw 3-stanowy (systemowy), tokeny typografii, profil', async ()=>{
+  const d=window.document;
+  const btns=[...d.querySelectorAll('#themeSeg button')].map(b=>b.dataset.theme);
+  eq2(btns.join(','), 'light,dark,system', 'przełącznik motywu: Jasny / Ciemny / Systemowy');
+  ok(d.querySelector('#themeSeg button[data-theme="system"]').classList.contains('on'), 'bez wyboru → „Systemowy" (prefers-color-scheme)');
+  d.querySelector('#themeSeg button[data-theme="dark"]').click();
+  ok(d.documentElement.classList.contains('dark') && window.localStorage.getItem('stacjaTheme')==='dark', 'Ciemny → html.dark');
+  d.querySelector('#themeSeg button[data-theme="system"]').click();
+  ok(!d.documentElement.classList.contains('dark') && window.localStorage.getItem('stacjaTheme')==='system', 'Systemowy (jsdom: jasny system) → bez html.dark');
+  const head=[...d.querySelectorAll('script:not([src])')].map(x=>x.textContent).join('\n');
+  ok(/prefers-color-scheme: dark/.test(head), 'wczesny skrypt motywu respektuje prefers-color-scheme');
+  const css=[...d.querySelectorAll('style')].map(x=>x.textContent).join('\n');
+  ok(/--fs-xs:13px; --fs-sm:14px; --fs-md:15px/.test(css), 'R-U1: tokeny --fs-xs/sm/md w :root');
+  const tiny=(css.match(/font-size: ?(8|9|10|11)(\.\d+)?px/g)||[]).length;
+  ok(tiny<=3, 'R-U1: deklaracje 8–11 px zastąpione tokenami (zostały tylko glify ×/✎ w kółkach 16–18 px: '+tiny+')');
+  ok(/\.grp-chip\{[^}]*color:var\(--muted\)/.test(css), 'U6: nieaktywny .grp-chip w kolorze --muted (≥4.5:1)');
+  ok(/\.mini button,[^{]*\{min-height:44px;min-width:44px\}/.test(css), 'R-U1: mini-akcje min. 44×44 px');
+  $(window,'goProfil').click(); await settle(8);
+  ok(!/\/ 12/.test(txt(window,'profilStats')), 'U12: brak placeholdera „/ 12" odznak');
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

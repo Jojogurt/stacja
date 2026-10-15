@@ -8,6 +8,7 @@ import { ensureSession, setHandle, fetchProfile, loginOAuth, logout,
   friendsList, pendingFriends, sentFriends, meInfo } from '../adapters-web/cf.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
 import { ic } from './icons.js';
+import { rankCategories } from '../core/matchRecord.js';
 
 const $m = id => document.getElementById(id);
 const bbLoader = '<div class="bb-loader"><i></i><i></i><i></i></div>';   // lokalny (bez kruchego współdzielonego importu)
@@ -25,6 +26,8 @@ export function showScreen(s){
   document.body.classList.remove('menu','solo','mp','liga','profil','salon'); document.body.classList.add(s);   // 'salon' (ekran-monitor TV) dokłada/zdejmuje mpRender
   if(s==='mp') mpPrefillName();
   const tt=$m('scrTitle'); if(tt) tt.textContent=SCR_HEAD[s]||'';
+  // F6a (F12): powiadom moduły (solo: „Kontynuuj mecz" w menu, nagłówek rundy zamiast „Ułóż mecz")
+  try{ window.dispatchEvent(new window.CustomEvent('stacja:screen', { detail:s })); }catch(_e){}
 }
 
 let dzMe=null;   // {id, handle, emoji, friend_code}
@@ -137,7 +140,7 @@ export async function renderDruzyna(){
   el.innerHTML = notice + kontoSection + teamSection + friendSection + '<div class="dz-hint" id="dzMsg"></div>';
   dzRenderLobby();   // odśwież wskaźnik online + baner aktywnej gry (jeśli kanał już coś wie)
   ensureFriendChannel();   // MVP-3: nasłuch zaproszeń od znajomych (raz, po poznaniu tożsamości)
-  }catch(e){ el.innerHTML='<div class="liga-empty">Coś poszło nie tak: '+escapeHtml(String(e&&e.message||e))+'<br><small>(prześlij mi ten komunikat)</small></div>'; }
+  }catch(e){ el.innerHTML='<div class="liga-empty">Nie udało się wczytać drużyny i znajomych.<br>Sprawdź internet i spróbuj ponownie za chwilę.<br><small>szczegóły: '+escapeHtml(String(e&&e.message||e))+'</small></div>'; }
 }
 function dzMsg(t,err){ const m=$m('dzMsg'); if(m){ m.textContent=t; m.className='dz-hint'+(err?' err':err===false?' ok':''); } }
 const dzErrLabel=(e)=> e==='requires_account' ? 'Najpierw zaloguj się (Google/Apple).' : e;
@@ -295,8 +298,7 @@ export async function renderProfil(){
   if(!p.handle || p.handle==='gracz'){ p.handle=funnyHandle(); setHandle(p.handle); }   // pierwsza wizyta → zabawna ksywa
   myHandle=p.handle;
   $m('profilHandle').value=p.handle;
-  const s=p.standing;
-  const acc = s.correct&&s.matches ? Math.round(s.correct/(s.matches||1)) : null;
+  const s=(p.standing && typeof p.standing==='object') ? p.standing : { matches:0, correct:0, points:0 };   // F6a: odporność na niepełną odpowiedź API
   // nagłówek: awatar + ksywa (design)
   const hd=$m('profilHead');
   if(hd){
@@ -306,17 +308,21 @@ export async function renderProfil(){
       <div class="pf-name">${escapeHtml(p.handle||'gracz')}</div>
       <div class="pf-sub">${escapeHtml(sub)}</div>`;
   }
-  const cats=Object.entries(p.byCat).sort((a,b)=>b[1].n-a[1].n);
+  // F6a (U12): „Najlepsze kategorie" po SKUTECZNOŚCI (min. 5 pytań w kategorii), nie po liczbie pytań
+  const rawCats=p.byCat||{};
+  const cats=rankCategories(rawCats, 5);
   const CATCOL=['var(--green)','var(--blue)','var(--purple)','var(--gold)'];
-  const catRows=cats.length? cats.map(([k,v],i)=>{
-    const pct=Math.round(v.ok/v.n*100), col=CATCOL[i%CATCOL.length];
+  const catRows=cats.length? cats.map(({key:k, n, ok:hit},i)=>{
+    const pct=Math.round(hit/n*100), col=CATCOL[i%CATCOL.length];
     return `<div class="pf-cat"><span class="lbl">${escapeHtml(catLabel(k))}</span>
       <span class="bar"><i style="width:${pct}%;background:${col}"></i></span><span class="pct" style="color:${col}">${pct}%</span></div>`;
-  }).join('') : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>';
-  // odznaki: kilka pochodnych ze statystyk + reszta zablokowana (placeholdery — pełny system później)
-  const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:ic('lock')}</span><small>${on?lab:'—'}</small></div>`;
+  }).join('') : (Object.keys(rawCats).length
+    ? '<div class="profil-empty" style="padding:14px">Zagraj min. 5 pytań w kategorii, żeby zobaczyć skuteczność.</div>'
+    : '<div class="profil-empty" style="padding:14px">Brak rozegranych pytań solo.</div>');
+  // odznaki: pochodne ze statystyk — licznik = faktyczna liczba definicji (bez placeholderów „/ 12")
+  const badge=(on,emoji,lab)=>`<div class="pf-badge${on?'':' lock'}"><span>${on?emoji:ic('lock')}</span><small>${escapeHtml(lab)}</small></div>`;
   const badgeDefs=[ [s.matches>0,'🎵','Pierwszy mecz'], [s.matches>=10,'🔥','10 meczów'],
-    [s.points>=100,'💯','100 pkt'], [false,'','—'] ];
+    [s.correct>=50,'🎯','50 trafnych'], [s.points>=1000,'💯','1000 pkt'] ];
   const badges=badgeDefs.map(b=>badge(b[0],b[1],b[2])).join('');
   const badgeOn=badgeDefs.filter(b=>b[0]).length;
   el.innerHTML=`<div class="pf-lbl">Konto</div>
@@ -328,7 +334,7 @@ export async function renderProfil(){
     </div>
     <div class="pf-lbl">Najlepsze kategorie</div>
     ${catRows}
-    <div class="pf-lbl">Odznaki <span class="pf-badgecount">${badgeOn} / 12</span></div>
+    <div class="pf-lbl">Odznaki <span class="pf-badgecount">${badgeOn} / ${badgeDefs.length}</span></div>
     <div class="pf-badges">${badges}</div>`;
   if(!p.secured) acInitAuthButtons();   // lazy-load GIS + Apple JS → natywne przyciski
 }

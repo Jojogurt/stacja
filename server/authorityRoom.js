@@ -25,7 +25,7 @@
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
-import { reduceAction, evaluateAnswer, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
+import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig } from '../core/match.js';
@@ -387,12 +387,12 @@ export class GameAuthority extends Server {
   async startMatch(config){
     // F1 (#5): rounds∈[1..MAX_ROUNDS] (rounds=200000 → 25 MB stanu = martwy pokój), timer clamp,
     // modes ⊂ ALL_MODES, format ∈ coop/solo/teams. assignments sanityzuje buildTeams (kolor/nazwa/members).
-    const { rounds, timer, modes, format, salon } = sanitizeMpConfig(config);
+    const { questions, timer, modes, format, salon } = sanitizeMpConfig(config);   // F6a: długość w pytaniach (stary klient: z rounds)
     const assignments = Array.isArray(config.assignments) ? config.assignments : undefined;
     const groupId = (typeof config.groupId==='string' && config.groupId) ? config.groupId.slice(0,64) : null;   // MVP-3: tag drużyny (sanityzowany)
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
     const catKeys = Object.keys(pools);
-    const r = buildMatch(catKeys, modes, rounds, pools);
+    const r = buildMatch(catKeys, modes, { questions }, pools);
     if(r.error || !r.slots) return;                 // klient waliduje przed wysłaniem — zignoruj zły config
     this.pools = pools; this.hostSeen = new Set(); this.recent = [];
     const s0=r.slots[0];
@@ -405,7 +405,7 @@ export class GameAuthority extends Server {
       answerSlots:slotsFor(s0.mode, s0.cat),
       format, teams, byTeam:emptyByTeam(teams), scores,
       reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon, groupId,   // MVP-3: tag drużyny
-      timer:timer||0, endsAt:null, beerTally:{}, tally:{},
+      timer:timer||0, endsAt:null, beerTally:{}, tally:{}, streaks:{}, playAt:null,
     };
     await this.nextQuestion();
   }
@@ -422,7 +422,7 @@ export class GameAuthority extends Server {
   async newRound(){
     reconcileTeams(this.game, this.playersOf());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
     this.game.phase=MP.LOADING; this.game.byTeam=emptyByTeam(this.game.teams);   // czyste buckety; scores kumulują się
-    this.game.reveal=null; this.game.endsAt=null; this.current=null;
+    this.game.reveal=null; this.game.endsAt=null; this.game.playAt=null; this.current=null;
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
     const hidden={ prompt:'', lyric:'', ttsUrl:'', snipStart:0 };   // F2b #11: odsłaniane w go()
@@ -519,6 +519,7 @@ export class GameAuthority extends Server {
     if((this.game.format||'coop')==='coop') this.playersOf().forEach(p=>this.coopRejoin(p.id));
     this.game.phase=assertMp(this.game.phase, MP.PLAY, console.warn);
     this.game.playNonce=(this.game.playNonce||0)+1;
+    this.game.playAt=Date.now();                    // F6a: start PLAY → bonus za szybkość liczony do zatwierdzenia
     if(this.game.timer>0) this.game.endsAt=Date.now()+this.game.timer*1000;   // serwerowy stempel czasu
     this.broadcastState(); await this.persist();
     if(this.game.timer>0) this.scheduleAutoLock(this.game.timer*1000);
@@ -529,16 +530,8 @@ export class GameAuthority extends Server {
     if(!this.game || this.game.phase!==MP.PLAY) return;
     this.clearAutoLock();
     noteAnswerers(this.game);                       // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
-    const ev=evaluateAnswer(this.game, this.current);   // ocenia KAŻDĄ drużynę (ev.perTeam)
-    this.game.beerTally=this.game.beerTally||{};
-    for(const t of this.game.teams){
-      const rr=ev.perTeam[t.id]; if(!rr) continue;
-      this.game.scores[t.id]=(this.game.scores[t.id]||0)+rr.gained;
-      if(rr.firstById){ this.game.tally[rr.firstById]=this.game.tally[rr.firstById]||{name:rr.firstBy,correct:0}; this.game.tally[rr.firstById].correct++; }
-      if(!rr.teamOk && rr.anySure){ rr.pewniacy.forEach(n=>{ this.game.beerTally[n]=(this.game.beerTally[n]||0)+1; }); }
-    }
-    this.game.results.push(ev.result);
-    this.game.reveal=ev.reveal;                     // DOPIERO TERAZ odpowiedź trafia do rozsyłanego stanu
+    const ev=evaluateAnswer(this.game, this.current, undefined, Date.now());   // ocenia KAŻDĄ drużynę (ev.perTeam); F6a: punkty + szybkość
+    applyEvaluation(this.game, ev, (this.game.tally=this.game.tally||{}));   // F6a: punkty/serie/tally/pewniaki/wynik/reveal — wspólne z hostem relay
     this.game.phase=assertMp(this.game.phase, MP.REVEAL, console.warn); this.game.endsAt=null;
     this.broadcastState(); await this.persist();
   }

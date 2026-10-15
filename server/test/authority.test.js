@@ -173,8 +173,12 @@ await group('authority 5: viewFor okraja cudze buckety drużyn w PLAY (3.1)', as
 await group('authority 6: validateMatchRecord odrzuca zawyżony wynik (3.2)', async ()=>{
   eq(validateMatchRecord({ total_questions:15, score:20, participants:[] }), null, 'poprawny wynik → null (ok)');
   ok(validateMatchRecord({ total_questions:99999, score:0 }), 'total_questions > cap → błąd');
-  ok(validateMatchRecord({ total_questions:15, score:9999 }), 'score > cap → błąd');
-  ok(validateMatchRecord({ total_questions:15, score:10, participants:[{ profile_id:'p', score:9999 }] }), 'participant.score > cap → błąd');
+  // F6a: wynik w PUNKTACH — cap = total_questions × SCORE_MAX_PER_Q (840): 15 pyt. → 12600
+  ok(validateMatchRecord({ total_questions:15, score:15*840+1 }), 'score > cap → błąd');
+  eq(validateMatchRecord({ total_questions:15, score:15*840 }), null, 'F6a: score = 15 × 840 (max punktów) → ok');
+  eq(validateMatchRecord({ total_questions:10, score:1450, participants:[{ profile_id:'p', score:1450, correct_count:9 }] }), null, 'F6a: typowy wynik punktowy „Graj teraz" przechodzi');
+  eq(validateMatchRecord({ total_questions:15, score:9, participants:[{ profile_id:'p', score:9, correct_count:9 }] }), null, 'F6a: stary klient (wynik = trafienia) dalej przechodzi');
+  ok(validateMatchRecord({ total_questions:15, score:10, participants:[{ profile_id:'p', score:99999 }] }), 'participant.score > cap → błąd');
   ok(validateMatchRecord({ total_questions:15, score:10, participants:[{ profile_id:'p', correct_count:9999 }] }), 'participant.correct_count > total → błąd');
 });
 
@@ -669,6 +673,34 @@ await group('F3: ABCD tasowane na serwerze — wspólny prompt, litera nie wycie
     eq(rv.answers.a[0], correct, 'reveal.answers.a[0] = przemapowana litera (stary klient)');
   }
   ok(letters.size>=2, 'poprawna litera zmienia się między meczami ('+[...letters].join('')+')');
+});
+
+/* ==================== F6a: długość meczu w pytaniach + punkty na serwerze ==================== */
+await group('F6a: start {questions} — 5 pytań = 1 slot; stary klient (tylko rounds) bez zmian; cap MAX', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  await room.msg(a, { t:'start', config:CONFIG({ questions:5, rounds:1 }) });
+  eq(room.game.slots.length, 1, 'questions=5 → 1 slot (5 pytań)');
+  room.game.phase=MP.DONE;
+  await room.msg(a, { t:'start', config:CONFIG({ rounds:2 }) });
+  eq(room.game.slots.length, 2*CPR, 'stary klient: rounds=2 → 2×CPR slotów');
+  room.game.phase=MP.DONE;
+  await room.msg(a, { t:'start', config:CONFIG({ questions:1e9, rounds:1 }) });
+  ok(room.game.slots.length<=MAX_ROUNDS*CPR, 'questions ogromne → przycięte (≤ MAX slotów)');
+});
+await group('F6a: lock liczy PUNKTY (scoreRound) + playAt w PLAY + seria', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  await room.msg(a, { t:'start', config:CONFIG({ questions:5, rounds:1 }) });
+  await room.msg(a, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  ok(Number.isFinite(room.game.playAt), 'playAt ustawione na starcie PLAY');
+  const good=room.current.answers.a[0];
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:good } } });
+  await room.msg(a, { t:'lock' });
+  const sc=Object.values(room.game.scores)[0];
+  ok(sc>=100 && sc<=150, 'trafienie quizu = 100 pkt + bonus za szybkość (≤150): '+sc);
+  eq(Object.values(room.game.streaks)[0], 1, 'seria drużyny = 1');
 });
 
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
