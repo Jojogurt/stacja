@@ -33,6 +33,7 @@ export function authorityChannel(code, cfg = {}) {
 
   const api = {
     hostId: null,              // ostatni autorytatywny host (z presence)
+    serverModes: null,         // F8a: tryby znane serwerowi (presence.modes); null = stary serwer → tylko dawne tryby
 
     on(kind, opts, cb) {
       if (kind === 'broadcast') { const e = opts && opts.event; (bcast[e] = bcast[e] || []).push(cb); }
@@ -100,6 +101,7 @@ export function authorityChannel(code, cfg = {}) {
         (bcast[msg.event] || []).forEach((cb) => { try { cb({ payload: p, from: p.from || null }); } catch (_e) {} });
       } else if (msg.t === 'presence') {
         api.hostId = msg.hostId || null;
+        if (Array.isArray(msg.modes)) api.serverModes = msg.modes.filter((m) => typeof m === 'string').slice(0, 32);   // F8a: capability
         presence = {};
         (msg.members || []).forEach((m) => { if (m && m.id) presence[m.id] = [{ name: m.name || '' }]; });
         if (presenceCb) { try { presenceCb(); } catch (_e) {} }

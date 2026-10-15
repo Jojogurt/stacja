@@ -2,7 +2,7 @@
  * Sieć: proxy Workera (omija blokady) → bezpośredni fetch → JSONP. Czystą selekcję
  * (filtr coverów, anty-powtórki, normalizacja) trzyma `core/trackSelect.js`, wspólna
  * z serwerem; tu tylko wstrzykujemy webowy `itunes(term)`. */
-import { resolveTrack as coreResolveTrack, pickTrack, BAD, cachedFetcher } from '../core/trackSelect.js';
+import { resolveTrack as coreResolveTrack, pickTrack, BAD, cachedFetcher, gatherDistractors } from '../core/trackSelect.js';
 
 /* ---- sieć (iTunes) ----
  * opts.song=true (F5 #5) → wyszukiwanie „artysta tytuł" BEZ attribute=artistTerm (utwór spoza
@@ -96,4 +96,10 @@ export { pickTrack, BAD };
 export function resolveTrack({cat, seen, recent, cfg}){
   lastCfg=cfg;
   return coreResolveTrack({ cat, seen, recent, itunes:cachedItunes });
+}
+
+// F8a (tryb „abcd"): dystraktory z kategorii — wyniki iTunes innych wykonawców z puli (ten sam cache co resolveTrack)
+export function resolveDistractors({cat, correct, cfg, rnd}){
+  if(cfg) lastCfg=cfg;
+  return gatherDistractors({ cat, correct, itunes:cachedItunes, rnd });
 }
