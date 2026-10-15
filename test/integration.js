@@ -16,6 +16,10 @@ async function group(name, fn){ console.log('• '+name); try{ await fn(); }catc
 // odznacz wszystkie kategorie i wszystkie tryby, zdejmij „playing"
 const resetSelection=(window)=>{
   window.document.querySelectorAll('.tick.on').forEach(t=>t.click());
+  // F8a: kategoria bez ticka (np. dodana przez picker MP, wylosowana kostką) zostawała w puli solo →
+  // „wszystkie" (zaznacz → odznacz) czyści pulę w całości (flaky: mecz grał z obcej kategorii)
+  const all=window.document.querySelector('.tick.rnd');
+  if(all){ all.click(); if(all.classList.contains('on')) all.click(); }
   window.document.querySelectorAll('#modeTicks .grp-chip.on').forEach(c=>c.click());
   window.document.body.classList.remove('playing');
 };
@@ -1306,6 +1310,122 @@ await group('F6b (F6/F5): potwierdzenie wyjścia + „Wróć do pokoju" (30 min)
   ok($(w,'mpRoom').style.display==='', 'F5: od razu w pokoju');
   w.mpLeaveConfirmed('room'); await settle(4);
   w.history.pushState({}, '', '/');
+});
+
+/* ===================== F8a: nowe tryby — intro (solo), ABCD muzyki, rok; picker MP wg capabilities ===================== */
+// zaślepka iTunes F8a: różne utwory per wykonawca (dystraktory ABCD muszą się różnić tytułem od poprawnego)
+const f8aFetch=(url)=>{
+  let term='X'; try{ term=new URL(String(url)).searchParams.get('term')||'X'; }catch(_e){}
+  const r=(t,y)=>({ trackName:t, artistName:term, previewUrl:'https://x/'+encodeURIComponent(t)+'.m4a', collectionName:'Album '+term, releaseDate:y+'-01-01', artworkUrl100:'https://x/a100x100.jpg' });
+  return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:[ r('Pieśń '+term, 1985), r('Ballada '+term, 1986) ] }) });
+};
+async function f8aSolo(modeRe, run){
+  const w=window, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  globalThis.fetch=f8aFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache();
+  try{
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    const { audio } = catsByKind(w);
+    ok(modeChip(w, modeRe), 'picker solo: chip trybu '+modeRe);
+    await f2aStartMatch(audio, modeRe);
+    for(let i=0;i<200 && $(w,'check').disabled;i++) await settle(2);
+    ok(!$(w,'check').disabled, 'pytanie gotowe — stan: '+txt(w,'state'));
+    await run(w);
+  } finally {
+    if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+    $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
+  }
+}
+await group('F8a solo: tryb „intro" — etapy 1→2 s, „+ więcej", mnożnik etapu w odsłonie', async ()=>{
+  await f8aSolo(/intro/, async (w)=>{
+    const body=w.document.body, more=$(w,'introMore');
+    ok(body.classList.contains('intro-mode'), 'body.intro-mode (przycisk „+ więcej" widoczny)');
+    ok(more && !more.disabled && /\+ więcej \(2 s\)/.test(more.textContent), '„+ więcej (2 s)" aktywne — '+(more&&more.textContent));
+    const dbg=soloAudioMod._soloAudioDebug();
+    ok(dbg.round && dbg.round.mode==='intro' && dbg.el.currentTime===0, 'gra od początku zajawki');
+    dbg.el.currentTime=1.05; dbg.el.emit('timeupdate'); await settle(1);
+    ok(dbg.el.paused && /intro 1 s/.test(txt(w,'state')), 'etap 1 s: stop po 1 s — '+txt(w,'state'));
+    const plays=dbg.el.plays;
+    more.click(); await settle(3);
+    ok(dbg.el.plays===plays+1 && dbg.el.currentTime===0, '„+ więcej" → od początku, dłużej');
+    ok(/\+ więcej \(4 s\)/.test(more.textContent), 'etap 2 s → kolejny „+ więcej (4 s)"');
+    dbg.el.currentTime=1.5; dbg.el.emit('timeupdate'); await settle(1);
+    ok(!dbg.el.paused, 'etap 2 s: po 1,5 s nadal gra');
+    $(w,'fTitle').value='Pieśń';   // tytuł utworu = „Pieśń <wykonawca>" albo „Ballada …" — częściowe/zero; ważny mnożnik
+    click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta');
+    ok(/na etapie 2 s/.test(rm) && /mnożnik ×1,6/.test(rm), 'odsłona: „na etapie 2 s · mnożnik ×1,6" — '+rm.replace(/\s+/g,' ').slice(0,200));
+    ok(more.disabled, 'po Sprawdź „+ więcej" nieaktywne');
+    const pts=+txt(w,'sPoints'); ok(pts===0 || pts===80, 'punkty = baza × 1,6 bez bonusu za szybkość (0 albo 50×1,6=80): '+pts);
+  });
+  ok(!window.document.body.classList.contains('intro-mode'), 'koniec meczu zdejmuje intro-mode');
+});
+await group('F8a solo: tryb „abcd" — 4 kafle .mc-opt z dystraktorami z kategorii, ocena po kaflu, punkty jak quiz', async ()=>{
+  await f8aSolo(/ABCD/, async (w)=>{
+    const opts=[...w.document.querySelectorAll('#quizForm .mc-opt')];
+    ok(opts.length===4, '4 kafle (reuse .mc-opt quizu) — '+opts.length);
+    ok($(w,'form').classList.contains('quiz') && !w.document.body.classList.contains('quiz-mode'), 'pola tytuł/wykonawca schowane, gałka audio widoczna');
+    const texts=opts.map(b=>(b.querySelector('.mc-tx')||{}).textContent||'');
+    ok(texts.every(t=>/ — /.test(t)) && new Set(texts).size===4, 'kafle „Tytuł — Wykonawca", bez duplikatów — '+texts.join(' | '));
+    ok(soloAudioMod._soloAudioDebug().round, 'zajawka gra (tryb audio)');
+    // wybierz klawiszem A–D (jak quiz) i sprawdź
+    const ev=new w.KeyboardEvent('keydown',{ key:'b', bubbles:true, cancelable:true });
+    $(w,'form').dispatchEvent(ev); await settle(1);
+    ok(w.document.querySelector('#quizForm .mc-opt.sel')?.dataset.letter==='B', 'klawisz B zaznacza kafel B');
+    click(w,'check'); await settle(2);
+    const ok1=w.document.querySelector('#quizForm .mc-opt.ok');
+    ok(ok1 && /✓/.test(ok1.textContent), 'odsłona: poprawny kafel zielony ✓');
+    const pts=+txt(w,'sPoints'); const hit=ok1.dataset.letter==='B';
+    ok(hit ? (pts>=100 && pts<=150) : pts===0, 'punkty jak quiz (100 + szybkość) / 0 — '+pts+' (trafienie: '+hit+')');
+    ok($(w,'art').style.display!=='none', 'okładka utworu w odsłonie');
+    click(w,'sessEnd'); await settle(4);
+    ok(/Pieśń|Ballada/.test(txt(w,'sumList')), 'podsumowanie: tytuł utworu (nie prompt ABCD) — '+txt(w,'sumList').slice(0,80));
+  });
+});
+await group('F8a solo: tryb „rok" — pole ±1 + suwak, punkty 100/70/50/20, odsłona z rokiem', async ()=>{
+  await f8aSolo(/rok/, async (w)=>{
+    const inp=$(w,'qf_year'), rng=$(w,'qf_yearRange');
+    ok(inp && rng && inp.type==='number' && rng.type==='range', 'pole liczbowe + suwak');
+    ok(+rng.min===1950 && +rng.max===2026, 'zakres 1950–2026');
+    rng.value='1983'; rng.dispatchEvent(new w.Event('input')); ok(inp.value==='1983', 'suwak → pole');
+    const plus=w.document.querySelector('#quizForm .yr-step[data-d="1"]'); plus.click(); plus.click();
+    ok(inp.value==='1985' && rng.value==='1985', '+1 ×2 → 1985 (pole i suwak)');
+    click(w,'check'); await settle(2);
+    const head=txt(w,'revealHead'), rm=txt(w,'rmeta');
+    ok(/Dokładnie|±1 rok/.test(head), 'nagłówek wyniku roku — '+head);
+    ok(/Rok/.test(rm) && /198[56]/.test(rm) && /Ty: 1985/.test(rm), 'odsłona: rok utworu + „Ty: 1985" — '+rm.replace(/\s+/g,' ').slice(0,160));
+    const pts=+txt(w,'sPoints'); ok(pts>=70 && pts<=150, 'punkty 100/70 (+ szybkość) — '+pts);
+    ok(inp.disabled, 'po Sprawdź pole roku zablokowane');
+  });
+});
+await group('F8a MP: picker wg capabilities serwera — stary serwer bez ABCD/rok, nowy z; intro nigdy', async ()=>{
+  const w=window; const ws=await f6bRoom();
+  ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  let html=$(w,'mpRoom').innerHTML;
+  ok(/Tryby pytań/.test(html) && /muzyka/.test(html), 'picker MP wyrenderowany');
+  ok(!/ABCD/.test(html) && !/📅 rok/.test(html) && !/⏱ intro/.test(html), 'stary serwer (presence bez modes) → bez nowych trybów');
+  ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','quiz'] }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  html=$(w,'mpRoom').innerHTML;
+  ok(/mpToggleMode\('abcd'\)/.test(html) && /mpToggleMode\('year'\)/.test(html), 'nowy serwer → chipy ABCD i rok');
+  ok(!/mpToggleMode\('intro'\)/.test(html), 'intro tylko solo — brak w MP');
+  // stan PLAY trybu „rok": pole liczbowe; ABCD: kafle w pudełku pytania
+  ws.pushState(playState(ws, { playNonce:8101, mode:'year', answerSlots:[{key:'year',label:'rok'}] })); await settle(6);
+  w.mpGoKombinuj(); await settle(3);
+  const yi=$(w,'mpProp_year')||$(w,'mpTyp_year');
+  ok(yi && yi.getAttribute('inputmode')==='numeric', 'MP rok: pole liczbowe (inputmode numeric)');
+  ws.pushState(playState(ws, { playNonce:8102, mode:'abcd', answerSlots:[{key:'a',label:'litera (A–D)'}], prompt:'Jaki to utwór?\nA) X — Y\nB) Africa — Toto\nC) Jump — Van Halen\nD) Take On Me — a-ha' })); await settle(6);
+  w.mpGoKombinuj(); await settle(3);
+  ok(/który utwór\?/.test($(w,'mpRoom').innerHTML) && $(w,'mpRoom').innerHTML.includes('Africa — Toto'), 'MP ABCD: kafle widoczne w fazie odpowiadania');
+  // odsłona „rok"
+  ws.pushState(playState(ws, { phase:'reveal', playNonce:8103, mode:'year', slots:[{round:1,cat:'d80',mode:'year'}], answerSlots:[{key:'year',label:'rok'}],
+    reveal:{ kind:'year', track:'Africa', artist:'Toto', year:'1982', album:'Toto IV', art:'', yearNote:'rok wg wydania w iTunes',
+      okBySlot:{year:true}, teamOk:true, gained:70, locked:{year:'1983'}, yearEval:{pts:70,diff:1,tier:'off1'} } })); await settle(6);
+  const rv=$(w,'mpRoom').innerHTML;
+  ok(/ROK/.test(rv) && /1982/.test(rv) && /drużyna: „1983"/.test(rv) && /±1 rok/.test(rv), 'odsłona MP „rok": rok utworu + typ drużyny + tier');
+  ok(/rok wg wydania w iTunes/.test(rv), 'odsłona MP: notka o roku z iTunes');
+  w.mpAdvance && w.mpAdvance();
+  w.mpLeaveConfirmed('room'); await settle(4);
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

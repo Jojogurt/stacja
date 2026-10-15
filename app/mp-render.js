@@ -4,7 +4,7 @@
  * w app/mp.js i jest wstrzykiwana przez initMpRender — bez statycznego cyklu render↔logika. */
 import { S, mpMe } from './mp-state.js';
 import { escapeHtml, safeColor, isSlotKey, num } from '../core/util.js';
-import { norm } from '../core/scoring.js';   // mpSlotsHTML: porównanie głosów (mój głos == kandydat)
+import { norm, YEAR_MIN, YEAR_MAX } from '../core/scoring.js';   // F8a: + zakres pola roku; mpSlotsHTML: porównanie głosów (mój głos == kandydat)
 import { QPC, matchProgress } from '../core/match.js';
 import { MP } from '../core/phases.js';
 import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS, MP_INTRO_MS } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"; F2b #6: auto-„dalej"; F6b: intro
@@ -296,7 +296,10 @@ const mpRemoteKnobHTML = ()=> `<button class="mp-knob remote" id="mpKnob" onclic
 const MP_REMOTE_STATUS = '🔈 słuchaj z głośnika hosta';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 // wiedza ogólna: treść pytania w tym samym pudełku co tekst lektora
-const mpPromptHTML = (g)=> g.mode==='quiz'&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">pytanie</span>${escapeHtml(g.prompt)}</div>` : '';
+// F8a: „abcd" (muzyka) — kafle „Tytuł — Wykonawca" w tym samym pudełku; odpowiedź = litera (jak ABCD quizu)
+const mpPromptHTML = (g)=> (g.mode==='quiz'||g.mode==='abcd')&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">${g.mode==='abcd'?'który utwór? — wpisz literę A–D':'pytanie'}</span>${escapeHtml(g.prompt)}</div>` : '';
+// F8a: atrybuty pola slotu — rok = liczba (klawiatura numeryczna, zakres suwaka solo)
+const slotInputAttrs = (s)=> s.key==='year' ? ` type="number" inputmode="numeric" min="${YEAR_MIN}" max="${YEAR_MAX}"` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
 function mpChatFeedHTML(){
   const rows=S.feed.log.map(c=>{
@@ -398,7 +401,7 @@ function mpLegendHTML(){
 // formularz typowania per slot (wspólny dla fazy/kombinuj)
 function mpFormHTML(g){
   const slots=renderSlots(g);
-  const inputs=slots.map(s=>`<input id="mpProp_${s.key}" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()">`).join('');
+  const inputs=slots.map(s=>`<input id="mpProp_${s.key}"${slotInputAttrs(s)} placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()">`).join('');
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
@@ -406,7 +409,7 @@ function mpFormHTML(g){
 // placeholderami — klikalne osobno. Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
 function mpComposerHTML(g){
   const slots=renderSlots(g);
-  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}" class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
+  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
       <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
       <div class="mp-compfield">
@@ -423,7 +426,8 @@ function mpQLabel(g){
   return `Pyt. ${num((Number(g.qi)||0)+1)}/${QPC}`;
 }
 function mpHeaderHTML(g){
-  const MODE={music:ic('music')+' muzyka',lektor:ic('mic')+' lektor',reverse:ic('reverse')+' od tyłu',snippet:ic('scissors')+' fragment',quiz:ic('brain')+' wiedza'};
+  const MODE={music:ic('music')+' muzyka',lektor:ic('mic')+' lektor',reverse:ic('reverse')+' od tyłu',snippet:ic('scissors')+' fragment',quiz:ic('brain')+' wiedza',
+    abcd:ic('music')+' ABCD', year:ic('music')+' rok'};   // F8a
   // F6b (F6): strzałka = „opuścić pokój?" (potwierdzenie), nie natychmiastowe wyjście
   return `<div class="mp-hd">
     <div class="mp-hd-r1">
@@ -456,7 +460,7 @@ function mpSluchajBodyHTML(g){
   return `<div class="mp-deck">${knob}
       <div class="mp-state" id="mpPlayStatus">${status}</div>
       <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
-    ${mpLyricHTML(g)}
+    ${mpLyricHTML(g)}${mpPromptHTML(g)}
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
     <div class="mp-foot">${mpHr()}${mpReactsBarHTML()}</div>`;
 }
@@ -465,7 +469,7 @@ function mpSluchajBodyHTML(g){
 // SALON (TV): bez pól wpisywania/pewności/emotek — host nadpisuje odpowiedź klikiem w kolumny.
 function mpKombinujKolumnyHTML(g){
   const foot = mpIsSalonHost()   // TV: bez pól/pewności/emotek (coop i Solo/Drużyny)
-    ? (g.mode==='quiz' ? `<div class="mp-foot">${mpHr()}${mpPromptHTML(g)}</div>` : '')
+    ? ((g.mode==='quiz'||g.mode==='abcd') ? `<div class="mp-foot">${mpHr()}${mpPromptHTML(g)}</div>` : '')
     : `<div class="mp-foot">
         ${mpPromptHTML(g)}${mpFormHTML(g)}
         <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
@@ -588,6 +592,7 @@ function mpRevealNextHTML(last){
 function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
   if(r.kind==='quiz') return mpRenderQuizReveal(snap);
+  if(r.kind==='year') return mpRenderYearReveal(snap);   // F8a: tryb „rok"
   const tv=mpIsCompTV();      // F6b: TV w Solo/Drużynach — poprawna odpowiedź + ranking, bez wyniku „swojej" drużyny
   const rv=tv ? {} : mpRevealMine(r);   // ✓/✗ slotów, locked, baner — z perspektywy MOJEJ drużyny
   // 5.2: waliduj URL okładki (tylko http(s)) + escapuj — art pochodzi z zewnętrznego API (iTunes)
@@ -603,6 +608,30 @@ function mpRenderRevealCard(snap){
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':`<div class="rv-locked">odpowiedź drużyny: „${escapeHtml(locked.title||'—')} · ${escapeHtml(locked.artist||'—')}"</div>`}
+    ${tv?'':mpCreditsHTML(snap.credits)}
+    ${mpRevealStandingsHTML(r.ranking)}
+    ${mpReactsBarHTML()}
+    ${mpRevealNextHTML(last)}`;
+}
+// F8a: odsłona trybu „rok" — karta utworu + rok wydania vs typ drużyny (dokładnie / ±1 / ±2 / dekada)
+const YEAR_TIER_TX = { exact:'dokładnie!', off1:'±1 rok', off2:'±2 lata', decade:'właściwa dekada', miss:'pudło' };
+function mpRenderYearReveal(snap){
+  const r=snap.reveal, head=snap.head, last=snap.isLast;
+  const tv=mpIsCompTV();
+  const rv=tv ? {} : mpRevealMine(r);
+  const artOk = typeof r.art==='string' && /^https?:\/\//.test(r.art);
+  const cover = artOk?`<img class="rv-cover" src="${escapeHtml(r.art)}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">${ic('disc')}</div>`;
+  const y=rv.yearEval||{}, ok=!!(rv.okBySlot&&rv.okBySlot.year);
+  const team=(rv.locked&&rv.locked.year)||'';
+  const tier = !tv && team ? `<small class="rv-team">drużyna: „${escapeHtml(team)}" · ${escapeHtml(YEAR_TIER_TX[y.tier]||'')}${y.pts?` · +${num(y.pts)}`:''}</small>` : '';
+  const note = r.yearNote ? `<div class="rv-team rv-fun">ℹ️ ${escapeHtml(r.yearNote)}</div>` : '';
+  return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}${mpHr()}
+    <div class="rv-card">
+      <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.track)}</span><span class="a">${escapeHtml(r.artist)}</span>${r.album?`<span class="m">${escapeHtml(r.album)}</span>`:''}</div></div>
+      <div class="rv-slot"><span class="k">ROK</span><span class="v">${escapeHtml(String(r.year||'—'))}${tier}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>
+      ${note}
+    </div>
+    ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits)}
     ${mpRevealStandingsHTML(r.ranking)}
     ${mpReactsBarHTML()}

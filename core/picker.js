@@ -41,7 +41,7 @@ export function grpActive(keys, picked){
 }
 
 // tryby, w których „pytanie" to utwór do rozpoznania ze słuchu (reszta: lektor/quiz = pytania)
-const AUDIO_MODES = ['music', 'reverse', 'snippet'];
+const AUDIO_MODES = ['music', 'reverse', 'snippet', 'intro', 'abcd', 'year'];   // F8a: + intro/abcd/rok
 
 // podsumowanie meczu: {error} przy braku/niekompatybilności, inaczej liczba pytań.
 // F2a: `cats` = FAKTYCZNIE grywalne wybrane kategorie (kompatybilne z którymś trybem), `unit` =

@@ -6,8 +6,22 @@ export const SNIP_SECS = 2;               // długość odtwarzanego fragmentu (
 export const SOLO_SNIP_MAX = 28;          // górne okno losowania startu fragmentu (solo)
 export const MP_SNIP_WINDOW_S = 16;       // okno losowania startu fragmentu (multiplayer)
 
+// F8a (#1 „Heardle"): tryb „intro" — zajawka odsłaniana etapami OD POCZĄTKU utworu (sekundy na etap).
+// Etap 0 = 1 s … etap 4 = 16 s; „+ więcej" przechodzi do następnego i gra od początku do nowej długości.
+export const INTRO_STAGES = [1, 2, 4, 8, 16];
+// długość odsłony etapu (s) — etap przycinany do [0..ostatni]; śmieci → etap 0
+export function introStageSecs(stage){
+  const i = Math.floor(Number(stage));
+  return INTRO_STAGES[Number.isFinite(i) ? Math.max(0, Math.min(INTRO_STAGES.length-1, i)) : 0];
+}
+// następny etap (null = już ostatni — „+ więcej" nieaktywne)
+export function introNextStage(stage){
+  const i = Math.max(0, Math.floor(Number(stage)) || 0);
+  return i+1 < INTRO_STAGES.length ? i+1 : null;
+}
+
 // ile sekund trwa faza „słuchaj" per tryb (gdy kategoria nie nadpisuje listenSecs)
-export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12 };
+export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
 // F2b (#6): twardy limit fazy gotowości (ARMING) po stronie serwera — po nim pytanie rusza z tymi,

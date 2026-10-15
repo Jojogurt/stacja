@@ -263,6 +263,12 @@
   .mc-opt.no{border-color:var(--red);background:rgba(255,75,75,.12)}
   .mc-opt.no .mc-let{background:var(--red);color:#fff}
   .mc-opt:disabled{cursor:default}
+  /* F8a: tryb „intro" — „+ więcej" tylko w intro; tryb „rok" — pole roku ±1 + suwak */
+  body:not(.intro-mode) #introMore{display:none}
+  #quizForm .yr-row{display:flex;gap:8px;align-items:stretch}
+  #quizForm .yr-row input{flex:1;text-align:center;font-size:22px;font-weight:800}
+  #quizForm .yr-step{flex:0 0 56px;min-height:44px;border-radius:12px;font-weight:800;cursor:pointer}
+  #quizForm .yr-range{width:100%;margin-top:10px;accent-color:var(--blue)}
   .mc-opt .mc-mark{flex:0 0 auto;font-weight:900;font-size:18px;margin-left:6px}   /* F2a #20: ✓/✗ tekstem, nie tylko kolor */
   .mc-opt.ok .mc-mark{color:var(--green)}
   .mc-opt.no .mc-mark{color:var(--red)}
@@ -1561,6 +1567,7 @@
     <div class="lyric-box" id="lyricBox" aria-live="polite" hidden></div>
     <div class="mini">
       <button id="replay" disabled>↻ od nowa</button>
+      <button id="introMore" type="button" disabled>+ więcej</button>
       <button id="skip" disabled>↷ pomiń</button>
     </div>
   </section>

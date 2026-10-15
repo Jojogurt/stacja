@@ -22,7 +22,7 @@
  *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS } from './scoring.js';
+import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS } from './scoring.js';
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -54,13 +54,17 @@ const readBucket = (game, teamId)=> (game && game.byTeam && game.byTeam[teamId])
 
 /* —— definicja slotów odpowiedzi (jedno źródło prawdy: render + scoring + composer) ——
  * Dziś zawsze tytuł+wykonawca; przyszłe tryby (np. uzupełnij słowa) zwrócą inne sloty. */
+export const YEAR_SLOT = { key:'year', label:'rok' };   // F8a: tryb „rok" — jeden slot liczbowy (głosowanie jak na sloty)
 export function slotsFor(mode, cat, q){
-  // pytanie z własnymi slotami (quiz, wiedza ogólna) → użyj ich; inaczej domyślne tytuł+wykonawca
+  // pytanie z własnymi slotami (quiz, wiedza ogólna, F8a: ABCD muzyki) → użyj ich; inaczej domyślne tytuł+wykonawca
   if(q && Array.isArray(q.slots) && q.slots.length) return q.slots;
+  if(mode==='year') return [ { ...YEAR_SLOT } ];
   return [ {key:'title', label:'tytuł'}, {key:'artist', label:'wykonawca'} ];
 }
 // mapowanie klucza slotu → pole w obiekcie utworu (current) do oceny
-export const SLOT_FIELD = { title:'track', artist:'artist' };
+export const SLOT_FIELD = { title:'track', artist:'artist', year:'year' };
+// F8a: pytanie „rok" = jedyny slot 'year' i brak wariantów odpowiedzi (quiz) — ocena yearScore, nie textMatch
+const isYearQ = (slots, hasAnswers)=> !hasAnswers && slots.length===1 && slots[0].key==='year';
 const DEFAULT_SLOTS = slotsFor();
 const slotsOf = (game)=> (game && game.answerSlots) || DEFAULT_SLOTS;
 
@@ -206,8 +210,10 @@ function evaluateTeam(game, teamId, current, match, timing){
   // inaczej per slot). Odpowiedź drużyny = górka głosów per slot — to samo „Connery" w dwóch slotach
   // zalicza tylko jeden (skojarzenie dwudzielne). MUZYKA: porównanie z polem utworu (SLOT_FIELD).
   const quizEval = (vals)=> evaluateQuiz(current, vals||{}, match, slots);
+  const yearQ = isYearQ(slots, hasAnswers);
   const evalAll = (vals)=>{
     if(hasAnswers) return quizEval(vals);
+    if(yearQ){ const ys=yearScore(vals && vals.year, current && current.year); return { ok: ys.points>=YEAR_OK_PTS, bySlot:{ year: ys.points>=YEAR_OK_PTS }, year:ys }; }
     const bySlot={}; slots.forEach(s=>{ bySlot[s.key]=match((vals&&vals[s.key])||'', current[SLOT_FIELD[s.key]] || ''); });
     return { ok: slots.every(s=>bySlot[s.key]), bySlot };
   };
@@ -225,6 +231,7 @@ function evaluateTeam(game, teamId, current, match, timing){
   const streak = teamOk ? prevStreak+1 : 0;
   const sc = hasAnswers
     ? scoreRound({ quizOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
+    : yearQ ? scoreRound({ yearPts:ev.year.points, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })   // F8a: rok
     : scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure });
   const gained = sc.points;
   // kto PIERWSZY w drużynie zaproponował komplet trafnych slotów (bonus/MVP)
@@ -237,7 +244,9 @@ function evaluateTeam(game, teamId, current, match, timing){
   // F3 #4: formy kanoniczne do odsłony (per drużyna — przy `pool` zależą od tego, co drużyna trafiła)
   const display = hasAnswers ? ev.display : undefined, others = hasAnswers ? ev.others : undefined;
   const credits = answerCredits(game, teamId, lockedAll);   // F6b (R8): „złożona z głosów: kaśka → tytuł…"
-  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits,
+  // F8a: odsłona „rok" (NIE `year` — coop spłaszcza pola drużyny na reveal, a reveal.year = rok utworu)
+  const yearEval = yearQ ? { pts:ev.year.points, diff:ev.year.diff, tier:ev.year.tier } : undefined;
+  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits, yearEval,
     pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
     streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult } };
 }
@@ -264,9 +273,11 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
     .sort((a,b)=> b.score-a.score);
   const isCoop = (game.format||'coop')==='coop';
   const flat = isCoop ? perTeam[teams[0].id] : {};   // coop: spłaszcz pola jedynej drużyny
+  const yearQ = isYearQ(slots, hasAnswers);
   const reveal = {
     track:current.track, artist:current.artist, year:current.year, album:current.album, art:current.art,
-    kind: hasAnswers ? 'quiz' : 'music', prompt: current.prompt || '',
+    kind: hasAnswers ? 'quiz' : (yearQ ? 'year' : 'music'), prompt: current.prompt || '',
+    yearNote: yearQ && current.yearNote ? String(current.yearNote) : '',   // F8a: „rok wg wydania w iTunes"
     slots, answers: hasAnswers ? current.answers : null,
     fun: hasAnswers ? String(current.fun||'') : '',          // F3 #4: ciekawostka (💡) — dopiero w odsłonie
     byTeam: perTeam, ranking,
@@ -277,8 +288,8 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
   return {
     reveal, perTeam, ranking,
     result: { round:game.round, cat:game.catKey, mode:game.mode,
-      track: hasAnswers ? (current.prompt||'') : current.track,
-      artist: hasAnswers ? '' : current.artist, ok:anyOk },
+      track: hasAnswers ? (current.track||current.prompt||'') : current.track,   // F8a: ABCD muzyki → tytuł utworu
+      artist: hasAnswers ? (current.artist||'') : current.artist, ok:anyOk },
   };
 }
 

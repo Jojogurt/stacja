@@ -747,5 +747,80 @@ await group('F6b (#6): salon w formacie Solo — TV poza drużynami, jej akcje i
   ok(Array.isArray(room.game.reveal.ranking) && room.game.reveal.ranking.length===2, 'odsłona z rankingiem drużyn');
   ok(Array.isArray(room.game.reveal.byTeam[pTeam].credits), 'odsłona: credits per drużyna (R8)');
 });
+
+/* ==================== F8a: tryby „abcd" i „rok" w MP (autorytet), capabilities, intro tylko solo ==================== */
+const audioPools=()=>({ d80:{ label:'80s', range:'1980–89', artists:['Toto','a-ha','Van Halen','Queen'] } });
+const TRACK={ track:'Africa', artist:'Toto', year:'1982', album:'Toto IV', preview:'https://p/africa.m4a', art:'' };
+function stubResolver(room, { track=TRACK, distractors=[{track:'Jump',artist:'Van Halen'},{track:'Take On Me',artist:'a-ha'},{track:'Radio Ga Ga',artist:'Queen'}] }={}){
+  room.resolver={ track: async()=>({ ...track }), distractors: async()=>distractors.slice() };
+}
+await group('F8a: presence niesie `modes` (capability) — bez „intro"', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  const pr=a.last('presence');
+  ok(Array.isArray(pr.modes) && pr.modes.includes('abcd') && pr.modes.includes('year'), 'presence.modes zawiera nowe tryby MP');
+  ok(!pr.modes.includes('intro'), 'intro tylko solo — serwer go nie ogłasza');
+});
+await group('F8a: start z samym „intro" → zignorowany (tryb tylko solo)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); stubResolver(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['intro'], format:'coop', pools:audioPools() } });
+  ok(!room.game || room.game.phase==null, 'brak meczu (sanitizeMpConfig wycina intro → buildMatch error)');
+});
+await group('F8a: ABCD muzyki — opcje od autorytetu, prompt dopiero w PLAY, litera sekretem do REVEAL', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo'); stubResolver(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['abcd'], format:'coop', pools:audioPools() } });
+  let g=a.last('state').game;
+  eq(g.phase, MP.ARMING, 'ARMING'); eq(g.mode, 'abcd', 'tryb abcd');
+  eq(g.preview, TRACK.preview, 'zajawka do buforowania w ARMING');
+  eq(g.prompt, '', 'kafle ukryte w ARMING (F2b #11)');
+  eq((g.answerSlots||[]).map(s=>s.key), ['a'], 'jeden slot litery');
+  const secret=room.current.mc.correct;
+  ok(/^[ABCD]$/.test(secret), 'poprawna litera tylko w this.current');
+  ok(!JSON.stringify(g).includes('"correct"') && !JSON.stringify(g).includes('"answers"'), 'stan bez mc.correct/answers');
+  for(const c of [a,b]) await room.msg(c, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  g=b.last('state').game;
+  eq(g.phase, MP.PLAY, 'PLAY');
+  ok(/^Jaki to utwór\?\nA\) /.test(g.prompt) && g.prompt.includes('Africa — Toto'), 'kafle w PLAY');
+  ok(!JSON.stringify(g).includes('"correct"'), 'w PLAY nadal bez poprawnej litery');
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:secret } } });
+  await room.msg(a, { t:'lock' });
+  const r=a.last('state').game.reveal;
+  eq(a.last('state').game.phase, MP.REVEAL, 'REVEAL');
+  eq(r.kind, 'quiz', 'odsłona jak ABCD quizu'); ok(r.teamOk, 'drużyna trafiła literą');
+  eq(r.answers.a[0], secret, 'litera ujawniona dopiero w REVEAL');
+  ok(r.gained>=100, 'punkty jak quiz (100 + szybkość)');
+  eq(room.game.results[0].track, 'Africa', 'wynik do ligi: tytuł utworu');
+});
+await group('F8a: ABCD — za mało dystraktorów → pytanie jak muzyka (tytuł+wykonawca)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); stubResolver(room, { distractors:[{track:'Jump',artist:'Van Halen'}] });
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['abcd'], format:'coop', pools:audioPools() } });
+  eq(room.game.mode, 'music', 'fallback: muzyka'); eq(room.game.answerSlots, null, 'sloty domyślne (tytuł/wykonawca)');
+  ok(!room.current.answers, 'bez answers → ocena muzyki');
+});
+await group('F8a: tryb „rok" — slot liczbowy, głosowanie co-op, yearScore, notka „wg iTunes"', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo'), c=room.join('C','Cy'); stubResolver(room, { track:{ ...TRACK, year:'2011' } });
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['year'], format:'coop', pools:audioPools() } });
+  eq(room.game.mode, 'year', 'tryb rok'); eq(room.game.answerSlots, [{key:'year',label:'rok'}], 'slot roku');
+  eq(room.current.yearNote, 'rok wg wydania w iTunes', '2011 poza dekadą 80s → notka');
+  for(const x of [a,b,c]) await room.msg(x, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ year:'2009' } } });
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ year:'2012' } } });
+  await room.msg(c, { t:'action', action:{ type:'vote', slot:'year', value:'2012' } });
+  await room.msg(a, { t:'lock' });
+  const r=room.game.reveal;
+  eq(r.kind, 'year', 'odsłona roku'); eq(r.year, '2011', 'rok utworu nienadpisany');
+  eq(r.locked.year, '2012', 'odpowiedź drużyny = górka głosów'); eq(r.yearEval.pts, 70, '±1 → 70');
+  ok(r.teamOk, '±1 = trafienie'); eq(r.yearNote, 'rok wg wydania w iTunes', 'notka w odsłonie');
+});
+await group('F8a: tryb „rok" — brak roku (np. Deezer) → pytanie jak muzyka', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); stubResolver(room, { track:{ ...TRACK, year:'' } });
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['year'], format:'coop', pools:audioPools() } });
+  eq(room.game.mode, 'music', 'fallback muzyka'); eq(room.game.answerSlots, null, 'sloty domyślne');
+});
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

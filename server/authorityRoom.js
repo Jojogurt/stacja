@@ -15,7 +15,8 @@
  *                 (propose/vote/unpropose/pass/ready) · {t:'lock'} (host) · {t:'next'} (host)
  *                 · {t:'go'} (host, F2b #6: „pomiń czekających" w ARMING)
  *   DO → klient:  {t:'state', game}  (BEZ sekretu — pełny utwór tylko w game.reveal przy REVEAL)
- *                 {t:'presence', members, hostId}
+ *                 {t:'presence', members, hostId, modes}  (F8a: `modes` = tryby, które ten serwer zna —
+ *                 capability dla pickera MP; stary serwer bez pola → klient ukrywa nowe tryby)
  *
  * SEKRET: pełny utwór (current) trzymany POZA `game`; do `game.reveal` trafia dopiero przy lock.
  * PERSYSTENCJA: stan w `ctx.storage` (przeżyć eviction DO w trakcie meczu).
@@ -28,13 +29,14 @@ import { verifyToken } from './lib/auth.js';
 import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
-import { buildMatch, matchAdvance, sanitizeMpConfig } from '../core/match.js';
+import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
 import { REACTIONS } from '../core/chatFeed.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { norm, quizKey, shuffleMC } from '../core/scoring.js';
+import { norm, quizKey, shuffleMC, parseYear } from '../core/scoring.js';
+import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
 import { MP_SNIP_WINDOW_S, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
-import { resolveTrackServer } from './lib/resolve.js';
+import { resolveTrackServer, resolveDistractorsServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 
 const ROOM_TTL_MS = 15*60*1000;      // sprzątanie storage pustego pokoju po 15 min (karencja na reconnect)
@@ -141,6 +143,8 @@ export class GameAuthority extends Server {
   // F2b #11: treść pytania/tekst lektora/TTS/offset fragmentu odsłaniane DOPIERO w PLAY (go()).
   // W ARMING rozsyłamy tylko to, co trzeba buforować (URL zajawki — bez niego nie ma równego startu).
   armHidden = null;
+  // F8a: sieć rozwiązywania utworu/dystraktorów — pole instancji (testy podmieniają bez fetch)
+  resolver = { track: resolveTrackServer, distractors: resolveDistractorsServer };
 
   constructor(ctx, env){
     super(ctx, env);
@@ -354,7 +358,7 @@ export class GameAuthority extends Server {
     const s = salon!=null ? salon : (this.game && this.game.salon);
     return (s && this.hostId) ? ms.filter(m=>m.id!==this.hostId) : ms;
   }
-  pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId })); }
+  pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId, modes:MP_MODES })); }
   // 3.1: rozsyłka per-połączenie z okrojeniem cudzych bucketów drużyn (wyciek typów rywali w PLAY).
   broadcastState(){
     for(const c of this.getConnections()){
@@ -453,10 +457,27 @@ export class GameAuthority extends Server {
       this.game.lyric=''; this.game.preview=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
       hidden.lyric=x.lyric; hidden.ttsUrl=x.tts||'';   // F2b #11: tekst/TTS lektora dopiero w PLAY
     } else {
-      const t=await resolveTrackServer({ cat, seen:this.hostSeen, recent:this.recent });
+      const t=await this.resolver.track({ cat, seen:this.hostSeen, recent:this.recent });
       if(t.error){ this.game.phase=MP.NETERR; this.game.netReason=t.reason; this.broadcastState(); await this.persist(); return; }
       this.current={ ...t, lyric:'' };
       this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
+      if(this.game.mode==='year'){
+        // F8a „rok": jeden slot liczbowy; brak roku (np. fallback Deezer) → to pytanie jak zwykła muzyka
+        if(parseYear(t.year)==null) this.game.mode='music';
+        else {
+          this.game.answerSlots=slotsFor('year');
+          if(!yearReliable(t.year, cat.range, t.yearSrc)) this.current.yearNote='rok wg wydania w iTunes';
+        }
+      } else if(this.game.mode==='abcd'){
+        // F8a „abcd": opcje generuje AUTORYTET — prompt z kaflami odsłaniany w PLAY (hidden.prompt), poprawna litera
+        // (answers/mc) zostaje w this.current (SEKRET) do REVEAL. Za mało dystraktorów → pytanie jak muzyka.
+        let ds=[]; try{ ds=await this.resolver.distractors({ cat, correct:t }); }catch(_e){ ds=[]; }
+        const q=buildTrackMC(t, ds);
+        if(q){
+          Object.assign(this.current, { prompt:q.prompt, slots:q.slots, answers:q.answers, mc:q.mc });
+          this.game.answerSlots=q.slots; hidden.prompt=q.prompt;
+        } else this.game.mode='music';
+      }
     }
     // muzyka/lektor → sloty DEFAULT (tytuł+wykonawca); inaczej runda audio po quizie dziedziczy sloty quizu
     // F2b #11: offset fragmentu ustalany na serwerze, ale wysyłany dopiero w PLAY (w ARMING 0).

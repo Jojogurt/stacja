@@ -21,7 +21,11 @@ export function norm(s){
   const base = prenorm(String(s).toLowerCase())
     .replace(/&/g,' and ')
     .replace(/[^a-z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
-  const reduced = base.replace(/\b(the|a|an|de|le|la)\b/g,' ').replace(/\s+/g,' ').trim();
+  // F8a: przedimki a/an/de/le/la TYLKO na POCZĄTKU („The …", „A …", „Le …", też ciągiem: „De La …").
+  // Dawniej usuwane wszędzie → „witamina A" → „witamina" (zaliczało „witamina B3"), „Grupa A" → „grupa".
+  // Wyjątek uzasadniony: angielskie „the" w ŚRODKU/na końcu nadal usuwane („A Day in the Life" ≈ „Day in Life")
+  // — to nigdy nie jest rozróżniający człon odpowiedzi (w przeciwieństwie do jednoliterowego „a").
+  const reduced = base.replace(/^(?:(?:the|a|an|de|le|la) )+/,'').replace(/\bthe\b/g,' ').replace(/\s+/g,' ').trim();
   // 4.3: usuwaj przedimki TYLKO gdy zostaje sensowny rdze\u0144 \u2014 \u22656 znak\u00f3w (bez spacji) LUB \u22652 tokeny.
   // Inaczej \u201eDe La Soul" \u2192 \u201esoul" (1 kr\u00f3tki token) fa\u0142szywie zaliczy\u0142oby odpowied\u017a \u201eSoul".
   // (Uog\u00f3lnienie dawnej ochrony przed redukcj\u0105 \u201eA"\u2192'' w pytaniach ABCD.)
@@ -118,9 +122,15 @@ function normNum(s){
 }
 const sameList = (a,b)=> a.length===b.length && a.every((x,i)=>x===b[i]);
 
+// F8a: jednoliterowe tokeny (litery) po normalizacji — „Grupa A", „witamina C", „Malcolm X"
+const letterTokens = s => s ? s.split(' ').filter(t=>/^[a-z]$/.test(t)).sort() : [];
 // czy odpowiedź „pasuje" do prawdy (tolerancja literówek, diakrytyków i leetspeaku)
 export function textMatch(guess,actual){
   const g=norm(guess),a=norm(actual);
+  // F8a: obie strony z jednoliterowym członem → człony muszą być IDENTYCZNE (jak liczby): „Grupa A" ≠ „Grupa B"
+  // (inaczej literówka ≤1 przy ≥6 znakach zaliczała). Gdy tylko jedna strona ma taki człon — bez zmian.
+  const lg=letterTokens(g), la=letterTokens(a);
+  if(lg.length && la.length && !sameList(lg, la)) return false;
   // F3 #6: obie strony z liczbą/numeracją → tokeny muszą być IDENTYCZNE (literówka w liczbie = źle)
   const ng=numTokens(guess), na=numTokens(actual);
   const numeric = ng.length>0 && na.length>0;
@@ -210,22 +220,64 @@ export function speedFactor(elapsedMs, limitMs){
   const left = 1 - Math.max(0, +elapsedMs)/lim;
   return 1 + SPEED_BONUS_MAX*Math.max(0, Math.min(1, left));
 }
-export function scoreRound({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk,
+/* F8a: tryb „rok" (oś czasu lite) — punkty za odległość od roku wydania: dokładnie 100, ±1 70, ±2 50,
+ * właściwa dekada (ta sama dziesiątka lat, np. 1980–1989) 20, inaczej 0. Brak/śmieci → 0. */
+export const YEAR_PTS = { exact:100, off1:70, off2:50, decade:20 };
+export const YEAR_MIN = 1950, YEAR_MAX = 2026;           // zakres suwaka/pola (UI)
+export const YEAR_OK_PTS = YEAR_PTS.off2;                 // „trafienie" (statystyki/seria) = ±2 lata (jak yearMatch)
+export function parseYear(v){
+  const m=String(v==null?'':v).trim().match(/^(\d{4})/);
+  if(!m) return null;
+  const y=+m[1]; return (y>=1000 && y<=2999) ? y : null;
+}
+export function yearScore(guess, actual){
+  const g=parseYear(guess), a=parseYear(actual);
+  if(g==null || a==null) return { points:0, diff:null, tier:'miss' };
+  const diff=Math.abs(g-a);
+  if(diff===0) return { points:YEAR_PTS.exact, diff, tier:'exact' };
+  if(diff===1) return { points:YEAR_PTS.off1, diff, tier:'off1' };
+  if(diff===2) return { points:YEAR_PTS.off2, diff, tier:'off2' };
+  if(Math.floor(g/10)===Math.floor(a/10)) return { points:YEAR_PTS.decade, diff, tier:'decade' };
+  return { points:0, diff, tier:'miss' };
+}
+/* F8a: tryb „intro" (Heardle) — mnożnik punktów wg etapu odsłony (1/2/4/8/16 s), w którym zgadnięto.
+ * Etap ZASTĘPUJE bonus za szybkość (wołający podaje elapsedMs:null). Poza zakresem → ostatni (×1). */
+export const INTRO_MULTS = [2.0, 1.6, 1.3, 1.1, 1.0];
+export function introMult(stage){
+  const i=Math.floor(Number(stage));
+  return INTRO_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(INTRO_MULTS.length-1, i)) : INTRO_MULTS.length-1];
+}
+
+// rdzeń punktacji (bez mnożnika trybu) — z niego też limit SCORE_MAX_PER_Q
+function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, yearPts,
   elapsedMs=null, limitMs=0, streak=0, sure=false } = {}){
   const isQuiz = quizOk!==undefined && quizOk!==null;
+  const isYear = !isQuiz && yearPts!==undefined && yearPts!==null;   // F8a: tryb „rok" — punkty z yearScore
+  const yp = isYear ? Math.max(0, Math.min(YEAR_PTS.exact, Math.round(+yearPts)||0)) : 0;
   const parts = isQuiz
     ? { title:0, artist:0, year:0, album:0, quiz: quizOk ? PTS.quiz : 0 }
+    : isYear ? { title:0, artist:0, year:yp, album:0, quiz:0 }
     : { title: okTitle?PTS.title:0, artist: okArtist?PTS.artist:0, year: okYear?PTS.year:0, album: okAlbum?PTS.album:0, quiz:0 };
-  const full = isQuiz ? !!quizOk : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
+  const full = isQuiz ? !!quizOk : isYear ? yp>=YEAR_OK_PTS : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
   const base = parts.title + parts.artist + parts.year + parts.album + parts.quiz;
   const speed = base>0 ? speedFactor(elapsedMs, limitMs) : 1;
   const sMult = full ? streakMult(streak) : 1;
   const sureMult = sure ? (full ? SURE_MULT : 0) : 1;
   const points = Math.round(base * speed * sMult * sureMult);
-  return { points, base, speed, streakMult:sMult, sureMult, parts };
+  return { points, base, speed, streakMult:sMult, sureMult, parts, full };
 }
 // górny limit punktów za JEDNO pytanie (walidacja ligi na serwerze): pełna baza × max szybkość × max seria × pewniak
-export const SCORE_MAX_PER_Q = scoreRound({ okTitle:true, okArtist:true, okYear:true, okAlbum:true, elapsedMs:0, streak:99, sure:true }).points;
+export const SCORE_MAX_PER_Q = scoreCore({ okTitle:true, okArtist:true, okYear:true, okAlbum:true, elapsedMs:0, streak:99, sure:true }).points;
+/* `mult` (F8a) — mnożnik trybu (np. etap „intro": introMult). Wynik przycinany do SCORE_MAX_PER_Q, więc format
+ * statystyk/ligi i walidacja serwera bez zmian (intro gra bez bonusu za szybkość: 140 × 2 × 2 = 560 < 840).
+ * `yearPts` (F8a) — tryb „rok": baza = yearScore().points; „pełne trafienie" (seria/pewniak) = ±2 lata. */
+export function scoreRound(args = {}){
+  const sc = scoreCore(args);
+  const m = Number(args.mult);
+  const mult = Number.isFinite(m) && m>0 ? Math.min(m, INTRO_MULTS[0]) : 1;
+  const points = Math.min(SCORE_MAX_PER_Q, Math.round(sc.points * mult));
+  return { points, base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult, mult, parts:sc.parts };
+}
 
 /* ======================= QUIZ (SPEC v2) — wspólne dla solo / MP-host / serwera =======================
  * Kontrakt: backlog/audyt-2026-10/SPEC-paczki-v2.md. Czyste funkcje, rng wstrzykiwany. */

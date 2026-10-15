@@ -3,8 +3,8 @@
  * Dane kategorii i wrappery związane z ALL_CATS wstrzykiwane przez initMp (app/ nie zależy od app.js).
  * Powiązania zwrotne MP↔social: initMp woła initSocial; mp importuje showScreen/render* z social. */
 import { shuffle, escapeHtml } from '../core/util.js';
-import { norm, quizKey } from '../core/scoring.js';
-import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions } from '../core/match.js';
+import { norm, quizKey, parseYear } from '../core/scoring.js';
+import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions, mpAvailableModes } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
@@ -18,19 +18,20 @@ import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
 import { authorityChannel } from '../adapters-web/roomTransport.js';
 import { ensureSession, setHandle, recordMatch } from '../adapters-web/cf.js';
-import { resolveTrack } from '../adapters-web/itunesRepository.js';
+import { resolveTrack, resolveDistractors } from '../adapters-web/itunesRepository.js';
+import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
 import { stopAudio } from './audio.js';
 import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle, knownHandle } from './social.js';
 import { playSfx, registerMusicProbe } from './sfx.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
 import { ic } from './icons.js';
 
-initMpPicker(mpRender, ()=>mpPlayers());   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
+initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH));   // F8a: + tryby znane serwerowi   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
 
 // wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
@@ -610,6 +611,7 @@ function mpHandleAct(a){
 /* ---- host: start gry / runda ---- */
 /* ---- host: ekran układania meczu (multi-select, jak solo) ---- */
 function mpStart(){
+  mpAvailModes();   // F8a: wytnij tryby, których pokój nie obsłuży (stary serwer)
   const r=buildMatch([...mpPickCats],[...mpPickModes],{questions:mpPickQuestions});   // F6a: długość w pytaniach
   if(r.error||!r.slots){ mpRender(); return; }
   mpUnlockAudio();   // gest hosta — odblokuj audio, zanim muzyka ruszy po fazie gotowości
@@ -678,6 +680,19 @@ async function mpHostNewRound(){
     if(t.error){ S.game.phase=MP.NETERR; S.game.netReason=t.reason; mpBroadcast(); mpRender(); return; }
     S.hostCurrent={...t, lyric:''};
     S.game.preview=t.preview; S.game.lyric=''; S.game.ttsUrl=''; S.game.prompt=''; S.game.answerSlots=null;
+    const cat=ALL_CATS[catKey]||{};
+    if(S.game.mode==='year'){
+      // F8a „rok" (relay-host = autorytet): jeden slot liczbowy; brak roku → pytanie jak muzyka
+      if(parseYear(t.year)==null) S.game.mode='music';
+      else { S.game.answerSlots=slotsFor('year'); if(!yearReliable(t.year, cat.range, t.yearSrc)) S.hostCurrent.yearNote='rok wg wydania w iTunes'; }
+    } else if(S.game.mode==='abcd'){
+      // F8a „abcd": host generuje kafle; poprawna litera zostaje w S.hostCurrent (sekret) do odsłony
+      let ds=[]; try{ ds=await resolveDistractors({ cat, correct:t, cfg:window.STACJA_CONFIG }); }catch(_e){ ds=[]; }
+      if(!S.game || S.game.phase!==MP.LOADING) return;   // pokój/mecz zmienił się w trakcie pobierania
+      const q=buildTrackMC(t, ds);
+      if(q){ Object.assign(S.hostCurrent, { prompt:q.prompt, slots:q.slots, answers:q.answers, mc:q.mc }); S.game.answerSlots=q.slots; S.game.prompt=q.prompt; }
+      else S.game.mode='music';
+    }
   }
   // RESET slotów dla muzyki/lektora → DEFAULT (tytuł+wykonawca). Bez tego runda audio po quizie
   // dziedziczy sloty quizu (np. a/b/c/d) → złe pola wpisywania + zła ocena/odsłona (rozjazd answerSlots).

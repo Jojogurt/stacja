@@ -2,7 +2,7 @@
  * Reużywa czystej selekcji z `core/trackSelect.js`; wstrzykuje serwerowy `itunes(term)`
  * (bezpośredni fetch iTunes → fallback Deezer — ta sama logika co proxy `/tracks`,
  * ale bez nagłówków CORS, bo to wywołanie serwer→serwer). */
-import { resolveTrack, cachedFetcher } from '../../core/trackSelect.js';
+import { resolveTrack, cachedFetcher, gatherDistractors } from '../../core/trackSelect.js';
 
 // opts.song=true (F5 #5) → „artysta tytuł" bez artistTerm (playlisty); domyślnie po wykonawcy
 async function fromItunes(term, opts){
@@ -39,4 +39,9 @@ const itunes = cachedFetcher(itunesRaw, { max:300 });
 // rozwiąż grywalny utwór dla kategorii (cat = obiekt puli wgrany przez hosta przy starcie)
 export function resolveTrackServer({cat, seen, recent}){
   return resolveTrack({ cat, seen, recent, itunes });
+}
+
+// F8a (tryb „abcd"): dystraktory dla utworu — inni wykonawcy z puli kategorii (cache izolatu jak wyżej)
+export function resolveDistractorsServer({cat, correct, rnd}){
+  return gatherDistractors({ cat, correct, itunes, rnd });
 }

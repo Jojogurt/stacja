@@ -12,7 +12,7 @@ import { setIcon, setRing, setState } from './dom.js';
 import { lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { ensureCtx, ensureCtxResumed, unlockCtx } from './audioCtx.js';
 import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
-import { SNIP_SECS as SNIP, soloSnipStart } from '../core/timing.js';
+import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs } from '../core/timing.js';
 import { registerMusicProbe } from './sfx.js';
 
 let el = null;           // trwały element HTMLAudio (music/snippet/fallback „od tyłu")
@@ -43,12 +43,14 @@ function ensureEl(){
   el = new Audio(); el.preload='auto';
   // ikona gałki STEROWANA REALNYM stanem odtwarzacza (nie optymistycznie) — #1/#3
   el.addEventListener('playing',()=>{ if(!round) return; setIcon('pause');
+    if(round.mode==='intro'){ armIntroStop(); setState('intro '+introStageSecs(round.cur.introStage)+' s…'); return; }   // F8a
     if(!round.said){ round.said=true; setState(round.mode==='snippet'?'słuchaj — krótki fragment!':(round.mode==='reverse'?'„od tyłu" niedostępne tutaj — gram normalnie':'słuchaj uważnie…')); } });
   el.addEventListener('play',   ()=>{ if(round) setIcon('pause'); });
-  el.addEventListener('pause',  ()=>{ if(round && !el.ended) setIcon('play'); });
+  el.addEventListener('pause',  ()=>{ if(round && round.stopT) clearTimeout(round.stopT); if(round && !el.ended) setIcon('play'); });   // F8a: pauza intro wstrzymuje timer etapu
   el.addEventListener('waiting',()=>{ if(round) setIcon('wait'); });
   // 2.2: 404/stall zajawki → nie zawieszaj rundy; pokaż komunikat i odblokuj pomiń/sprawdź
-  el.addEventListener('error',  ()=>{ if(!round) return; setIcon('play'); setState('zajawka niedostępna — pomiń albo sprawdź'); armControls(); });
+  el.addEventListener('error',  ()=>{ if(!round) return; if(round.mode==='intro') round.cur.introBroken=true;   // F8a: bez zajawki intro = jak muzyka (bez mnożnika)
+    setIcon('play'); setState('zajawka niedostępna — pomiń albo sprawdź'); armControls(); });
   el.addEventListener('ended',  ()=>{ if(!round) return; round=null; setIcon('play'); setRing(1); setState('koniec zajawki · ↻ od nowa'); });
   el.addEventListener('loadedmetadata',()=>{
     if(!round || round.mode!=='snippet' || round.seeked) return;
@@ -60,6 +62,7 @@ function ensureEl(){
   });
   el.addEventListener('timeupdate',()=>{
     if(!round) return;
+    if(round.mode==='intro'){ introTick(); return; }   // F8a
     if(round.mode==='snippet'){
       const cur=round.cur; if(cur.snipStart==null) return;
       const t=el.currentTime-cur.snipStart;
@@ -72,6 +75,32 @@ function ensureEl(){
   return el;
 }
 
+/* F8a: tryb „intro" (Heardle) — gra od POCZĄTKU zajawki do długości etapu (core/timing.INTRO_STAGES).
+ * Stop pilnują dwa mechanizmy: timeupdate (~4 Hz) i precyzyjny setTimeout uzbrajany na 'playing'
+ * (etap 1 s nie może przeciec do 1,25 s). Koniec etapu = round.snipDone (gałka/↻ gra etap od nowa). */
+function introDone(){
+  if(!round || round.mode!=='intro' || round.snipDone) return;
+  const lim=introStageSecs(round.cur.introStage);
+  round.snipDone=true; clearTimeout(round.stopT); el.pause(); setIcon('play'); setRing(1);
+  setState('intro '+lim+' s · zgaduj albo „+ więcej"');
+}
+function introTick(){
+  const lim=introStageSecs(round.cur.introStage);
+  setRing(Math.min(1, el.currentTime/lim));
+  if(el.currentTime>=lim) introDone();
+}
+function armIntroStop(){
+  if(!round || round.mode!=='intro') return;
+  clearTimeout(round.stopT);
+  const r=round, lim=introStageSecs(r.cur.introStage);
+  r.stopT=setTimeout(()=>{ if(round===r) introDone(); }, Math.max(0, (lim-(el.currentTime||0))*1000));
+}
+function startIntro(){
+  const current=getCurrent();
+  loadEl(current, 'intro');
+  try{ el.currentTime=0; }catch(_e){}
+  playEl();
+}
 // F2a #9: odblokowanie w GEŚCIE (synchronicznie) — AudioContext („od tyłu") i trwały element.
 // Element odblokowujemy tylko, gdy nie gra (ciche WAV podmienia .src).
 export function unlockSoloAudio({ ctx=true } = {}){
@@ -103,6 +132,7 @@ export function startAudio(){
   if(!current) return;
   if(mode==='reverse'){ return startReverse(); }
   if(mode==='snippet'){ return startSnippet(); }
+  if(mode==='intro' && !current.introFull){ return startIntro(); }   // F8a (po odsłonie ↻ gra całą zajawkę)
   loadEl(current, 'music');
   playEl();   // tekst stanu dopiero gdy dźwięk RZECZYWIŚCIE leci ('playing') — #5: nie udawaj, że gra
 }
@@ -146,6 +176,7 @@ async function startReverse(){
 
 export function stopAudio(){
   const r=round; round=null;                  // F2a #15: najpierw odepnij rundę — 'pause' poniżej już nic nie ruszy
+  if(r && r.stopT) clearTimeout(r.stopT);     // F8a: timer końca etapu „intro"
   if(el && r){ try{ el.pause(); }catch(_e){} }
   if(revSrc){ revSrc.stop(); revSrc=null; }   // uchwyt z playReverse sam czyści timer
   lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live');

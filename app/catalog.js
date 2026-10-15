@@ -45,7 +45,7 @@ export function addLateQuizCats(src = (window.CATEGORIES && window.CATEGORIES.qu
 export const modesFor    = (catKey)             => _modesFor(catKey, ALL_CATS);
 export const catLabel    = (catKey)             => _catLabel(catKey, ALL_CATS);
 export const buildMatch  = (catPool,modePool,r) => _buildMatch(catPool, modePool, r, ALL_CATS);
-export const randomPools = ()                   => _randomPools(ALL_KEYS, ALL_CATS);
+export const randomPools = (allowed)            => _randomPools(ALL_KEYS, ALL_CATS, allowed);   // F8a: allowed = tryby kontekstu (MP)
 export const matchHeader = (m)                  => _matchHeader(m, ALL_CATS);
 
 /* ---- playlisty ze Spotify (localStorage) — dane; UI jest w app/solo.js ---- */

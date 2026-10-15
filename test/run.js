@@ -116,8 +116,8 @@ const CATS={
   gk:{label:'wiedza', kind:'quiz', questions:[{prompt:'q',slots:[{key:'a',label:'odp'}],answers:{a:['x']}}]},
 };
 group('match.modesFor', ()=>{
-  eq(modesFor('d80',CATS),['music','reverse','snippet'],'audio bez tekstu');
-  eq(modesFor('rock',CATS),['music','reverse','snippet','lektor'],'audio + lektor (jest lyric)');
+  eq(modesFor('d80',CATS),['music','reverse','snippet','intro'],'audio bez tekstu (F8a: + intro; 2 utwory bez roku → bez abcd/rok)');
+  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','lektor'],'audio + lektor (jest lyric)');
   eq(modesFor('lyr',CATS),['lektor'],'kind=lyrics → tylko lektor');
   eq(modesFor('gk',CATS),['quiz'],'kind=quiz → tylko quiz');
   ok(!modesFor('d80',CATS).includes('quiz'),'muzyka nigdy nie ma trybu quiz');
@@ -1205,6 +1205,199 @@ group('F6b ksywy: domyślnie neutralne, pikantne opt-in; 🖕 → 🍺 (U10)', (
   const srv=readFileSync(join(dirname(fileURLToPath(import.meta.url)),'..','server','authorityRoom.js'),'utf8');
   const rel=readFileSync(join(dirname(fileURLToPath(import.meta.url)),'..','server','gameRoom.js'),'utf8');
   ok(/import \{ REACTIONS \} from '\.\.\/core\/chatFeed\.js'/.test(srv) && /import \{ REACTIONS \} from '\.\.\/core\/chatFeed\.js'/.test(rel) && !srv.includes("'🖕'") && !rel.includes("'🖕'"), 'serwer (autorytet + relay) używa wspólnej whitelist z rdzenia');
+});
+
+/* ===================== F8a: norm (przedimki tylko na początku), intro, ABCD muzyki, rok ===================== */
+import { yearScore, parseYear, introMult, INTRO_MULTS, YEAR_PTS } from '../core/scoring.js';
+import { INTRO_STAGES, introStageSecs, introNextStage, LISTEN_SECS } from '../core/timing.js';
+import { pickDistractors, buildTrackMC, gatherDistractors, displayTitle, yearReliable } from '../core/trackSelect.js';
+import { MP_MODES, SOLO_ONLY_MODES, LEGACY_MP_MODES, mpAvailableModes, MODE_LABEL } from '../core/match.js';
+group('F8a norm(): przedimki tylko na POCZĄTKU (+ „the" w środku), jednoliterowe człony dokładnie', ()=>{
+  ok(!textMatch('witamina A','witamina B3'), '„witamina A" ≠ „witamina B3" (dawniej „a" w środku usuwane)');
+  ok(!textMatch('witamina B3','witamina A'), 'symetrycznie');
+  ok(!textMatch('Grupa A','Grupa B'), '„Grupa A" ≠ „Grupa B" (jednoliterowy człon bez tolerancji literówek)');
+  ok(!textMatch('witamina C','witamina D'), '„witamina C" ≠ „witamina D"');
+  ok(textMatch('Grupa A','grupa a'), '„Grupa A" = „grupa a"');
+  ok(textMatch('witamina A','Witamina A'), '„witamina A" = „Witamina A"');
+  eq(norm('witamina A'),'witamina a','„a" w środku zostaje');
+  eq(norm('Grupa A'),'grupa a','„Grupa A" bez redukcji');
+  ok(textMatch('The Beatles','Beatles'), '„The Beatles" = „Beatles"');
+  ok(textMatch('Beatles','The Beatles'), '„Beatles" = „The Beatles"');
+  eq(norm('A-ha'),'a ha','„A-ha" — obecne zachowanie (rdzeń „ha" za krótki → bez redukcji)');
+  ok(textMatch('a-ha','A-ha') && textMatch('A ha','A-ha'), '„A-ha" zalicza zapis z/bez myślnika');
+  eq(norm('A Day in the Life'),'day in life','przedimek na początku + „the" w środku (uzasadniony wyjątek)');
+  ok(textMatch('Day in the Life','A Day in the Life'), 'tytuł bez „A" na początku zalicza');
+  eq(norm('De La Soul'),'de la soul','„De La Soul" bez zmian');
+  eq(norm('Le Freak'),'le freak','„Le Freak" — rdzeń „freak" za krótki → bez redukcji');
+  eq(norm('La Isla Bonita'),'isla bonita','„La …" na początku usuwane');
+  eq(norm('Viva la Vida'),'viva la vida','„la" w środku zostaje');
+  ok(textMatch('Viva la Vida','Viva La Vida'), '„Viva la Vida" OK');
+  ok(textMatch('Romeo i Julia','Romeo i Julia') && !textMatch('Romeo a Julia','Romeo i Julia'), 'spójnik jednoliterowy dokładnie');
+  ok(textMatch('Malcolm X','malcolm x'), '„Malcolm X" OK');
+});
+group('F8a timing: etapy intro 1→2→4→8→16 s', ()=>{
+  eq(INTRO_STAGES,[1,2,4,8,16],'stała etapów');
+  eq([0,1,2,3,4].map(introStageSecs),[1,2,4,8,16],'długość etapu');
+  eq(introStageSecs(99),16,'poza zakresem → ostatni'); eq(introStageSecs('x'),1,'śmieci → etap 0');
+  eq(introNextStage(0),1,'0 → 1'); eq(introNextStage(3),4,'3 → 4'); eq(introNextStage(4),null,'ostatni → null');
+  ok(LISTEN_SECS.intro>0 && LISTEN_SECS.abcd>0 && LISTEN_SECS.year>0, 'faza „słuchaj" zdefiniowana dla nowych trybów');
+});
+group('F8a scoring: mnożnik etapu intro (×2.0/1.6/1.3/1.1/1.0)', ()=>{
+  eq(INTRO_MULTS,[2,1.6,1.3,1.1,1],'mnożniki');
+  eq([0,1,2,3,4].map(introMult),[2,1.6,1.3,1.1,1],'introMult per etap');
+  eq(introMult(-3),2,'ujemny → etap 0'); eq(introMult(9),1,'poza zakresem → ×1'); eq(introMult(undefined),1,'brak → ×1');
+  const full={ okTitle:true, okArtist:true, roundOk:true, elapsedMs:null, streak:1 };
+  eq(scoreRound({ ...full, mult:introMult(0) }).points, 200, 'etap 1 s, pełne trafienie: 100 × 2 = 200');
+  eq(scoreRound({ ...full, mult:introMult(1) }).points, 160, 'etap 2 s: ×1.6 = 160');
+  eq(scoreRound({ ...full, mult:introMult(4) }).points, 100, 'etap 16 s: ×1 = 100');
+  eq(scoreRound({ okTitle:true, elapsedMs:null, mult:introMult(2) }).points, 65, 'częściowe (sam tytuł 50) × 1.3 = 65');
+  eq(scoreRound({ ...full, mult:introMult(0) }).mult, 2, 'mult w wyniku (rozbicie punktów)');
+  eq(scoreRound(full).mult, 1, 'domyślnie ×1');
+  const worst=scoreRound({ okTitle:true, okArtist:true, okYear:true, okAlbum:true, elapsedMs:null, streak:99, mult:introMult(0) }).points;
+  ok(worst<=SCORE_MAX_PER_Q, 'intro (bez bonusu za szybkość) mieści się w limicie ligi: '+worst+' ≤ '+SCORE_MAX_PER_Q);
+  ok(scoreRound({ okTitle:true, okArtist:true, okYear:true, okAlbum:true, elapsedMs:0, streak:99, sure:true, mult:9 }).points<=SCORE_MAX_PER_Q, 'nawet z mult/pewniakiem — przycięte do SCORE_MAX_PER_Q');
+  eq(SCORE_MAX_PER_Q, 840, 'limit ligi bez zmian (format statystyk)');
+});
+group('F8a scoring: tryb „rok" (100 / ±1 70 / ±2 50 / dekada 20)', ()=>{
+  eq(yearScore('1984','1984').points,100,'dokładnie'); eq(yearScore(1985,'1984').points,70,'+1');
+  eq(yearScore('1983','1984-05-01').points,70,'−1 (rok z daty)'); eq(yearScore('1986','1984').points,50,'±2');
+  eq(yearScore('1989','1984').points,20,'ta sama dekada'); eq(yearScore('1980','1984').points,20,'początek dekady');
+  eq(yearScore('1979','1981').points,50,'±2 przez granicę dekady'); eq(yearScore('1978','1981').points,0,'inna dekada, ±3 → 0');
+  eq(yearScore('1990','1987').points,0,'±3 w innej dekadzie → 0');
+  eq(yearScore('','1984'), { points:0, diff:null, tier:'miss' }, 'brak odpowiedzi'); eq(yearScore('abc','1984').points,0,'śmieci');
+  eq(yearScore('1984','').points,0,'brak roku utworu');
+  eq(yearScore('1984','1984').tier,'exact','tier'); eq(yearScore('1987','1984').tier,'decade','tier dekada');
+  eq(parseYear(' 2001 '),2001,'parseYear'); eq(parseYear('12'),null,'za krótki'); eq(parseYear(null),null,'null');
+  eq(scoreRound({ yearPts:100, elapsedMs:null, streak:1 }).points,100,'scoreRound yearPts=100');
+  eq(scoreRound({ yearPts:20, elapsedMs:null, streak:5 }).points,20,'dekada nie liczy się do serii (pełne trafienie = ±2)');
+  eq(scoreRound({ yearPts:50, elapsedMs:null, streak:3 }).points,75,'±2 przy serii 3 → ×1.5');
+  eq(scoreRound({ yearPts:70, elapsedMs:null }).parts.year,70,'parts.year = punkty roku');
+  eq(scoreRound({ yearPts:20, sure:true, elapsedMs:null }).points,0,'pewniak przy samej dekadzie = przegrany');
+  eq(scoreRound({ yearPts:500, elapsedMs:null }).base,100,'yearPts przycięte do 100');
+  eq(YEAR_PTS,{exact:100,off1:70,off2:50,decade:20},'stałe');
+});
+group('F8a trackSelect: pickDistractors (duplikaty, wersje, fallback ten sam wykonawca)', ()=>{
+  const it=(t,a,extra={})=>({ trackName:t, artistName:a, previewUrl:'https://x', collectionName:'', ...extra });
+  const correct={ track:'Bohemian Rhapsody (Remastered 2011)', artist:'Queen' };
+  const cands=[
+    it('Bohemian Rhapsody','Queen'), it('Bohemian Rhapsody (Live Aid)','Queen'), it('Bohemian Rhapsody','Panic! At The Disco'),
+    it('Africa','Toto'), it('Rosanna','Toto'), it('Take On Me','a-ha'), it('Take On Me (2015 Remaster)','a-ha'),
+    it('Jump','Van Halen'), it('Jump (Live)','Van Halen'), it('Karaoke Hits','Tribute Band'),
+    it('Under Pressure','Queen'), it('Somebody to Love','Queen'),
+  ];
+  let i=0; const rnd=()=>((i++*0.37)%1);
+  const d=pickDistractors(cands, correct, rnd);
+  eq(d.length,3,'3 dystraktory');
+  ok(!d.some(x=>/bohemian/i.test(x.track)), 'nigdy ten sam utwór (też wersja live i cover innego wykonawcy)');
+  eq(new Set(d.map(x=>x.artist)).size,3,'najpierw RÓŻNI wykonawcy');
+  ok(!d.some(x=>x.artist==='Queen'), 'inni wykonawcy przed tym samym');
+  ok(!d.some(x=>/\(|live|karaoke/i.test(x.track)), 'bez live/remaster w nazwie (displayTitle) i bez karaoke');
+  eq(new Set(d.map(x=>x.track.toLowerCase())).size,3,'bez duplikatów tytułów');
+  const own=pickDistractors([it('Under Pressure','Queen'),it('Somebody to Love','Queen'),it('Under Pressure (Remastered)','Queen'),it('Radio Ga Ga','Queen'), it('Bohemian Rhapsody','Queen')], correct, Math.random);
+  eq(own.length,3,'fallback: utwory tego samego wykonawcy');
+  ok(own.every(x=>x.artist==='Queen') && new Set(own.map(x=>x.track)).size===3, 'bez wersji tego samego utworu („Under Pressure" raz)');
+  const few=pickDistractors([it('Africa','Toto')], correct, Math.random);
+  eq(few.length,1,'za mało kandydatów → mniej (wołający gra jak muzyka)');
+  const songs=pickDistractors([{title:'A1',artist:'X'},{title:'B1',artist:'Y'},{title:'C1',artist:'Z'},{title:'Bohemian Rhapsody',artist:'Queen'}], correct, Math.random);
+  eq(songs.length,3,'kandydaci z playlisty {title,artist}');
+  eq(pickDistractors(null, correct), [], 'null → []');
+  eq(displayTitle('Take On Me (2015 Remaster)'),'Take On Me','displayTitle: remaster precz');
+  eq(displayTitle('Hey Jude - Remastered 2015'),'Hey Jude','displayTitle: sufiks remaster precz');
+  eq(displayTitle('Stayin\' Alive (feat. X)'),'Stayin\' Alive','displayTitle: feat. precz');
+  eq(displayTitle('Jump (Live)'),'Jump (Live)','displayTitle: live zostaje (widoczna różnica wersji)');
+});
+group('F8a trackSelect: buildTrackMC — kształt pytania ABCD (evaluateQuiz)', ()=>{
+  const correct={ track:'Africa', artist:'Toto' };
+  const ds=[{track:'Jump',artist:'Van Halen'},{track:'Take On Me',artist:'a-ha'},{track:'Rosanna',artist:'Toto'}];
+  const q=buildTrackMC(correct, ds, ()=>0.5);
+  ok(q && q.mc && q.mc.options.length===4, '4 kafle');
+  eq(q.slots,[{key:'a',label:'litera (A–D)'}],'jeden slot litery');
+  const c=q.mc.options.find(o=>o.letter===q.mc.correct);
+  eq(c.text,'Africa — Toto','poprawny kafel = „Tytuł — Wykonawca"');
+  eq(q.answers.a,[q.mc.correct,'Africa — Toto'],'answers: litera + tekst');
+  ok(/^Jaki to utwór\?\nA\) /.test(q.prompt), 'prompt z opcjami A) … (parseMC / odsłona MP)');
+  eq(parseMC(q.prompt).options.length,4,'parseMC rozpoznaje 4 opcje');
+  eq(evaluateQuiz(q, {a:q.mc.correct}).ok, true, 'wybór poprawnej litery → ok');
+  const wrong='ABCD'.split('').find(l=>l!==q.mc.correct);
+  eq(evaluateQuiz(q, {a:wrong}).ok, false, 'inna litera → źle');
+  eq(evaluateQuiz(q, {a:'Africa — Toto'}).ok, true, 'MP: tekst kafla bez litery też wskaże opcję');
+  eq(buildTrackMC(correct, ds.slice(0,2)), null, '< 3 dystraktory → null');
+  eq(buildTrackMC(null, ds), null, 'brak utworu → null');
+  const lets=new Set(); for(let k=0;k<20;k++) lets.add(buildTrackMC(correct, ds, Math.random).mc.correct);
+  ok(lets.size>1, 'poprawna litera losowana');
+  eq(scoreRound({ quizOk:true, elapsedMs:null }).points, 100, 'punkty jak quiz (scoreRound quizOk)');
+});
+console.log('• F8a trackSelect: gatherDistractors (wstrzyknięta sieć, playlista bez sieci, błędy)');
+await (async ()=>{
+  const it=(t,a)=>({ trackName:t, artistName:a, previewUrl:'https://x' });
+  const net={ 'Toto':[it('Africa','Toto'),it('Rosanna','Toto'),it('Hold the Line','Toto')], 'a-ha':[it('Take On Me','a-ha'),it('The Sun Always Shines on T.V.','a-ha')],
+    'Van Halen':[it('Jump','Van Halen')], 'Queen':[it('Bohemian Rhapsody','Queen'),it('Under Pressure','Queen')] };
+  const calls=[];
+  const itunes=async(term)=>{ calls.push(term); if(term==='Boom') throw new Error('x'); return net[term]||[]; };
+  const d=await gatherDistractors({ cat:{ artists:['Toto','a-ha','Van Halen','Queen','Boom'] }, correct:{track:'Africa',artist:'Toto'}, itunes, rnd:()=>0.3 });
+  eq(d.length,3,'gather: 3 dystraktory z innych wykonawców'); ok(!d.some(x=>x.track==='Africa'),'bez poprawnego');
+  ok(!calls.includes('Toto') || d.length===3, 'własny wykonawca pytany tylko w fallbacku');
+  const own=await gatherDistractors({ cat:{ artists:['Toto','Boom'] }, correct:{track:'Africa',artist:'Toto'}, itunes, rnd:Math.random });
+  eq(own.map(x=>x.artist),['Toto','Toto'],'fallback: inne utwory tego samego wykonawcy (2 dostępne)');
+  const pl=await gatherDistractors({ cat:{ songs:[{title:'S1',artist:'A'},{title:'S2',artist:'B'},{title:'S3',artist:'C'},{title:'Africa',artist:'Toto'}] }, correct:{track:'Africa',artist:'Toto'}, itunes:null });
+  eq(pl.length,3,'playlista: dystraktory z utworów kategorii (bez sieci)');
+  const off=await gatherDistractors({ cat:{ artists:['Boom','Zzz'] }, correct:{track:'X',artist:'Q'}, itunes:async()=>{ throw new Error('offline'); } });
+  eq(off,[],'offline → [] (nie rzuca)');
+  const slow=await gatherDistractors({ cat:{ artists:['A','B'] }, correct:{track:'X',artist:'Q'}, itunes:()=>new Promise(()=>{}), capMs:30 });
+  eq(slow,[],'wiszące zapytania → cap czasu → []');
+})();
+group('F8a trackSelect: wiarygodność roku', ()=>{
+  ok(yearReliable('1984','1980–89'), 'rok w dekadzie kategorii');
+  ok(!yearReliable('2011','1980–89'), 'remaster spoza dekady → niewiarygodny');
+  ok(!yearReliable('1984',''), 'styl/playlista bez zakresu → „rok wg iTunes"');
+  ok(yearReliable('1984','', 'data'), 'rok z danych playlisty → wiarygodny');
+  ok(yearReliable('2023','2020+'), 'otwarta dekada');
+});
+group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
+  ok(['intro','abcd','year'].every(m=>ALL_MODES.includes(m) && MODE_LABEL[m]), 'nowe tryby w ALL_MODES + etykiety');
+  eq(MODE_LABEL.intro,'⏱ intro','etykieta intro');
+  eq(SOLO_ONLY_MODES,['intro'],'intro tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
+  const C={ dek:{label:'80', range:'1980–89', artists:['A','B','C']}, pl:{label:'pl', songs:[1,2,3,4,5].map(i=>({title:'t'+i,artist:'a'+i,year:'199'+i}))},
+    pl2:{label:'pl2', songs:[{title:'x',artist:'y'},{title:'z',artist:'w'}]}, lyr:{label:'l', kind:'lyrics', songs:[{title:'d'}]}, q:{label:'q', kind:'quiz', questions:[]},
+    solo1:{label:'s', artists:['Only']} };
+  eq(modesFor('dek',C),['music','reverse','snippet','intro','abcd','year'],'dekada: wszystkie tryby audio');
+  eq(modesFor('pl',C),['music','reverse','snippet','intro','abcd','year'],'playlista z rokiem: + rok');
+  eq(modesFor('pl2',C),['music','reverse','snippet','intro'],'2 utwory bez roku: bez ABCD/roku');
+  eq(modesFor('solo1',C),['music','reverse','snippet','intro','year'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
+  eq(modesFor('lyr',C),['lektor'],'teksty bez audio — bez nowych trybów'); eq(modesFor('q',C),['quiz'],'quiz bez nowych trybów');
+  const mi=buildMatch(['dek'],['intro'],{questions:5},C); ok(!mi.error && mi.slots[0].mode==='intro', 'buildMatch: mecz intro');
+  eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','zzz'] }).modes,['music','abcd','year'],'MP config: intro odrzucone (tylko solo)');
+  eq(mpAvailableModes(null,true),LEGACY_MP_MODES,'stary serwer (brak modes w presence) → tylko dawne tryby');
+  eq(mpAvailableModes(MP_MODES,true),MP_MODES,'nowy serwer → wszystkie MP');
+  eq(mpAvailableModes(['music','abcd'],true),['music','abcd'],'przecięcie z tym, co zna serwer');
+  eq(mpAvailableModes(null,false),MP_MODES,'relay (host liczy sam) → wszystkie MP');
+  for(let k=0;k<30;k++){ const r=randomPools(Object.keys(C), C, ['music','reverse']); ok(r.modes.every(m=>['music','reverse'].includes(m)), 'randomPools: tylko dozwolone tryby'); }
+  ok(pickSummary(new Set(['dek']), new Set(['year']), {questions:5}, C).unit==='utworów', 'picker: rok = utwory');
+});
+group('F8a mpReducer: tryb „rok" — slot liczbowy, głosowanie co-op, yearScore', ()=>{
+  eq(slotsFor('year'),[{key:'year',label:'rok'}],'slotsFor(year)');
+  const g={ phase:MP.PLAY, answerSlots:slotsFor('year'), teams:[{id:COOP_TEAM,name:'D',members:['a','b','c']}], byTeam:{}, scores:{}, format:'coop', mode:'year', round:1, catKey:'d' };
+  reduceAction(g,{type:'propose',by:'a',byName:'A',values:{year:'1984'}});
+  reduceAction(g,{type:'propose',by:'b',byName:'B',values:{year:'1986'}});
+  reduceAction(g,{type:'vote',by:'c',slot:'year',value:'1986'});
+  eq(teamAnswer(g,COOP_TEAM).year,'1986','górka głosów na rok');
+  const ev=evaluateAnswer(g,{ track:'T', artist:'A', year:'1985', yearNote:'rok wg wydania w iTunes' });
+  eq(ev.reveal.kind,'year','reveal.kind = year'); eq(ev.reveal.year,'1985','rok w odsłonie');
+  eq(ev.perTeam[COOP_TEAM].yearEval.pts,70,'±1 → 70'); eq(ev.reveal.yearEval.tier,'off1','coop: yearEval spłaszczone, reveal.year nienadpisany'); eq(ev.perTeam[COOP_TEAM].gained,70,'punkty drużyny');
+  ok(ev.perTeam[COOP_TEAM].teamOk,'±1 = trafienie'); eq(ev.reveal.yearNote,'rok wg wydania w iTunes','notka o roku');
+  eq(ev.result.track,'T','wynik do ligi: tytuł utworu');
+  eq(ev.perTeam[COOP_TEAM].firstBy,'A','pierwszy z trafionym rokiem (±2)');
+  const g2={ ...g, byTeam:{} }; reduceAction(g2,{type:'propose',by:'a',byName:'A',values:{year:'1975'}});
+  const ev2=evaluateAnswer(g2,{ track:'T', artist:'A', year:'1985' });
+  eq(ev2.perTeam[COOP_TEAM].gained,0,'pudło → 0'); ok(!ev2.perTeam[COOP_TEAM].teamOk,'pudło');
+});
+group('F8a mpReducer: ABCD muzyki = pytanie quizu w stanie (sekret do REVEAL)', ()=>{
+  const q=buildTrackMC({track:'Africa',artist:'Toto'}, [{track:'Jump',artist:'Van Halen'},{track:'Take On Me',artist:'a-ha'},{track:'Rosanna',artist:'Toto'}], ()=>0.2);
+  const g={ phase:MP.PLAY, answerSlots:q.slots, teams:[{id:COOP_TEAM,name:'D',members:['a']}], byTeam:{}, scores:{}, format:'coop', mode:'abcd', round:1, catKey:'d' };
+  reduceAction(g,{type:'propose',by:'a',byName:'A',values:{a:q.mc.correct}});
+  const ev=evaluateAnswer(g,{ track:'Africa', artist:'Toto', year:'1982', prompt:q.prompt, slots:q.slots, answers:q.answers, mc:q.mc });
+  ok(ev.perTeam[COOP_TEAM].teamOk,'poprawna litera'); eq(ev.perTeam[COOP_TEAM].gained,100,'100 pkt (jak quiz)');
+  eq(ev.reveal.kind,'quiz','odsłona jak quiz ABCD'); eq(ev.result.track,'Africa','wynik do ligi: tytuł, nie prompt'); eq(ev.result.artist,'Toto','i wykonawca');
 });
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

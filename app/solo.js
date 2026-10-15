@@ -2,12 +2,14 @@
  * mecz solo (rundy × kategorie × pytania), sprawdzanie odpowiedzi. Self-wiring przy imporcie
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
-import { norm, textMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS } from '../core/scoring.js';
+import { norm, textMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS } from '../core/scoring.js';
+import { introStageSecs, introNextStage } from '../core/timing.js';
+import { buildTrackMC, yearReliable, parseRange } from '../core/trackSelect.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
   syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick } from '../core/picker.js';
-import { resolveTrack } from '../adapters-web/itunesRepository.js';
+import { resolveTrack, resolveDistractors } from '../adapters-web/itunesRepository.js';
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet } from './dom.js';
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
@@ -269,8 +271,8 @@ async function newRound(){
   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem.
   // F2a #3: `busy` należy wtedy już do nowszego stanu (abandonRound je zwolnił, nowa runda mogła je zająć) — nie ruszaj.
   if(gen!==soloGen) return;
-  busy=false;
   if(t.error){
+    busy=false;
     // 2.2: NIE zostawiaj poprzedniego utworu — inaczej „sprawdź" oceniłoby stare pytanie (duplikat w wynikach)
     current=null; setIcon('play');
     document.getElementById('skip').disabled=false;   // pozwól pominąć; ▶ (gałka) z current=null ponawia newRound
@@ -280,10 +282,45 @@ async function newRound(){
     else flash('Brak zajawek dla tej kategorii — stuknij ▶, by spróbować ponownie, albo pomiń pytanie.');
     return;
   }
-  current={...t, era:eraKey, lyric:''};
+  const cur={...t, era:eraKey, lyric:''};
+  // F8a: przygotowanie pytania wg trybu (intro: etap 0; rok: wiarygodność; ABCD: kafle z dystraktorów).
+  // Brak roku / za mało dystraktorów → pytanie jak zwykła „muzyka" (cur.fallback).
+  if(mode==='intro') cur.introStage=0;
+  if(mode==='year'){
+    if(parseYear(t.year)==null) cur.fallback=true;
+    else if(!yearReliable(t.year, cat.range, t.yearSrc)) cur.yearNote='rok wg wydania w iTunes';
+  }
+  if(mode==='abcd'){
+    setState('układam odpowiedzi…');
+    let ds=[]; try{ ds=await resolveDistractors({cat, correct:t, cfg:window.STACJA_CONFIG}); }catch(_e){ ds=[]; }
+    if(gen!==soloGen) return;   // runda porzucona w trakcie pobierania dystraktorów
+    const q=buildTrackMC(t, ds);
+    if(q){ cur.mc=q.mc; cur.slots=q.slots; cur.answers=q.answers; cur.prompt=q.prompt; } else cur.fallback=true;
+  }
+  busy=false;
+  current=cur;
+  renderSoloForm(); syncIntroBtn();
   qStartAt=Date.now();   // F6a: od teraz liczy się czas odpowiedzi
   startAudio();
 }
+/* F8a: tryb efektywny bieżącego pytania — ABCD bez kafli / rok bez roku grają jak „muzyka" */
+function qMode(){ return (current && current.fallback) ? 'music' : mode; }
+/* F8a: „+ więcej" (intro) — następny etap odsłony, gra od początku do nowej długości */
+function syncIntroBtn(){
+  const b=document.getElementById('introMore'); if(!b) return;
+  const can = mode==='intro' && current && !roundDone && introNextStage(current.introStage)!=null;
+  b.disabled=!can;
+  const nx = current && mode==='intro' ? introNextStage(current.introStage) : null;
+  b.textContent = nx!=null ? '+ więcej ('+introStageSecs(nx)+' s)' : '+ więcej';
+}
+function introMore(){
+  if(mode!=='intro' || !current || roundDone || busy) return;
+  const nx=introNextStage(current.introStage); if(nx==null) return;
+  unlockSoloAudio({ctx:false});   // gest → element odblokowany (iOS)
+  current.introStage=nx; syncIntroBtn();
+  startAudio();
+}
+(function wireIntroMore(){ const b=document.getElementById('introMore'); if(b) b.onclick=introMore; })();
 
 /* ============ audio (solo) → app/audio.js + app/audioCtx.js ============ */
 // stan gry (current/mode) i wznowienie rundy wstrzykiwane; uchwyty odtwarzacza żyją w module
@@ -292,6 +329,7 @@ document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
 
 function disableRoundControls(){
+  const im=document.getElementById('introMore'); if(im) im.disabled=true;   // F8a
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=true;
   document.getElementById('skip').disabled=true;
@@ -307,6 +345,7 @@ function abandonRound(){
 function syncModeClasses(){
   document.body.classList.toggle('quiz-mode', mode==='quiz');
   document.body.classList.toggle('lektor-mode', mode==='lektor');
+  document.body.classList.toggle('intro-mode', mode==='intro');   // F8a: „+ więcej"
 }
 
 /* ============ przełącznik trybu muzyka/lektor ============ */
@@ -411,10 +450,14 @@ function selectMC(btn){
 function renderSoloForm(){
   const form=document.getElementById('form'); if(!form) return;
   const isQuiz = mode==='quiz';
-  form.classList.toggle('quiz', isQuiz);
+  const qm = qMode();
+  const isMC = (isQuiz || qm==='abcd') && !!(current && current.mc);   // F8a: ABCD muzyki = te same kafle .mc-opt
+  const isYear = qm==='year' && !!current;                             // F8a: pole roku zamiast tytułu/wykonawcy
+  form.classList.toggle('quiz', isQuiz || isMC || isYear);
   syncModeClasses();   // quiz-mode: ukryj gałkę/audio w decku; lektor-mode: pokaż „lepszy głos"
   const qf=document.getElementById('quizForm'); if(!qf) return;
-  if(isQuiz && current && current.mc){
+  if(isYear){ renderYearForm(qf); return; }
+  if(isMC){
     qf.innerHTML='<div class="mc-opts">'+current.mc.options.map(o=>
       `<button type="button" class="mc-opt" aria-pressed="false" data-letter="${o.letter}"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span></button>`).join('')+'</div>';
     qf.querySelectorAll('.mc-opt').forEach(b=>{ b.onclick=()=>selectMC(b); });
@@ -425,11 +468,34 @@ function renderSoloForm(){
     qf.innerHTML = '';
   }
 }
+/* F8a: tryb „rok" — pole liczbowe (1950–2026) z przyciskami ±1 i suwakiem; suwak startuje w środku dekady kategorii */
+function yearMid(){
+  const rng=parseRange(current && ALL_CATS[current.era] && ALL_CATS[current.era].range);
+  if(rng && rng.to<9999) return Math.round((rng.from+rng.to)/2);
+  if(rng) return Math.min(YEAR_MAX, rng.from+3);
+  return 1990;
+}
+const clampYear = y => Math.max(YEAR_MIN, Math.min(YEAR_MAX, y));
+function renderYearForm(qf){
+  const mid=yearMid();
+  qf.innerHTML=`<div class="field yr"><label for="qf_year">Rok wydania</label>
+    <div class="yr-row"><button type="button" class="yr-step" data-d="-1" aria-label="rok −1">−1</button>
+    <input id="qf_year" type="number" inputmode="numeric" min="${YEAR_MIN}" max="${YEAR_MAX}" autocomplete="off" placeholder="np. ${mid}">
+    <button type="button" class="yr-step" data-d="1" aria-label="rok +1">+1</button></div>
+    <input id="qf_yearRange" class="yr-range" type="range" min="${YEAR_MIN}" max="${YEAR_MAX}" step="1" value="${mid}" aria-label="rok wydania — suwak"></div>`;
+  const inp=document.getElementById('qf_year'), rng=document.getElementById('qf_yearRange');
+  rng.oninput=()=>{ inp.value=rng.value; };
+  inp.oninput=()=>{ const y=parseYear(inp.value); if(y!=null) rng.value=String(clampYear(y)); };
+  qf.querySelectorAll('.yr-step').forEach(b=>{ b.onclick=()=>{
+    const y=clampYear((parseYear(inp.value) ?? +rng.value) + (+b.dataset.d));
+    inp.value=String(y); rng.value=String(y);
+  }; });
+}
 function showPrompt(text){ const b=document.getElementById('lyricBox'); if(!b) return;
   b.innerHTML='<span class="lyric-cap">pytanie</span>'+escapeHtml(text||''); b.classList.add('quiz'); b.hidden=false; }
 document.getElementById('skip').onclick=()=>{
   if(roundDone) return;   // F2a #4: pytanie już ocenione („Sprawdź") — drugi wpis tego samego pytania zablokowany
-  roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true;
+  roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true; syncIntroBtn();
   unlockSoloAudio({ctx:session?session.hasReverse:false});   // F2a #9: gest → kolejna zajawka zagra bez dodatkowego stuknięcia (iOS)
   if(session && current){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:false, okArtist:false, skipped:true, points:0, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
   streak=0; updateScore();
@@ -532,7 +598,7 @@ function endMatch(){
   abandonRound();   // 2.1/F2a #3: koniec meczu — porzuć async ostatniej rundy i zwolnij busy
   session=null;
   document.getElementById('session').classList.remove('live');
-  document.body.classList.remove('playing','quiz-mode','lektor-mode','match-over');
+  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','match-over');
   hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
   soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
 }
@@ -566,7 +632,7 @@ function finishMatch(){
   stopAudio(); setIcon('play'); hideReveal();
   // F2a #10: deck/formularz pod podsumowaniem wyłączone (nic do sprawdzenia/odtworzenia z zakończonego meczu)
   resetForm(); hideLyric(); const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
-  document.body.classList.remove('quiz-mode','lektor-mode'); document.body.classList.add('match-over');
+  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode'); document.body.classList.add('match-over');
   setState('mecz zakończony');
   const cut = played < tot;
   document.getElementById('sumBig').textContent=hits+' / '+(cut?played:tot);
@@ -607,14 +673,23 @@ function check(){
   if(!current || roundDone) return;   // F2a #4/#10: brak pytania / już ocenione / pominięte
   roundDone=true;
   document.getElementById('skip').disabled=true;   // F2a #4: po ocenie „pomiń" nieaktywne (tylko „Następny →")
+  syncIntroBtn();
   if(mode==='quiz'){ return checkQuiz(); }
+  const qm=qMode();
+  if(qm==='abcd' && current.mc){ return checkQuiz(); }   // F8a: ABCD muzyki — ocena po wybranym kaflu
+  if(qm==='year'){ return checkYear(); }                 // F8a: rok wydania
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
   const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
   total++; if(roundOk){score++;streak++;} else streak=0;
+  // F8a: intro — mnożnik etapu ZAMIAST bonusu za szybkość; brak zajawki → bez mnożnika (jak muzyka)
+  const intro = mode==='intro' && !current.introBroken;
+  const iStage = intro ? (current.introStage||0) : null;
   // F6a (R2/R-U3): punkty — częściowe trafienie, rok/album +20, szybkość, seria
-  const sc=scoreRound({ okTitle, okArtist, okYear, okAlbum, roundOk, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });
+  const sc=scoreRound({ okTitle, okArtist, okYear, okAlbum, roundOk, elapsedMs: intro ? null : (qStartAt ? Date.now()-qStartAt : null), limitMs:SPEED_CAP_MS, streak,
+    mult: intro ? introMult(iStage) : 1 });
   points+=sc.points;
+  if(mode==='intro') current.introFull=true;   // F8a: po ocenie ↻ od nowa gra całą zajawkę (dosłuchanie)
   updateScore();
   if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle, okArtist, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
 
@@ -629,7 +704,8 @@ function check(){
     r.appendChild(guessLine(okYear,'Rok',String(current.year),g.year, okYear && !exact ? 'rok ±2 OK' : '', sc.parts.year));
   }
   if(current.album) r.appendChild(guessLine(okAlbum,'Album',current.album,g.album, okAlbum && norm(g.album)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
-  if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  if(intro) r.appendChild(noteLine('intro', `${roundOk?'zgadłeś':'odpowiedź'} na etapie ${introStageSecs(iStage)} s · mnożnik ×${String(sc.mult).replace('.',',')}`));
+  if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(mode==='lektor' && current.lyric){
     const d=document.createElement('div'); d.className='rline';
     d.innerHTML='<span class="mk" style="color:var(--muted)">„</span>'+
@@ -657,6 +733,8 @@ function check(){
 }
 // ocena quizu (solo): core/scoring.evaluateQuiz; trafienie = wszystkie sloty
 function checkQuiz(){
+  const abcd = mode!=='quiz';   // F8a: ABCD muzyki (zajawka + kafle „Tytuł — Wykonawca")
+  if(abcd) stopAudio();
   setIcon('play');
   const mc=current.mc;
   const slots=current.slots||[];
@@ -678,7 +756,7 @@ function checkQuiz(){
   points+=sc.points;
   updateScore();
   if(mode==='quiz' && current.statKey) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł
-  if(session){ const s=matchSlot(session.match); session.results.push({track:current.prompt, artist:'', okTitle:roundOk, okArtist:roundOk, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  if(session){ const s=matchSlot(session.match); session.results.push({track:abcd?current.track:current.prompt, artist:abcd?current.artist:'', okTitle:roundOk, okArtist:roundOk, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   const r=document.getElementById('rmeta'); r.innerHTML='';
   if(mc){
     const correctLetter=mc.correct||'';
@@ -704,7 +782,9 @@ function checkQuiz(){
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(current.fun) r.appendChild(noteLine('ciekawostka', '💡 '+current.fun));
-  const img=document.getElementById('art'); if(img) img.style.display='none';
+  if(abcd){ const meta=[current.album, current.year].filter(Boolean).join(' · '); if(meta) r.appendChild(noteLine('album', meta)); }
+  const img=document.getElementById('art');
+  if(img){ if(abcd && current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
   const rh=document.getElementById('revealHead');
   if(rh){ const cls=roundOk?'win':'fail'; const ic=roundOk?'✓':'✗';
     rh.className='rv-shead '+cls;
@@ -713,13 +793,48 @@ function checkQuiz(){
   document.getElementById('reveal').classList.add('show');
   if(roundOk){ confetti(); playClap(); } else playSfx('buzz');   // F6b (U4): pudło → „bzzt"
   document.getElementById('check').disabled=true;
+  if(abcd) document.getElementById('replay').disabled=false;   // można dosłuchać
+  document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+/* F8a: tryb „rok" — ocena yearScore (100 / ±1 70 / ±2 50 / dekada 20), punkty przez scoreRound({yearPts}) */
+const YEAR_TIER = { exact:'Dokładnie!', off1:'±1 rok', off2:'±2 lata', decade:'Właściwa dekada', miss:'Pudło' };
+function checkYear(){
+  stopAudio(); setIcon('play');
+  const gy=val('qf_year');
+  const ys=yearScore(gy, current.year);
+  const ok=ys.points>=YEAR_OK_PTS;
+  total++; if(ok){score++;streak++;} else streak=0;
+  const sc=scoreRound({ yearPts:ys.points, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });
+  points+=sc.points;
+  updateScore();
+  if(session){ const s=matchSlot(session.match); session.results.push({track:current.track, artist:current.artist, okTitle:ok, okArtist:ok, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  document.querySelectorAll('#quizForm input, #quizForm button').forEach(x=>{ x.disabled=true; });
+  const r=document.getElementById('rmeta'); r.innerHTML='';
+  const tag = ys.tier==='miss' ? '' : (ys.tier==='exact' ? 'dokładnie' : YEAR_TIER[ys.tier].toLowerCase());
+  r.appendChild(guessLine(ys.points>0, 'Rok', String(parseYear(current.year)||current.year), parseYear(gy)!=null?String(parseYear(gy)):'', tag, sc.parts.year));
+  r.appendChild(noteLine('utwór', current.track+' — '+current.artist));
+  if(current.yearNote) r.appendChild(noteLine('uwaga', current.yearNote));
+  if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  const img=document.getElementById('art');
+  if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
+  const rh=document.getElementById('revealHead');
+  if(rh){
+    const cls = ok ? 'win' : (ys.points>0 ? 'part' : 'fail'), ic = ok ? '✓' : (ys.points>0 ? '≈' : '✗');
+    const sub = ys.diff==null ? 'nie podano roku' : (ys.diff===0 ? 'rok wydania trafiony' : `różnica: ${ys.diff} ${plPick(ys.diff,'rok','lata','lat')}`);
+    rh.className='rv-shead '+cls;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${YEAR_TIER[ys.tier]}</b><small>${escapeHtml(sub)}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+  }
+  document.getElementById('reveal').classList.add('show');
+  if(ok){ confetti(); playClap(); } else playSfx(ys.points>0 ? 'ding' : 'buzz');
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=false;
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 document.getElementById('check').onclick=check;
 document.getElementById('next').onclick=()=>{ unlockSoloAudio({ctx:session?session.hasReverse:false}); advance(); };   // F2a #9: gest → odblokuj
 document.getElementById('form').addEventListener('keydown',e=>{
   // ABCD: klawisze A–D zaznaczają opcję (wygodne na desktopie)
-  if(mode==='quiz' && current && current.mc && /^[a-dA-D]$/.test(e.key)){
+  if((mode==='quiz' || qMode()==='abcd') && current && current.mc && /^[a-dA-D]$/.test(e.key)){
     const b=document.querySelector(`#quizForm .mc-opt[data-letter="${e.key.toUpperCase()}"]`);
     if(b && !b.disabled){ selectMC(b); e.preventDefault(); return; }
   }
@@ -767,6 +882,7 @@ function ptsBreakdown(sc){
   const parts=['baza '+sc.base];
   if(sc.speed>1) parts.push('szybkość ×'+(Math.round(sc.speed*100)/100).toString().replace('.',','));
   if(sc.streakMult>1) parts.push('seria ×'+String(sc.streakMult).replace('.',','));
+  if(sc.mult>1) parts.push('etap ×'+String(sc.mult).replace('.',','));   // F8a: intro
   return parts.join(' · ')+' = '+sc.points+' pkt';
 }
 // F6a (R-U2): wiersz odsłony muzyki — poprawna wartość + tag („literówka OK") + „Ty: …" + zdobyte punkty. Tekst ESCAPOWANY.

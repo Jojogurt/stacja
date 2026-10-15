@@ -227,7 +227,10 @@ async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS){
         }catch(e){ /* błąd/timeout — następny wariant */ }
       }
     }
-    if(preview){ seen.add(norm(s.title)); return { track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art }; }
+    if(preview){ seen.add(norm(s.title));
+      const t={ track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art };
+      if(s.year) t.yearSrc='data';   // F8a: rok z danych playlisty (kuratorowany), nie z iTunes
+      return t; }
     seen.add(norm(s.title));
     if(Date.now()>=deadline) break;
   }
@@ -265,6 +268,111 @@ async function resolveFromArtists(cat, seen, recent, itunes, capMs=RESOLVE_CAP_M
   }
   if(fallback) return take(fallback.p, fallback.artist);   // rzadki zapas: rok z releaseDate, nie udajemy dekady
   return { error:true, reason: anyResponse?'empty':'offline' };
+}
+
+/* ---------- F8a: tryb „rok" — wiarygodność roku ----------
+ * Rok wydania z iTunes (releaseDate) bywa datą remasteru/kompilacji. Ufamy mu, gdy mieści się ŚCIŚLE w zakresie
+ * dekady kategorii (F5 i tak preferuje takie utwory). Inaczej (style/playlisty/zapas spoza dekady) odsłona mówi
+ * „rok wg wydania w iTunes". Rok z danych playlisty (yearSrc:'data') traktujemy jako kuratorowany. */
+export function yearReliable(year, range, yearSrc){
+  if(yearSrc==='data') return true;
+  const y=parseInt(String(year||'').slice(0,4),10);
+  const rng=typeof range==='string' ? parseRange(range) : range;
+  return !!(rng && Number.isFinite(y) && y>=rng.from && y<=rng.to);
+}
+
+/* ---------- F8a: tryb „abcd" — dystraktory (szybkie ABCD dla muzyki) ----------
+ * Tytuł do kafla: bez „ozdobników" wersji (remaster/feat./radio edit/„from …") — wszystkie kafle wyglądają
+ * jednakowo (poprawna odpowiedź nie wyróżnia się „(2011 Remaster)"). */
+export function displayTitle(title){
+  const t=String(title||'').trim();
+  const cleaned=t.replace(/\s*[(\[]([^)\]]*)[)\]]/g,(m,inner)=> (BENIGN.test(inner.trim()) || REMASTER.test(inner)) ? '' : m)
+    .replace(/\s[-–]\s(.+)$/,(m,suf)=> (BENIGN.test(suf.trim()) || REMASTER.test(suf)) ? '' : m)
+    .replace(/\s+/g,' ').trim();
+  return cleaned || t;
+}
+// kandydat → {track, artist} (wynik iTunes {trackName,artistName} albo utwór playlisty {title,artist})
+function asOption(c){
+  if(!c || typeof c!=='object') return null;
+  const raw=c.trackName!=null ? c : { trackName:c.title!=null?c.title:c.track, artistName:c.artist, collectionName:c.album||'' };
+  const track=displayTitle(raw.trackName), artist=String(raw.artistName||'').replace(/\s+/g,' ').trim();
+  if(!track || !artist) return null;
+  if(BAD.test(track)||BAD.test(artist)||BAD.test(raw.collectionName||'')||NONSONG.test(track)) return null;
+  if(raw.trackName!=null && c.trackName!=null && versionTier(c)===2) return null;   // live/remix — nie jako dystraktor
+  return { track, artist, key:titleKey(track) };
+}
+/* Czysta: wybierz `n` dystraktorów dla poprawnego utworu `correct` ({track, artist}) z kandydatów.
+ *  • nigdy ten sam utwór (titleKey albo textMatch tytułu — też cover/wersja u INNEGO wykonawcy),
+ *  • bez duplikatów między kaflami (titleKey), bez live/remiksów/karaoke,
+ *  • najpierw INNI wykonawcy (po jednym utworze na wykonawcę, kolejność losowa `rnd`),
+ *    potem fallback: inne utwory TEGO SAMEGO wykonawcy, na końcu kolejne utwory innych wykonawców.
+ * Zwraca [{track, artist}] (≤ n). */
+export function pickDistractors(candidates, correct, rnd=Math.random, n=3){
+  const cTitle=displayTitle(correct && correct.track), cArtist=String((correct && correct.artist)||'');
+  const cKey=titleKey(cTitle);
+  const opts=[];
+  (candidates||[]).forEach(c=>{
+    const o=asOption(c); if(!o || !o.key) return;
+    if(o.key===cKey || textMatch(o.track, cTitle)) return;
+    opts.push(o);
+  });
+  // tasowanie Fisher–Yates z wstrzykniętym rnd (deterministyczne w testach)
+  for(let i=opts.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [opts[i],opts[j]]=[opts[j],opts[i]]; }
+  const same=o=> sameArtist(o.artist, cArtist) || sameArtist(cArtist, o.artist);
+  const picked=[], usedKeys=new Set(), usedArtists=new Set();
+  const take=(o)=>{ if(picked.length>=n || usedKeys.has(o.key)) return; picked.push(o); usedKeys.add(o.key); usedArtists.add(norm(o.artist)); };
+  opts.filter(o=>!same(o)).forEach(o=>{ if(!usedArtists.has(norm(o.artist))) take(o); });   // 1) inni wykonawcy, po 1
+  opts.filter(same).forEach(take);                                                          // 2) ten sam wykonawca
+  opts.filter(o=>!same(o)).forEach(take);                                                   // 3) dalsze utwory innych
+  return picked.slice(0, n).map(o=>({ track:o.track, artist:o.artist }));
+}
+/* Czysta: pytanie ABCD z utworu + dystraktorów — kształt jak potasowane pytanie quizu (shuffleMC), więc ocenia je
+ * core/scoring.evaluateQuiz (solo i MP), a odsłona MP to odsłona quizu. Kafel = „Tytuł — Wykonawca".
+ * Za mało dystraktorów (< n) → null (wołający gra pytanie jak zwykłą „muzykę"). */
+const MC_LET='ABCD';
+export const ABCD_SLOT={ key:'a', label:'litera (A–D)' };
+export function buildTrackMC(correct, distractors, rnd=Math.random, n=3){
+  const ds=(distractors||[]).filter(d=>d && d.track && d.artist).slice(0, n);
+  if(!correct || !correct.track || ds.length<n) return null;
+  const clean=x=>String(x).replace(/\s+/g,' ').trim();
+  const label=o=>clean(displayTitle(o.track))+' — '+clean(o.artist);
+  const all=[{ text:label(correct), ok:true }, ...ds.map(d=>({ text:label(d), ok:false }))];
+  for(let i=all.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [all[i],all[j]]=[all[j],all[i]]; }
+  const options=all.map((o,i)=>({ letter:MC_LET[i], text:o.text }));
+  const ci=all.findIndex(o=>o.ok);
+  const question='Jaki to utwór?';
+  return {
+    prompt: question+'\n'+options.map(o=>o.letter+') '+o.text).join('\n'),
+    slots:[ { ...ABCD_SLOT } ],
+    answers:{ a:[ options[ci].letter, options[ci].text ] },
+    mc:{ question, options, correct:options[ci].letter },
+  };
+}
+/* Dystraktory z kategorii: playlista → jej utwory (bez sieci); pula wykonawców → wyniki iTunes kilku INNYCH
+ * wykonawców z puli (wstrzyknięty `itunes` — w web/serwerze to cache per artysta, F5 #6), równolegle, z capem
+ * czasu; gdy za mało — utwory tego samego wykonawcy. Nigdy nie rzuca: [] przy braku sieci. */
+export const DISTRACTOR_ARTISTS = 4;
+export const DISTRACTOR_CAP_MS = 6000;
+export async function gatherDistractors({ cat, correct, itunes, rnd=Math.random, capMs=DISTRACTOR_CAP_MS, n=3 }){
+  if(!cat || !correct) return [];
+  const cands=[];
+  const fetchFor=async(artist)=>{
+    try{ const res=await withTimeout(Promise.resolve(itunes(artist)), capMs);
+      (res||[]).forEach(r=>{ if(r && sameArtist(r.artistName, artist)) cands.push(r); }); }catch(_e){ /* timeout/błąd — pomiń */ }
+  };
+  if(Array.isArray(cat.songs)) cat.songs.forEach(x=>cands.push(x));
+  const artists=Array.isArray(cat.artists) ? cat.artists : [];
+  if(artists.length && itunes){
+    const others=artists.filter(a=>!sameArtist(correct.artist, a) && !sameArtist(a, correct.artist));
+    const order=others.slice();
+    for(let i=order.length-1;i>0;i--){ const j=Math.floor(rnd()*(i+1)); [order[i],order[j]]=[order[j],order[i]]; }
+    await Promise.all(order.slice(0, DISTRACTOR_ARTISTS).map(fetchFor));
+    if(pickDistractors(cands, correct, rnd, n).length<n){
+      const own=artists.find(a=>sameArtist(correct.artist, a)) || correct.artist;
+      await fetchFor(own);
+    }
+  }
+  return pickDistractors(cands, correct, rnd, n);
 }
 
 /* jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców).

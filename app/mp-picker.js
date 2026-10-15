@@ -2,7 +2,7 @@
  * Stan pickera zamknięty w module (czytany przez mpStart w mp.js). mpRender wstrzykiwany (initMpPicker)
  * — re-render po zmianie wyboru bez cyklu z mp.js. */
 import { ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, ALL_CATS, randomPools, plLoad, plFetch } from './catalog.js';
-import { ALL_MODES, MODE_LABEL, MATCH_LENGTHS, DEFAULT_QUESTIONS } from '../core/match.js';
+import { MP_MODES, MODE_LABEL, MATCH_LENGTHS, DEFAULT_QUESTIONS } from '../core/match.js';
 import { MP_TIMER_OPTIONS } from '../core/timing.js';
 import { escapeHtml } from '../core/util.js';
 import { pickSummary, pickSummaryText, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive } from '../core/picker.js';
@@ -11,7 +11,10 @@ import { ic } from './icons.js';
 
 let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render widoku pokoju)
 let mpGetPlayers = () => [];             // [{id,name}] obecni gracze (z mp.js) — do przypisania do drużyn
-export function initMpPicker(render, getPlayers){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; }
+let mpGetModes = () => MP_MODES;         // F8a: tryby dostępne w tym pokoju (relay: wszystkie MP; autorytet: znane serwerowi)
+export function initMpPicker(render, getPlayers, getModes){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; }
+// F8a: dostępne tryby + wytnij z wyboru te, których pokój nie obsłuży (np. stary serwer nie zna 'abcd'/'year')
+function mpAvailModes(){ const av=mpGetModes()||MP_MODES; [...mpPickModes].forEach(m=>{ if(m!=='quiz' && !av.includes(m)) mpPickModes.delete(m); }); return av; }
 
 let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickQuestions=DEFAULT_QUESTIONS, mpPickTimer=60;   // F6a: długość w pytaniach
 let mpPickSalon=false;   // tryb salonowy: TEN ekran tylko prowadzi i gra muzykę (TV), telefony = kontrolery
@@ -111,7 +114,8 @@ function mpPickerHTML(){
     }
     grpBands+=`<div class="grp-band open">${inner}</div>`;
   });
-  const modeChips=ALL_MODES.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
+  const availModes=mpAvailModes();
+  const modeChips=availModes.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
   // F6a (R-F2): długość meczu w pytaniach (Krótki 5 · Standard 15 · Długi 30); DO przycina do MAX_QUESTIONS
   const lenBtns=MATCH_LENGTHS.map(L=>`<button class="um-len${mpPickQuestions===L.q?' on':''}" onclick="mpSetQuestions(${L.q})"><b>${L.label}</b><small>${L.q} pyt.</small></button>`).join('');
   const timerBtns=MP_TIMER_OPTIONS.map(v=>[v, v?v+'s':'bez']).map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
@@ -208,8 +212,8 @@ function mpBuildPools(cats, modes){
   }
   return pools;
 }
-function mpRandomPick(){ const {cats,modes}=randomPools(); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
+function mpRandomPick(){ const {cats,modes}=randomPools(mpAvailModes()); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
 Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetAudioHost, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly };
+export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly };
