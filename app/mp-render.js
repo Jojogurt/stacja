@@ -7,7 +7,7 @@ import { escapeHtml, safeColor, isSlotKey, num } from '../core/util.js';
 import { norm } from '../core/scoring.js';   // mpSlotsHTML: porównanie głosów (mój głos == kandydat)
 import { QPC } from '../core/match.js';
 import { MP } from '../core/phases.js';
-import { listenSecs as _listenSecs } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"
+import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"; F2b #6: auto-„dalej"
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState } from '../core/mpReducer.js';
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn } from './dom.js';
@@ -77,6 +77,8 @@ function mpOnEnter(g, head, st){
     S.revealNonce=g.playNonce;
     S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1) };
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
+    // F2b #6: auto-„dalej" po bezczynności (od końca intra). TV w salonie nie — przechodzi po „dalej" telefonów.
+    S.revealAutoAt = mpIsSalonHost() ? 0 : Date.now() + mpIntroRevealMs() + mpRevealAutoMs();
     if(g.reveal.teamOk || g.reveal.pewniakWin){   // drużyna trafiła → confetti + oklaski DOPIERO po intrze (gdy odsłona wchodzi, nie pod ikoną)
       const ms=mpIntroRevealMs();
       if(ms>20) setTimeout(()=>{ if(mpRevealPending() && S.revealNonce===g.playNonce){ confetti(); playClap(); } }, ms);
@@ -133,9 +135,21 @@ function mpReactsBarHTML(){
 const bbLoader = `<div class="bb-loader"><i></i><i></i><i></i></div>`;
 const mpRenderLoading = (head)=> `${head}<div class="mp-deck">${bbLoader}<div class="mp-state">host losuje utwór…</div></div>`;
 const mpRosterStrip = (g)=> `<div class="mp-roster">${mpRosterHTML(g||S.game||{})}</div>`;
+// F2b #6: teksty liczników (wspólne z tickiem w mp.js)
+const mpArmLeftText = (s)=> `start najpóźniej za ${num(s)} s`;
+const mpRevealAutoText = (s)=> `auto-„dalej" za ${num(s)} s`;
+// czas bezczynności do auto-„dalej" (seam testowy jak intro: window.__MP_REVEAL_AUTO_MS__)
+const mpRevealAutoMs = ()=> (typeof window!=='undefined' && window.__MP_REVEAL_AUTO_MS__!=null) ? window.__MP_REVEAL_AUTO_MS__ : MP_REVEAL_AUTO_MS;
 const mpRenderArming = (g, head)=>{
   const rc=num(g.readyCount||0), rt=num(g.readyTotal||mpMembers().length);
-  return `${head}${mpRosterStrip(g)}<div class="mp-deck">${bbLoader}<div class="mp-state">czekamy aż wszyscy będą gotowi… <b>${rc}/${rt}</b></div><div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div></div>${mpReactsBarHTML()}`;
+  // F2b #6: nowy serwer (armMs) ma twardy limit + komendę go — licznik i „pomiń czekających" dla hosta.
+  // Stary serwer (bez armMs) go nie zna → bez przycisku, który nic by nie zrobił.
+  const hasLimit = g.armMs>0;
+  const note = hasLimit
+    ? `<div class="mp-state" id="mpArmLeft" style="opacity:.7">${mpArmLeftText(secsLeft(S.armDeadlineLocal, Date.now()))}</div>`
+    : `<div class="mp-state" style="opacity:.7">pytanie ruszy równo u wszystkich</div>`;
+  const skip = (S.host && hasLimit) ? `<button class="mp-btn ghost" onclick="mpHostSkipWait()">pomiń czekających ›</button>` : '';
+  return `${head}${mpRosterStrip(g)}<div class="mp-deck">${bbLoader}<div class="mp-state">czekamy aż wszyscy będą gotowi… <b>${rc}/${rt}</b></div>${note}${skip}</div>${mpReactsBarHTML()}`;
 };
 // klient już kliknął „dalej" i czeka, aż reszta też przejdzie do następnego pytania
 const mpRenderWaitNext = (head)=>{
@@ -487,7 +501,9 @@ function mpRevealNextHTML(last){
     return `<div class="mp-state" style="text-align:center;margin-top:6px">✓ ${c}/${t} graczy kliknęło „dalej"</div>
       <button class="mp-next ghost" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'pomiń czekanie ›'}</button>`;
   }
-  return `<button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>`;
+  // F2b #6: widoczny licznik auto-„dalej" (bezczynność) — odświeża go tick w mp.js
+  const auto = S.revealAutoAt ? `<div class="mp-state mp-autonext" id="mpRevealAuto" style="text-align:center;opacity:.6">${mpRevealAutoText(secsLeft(S.revealAutoAt, Date.now()))}</div>` : '';
+  return `<button class="mp-next" onclick="mpAdvance()">${last?'WYNIK KOŃCOWY →':'NASTĘPNE PYTANIE ›'}</button>${auto}`;
 }
 // odsłona rundy (design): rail + zielona karta utworu + baner pewniaka + odpowiedź drużyny
 function mpRenderRevealCard(snap){
@@ -593,4 +609,4 @@ function mpRenderDone(g, head){
     <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">${ic('back')} menu</button>${S.host?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
 }
 
-export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS };
+export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText };

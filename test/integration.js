@@ -34,6 +34,7 @@ const catsByKind=(window)=>{
 // re-wiązałby DOM/window. serverAuthority czytane przy ładowaniu; roomsBase ustawiamy runtime
 // dopiero w grupie MP (reszta testów działa jak dotąd z pustym base → wariant „bez backendu").
 const { window, fetchCalls, wsInstances, audioInstances } = await bootApp({ serverAuthority:true });
+window.__MP_REVEAL_AUTO_MS__ = 600000;   // F2b #6: auto-„dalej" na odsłonie wyłączony w siatce (test F2b ustawia krótko)
 
 await group('load: app.js montuje się bez wyjątku', async ()=>{
   ok(window.STACJA_VERSION, 'STACJA_VERSION ustawione: '+window.STACJA_VERSION);
@@ -789,6 +790,141 @@ await group('F2a #8: kategoria quizu dociągnięta PO starcie (zdarzenie stacja:
   ok(!$(w,'grpWiedza').hidden, 'chip „Wiedza" widoczny');
   w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(1);
   ok([...w.document.querySelectorAll('#quizTicks .tick')].filter(x=>x.dataset.era==='f2a-late').length===1, 'idempotentne (bez duplikatu ticka)');
+});
+
+
+// —— F2b audytu 2026-10: odporność MP (klient) ——
+const realWaitF2b=(ms)=>new Promise(r=>setTimeout(r,ms));
+const revealState=(ws, over={})=>({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'d80',mode:'music'}],
+  mode:'music', catKey:'d80', catLabel:'80s', answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+  format:'coop', teams:[{id:'all',name:'Drużyna',members:[ws._id]}], scores:{all:0}, byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } },
+  reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:'', okTitle:false, okArtist:false, teamOk:false,
+    gained:0, pewniacy:[], pewniakWin:false, pewniakLose:false, locked:{} },
+  timer:0, hostId:ws._id, results:[], ...over });
+const armState=(ws, over={})=>({ phase:'arming', round:1, rounds:4, si:0, qi:0, mode:'lektor', catKey:'d80', catLabel:'80s',
+  preview:'', lyric:'', prompt:'', playNonce:0, timer:0, endsAt:null, hostId:ws._id, readyCount:0, readyTotal:2, readyIds:[], results:[], ...over });
+
+await group('F2b #3: presence z hostId=null → klient NIE zostaje przy roli hosta', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  ws.pushState(playState(ws, { playNonce:3000 })); await settle(6);
+  w.mpGoKombinuj(); await settle(3);
+  ok(/mp-lockmini/.test($(w,'mpRoom').innerHTML), 'host: przycisk „Zatwierdź"');
+  ws._emit({ t:'presence', members:[{ id:ws._id, name:'host' }], hostId:null }); await settle(3);
+  ok(!/mp-lockmini/.test($(w,'mpRoom').innerHTML), '#3: hostId=null → bez przycisków hosta (serwer i tak je odrzuca)');
+  ws._emit({ t:'presence', members:[{ id:ws._id, name:'host' }], hostId:ws._id }); await settle(3);
+  ok(/mp-lockmini/.test($(w,'mpRoom').innerHTML), 'powrót roli → przyciski hosta wracają');
+});
+
+await group('F2b #6: ARMING — host „pomiń czekających" ({t:go}) + licznik; stary serwer bez armMs → bez przycisku', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  ws.pushState(armState(ws, { armNonce:6100 })); await settle(4);
+  ok(!/mpHostSkipWait/.test($(w,'mpRoom').innerHTML), 'stary serwer (brak armMs) → brak przycisku (go i tak ignorowane)');
+  ws.pushState(armState(ws, { armNonce:6101, armMs:12000 })); await settle(4);
+  const h=$(w,'mpRoom').innerHTML;
+  ok(/mpHostSkipWait/.test(h) && /pomiń czekających/.test(h), '#6: host widzi „pomiń czekających"');
+  ok(/start najpóźniej za 1[12] s/.test(h), '#6: licznik twardego limitu widoczny');
+  const n=ws.sent.filter(m=>m.t==='go').length;
+  w.mpHostSkipWait(); await settle(2);
+  ok(ws.sent.filter(m=>m.t==='go').length===n+1, '#6: klik wysyła {t:go}');
+});
+
+await group('F2b #6: auto-„dalej" na odsłonie po bezczynności (licznik widoczny)', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  w.__MP_REVEAL_AUTO_MS__=60;
+  try{
+    ws.pushState(revealState(ws, { playNonce:3100 })); await settle(6);
+    ok(/rv-banner/.test($(w,'mpRoom').innerHTML), 'odsłona pokazana');
+    ok($(w,'mpRevealAuto') && /auto/.test($(w,'mpRevealAuto').textContent), '#6: licznik auto-„dalej" widoczny');
+    const n=ws.sent.filter(m=>m.t==='next').length;
+    await realWaitF2b(120); w.mpTickTimer(); await settle(3);
+    ok(ws.sent.filter(m=>m.t==='next').length===n+1, '#6: po bezczynności odsłona zamknięta sama (host → next)');
+  } finally { w.__MP_REVEAL_AUTO_MS__=600000; }
+});
+
+await group('F2b #6: PLAY przy niezamkniętej odsłonie → audio dopiero po „dalej" (na dogonienie)', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  const plays=()=>audioInstances.reduce((a,x)=>a+x.plays,0);
+  ws.pushState(revealState(ws, { playNonce:3200 })); await settle(6);
+  const p0=plays();
+  ws.pushState(playState(ws, { playNonce:3201, preview:'https://x/catchup.m4a' })); await settle(8);
+  ok(/rv-banner/.test($(w,'mpRoom').innerHTML), 'odsłona nadal widoczna (gracz jej nie zamknął)');
+  ok(plays()===p0, '#6: zajawka NIE gra pod odsłoną');
+  w.mpAdvance(); await settle(8);
+  ok(/id="mpKnob"/.test($(w,'mpRoom').innerHTML), 'po „dalej" → faza słuchaj');
+  ok(plays()===p0+1, '#6: audio na dogonienie wystartowało po „dalej"');
+});
+
+await group('F2b #6: salon — „pomiń czekanie" pomija też ARMING (TV wysyła go po swoim buforze)', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  ws.pushState(revealState(ws, { playNonce:3300, salon:true })); await settle(6);
+  const nN=ws.sent.filter(m=>m.t==='next').length, nG=ws.sent.filter(m=>m.t==='go').length;
+  w.mpAdvance(); await settle(3);   // TV: „pomiń czekanie ›"
+  ok(ws.sent.filter(m=>m.t==='next').length===nN+1, 'TV: next wysłany');
+  ws.pushState(armState(ws, { armNonce:6300, armMs:12000, salon:true })); await settle(6);
+  ok(ws.sent.filter(m=>m.t==='go').length===nG+1, '#6: salon — po zbuforowaniu TV wysyła go (bez czekania na telefony)');
+  ws.pushState(armState(ws, { armNonce:6301, armMs:12000, salon:true })); await settle(6);
+  ok(ws.sent.filter(m=>m.t==='go').length===nG+1, 'pominięcie jednorazowe (kolejne ARMING czeka normalnie)');
+  ws.pushState(playState(ws, { playNonce:3301, salon:false })); await settle(4);
+});
+
+await group('F2b #12: ARMING bez nas w readyIds NIE przeładowuje zajawki (load tylko przy nowym armNonce)', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  const P=w.Audio.prototype, origLoad=P.load; let loads=0, emit=true;
+  P.load=function(){ loads++; if(emit) return origLoad.call(this); };
+  const nReady=()=>ws.sent.filter(m=>m.t==='action' && m.action && m.action.type==='ready').length;
+  try{
+    const r0=nReady();
+    ws.pushState(armState(ws, { armNonce:7000, mode:'music', preview:'https://x/arm12.m4a' })); await settle(4);
+    ok(loads===1 && nReady()===r0+1, 'nowy armNonce → load + ready');
+    ws.pushState(armState(ws, { armNonce:7000, mode:'music', preview:'https://x/arm12.m4a', readyIds:['OTHER'], readyCount:1 })); await settle(4);
+    ok(loads===1, '#12: ARMING innego gracza → bez ponownego load()');
+    ok(nReady()===r0+2, 'ready dosłane (1.1) bez przeładowania');
+    // buforowanie w toku (load nie kończy się od razu) → kolejne ARMING ani nie przeładowuje, ani nie dosyła
+    emit=false;
+    ws.pushState(armState(ws, { armNonce:7001, mode:'music', preview:'https://x/arm12b.m4a' })); await settle(4);
+    ws.pushState(armState(ws, { armNonce:7001, mode:'music', preview:'https://x/arm12b.m4a', readyIds:['OTHER'] })); await settle(4);
+    ok(loads===2 && nReady()===r0+2, '#12: w trakcie buforowania → brak re-load i brak ready');
+    const el=audioInstances.find(a=>a.src==='https://x/arm12b.m4a'); el && el.emit('canplay'); await settle(2);
+    ok(nReady()===r0+3, 'koniec buforowania → jedno ready');
+    el && el.emit('canplaythrough'); await settle(2);
+    ok(nReady()===r0+3, 'kolejne zdarzenia bufora nie dublują ready');
+  } finally { P.load=origLoad; }
+});
+
+await group('F2b picker MP: kategorie przez data-mp-cat + delegację (bez klucza w inline onclick)', async ()=>{
+  const w=window;
+  const cat=await import('../app/catalog.js');
+  const evil="pl_x');window.__pk=1;('";
+  cat.plSave({ ...cat.plLoad(), [evil]:{ label:'Zła', kind:'playlist', songs:[{ title:'A', artist:'B', preview:'https://x/a.m4a' }] } });
+  cat.plMerge();
+  w.mpNewGame(); await settle(3);   // host → picker
+  const html=()=>$(w,'mpRoom').innerHTML;
+  if(!/grp-chip[^"]*open[^>]*mpToggleGrp\('twoje'\)/.test(html())) w.mpToggleGrp('twoje');
+  if(!/grp-chip[^"]*open[^>]*mpToggleGrp\('dekady'\)/.test(html())) w.mpToggleGrp('dekady');
+  await settle(2);
+  ok(!/mpToggleCat\('/.test(html()), 'picker: klucz kategorii NIE trafia do inline onclick');
+  ok(!/class="tick[^"]*"[^>]*onclick=/.test(html()), 'ticki kategorii bez inline onclick');
+  const tick=[...w.document.querySelectorAll('#mpStage .tick')].find(t=>t.dataset.mpCat===evil);
+  ok(!!tick, 'tick z kluczem w data-mp-cat');
+  tick && tick.click(); await settle(2);
+  ok(w.__pk===undefined, 'złośliwy klucz nie wykonał kodu');
+  const t2=[...w.document.querySelectorAll('#mpStage .tick')].find(t=>t.dataset.mpCat===evil);
+  ok(t2 && t2.classList.contains('on'), 'klik zaznacza kategorię (delegacja działa)');
+  t2 && t2.click(); await settle(1);
+});
+
+await group('F2b #13: wyjście w trakcie pytania i wejście do nowego pokoju → 1. pytanie od fazy „słuchaj"', async ()=>{
+  const w=window;
+  let ws=wsInstances[wsInstances.length-1];
+  ws.pushState(playState(ws, { playNonce:1 })); await settle(6);
+  w.mpGoKombinuj(); await settle(3);
+  ok(!/id="mpKnob"/.test($(w,'mpRoom').innerHTML), 'stary pokój: kombinuj');
+  w.mpRoomBack(); await settle(4);
+  $(w,'mpCreate').click(); await settle(10);
+  ws=wsInstances[wsInstances.length-1];
+  ws.pushState(playState(ws, { playNonce:1 })); await settle(8);
+  ok(/id="mpKnob"/.test($(w,'mpRoom').innerHTML), '#13: nowy pokój, playNonce=1 → gałka (faza słuchaj), nie kombinuj');
+  ok(/mp-intro(ing|done)/.test($(w,'mpStage').className) || $(w,'mpListenBar'), '#13: intro/okno słuchania od nowa');
 });
 
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

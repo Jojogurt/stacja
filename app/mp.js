@@ -8,8 +8,8 @@ import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds }
 import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, slotsFor, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
-import { buildMpRecord } from '../core/matchRecord.js';
-import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
+import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
+import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
@@ -26,7 +26,7 @@ import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ
   catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS } from './mp-render.js';
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
 import { ic } from './icons.js';
 
 initMpPicker(mpRender, ()=>mpPlayers());   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
@@ -116,12 +116,28 @@ async function mpLeave(){
   mpNetStatus('ok');   // 5.6: schowaj pasek reconnectu przy wyjściu
   if(S.timerInt){ clearInterval(S.timerInt); S.timerInt=null; }   // 1.8: bez tego tick zostaje po wyjściu (re-enter nie tworzy nowego)
   if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
+  // F2b #13: wyczyść CAŁY stan faz/liczników poprzedniego pokoju — nowy mecz też zaczyna od playNonce=1,
+  // a stary S.playRound=1 + S.sub='kombinuj' dawały 1. pytanie bez fazy „słuchaj" (zajawka bez gałki).
+  if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; }
+  if(S.audio){ mpClearSnip(S.audio); mpClearArmWait(S.audio); }
+  S.playRound=S.playSkin=S.playSub=null; S.sub='sluchaj'; S.composerMode='chat'; S.introUntil=0;
+  S.listenStart=0; S.listenDur=0; S.revealAutoAt=0; S.skipArm=false;
+  S.armPending=S.armReported=S.armSeen=null; S.armDeadlineLocal=0;
+  S.seenActs.clear(); S.hostSeen.clear(); S.autoLocked=false;
+  mpFeedReset(); mpClearTyping();
   S.ready=new Set(); S.lastArmNonce=null;
   advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
   S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
 }
+
+// F2b #6: każda interakcja na odsłonie odsuwa auto-„dalej" (liczy się BEZCZYNNOŚĆ, nie czas od odsłony)
+(function wireRevealActivity(){
+  const st=$m('mpStage'); if(!st) return;
+  const bump=()=>{ if(S.revealAutoAt && mpRevealPending()) S.revealAutoAt=Date.now()+mpRevealAutoMs(); };
+  ['pointerdown','keydown','input'].forEach(ev=>st.addEventListener(ev, bump, true));
+})();
 
 /* ---- tworzenie / dołączanie (ksywa z profilu — bez pola w UI) ---- */
 $m('mpCreate').onclick=async()=>{ mpUnlockAudio(); const n=await ensureHandle(); mpMe.name=n; setHandle(n); mpEnterRoom(mpRandCode(), true); };
@@ -187,7 +203,9 @@ async function mpEnterRoom(code, asHost, groupId){
   S.ch.on('status',{},(s)=>mpNetStatus(s));   // 5.6: wskaźnik reconnectu
   S.ch.on('presence',{event:'sync'},()=>{
     const prevHost=S.host;                                          // 1.5: wykryj zmianę roli hosta (promote)
-    if(SERVER_AUTH && S.ch.hostId) S.host=(S.ch.hostId===mpMe.id);   // host = autorytatywny hostId z DO
+    // host = autorytatywny hostId z DO. F2b #3: także gdy hostId=null (stary serwer po wyjściu hosta
+    // z duplikatem socketu) — dawniej klient zostawał przy S.host=true z przyciskami, które DO odrzucał.
+    if(SERVER_AUTH) S.host=(!!S.ch.hostId && S.ch.hostId===mpMe.id);
     mpRenderMembers();
     // 1.5: zmiana S.host → ZAWSZE re-render (inaczej awansowany host nie zobaczy przycisków hosta;
     //      domyka 1.2 — przycisk „następne" po promocie w REVEAL). Dotąd re-render tylko w lobby.
@@ -264,21 +282,28 @@ function mpAfterSync(){
   // host-lokalny fallback salonu: serwer (jeszcze) nie odsyła game.salon → wstrzyknij, by
   // teamAnswer (nadpisanie) i widok-monitor działały u hosta bez deployu DO.
   if(S.salon && S.game && !S.game.salon) S.game.salon=true;
+  const g=S.game;
+  // F2b #6: lokalny termin twardego limitu ARMING (serwer wysyła armMs; stary serwer — brak → bez licznika)
+  if(g && g.phase===MP.ARMING && g.armMs>0 && S.armSeen!==g.armNonce){ S.armSeen=g.armNonce; S.armDeadlineLocal=Date.now()+g.armMs; }
   // faza gotowości: zbuforuj utwór i zgłoś „ready" — ale TYLKO gdy nie ma odsłony do
   // zamknięcia. Z zaległą odsłoną klient zbroi się dopiero po kliknięciu „dalej".
-  // 1.1: zbrój też, gdy serwer NIE widzi nas na liście gotowych (readyIds) mimo tego samego
-  // armNonce — nasze wcześniejsze `ready` zginęło (send przy zamkniętym sockecie zwraca false po cichu).
-  // Addytywne: stary serwer bez readyIds → Array.isArray false → zachowanie jak dziś.
-  const needArm = S.game && S.game.phase===MP.ARMING && !mpRevealPending() &&
-    (S.game.armNonce!==S.lastArmNonce ||
-     (Array.isArray(S.game.readyIds) && !S.game.readyIds.includes(mpMe.id)));
-  if(needArm){
-    mpArm();
+  if(g && g.phase===MP.ARMING && !mpRevealPending()){
+    if(g.armNonce!==S.lastArmNonce) mpArm();          // nowe pytanie → pełne zbrojenie (load zajawki)
+    // 1.1: serwer NIE widzi nas na liście gotowych (readyIds) mimo tego samego armNonce — nasze `ready`
+    // zginęło (send przy zamkniętym sockecie zwraca false po cichu) → DOSYŁKA samego ready.
+    // F2b #12: BEZ ponownego load() (każdy ARMING innego gracza przerywał buforowanie u wolnych);
+    // w trakcie buforowania (armPending) nic — ready pójdzie samo po canplay/bezpieczniku.
+    // Addytywne: stary serwer bez readyIds → Array.isArray false → bez dosyłki.
+    else if(Array.isArray(g.readyIds) && !g.readyIds.includes(mpMe.id) && S.armReported===g.armNonce){
+      mpSend({type:'ready', armNonce:g.armNonce});
+    }
   }
   // start: zagraj lokalnie gdy zmienił się nonce (audio już zbuforowane → równy start).
   // Render NAJPIERW, żeby gałka/status już istniały, gdy mpPlayLocal ustawia „ładowanie…".
-  const startPlay = S.game && S.game.phase===MP.PLAY && S.game.playNonce!==S.lastNonce;
-  if(startPlay) S.lastNonce=S.game.playNonce;
+  // F2b #6: z NIEZAMKNIĘTĄ odsłoną start czeka na „dalej" (serwer mógł ruszyć bez nas po limicie ARMING) —
+  // wtedy mpAdvance → mpAfterSync odpala fazę z audio „na dogonienie" (dawniej zajawka grała pod odsłoną).
+  const startPlay = g && g.phase===MP.PLAY && g.playNonce!==S.lastNonce && !mpRevealPending();
+  if(startPlay){ S.lastNonce=g.playNonce; S.skipArm=false; }
   mpRender();   // może odpalić INTRO fazy i ustawić S.introUntil (start fazy wstrzymany do końca animacji)
   // CAŁA faza (okno czasu + audio) startuje DOPIERO po intrze — nic nie gra/tyka pod dużą ikoną fazy.
   if(startPlay){
@@ -333,18 +358,33 @@ function mpRecountAdvance(){
 // „dalej" na ekranie wyniku — KAŻDY klika sam, we własnym tempie
 function mpAdvance(){
   if(!S.game) return;
-  S.ack=S.revealNonce;                                  // zamknij u siebie odsłonę
-  if(S.host){
-    if(S.game.phase===MP.REVEAL){ mpHostNextReveal(); }  // host (też salon „pomiń") → następne pytanie
-    else { mpRender(); }
-  } else {
-    // SALON: zgłoś hostowi „kliknąłem dalej" — TV przejdzie samo, gdy wszyscy klikną (host nie gra)
-    if(S.game.salon && S.game.phase===MP.REVEAL && S.ch){
-      S.ch.send({type:'broadcast',event:'advanced',payload:{by:mpMe.id, nonce:S.game.playNonce}});
-    }
-    if(S.game.phase===MP.ARMING && S.game.armNonce!==S.lastArmNonce){ mpArm(); }  // host już zbroi → zgłoś gotowość
-    mpRender();
+  S.ack=S.revealNonce; S.revealAutoAt=0;                // zamknij u siebie odsłonę (+ wyłącz auto-„dalej")
+  if(S.host && S.game.phase===MP.REVEAL){
+    // F2b #6: SALON — klik na TV = „pomiń czekanie" → pomiń też fazę gotowości następnego pytania
+    // (TV wyśle {t:go} zaraz po zbuforowaniu własnego audio; telefony dogonią). Auto-przejście
+    // po „dalej" wszystkich graczy (mpRecountAdvance) idzie prosto do mpHostNextReveal — bez pomijania.
+    if(S.game.salon || S.salon) S.skipArm=true;
+    mpHostNextReveal(); return;                         // host → następne pytanie
   }
+  // SALON: zgłoś hostowi „kliknąłem dalej" — TV przejdzie samo, gdy wszyscy klikną (host nie gra)
+  if(!S.host && S.game.salon && S.game.phase===MP.REVEAL && S.ch){
+    S.ch.send({type:'broadcast',event:'advanced',payload:{by:mpMe.id, nonce:S.game.playNonce}});
+  }
+  // ARMING → zbrój się i zgłoś gotowość; PLAY ruszył bez nas (limit ARMING) → faza z audio na dogonienie
+  mpAfterSync();
+}
+// F2b #6: host „pomiń czekających" w ARMING — autorytet: {t:go} do DO; relay: lokalny start
+function mpHostSkipWait(){
+  if(!S.host || !S.game || S.game.phase!==MP.ARMING) return;
+  if(SERVER_AUTH){ if(S.ch && S.ch.go) S.ch.go(); }
+  else mpGo();
+}
+// F2b #6: salon „pomiń czekanie" — po zgłoszeniu własnej gotowości TV od razu startuje pytanie (jednorazowo)
+function mpMaybeSkipArm(armNonce){
+  if(!S.skipArm) return;
+  const now = S.host && S.game && S.game.phase===MP.ARMING && S.game.armNonce===armNonce;
+  S.skipArm=false;
+  if(now) mpHostSkipWait();
 }
 // stany gałki: 'pause' (∥ gra), 'wait' (⏳ ładowanie), 'play' (▶ idle/pauza)
 function mpSetKnob(state){
@@ -380,21 +420,27 @@ function mpUnlockAudio(){ unlockCtx(); unlockAudioElement(mpEnsureAudio()); }
 // usuń ewentualny watchdog fragmentu z poprzedniej rundy (element jest trwały)
 function mpClearSnip(a){ if(a._snipStop){ a.removeEventListener('timeupdate', a._snipStop); a._snipStop=null; } }
 
-// faza gotowości — preload zajawki na trwałym elemencie, potem zgłoś hostowi „ready" (#4)
+// faza gotowości — preload zajawki na trwałym elemencie, potem zgłoś hostowi „ready" (#4).
+// Wołane RAZ na armNonce (F2b #12: dosyłka ready z mpAfterSync nie przeładowuje zajawki).
+const ARM_EVENTS=['canplaythrough','canplay','error'];   // error też → zgłoś (host nie utknie)
+function mpClearArmWait(a){
+  const w=a && a._armWait; if(!w) return;
+  ARM_EVENTS.forEach(ev=>a.removeEventListener(ev, w.fn)); clearTimeout(w.t); a._armWait=null;
+}
 function mpArm(){
   mpSetKnob(false);
   const armNonce=S.game.armNonce;
   S.lastArmNonce=armNonce;   // ta runda już zbrojona przez tego klienta (anty-dublowanie)
+  const report=()=>{ S.armPending=null; S.armReported=armNonce; mpSend({type:'ready', armNonce}); mpMaybeSkipArm(armNonce); };
   // lektor / brak zajawki — nic do buforowania, gotów od razu
-  if(S.game.mode==='lektor' || !S.game.preview){ mpSend({type:'ready', armNonce}); return; }
-  const a=mpEnsureAudio(); mpClearSnip(a);
+  if(S.game.mode==='lektor' || !S.game.preview){ report(); return; }
+  const a=mpEnsureAudio(); mpClearSnip(a); mpClearArmWait(a);   // listenery poprzedniej rundy precz (bez kumulacji)
   if(a.src!==S.game.preview) a.src=S.game.preview;
+  S.armPending=armNonce;
   let done=false;
-  const ready=()=>{ if(done) return; done=true; mpSend({type:'ready', armNonce}); };
-  a.addEventListener('canplaythrough', ready, {once:true});
-  a.addEventListener('canplay',        ready, {once:true});
-  a.addEventListener('error',          ready, {once:true}); // i tak zgłoś — host nie utknie
-  setTimeout(ready, MP_BUFFER_TIMEOUT_MS);                  // bezpiecznik
+  const ready=()=>{ if(done) return; done=true; mpClearArmWait(a); if(S.lastArmNonce===armNonce) report(); };
+  a._armWait={ fn:ready, t:setTimeout(ready, MP_BUFFER_TIMEOUT_MS) };   // bezpiecznik
+  ARM_EVENTS.forEach(ev=>a.addEventListener(ev, ready));
   a.load();
 }
 function mpStopRev(){ if(S.revSrc){ S.revSrc.stop(); S.revSrc=null; } }   // uchwyt z playReverse
@@ -576,6 +622,7 @@ function mpLock(){
   if(SERVER_AUTH){ if(S.ch&&S.ch.lock) S.ch.lock(); return; }   // AUTORYTET: DO ocenia i robi reveal
   S.autoLocked=true;
   const c=S.hostCurrent;
+  noteAnswerers(S.game);                // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
   const ev=evaluateAnswer(S.game, c);   // czysta ocena (core) — ocenia KAŻDĄ drużynę (ev.perTeam)
   // nałóż wyliczenia per-drużyna: punkty drużyny + wkład gracza (tally, globalny) + przegrane pewniaki
   S.game.beerTally=S.game.beerTally||{};
@@ -637,6 +684,16 @@ function mpVoteFromBubble(el){
 }
 
 function mpTickTimer(){
+  // F2b #6: auto-„dalej" na odsłonie po bezczynności (licznik na karcie) — AFK nie blokuje stołu
+  if(S.revealAutoAt && mpRevealPending()){
+    const now=Date.now();
+    const ae=$m('mpRevealAuto'); if(ae) ae.textContent=mpRevealAutoText(secsLeft(S.revealAutoAt, now));
+    if(now>=S.revealAutoAt){ S.revealAutoAt=0; mpAdvance(); return; }
+  }
+  // F2b #6: licznik twardego limitu fazy gotowości
+  if(S.game && S.game.phase===MP.ARMING && S.armDeadlineLocal){
+    const le=$m('mpArmLeft'); if(le) le.textContent=mpArmLeftText(secsLeft(S.armDeadlineLocal, Date.now()));
+  }
   const el=$m('mpCountdown');
   if(!S.game || S.game.phase!==MP.PLAY || !S.game.endsAt){ if(el) el.textContent=''; return; }
   const rem=Math.max(0, S.game.endsAt - Date.now());
@@ -763,7 +820,7 @@ Object.assign(window, {
   mpHostNewRound, mpLock, mpNewGame, mpNext, mpPlayLocal, mpPropose, mpVote, mpPick, mpVoteFromBubble,
   mpReact, mpSay, mpSend, mpSetSkin, mpComposerSend, mpTypingPing, mpKnobTap,
   mpGoKombinuj, mpComposerToggle, mpChatInput,
-  mpStart, mpAdvance, mpHostRetry, mpHostNextReveal, mpTickTimer,
+  mpStart, mpAdvance, mpHostRetry, mpHostNextReveal, mpTickTimer, mpHostSkipWait,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane

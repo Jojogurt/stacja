@@ -13,12 +13,15 @@
  * Protokół (JSON/WS):
  *   klient → DO:  {t:'hello'} · {t:'start', config} (host) · {t:'action', action}
  *                 (propose/vote/unpropose/pass/ready) · {t:'lock'} (host) · {t:'next'} (host)
+ *                 · {t:'go'} (host, F2b #6: „pomiń czekających" w ARMING)
  *   DO → klient:  {t:'state', game}  (BEZ sekretu — pełny utwór tylko w game.reveal przy REVEAL)
  *                 {t:'presence', members, hostId}
  *
  * SEKRET: pełny utwór (current) trzymany POZA `game`; do `game.reveal` trafia dopiero przy lock.
  * PERSYSTENCJA: stan w `ctx.storage` (przeżyć eviction DO w trakcie meczu).
- * PROMOTE: host wyjdzie → awans najstarszego obecnego (rola `hostId` w stanie).
+ * PROMOTE: host wyjdzie → awans najstarszego obecnego (rola `hostId` w stanie). F2b #3: tylko gdy
+ * NIE został żaden inny socket z id hosta (druga karta / reconnect przed zamknięciem starego);
+ * pusty pokój → hostId zostaje (czeka na powrót), a nieobecnego hosta przejmuje pierwszy łączący.
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
@@ -27,9 +30,9 @@ import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
-import { buildMpRecord } from '../core/matchRecord.js';
+import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm } from '../core/scoring.js';
-import { MP_SNIP_WINDOW_S } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu (koniec kopii)
+import { MP_SNIP_WINDOW_S, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
 import { resolveTrackServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 
@@ -116,12 +119,19 @@ export class GameAuthority extends Server {
   hostSeen = new Set();   // anty-powtórki tytułów
   recent = [];            // anty-powtórki artystów
   _autoLock = null;       // serwerowy timer auto-locka (koniec czasu pytania)
+  // F2b #6: twardy limit fazy gotowości — po nim pytanie rusza z gotowymi (persist: armDeadline)
+  armTimeoutMs = MP_ARM_TIMEOUT_MS;
+  armDeadline = null;     // epoch ms końca ARMING (wznowienie timera po evikcji DO)
+  _armTimer = null;
+  // F2b #11: treść pytania/tekst lektora/TTS/offset fragmentu odsłaniane DOPIERO w PLAY (go()).
+  // W ARMING rozsyłamy tylko to, co trzeba buforować (URL zajawki — bez niego nie ma równego startu).
+  armHidden = null;
 
   constructor(ctx, env){
     super(ctx, env);
     // wczytaj stan z trwałego magazynu (po eviccie/restarcie DO) zanim obsłużymy żądania
     ctx.blockConcurrencyWhile(async () => {
-      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready']);
+      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden']);
       this.game = s.get('game') || null;
       this.current = s.get('current') || null;
       this.pools = s.get('pools') || null;
@@ -130,10 +140,15 @@ export class GameAuthority extends Server {
       this.hostSeen = new Set(s.get('hostSeen') || []);
       this.recent = s.get('recent') || [];
       this.ready = new Set(s.get('ready') || []);
+      this.armDeadline = s.get('armDeadline') || null;
+      this.armHidden = s.get('armHidden') || null;
       // WZNÓW serwerowy auto-lock po restarcie (in-memory setTimeout ginie przy evikcji DO).
-      // ARMING nie potrzebuje timera — gotowość przeliczy onConnect (maybeGoArming) gdy klienci wrócą.
       if(this.game && this.game.phase===MP.PLAY && this.game.timer>0 && this.game.endsAt){
         this.scheduleAutoLock(Math.max(0, this.game.endsAt - Date.now()));   // auto-lock wg pozostałego czasu
+      }
+      // F2b #6: wznów twardy limit ARMING (gotowość przelicza też onConnect/maybeGoArming)
+      if(this.game && this.game.phase===MP.ARMING && this.armDeadline){
+        this.scheduleArmTimer(Math.max(0, this.armDeadline - Date.now()));
       }
     });
   }
@@ -142,6 +157,7 @@ export class GameAuthority extends Server {
     await this.ctx.storage.put({
       game:this.game, current:this.current, pools:this.pools,
       hostId:this.hostId, starterId:this.starterId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
+      armDeadline:this.armDeadline, armHidden:this.armHidden,
     });
   }
 
@@ -157,24 +173,38 @@ export class GameAuthority extends Server {
     if(!id){ try{ conn.close(4001,'auth'); }catch(_e){} return; }            // brak ważnego tokenu → odrzuć (koniec ?id=)
     conn.setState({ id, name, verified:true });
     try{ await this.ctx.storage.deleteAlarm(); }catch(_e){}                   // ktoś wrócił → anuluj zaplanowane sprzątanie
-    if(!this.hostId){ this.hostId=id; await this.persist(); }                 // pierwszy obecny = host (przenoszalny)
+    // F2b #3: host NIEOBECNY (wyszedł, gdy nie było kogo awansować) → pierwszy łączący przejmuje
+    // (jak dawniej przy hostId=null). Sam host po powrocie ma hostId===id → nic się nie zmienia.
+    const hostHere = !!this.hostId && this.idPresent(this.hostId, conn);
+    if(!this.hostId || (!hostHere && this.hostId!==id)){                      // pierwszy obecny = host (przenoszalny)
+      this.hostId=id; if(this.game) this.game.hostId=id; await this.persist();
+    }
     // STABILNOŚĆ HOSTA: starter meczu wraca po reconnect → odzyskuje hosta (a nie zostaje przy
     // tym, kto został awansowany promote'em w jego nieobecności). Działa w trakcie aktywnego meczu.
-    else if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && this.game.phase!==MP.DONE){
+    if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && this.game.phase!==MP.DONE){
       this.hostId=id; this.game.hostId=id; await this.persist();
     }
+    // F2b #7: coop — powrót (albo wejście) w trakcie pytania → dołącz do jedynej drużyny OD RAZU
+    // (dawniej skład liczony tylko w newRound → krótki rozłącz między pytaniami = całe pytanie bez gry)
+    if(this.coopRejoin(id)){ this.broadcastState(); await this.persist(); }
     conn.send(JSON.stringify({ t:'state', game:this.viewFor(id) }));   // 3.1: okrojony widok
     this.pushPresence();
-    await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (anty-deadlock, bez timera)
+    await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (+ twardy limit armTimeoutMs, F2b #6)
   }
 
   async onClose(conn){
     const left = conn.state && conn.state.id;
-    if(left && left===this.hostId){                                   // promote: awansuj najstarszego obecnego
-      const others=[...this.getConnections()].map(c=>c.state).filter(s=>s&&s.id&&s.id!==left);
-      this.hostId = others.length ? others[0].id : null;
-      if(this.game) this.game.hostId=this.hostId;
-      await this.persist();
+    // F2b #3: promote TYLKO gdy host nie ma już ŻADNEGO innego połączenia (druga karta / nowy socket
+    // po reconnect, a stary half-open zamknięty później) — dawniej awansował innego mimo obecnego hosta.
+    if(left && left===this.hostId && !this.idPresent(left, conn)){     // promote: awansuj najstarszego obecnego
+      const others=[...this.getConnections()].filter(c=>c!==conn).map(c=>c.state).filter(s=>s&&s.id&&s.id!==left);
+      // nikogo do awansu → hostId ZOSTAJE (pokój czeka na powrót hosta; inny łączący przejmie w onConnect).
+      // Dawniej null → klient hosta po powrocie nie dostawał roli, a serwer odrzucał lock/next → zamrożenie.
+      if(others.length){
+        this.hostId = others[0].id;
+        if(this.game) this.game.hostId=this.hostId;
+        await this.persist();
+      }
     }
     this.pushPresence();
     await this.maybeGoArming();   // ktoś wyszedł w ARMING → jeśli reszta gotowa, startuj (nie blokuj na nieobecnym)
@@ -184,14 +214,29 @@ export class GameAuthority extends Server {
     }
   }
   onError(){ this.pushPresence(); }
+  // czy id ma jeszcze jakieś połączenie poza `except` (wiele kart / reconnect przed zamknięciem starego)
+  idPresent(id, except){
+    return [...this.getConnections()].some(c=>c!==except && c.state && c.state.id===id);
+  }
+  // F2b #7: coop — dopisz gracza do drużyny 'all' w LOADING/ARMING/PLAY (salon: nie TV-hosta).
+  // Zwraca true, gdy skład się zmienił. Solo/Drużyny bez zmian (reconcile między pytaniami / skład zamrożony).
+  coopRejoin(id){
+    const g=this.game;
+    if(!g || (g.format||'coop')!=='coop' || ![MP.LOADING, MP.ARMING, MP.PLAY].includes(g.phase)) return false;
+    if(g.salon && id===this.hostId) return false;
+    const t=(g.teams||[])[0]; if(!t) return false;
+    t.members=t.members||[];
+    if(t.members.includes(id)) return false;
+    t.members.push(id); return true;
+  }
 
   // sprzątanie: alarm odpala po karencji od opustoszenia — jeśli nadal pusto, skasuj storage pokoju
   async onAlarm(){
     if([...this.getConnections()].length > 0) return;          // ktoś wrócił — nie kasuj
     await this.ctx.storage.deleteAll();                        // kasuje też alarm
-    this.game=null; this.current=null; this.pools=null; this.hostId=null;
-    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[];
-    this.clearAutoLock();
+    this.game=null; this.current=null; this.pools=null; this.hostId=null; this.starterId=null;
+    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null;
+    this.clearAutoLock(); this.clearArmTimer();
   }
 
   async onMessage(conn, raw){
@@ -262,6 +307,10 @@ export class GameAuthority extends Server {
 
       case 'retry':                                   // tylko host, tylko w NETERR/NOLYRIC (1.3)
         if(me && me===this.hostId) await this.retry();
+        return;
+
+      case 'go':                                      // F2b #6: host „pomiń czekających" — tylko w ARMING (go() strzeże fazy)
+        if(me && me===this.hostId) await this.go();
         return;
     }
   }
@@ -362,6 +411,8 @@ export class GameAuthority extends Server {
     this.game.reveal=null; this.game.endsAt=null; this.current=null;
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
+    const hidden={ prompt:'', lyric:'', ttsUrl:'', snipStart:0 };   // F2b #11: odsłaniane w go()
+    this.armHidden=null; this.armDeadline=null; this.clearArmTimer();
     if(!cat){ this.game.phase=MP.NETERR; this.game.netReason='nocat'; this.broadcastState(); await this.persist(); return; }
 
     if(this.game.mode==='quiz'){
@@ -371,14 +422,16 @@ export class GameAuthority extends Server {
       const q=qs[Math.floor(Math.random()*qs.length)];
       this.current={ prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:'' };
       this.hostSeen.add(norm(q.prompt));
-      this.game.answerSlots=q.slots; this.game.prompt=q.prompt; this.game.preview=''; this.game.lyric=''; this.game.ttsUrl='';
+      this.game.answerSlots=q.slots; this.game.prompt=''; this.game.preview=''; this.game.lyric=''; this.game.ttsUrl='';
+      hidden.prompt=q.prompt;                       // F2b #11: treść pytania dopiero w PLAY
     } else if(this.game.mode==='lektor'){
       const songs=(cat.songs||[]).filter(x=>x.lyric && !this.hostSeen.has(norm(x.title)));
       if(!songs.length){ this.game.phase=MP.NOLYRIC; this.broadcastState(); await this.persist(); return; }
       const x=songs[Math.floor(Math.random()*songs.length)];
       this.current={ track:x.title, artist:x.artist, year:x.year||'', album:x.album||'', art:'', preview:'', lyric:x.lyric };
       this.hostSeen.add(norm(x.title));
-      this.game.lyric=x.lyric; this.game.preview=''; this.game.ttsUrl=x.tts||''; this.game.prompt=''; this.game.answerSlots=null;
+      this.game.lyric=''; this.game.preview=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
+      hidden.lyric=x.lyric; hidden.ttsUrl=x.tts||'';   // F2b #11: tekst/TTS lektora dopiero w PLAY
     } else {
       const t=await resolveTrackServer({ cat, seen:this.hostSeen, recent:this.recent });
       if(t.error){ this.game.phase=MP.NETERR; this.game.netReason=t.reason; this.broadcastState(); await this.persist(); return; }
@@ -386,20 +439,30 @@ export class GameAuthority extends Server {
       this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
     }
     // muzyka/lektor → sloty DEFAULT (tytuł+wykonawca); inaczej runda audio po quizie dziedziczy sloty quizu
-    this.game.snipStart = this.game.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
+    // F2b #11: offset fragmentu ustalany na serwerze, ale wysyłany dopiero w PLAY (w ARMING 0).
+    // Klient i tak buforuje CAŁY plik zajawki (URL musi być znany w ARMING dla równego startu) —
+    // ukrywamy tylko, KTÓRY 2-s wycinek zagra.
+    hidden.snipStart = this.game.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
+    this.game.snipStart = 0;
+    this.armHidden = hidden;
     // FAZA GOTOWOŚCI: roześlij utwór (bez odpowiedzi), czekaj aż wszyscy zbuforują
     this.game.phase=MP.ARMING; this.game.armNonce=(this.game.armNonce||0)+1;
     this.game.endsAt=null; this.game.readyCount=0; this.game.readyTotal=this.expectedReady().length;
     this.ready=new Set(); this.game.readyIds=[];   // 1.1: kto już zgłosił ready (klient wykrywa zgubione ready po reconnect)
+    // F2b #6: PLAY rusza, gdy WSZYSCY OBECNI zgłoszą ready ALBO po twardym limicie (armMs) — z gotowymi.
+    // Niegotowi (np. AFK na odsłonie) dołączają w PLAY z audio „na dogonienie". Host może też wysłać {t:'go'}.
+    this.game.armMs=this.armTimeoutMs;
+    this.armDeadline=Date.now()+this.armTimeoutMs;
     this.broadcastState(); await this.persist();
-    // BRAK timera startu: PLAY rusza dopiero gdy WSZYSCY OBECNI zgłoszą ready. Klient nie zbroi się,
-    // póki nie zamknie u siebie ekranu odpowiedzi (reveal) → czekamy aż każdy sam przejdzie do nowego pytania.
-    // Zawieszony bufor nie blokuje: klient self-reportuje ready w MP_BUFFER_TIMEOUT_MS mimo błędu audio.
+    this.scheduleArmTimer(this.armTimeoutMs);
   }
 
   async onReady(id, armNonce){
     if(!this.game || this.game.phase!==MP.ARMING) return;
     if(armNonce!==this.game.armNonce) return;       // ready ze starej rundy
+    // F2b #12: duplikat (ten sam gracz, ten sam nonce) → bez broadcastu. Dawniej każde ready = rozsyłka
+    // ARMING do wszystkich, a u wolnych klientów każda taka rozsyłka mogła wywołać ponowne zbrojenie.
+    if(this.ready.has(id)) return;
     this.ready.add(id);
     await this.maybeGoArming();
   }
@@ -423,6 +486,18 @@ export class GameAuthority extends Server {
 
   async go(){
     if(!this.game || this.game.phase!==MP.ARMING) return;
+    this.clearArmTimer(); this.armDeadline=null;
+    // F2b #11: odsłoń treść pytania / tekst lektora / TTS / offset fragmentu dopiero teraz
+    const h=this.armHidden;
+    if(h){
+      if(h.prompt) this.game.prompt=h.prompt;
+      if(h.lyric) this.game.lyric=h.lyric;
+      if(h.ttsUrl) this.game.ttsUrl=h.ttsUrl;
+      if(h.snipStart) this.game.snipStart=h.snipStart;
+      this.armHidden=null;
+    }
+    // F2b #7: coop — skład = wszyscy obecni gracze także na starcie PLAY (dopisz, nie usuwaj)
+    if((this.game.format||'coop')==='coop') this.playersOf().forEach(p=>this.coopRejoin(p.id));
     this.game.phase=assertMp(this.game.phase, MP.PLAY, console.warn);
     this.game.playNonce=(this.game.playNonce||0)+1;
     if(this.game.timer>0) this.game.endsAt=Date.now()+this.game.timer*1000;   // serwerowy stempel czasu
@@ -434,6 +509,7 @@ export class GameAuthority extends Server {
   async lock(){
     if(!this.game || this.game.phase!==MP.PLAY) return;
     this.clearAutoLock();
+    noteAnswerers(this.game);                       // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
     const ev=evaluateAnswer(this.game, this.current);   // ocenia KAŻDĄ drużynę (ev.perTeam)
     this.game.beerTally=this.game.beerTally||{};
     for(const t of this.game.teams){
@@ -462,6 +538,7 @@ export class GameAuthority extends Server {
     this.game.phase=MP.DONE; this.broadcastState();
     // zapis do D1 — AUTORYTATYWNY (DO liczył wynik sam; bez klientowego podawania)
     try{
+      // F2b #8: uczestnicy z historii odpowiedzi (game.playedBy), nie z obecnych przy DONE; salon bez TV
       const payload=buildMpRecord({ game:this.game, tally:this.game.tally, members:this.members(), hostId:this.hostId, roomCode:this.name });
       await insertMatch(this.env, payload);
     }catch(e){ try{ console.warn('finish: zapis meczu do D1 nieudany', e&&e.message||e); }catch(_e){} }   // 3.5: nie połykaj po cichu
@@ -484,4 +561,14 @@ export class GameAuthority extends Server {
   /* ---- serwerowy auto-lock (koniec czasu pytania) ---- */
   scheduleAutoLock(ms){ this.clearAutoLock(); this._autoLock=setTimeout(()=>{ this.lock().catch(()=>{}); }, ms); }
   clearAutoLock(){ if(this._autoLock){ clearTimeout(this._autoLock); this._autoLock=null; } }
+  /* ---- F2b #6: twardy limit fazy gotowości (ARMING) ---- */
+  scheduleArmTimer(ms){
+    this.clearArmTimer();
+    const nonce=this.game && this.game.armNonce;
+    this._armTimer=setTimeout(()=>{
+      this._armTimer=null;
+      if(this.game && this.game.phase===MP.ARMING && this.game.armNonce===nonce) this.go().catch(()=>{});
+    }, ms);
+  }
+  clearArmTimer(){ if(this._armTimer){ clearTimeout(this._armTimer); this._armTimer=null; } }
 }

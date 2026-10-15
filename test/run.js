@@ -6,11 +6,11 @@ import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
 import { escapeHtml, safeColor, isSlotKey, num, clipText } from '../core/util.js';
 import { clampRounds, sanitizeMpConfig, MAX_ROUNDS } from '../core/match.js';
-import { clampTimer, MP_TIMER_MAX_S } from '../core/timing.js';
+import { clampTimer, MP_TIMER_MAX_S, secsLeft, MP_ARM_TIMEOUT_MS, MP_REVEAL_AUTO_MS, MP_BUFFER_TIMEOUT_MS } from '../core/timing.js';
 import { canTransitionSolo, canTransitionMp, MP, SOLO } from '../core/phases.js';
 import { pickTrack, BAD } from '../adapters-web/itunesRepository.js';
 import { resolveTrack } from '../core/trackSelect.js';
-import { buildSoloRecord, buildMpRecord } from '../core/matchRecord.js';
+import { buildSoloRecord, buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { listenSecs, soloSnipStart, mpSnipStart, shouldPing, SNIP_SECS, SOLO_SNIP_MAX, MP_SNIP_WINDOW_S } from '../core/timing.js';
 import { plPick, togglePick, toggleAllPick, allSelected, syncQuizMode, grpActive, pickSummary, pickSummaryText } from '../core/picker.js';
 import { readFileSync, existsSync } from 'node:fs';
@@ -418,7 +418,8 @@ group('matchRecord.buildSoloRecord', ()=>{
   const rec=buildSoloRecord({results, slots, profileId:'u1', displayName:'Ala', config:{rounds:1}});
   eq(rec.mode,'solo','tryb solo');
   eq(rec.score,1,'1 pełne trafienie');
-  eq(rec.total_questions,3*QPC,'sloty × QPC');
+  // F2b (liga solo): przerwany mecz (3 z 3×QPC pytań) → total = ROZEGRANE, nie pełna długość meczu
+  eq(rec.total_questions,3,'F2b: przerwany mecz → total_questions = rozegrane (3), nie sloty × QPC');
   eq(rec.participants.length,1,'jeden uczestnik');
   eq(rec.participants[0].profile_id,'u1','uczestnik = profil gracza');
   eq(rec.answers.length,3,'po jednej odpowiedzi na pytanie');
@@ -446,6 +447,43 @@ group('matchRecord.buildMpRecord', ()=>{
   eq(recG.group_id,'team-42','game.groupId → record.group_id (tag drużyny)');
 });
 
+group('F2b: liga solo — pełny mecz liczy wszystkie pytania, pusty 0', ()=>{
+  const slots=[{}];
+  const full=Array.from({length:QPC},(_,i)=>({track:'T'+i,artist:'A',okTitle:i<2,okArtist:i<2}));
+  eq(buildSoloRecord({results:full, slots, profileId:'u'}).total_questions, QPC, 'pełny mecz → QPC pytań');
+  eq(buildSoloRecord({results:[], slots, profileId:'u'}).total_questions, 0, 'brak odpowiedzi → 0');
+  eq(buildSoloRecord({results:full.concat(full), slots, profileId:'u'}).total_questions, QPC, 'cap: nie więcej niż sloty × QPC');
+});
+group('F2b #8: noteAnswerers + uczestnicy MP = kto odpowiadał (bez widzów/TV, z tymi co wyszli)', ()=>{
+  const g={ format:'coop', teams:[{id:'all',members:['H','P','Z']}], byTeam:{ all:{
+    proposals:[{by:'P',byName:'Pola',values:{title:'x'}}], votes:{ title:{ P:'x', H:'x' } }, sure:[], passed:[{id:'Q',name:'Quba'}] } } };
+  noteAnswerers(g);
+  eq(Object.keys(g.playedBy).sort(), ['H','P','Q'], 'propozycja + głos + pas = odpowiadał (Z nic nie zrobił)');
+  eq(g.playedBy.P, 'Pola', 'nazwa z propozycji');
+  g.byTeam={ all:{ proposals:[], votes:{}, sure:[{id:'R',name:'Rysiek'}], passed:[] } };
+  noteAnswerers(g);
+  eq(Object.keys(g.playedBy).sort(), ['H','P','Q','R'], 'kumuluje przez rundy (pewniak też)');
+  noteAnswerers(null); ok(true, 'noteAnswerers(null) nie rzuca');
+  // P wyszedł przed DONE (nie ma go w members), Z dołączył na koniec (jest w members, nie odpowiadał)
+  const game={ slots:[{}], rounds:1, scores:{all:3}, results:[], playedBy:{ H:'Host', P:'Pola' } };
+  const rec=buildMpRecord({ game, tally:{ P:{name:'Pola',correct:7} }, members:[{id:'H',name:'Host'},{id:'Z',name:'Zocha'}], hostId:'H' });
+  eq(rec.participants.map(p=>p.profile_id).sort(), ['H','P'], '#8: P (wyszedł) jest, Z (widz bez odpowiedzi) nie');
+  eq(rec.participants.find(p=>p.profile_id==='P').correct_count, 7, '#8: trafienia P zachowane');
+  eq(rec.participants.find(p=>p.profile_id==='H').role, 'host', 'host oznaczony');
+  // salon: TV (host) nie jest uczestnikiem, nawet gdy „nadpisał" głos klikiem w kolumny
+  const recS=buildMpRecord({ game:{ ...game, salon:true }, tally:{}, members:[{id:'H',name:'TV'}], hostId:'H' });
+  eq(recS.participants.map(p=>p.profile_id), ['P'], '#8: salon — TV-host poza ligą');
+  // tally bez historii (np. tylko trafienie) też liczy się jako udział
+  const recT=buildMpRecord({ game:{ ...game, playedBy:{} }, tally:{ X:{name:'Iks',correct:1} }, members:[], hostId:'H' });
+  eq(recT.participants.map(p=>[p.profile_id,p.display_name]), [['X','Iks']], 'uczestnik z tally (nazwa z tally)');
+});
+
+group('F2b #6: timing — limity gotowości/odsłony + secsLeft', ()=>{
+  ok(MP_ARM_TIMEOUT_MS>MP_BUFFER_TIMEOUT_MS, 'limit ARMING dłuższy niż bezpiecznik buforowania klienta');
+  eq(MP_REVEAL_AUTO_MS, 10000, 'auto-„dalej" po 10 s');
+  eq(secsLeft(10500, 0), 11, 'zaokrąglenie w górę'); eq(secsLeft(1000, 5000), 0, 'minął → 0');
+  eq(secsLeft(0, 5), 0, 'brak terminu → 0'); eq(secsLeft('x', 5), 0, 'śmieci → 0');
+});
 /* --- timing --- */
 group('timing.listenSecs', ()=>{
   eq(listenSecs('lektor'),22,'lektor 22 s');

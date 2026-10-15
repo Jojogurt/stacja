@@ -4,7 +4,7 @@
  * `.on/.subscribe/.track/.send/.presenceState/.unsubscribe` — więc `mpEnterRoom` i nadawcy
  * emotek w `app.js` działają bez zmian. RÓŻNICA: tu serwer jest autorytetem — klient NIE
  * rozsyła stanu, tylko WYSYŁA AKCJE i DOSTAJE autorytatywny `{t:'state'}`. Plus komendy
- * hosta: `.startMatch/.lock/.next` i odczyt `.hostId`.
+ * hosta: `.startMatch/.lock/.next/.retry/.go` i odczyt `.hostId`.
  *
  * Mapowanie `send({type:'broadcast', event, payload})`:
  *   event 'sync'             → IGNOR (stan należy do DO, klient go nie rozsyła)
@@ -56,6 +56,7 @@ export function authorityChannel(code, cfg = {}) {
     lock() { return send({ t: 'lock' }); },
     next() { return send({ t: 'next' }); },
     retry() { return send({ t: 'retry' }); },   // 1.3: host ponawia rundę zablokowaną w NETERR/NOLYRIC
+    go() { return send({ t: 'go' }); },         // F2b #6: host „pomiń czekających" w ARMING (stary serwer: ignoruje)
 
     presenceState() { return presence; },
     unsubscribe() {

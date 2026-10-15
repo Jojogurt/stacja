@@ -10,6 +10,17 @@ export const MP_SNIP_WINDOW_S = 16;       // okno losowania startu fragmentu (mu
 export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
+// F2b (#6): twardy limit fazy gotowości (ARMING) po stronie serwera — po nim pytanie rusza z tymi,
+// którzy są gotowi; niegotowi dostają audio „na dogonienie". Bez tego jeden AFK blokował pokój.
+export const MP_ARM_TIMEOUT_MS = 12000;
+// F2b (#6): auto-„dalej" na odsłonie po tylu ms bezczynności (licznik widoczny na karcie)
+export const MP_REVEAL_AUTO_MS = 10000;
+// ile pełnych sekund zostało do terminu (0 gdy minął / brak terminu) — liczniki w UI
+export function secsLeft(deadline, now){
+  const d = Number(deadline);
+  if(!Number.isFinite(d) || d <= 0) return 0;
+  return Math.max(0, Math.ceil((d - now) / 1000));
+}
 // F1 (#5): opcje timera pytania MP (picker) + clamp na serwerze — jedno źródło
 export const MP_TIMER_OPTIONS = [0, 30, 60, 90];
 export const MP_TIMER_MAX_S = 90;

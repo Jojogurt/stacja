@@ -30,12 +30,12 @@ class FakeConn {
   close(code,why){ this.closed={code,why}; }
   last(t){ for(let i=this.sent.length-1;i>=0;i--) if(this.sent[i].t===t) return this.sent[i]; }
 }
-async function makeRoom(){
+async function makeRoom(env={}){
   let initPromise=null;
   // Worker BLOKUJE wiadomości do końca konstruktorowego blockConcurrencyWhile — tu awaitujemy
   // ten promise, inaczej async-wczytanie storage nadpisałoby stan ustawiony przez start (race).
   const ctx={ storage:new FakeStorage(), blockConcurrencyWhile:(fn)=>{ initPromise=fn(); return initPromise; } };
-  const room=new GameAuthority(ctx, { TOKEN_SECRET:'x' });
+  const room=new GameAuthority(ctx, { TOKEN_SECRET:'x', ...env });
   await initPromise;
   const conns=[];
   room.getConnections=()=>conns;
@@ -44,6 +44,11 @@ async function makeRoom(){
   room.join=(id,name)=>{ const c=new FakeConn(id,name); conns.push(c);
     if(!room.hostId) room.hostId=id; room.pushPresence(); return c; };
   room.drop=async(c)=>{ conns.splice(conns.indexOf(c),1); await room.onClose(c); };
+  // F2b: prawdziwe wejście przez onConnect (token → tożsamość; reclaim/promote/coop-rejoin)
+  room.connect=async(id,name)=>{ const c=new FakeConn(null,null); c.state=null; conns.push(c);
+    const tok=await signToken('x', { sub:id });
+    await room.onConnect(c, { request:{ url:'https://w/parties/game-authority/TEST?t='+tok+'&name='+encodeURIComponent(name||id) } });
+    return c; };
   room.msg=(c,obj)=>room.onMessage(c, JSON.stringify(obj));
   return {room, conns};
 }
@@ -381,6 +386,219 @@ await group('F1 #10: kanał user-<id> — słucha tylko właściciel, invite tyl
   const o2=await room2.join('O','Owner'), f2=await room2.join('F','F');
   await room2.msg(f2, { t:'b', event:'invite', payload:{ code:'ABCD' } });
   ok(!o2.sent.some(m=>m.t==='b'), '#10: brak D1 → invite odrzucone (fail-closed)');
+});
+
+
+/* ==================== F2b: odporność MP (audyt 2026-10: #3 #6 #7 #8 #11 #12) ==================== */
+const readyAll=async(room, ...cs)=>{ const n=room.game.armNonce; for(const c of cs) await room.msg(c, { t:'action', action:{ type:'ready', armNonce:n } }); };
+const sleep=(ms)=>new Promise(r=>setTimeout(r,ms));
+
+await group('F2b #3: zamknięcie DRUGIEGO socketu hosta nie odbiera mu roli (dwie karty / half-open)', async ()=>{
+  const { room } = await makeRoom();
+  const h1=room.join('H','Host'), p=room.join('P','Pola');
+  await toPlay(room, h1, p);
+  const h2=await room.connect('H','Host');          // reconnect / druga karta — H1 jeszcze otwarty
+  await room.drop(h1);                              // stary socket H1 zamknięty PO wejściu H2
+  eq(room.hostId, 'H', '#3: host zostaje hostem (ma inne połączenie)');
+  eq(h2.last('presence').hostId, 'H', '#3: presence nadal hostId=H');
+  await room.msg(h2, { t:'lock' });
+  eq(room.game.phase, MP.REVEAL, '#3: lock od H2 działa');
+});
+
+await group('F2b #3: host sam (bez kogo awansować) → pokój czeka; po powrocie gra toczy się dalej', async ()=>{
+  const { room } = await makeRoom();
+  const h1=room.join('H','Host');
+  await room.msg(h1, { t:'start', config:CONFIG() });
+  await readyAll(room, h1);
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  const h2=await room.connect('H','Host');
+  await room.drop(h1);
+  await room.drop(h2);                              // wszyscy wyszli
+  eq(room.hostId, 'H', '#3: brak kogo awansować → hostId NIE zerowany');
+  const h3=await room.connect('H','Host');          // host wraca
+  eq(h3.last('presence').hostId, 'H', '#3: po powrocie presence hostId=H');
+  await room.msg(h3, { t:'lock' });
+  eq(room.game.phase, MP.REVEAL, '#3: po powrocie lock działa (bez zamrożenia)');
+  await room.msg(h3, { t:'next' });
+  ok(room.game.phase===MP.ARMING, '#3: next działa → ARMING');
+});
+
+await group('F2b #3: host nieobecny → nowy łączący przejmuje; starter wraca → odzyskuje', async ()=>{
+  const { room } = await makeRoom();
+  const h=room.join('H','Host'), p=room.join('P','Pola');
+  await toPlay(room, h, p);
+  await room.drop(p); await room.drop(h);           // P wyszedł pierwszy → przy wyjściu H nie ma kogo awansować
+  eq(room.hostId, 'H', 'hostId zostaje H');
+  const p2=await room.connect('P','Pola');
+  eq(room.hostId, 'P', 'P wraca, H nieobecny → P przejmuje (pokój nie zamarza na zawsze)');
+  const h2=await room.connect('H','Host');
+  eq([room.hostId, h2.last('presence').hostId], ['H','H'], 'starter H wraca → odzyskuje hosta');
+});
+
+await group('F2b #6: twardy timeout ARMING → start z gotowymi (AFK nie blokuje pokoju)', async ()=>{
+  const { room } = await makeRoom();
+  room.armTimeoutMs=30;
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG() });
+  ok(a.last('state').game.armMs>0, 'ARMING niesie armMs (licznik w UI)');
+  await room.msg(a, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  eq(room.game.phase, MP.ARMING, 'B AFK → ARMING');
+  await sleep(80);
+  eq(room.game.phase, MP.PLAY, '#6: po timeoucie → PLAY bez B');
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:'x' } } });
+  ok(room.game.byTeam.all.proposals.length===1, 'niegotowy B gra normalnie po starcie (dogania)');
+});
+
+await group('F2b #6: host „pomiń czekających" {t:go} w ARMING; nie-host ignorowany', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG() });
+  await room.msg(b, { t:'go' });
+  eq(room.game.phase, MP.ARMING, '#6: go od nie-hosta → bez zmian');
+  await room.msg(a, { t:'go' });
+  eq(room.game.phase, MP.PLAY, '#6: go od hosta → PLAY');
+  const pn=room.game.playNonce;
+  await room.msg(a, { t:'go' });
+  eq(room.game.playNonce, pn, 'go poza ARMING = no-op');
+});
+
+await group('F2b #6: timer ARMING wznawiany po restarcie DO (persist armDeadline)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG() });
+  room.clearArmTimer();                              // „evikcja": in-memory timer zginął
+  const ctx={ storage:room.ctx.storage, blockConcurrencyWhile:null };
+  let init=null; ctx.blockConcurrencyWhile=(fn)=>{ init=fn(); return init; };
+  room.armDeadline=Date.now()+20; await room.persist();
+  const r2=new GameAuthority(ctx, { TOKEN_SECRET:'x' }); await init;
+  r2.getConnections=()=>[a,b]; r2.broadcast=(s)=>[a,b].forEach(c=>c.send(s));
+  eq(r2.game.phase, MP.ARMING, 'po restarcie ARMING');
+  await sleep(70);
+  eq(r2.game.phase, MP.PLAY, '#6: wznowiony timer ARMING startuje pytanie');
+});
+
+await group('F2b #7: coop — gracz wraca w ARMING/PLAY → dołącza do drużyny i gra', async ()=>{
+  const { room } = await makeRoom();
+  const h=room.join('H','Host'), p=room.join('P','Pola');
+  await toPlay(room, h, p, { rounds:2 });
+  await room.msg(h, { t:'lock' });
+  await room.drop(p);                               // P traci zasięg na odsłonie…
+  await room.msg(h, { t:'next' });                  // …dokładnie gdy host klika „Następne"
+  eq(room.game.teams[0].members, ['H'], 'newRound składa drużynę z obecnych (bez P)');
+  const p2=await room.connect('P','Pola');          // P wraca w ARMING
+  ok(room.game.teams[0].members.includes('P'), '#7: powrót w ARMING → P w drużynie');
+  await readyAll(room, h, p2);
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  await room.msg(p2, { t:'action', action:{ type:'propose', values:{ a:'cokolwiek' } } });
+  ok(room.game.byTeam.all.proposals.some(x=>x.by==='P'), '#7: typ P przyjęty');
+  // powrót w trakcie PLAY
+  await room.drop(p2);
+  room.game.teams[0].members=['H'];                 // jak po newRound bez P
+  const p3=await room.connect('P','Pola');
+  ok(room.game.teams[0].members.includes('P'), '#7: powrót w PLAY → P w drużynie');
+  ok((p3.last('state').game.teams[0].members||[]).includes('P'), 'stan z P w drużynie rozesłany');
+});
+
+await group('F2b #7: salon — TV (host) po powrocie NIE trafia do drużyny graczy', async ()=>{
+  const { room } = await makeRoom();
+  const tv=room.join('TV','Telewizor'), p=room.join('P','Pola');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
+  const tv2=await room.connect('TV','Telewizor');
+  ok(!room.game.teams[0].members.includes('TV'), 'TV poza drużyną');
+});
+
+await group('F2b #8: liga — uczestnik = kto odpowiadał (wyszedł przed DONE: jest; widz: nie ma)', async ()=>{
+  const DB=fakeDB();
+  const { room } = await makeRoom({ DB });
+  const h=room.join('H','Host'), p=room.join('P','Pola');
+  await toPlay(room, h, p);
+  // P trafia każde pytanie, potem wychodzi przed końcem; Z dołącza na sam koniec i nic nie robi
+  let guard=0, z=null;
+  while(room.game.phase!==MP.DONE && guard++<100){
+    const g=room.game;
+    room.getConnections().forEach(c=>{ c._tb=null; });   // rate-limit (F1 #14) nie dotyczy symulacji długiego meczu
+    if(g.phase===MP.ARMING){ await readyAll(room, ...room.getConnections()); continue; }
+    if(g.phase===MP.PLAY){
+      const ans=room.current.answers.a[0];
+      if(room.getConnections().includes(p)) await room.msg(p, { t:'action', action:{ type:'propose', values:{ a:ans } } });
+      await room.msg(h, { t:'lock' });
+      continue;
+    }
+    if(g.phase===MP.REVEAL){
+      if(g.qi===2 && room.getConnections().includes(p)) await room.drop(p);
+      if(g.qi===3 && !z) z=await room.connect('Z','Zocha');
+      await room.msg(h, { t:'next' });
+      continue;
+    }
+    break;
+  }
+  eq(room.game.phase, MP.DONE, 'mecz dobiegł końca');
+  const ids=DB.parts.map(x=>x.profile_id);
+  ok(ids.includes('P'), '#8: P (wyszedł przed DONE) zapisany do ligi');
+  ok(DB.parts.find(x=>x.profile_id==='P').score>=3, '#8: z jego trafieniami');
+  ok(!ids.includes('Z'), '#8: Z (widz bez odpowiedzi) NIE zapisany');
+});
+
+await group('F2b #8: salon — TV-host nie trafia do ligi', async ()=>{
+  const DB=fakeDB();
+  const { room } = await makeRoom({ DB });
+  const tv=room.join('TV','Telewizor'), p=room.join('P','Pola');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
+  let guard=0;
+  while(room.game.phase!==MP.DONE && guard++<100){
+    const g=room.game;
+    room.getConnections().forEach(c=>{ c._tb=null; });   // rate-limit (F1 #14) nie dotyczy symulacji długiego meczu
+    if(g.phase===MP.ARMING) await readyAll(room, p);
+    else if(g.phase===MP.PLAY){ await room.msg(tv, { t:'action', action:{ type:'vote', slot:'a', value:'x', set:true } });
+      await room.msg(p, { t:'action', action:{ type:'pass' } }); await room.msg(tv, { t:'lock' }); }
+    else if(g.phase===MP.REVEAL) await room.msg(tv, { t:'next' });
+    else break;
+  }
+  eq(DB.parts.map(x=>x.profile_id), ['P'], '#8: tylko gracz P (TV poza ligą)');
+});
+
+await group('F2b #11: ARMING bez treści pytania/tekstu/offsetu — dopiero w PLAY', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG() });
+  const arm=b.last('state').game;
+  eq(arm.phase, MP.ARMING, 'ARMING');
+  eq(arm.prompt||'', '', '#11: brak treści pytania w ARMING');
+  await room.msg(a, { t:'action', action:{ type:'ready', armNonce:arm.armNonce } });
+  eq(b.last('state').game.prompt||'', '', '#11: nadal brak po ready innego gracza');
+  await room.msg(b, { t:'action', action:{ type:'ready', armNonce:arm.armNonce } });
+  const play=b.last('state').game;
+  eq(play.phase, MP.PLAY, 'PLAY');
+  ok(/^P\d+$/.test(play.prompt), '#11: treść pytania w PLAY');
+  // lektor/fragment: bezpośrednio na stanie serwera (bez sieci — nowa runda ręcznie)
+  room.game.phase=MP.ARMING; room.armHidden={ prompt:'', lyric:'tekst piosenki', ttsUrl:'tts/x.mp3', snipStart:7.5 };
+  room.game.lyric=''; room.game.ttsUrl=''; room.game.snipStart=0;
+  await room.go();
+  eq([room.game.lyric, room.game.ttsUrl, room.game.snipStart], ['tekst piosenki','tts/x.mp3',7.5], '#11: lyric/tts/offset fragmentu ujawnione w go()');
+});
+
+await group('F2b #11: lektor — tekst/TTS nie w ARMING (newRound z pulą piosenek)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  const pools={ ly:{ label:'Teksty', kind:'lyrics', songs:[{ title:'T', artist:'A', lyric:'la la la', tts:'tts/a.mp3' }] } };
+  await room.msg(a, { t:'start', config:CONFIG({ modes:['lektor'], pools }) });
+  const g=a.last('state').game;
+  if(g.phase===MP.ARMING){
+    eq([g.lyric||'', g.ttsUrl||''], ['',''], '#11: lektor w ARMING bez tekstu i TTS');
+    await readyAll(room, a);
+    eq(a.last('state').game.lyric, 'la la la', '#11: tekst lektora w PLAY');
+  } else ok(false, 'lektor: oczekiwano ARMING, było '+g.phase);
+});
+
+await group('F2b #12: duplikat ready nie powoduje broadcastu (bez kaskady re-arm)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG() });
+  const n=room.game.armNonce;
+  await room.msg(a, { t:'action', action:{ type:'ready', armNonce:n } });
+  const before=b.sent.filter(m=>m.t==='state').length;
+  for(let i=0;i<5;i++) await room.msg(a, { t:'action', action:{ type:'ready', armNonce:n } });
+  eq(b.sent.filter(m=>m.t==='state').length, before, '#12: 5× to samo ready → 0 broadcastów');
 });
 
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);

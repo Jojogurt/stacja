@@ -61,6 +61,14 @@ async function mpPlImport(){
   }catch(e){ setSt('err','Nie udało się: '+(e.message||e)); }
 }
 function mpToggleCat(k){ _togglePick(mpPickCats,k); mpRender(); }
+// F2b: delegacja kliknięć ticków kategorii (jeden listener na #mpStage, przeżywa re-render innerHTML)
+(function wireCatDelegation(){
+  const st=(typeof document!=='undefined') && document.getElementById('mpStage'); if(!st) return;
+  st.addEventListener('click', (e)=>{
+    const b=e.target && e.target.closest && e.target.closest('[data-mp-cat]');
+    if(b && st.contains(b)) mpToggleCat(b.dataset.mpCat);
+  });
+})();
 function mpToggleMode(m){ _togglePick(mpPickModes,m); mpRender(); }
 function mpSetRounds(r){ mpPickRounds=r; mpRender(); }
 function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
@@ -86,15 +94,17 @@ function mpPickerHTML(){
     const open=mpPickOpenGrp.has(d.g);
     grpChips+=`<button class="grp-chip${active?' on':''}${open?' open':''}" onclick="mpToggleGrp('${d.g}')">${d.lab}</button>`;
     if(!open) return;
+    // F2b: klucz kategorii (np. własnej playlisty z localStorage) w data-mp-cat + delegacja kliknięć
+    // (wireCatDelegation) — klucz nigdy nie trafia do inline JS (`'` w kluczu łamał/wstrzykiwał onclick)
     let inner;
     if(d.g==='twoje'){
       inner=`<div class="band-sub">twoje playlisty <button class="pl-add" onclick="mpPlToggle()">+ ze Spotify</button></div>`+
-        (keys.length? `<div class="ticks">`+keys.map(k=>`<button class="tick pl ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${(ALL_CATS[k].songs||[]).length} utw.</small></button>`).join('')+`</div>`
+        (keys.length? `<div class="ticks">`+keys.map(k=>`<button class="tick pl ${mpPickCats.has(k)?'on':''}" data-mp-cat="${escapeHtml(k)}">${escapeHtml(ALL_CATS[k].label)}<small>${(ALL_CATS[k].songs||[]).length} utw.</small></button>`).join('')+`</div>`
           : `<div class="ticks"><span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span></div>`)+
         `<div class="pl-panel${mpPlOpen?' show':''}"><input id="mpPlUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus">${escapeHtml(mpPlStatus)}</div></div>`;
     } else {
       inner=(MP_GRP_SUB[d.g]?`<div class="band-sub">${MP_GRP_SUB[d.g]}</div>`:'')+
-        `<div class="ticks">`+keys.map(k=>`<button class="tick ${d.cls} ${mpPickCats.has(k)?'on':''}" onclick="mpToggleCat('${k}')">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>`;
+        `<div class="ticks">`+keys.map(k=>`<button class="tick ${d.cls} ${mpPickCats.has(k)?'on':''}" data-mp-cat="${escapeHtml(k)}">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>`;
     }
     grpBands+=`<div class="grp-band open">${inner}</div>`;
   });

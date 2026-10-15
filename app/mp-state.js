@@ -44,4 +44,12 @@ export const S = {
   subTimer: null,         // auto-przejście słuchaj → kombinuj
   listenStart: 0,         // okno fazy „słuchaj" — start (ms)
   listenDur: 0,           // okno fazy „słuchaj" — długość (ms)
+  introUntil: 0,          // koniec intra fazy (start audio/okna wstrzymany do tego czasu)
+  // F2b #6/#12: faza gotowości i odsłona
+  armPending: null,       // armNonce, dla którego trwa buforowanie zajawki (bez dosyłki/re-load)
+  armReported: null,      // armNonce, dla którego już wysłaliśmy ready (1.1: dosyłka bez load)
+  armSeen: null,          // armNonce, dla którego ustawiono lokalny termin limitu ARMING
+  armDeadlineLocal: 0,    // lokalny termin twardego limitu ARMING (licznik w UI)
+  skipArm: false,         // salon: TV kliknęło „pomiń czekanie" → pomiń też ARMING (jednorazowo)
+  revealAutoAt: 0,        // termin auto-„dalej" na odsłonie (bezczynność); 0 = wyłączone
 };
