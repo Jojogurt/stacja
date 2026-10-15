@@ -8,7 +8,7 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v54';
+const CACHE = 'stacja-v55';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -40,7 +40,7 @@ self.addEventListener('install', (e) => {
   // precache best-effort (pojedynczy 404 nie wywala instalacji)
   e.waitUntil((async () => {
     const c = await caches.open(CACHE);
-    await Promise.allSettled(SHELL.map((u) => c.add(u)));
+    await Promise.allSettled(SHELL.map((u) => c.add(new Request(u, { cache: 'reload' }))));   // świeże z sieci, nie z HTTP-cache
     self.skipWaiting();
   })());
 });
@@ -88,7 +88,10 @@ self.addEventListener('fetch', (e) => {
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;   // cross-origin → sieć (domyślnie)
 
-  const net = fetch(req);
+  // 'no-cache' = rewalidacja w HTTP-cache przeglądarki: bez tego po deployu heurystyczny cache
+  // (GitHub Pages max-age=600) potrafił podać STARY moduł obok nowych → błąd importu i biały ekran.
+  // Nawigacji nie wolno przebudować z RequestInit (TypeError) — leci jak jest.
+  const net = req.mode === 'navigate' ? fetch(req) : fetch(req, { cache: 'no-cache' });
   // klon PRZED oddaniem odpowiedzi stronie (ciało jeszcze nieprzeczytane); waitUntil synchronicznie,
   // żeby zapis do cache dokończył się także wtedy, gdy stronie oddaliśmy już kopię z cache (timeout)
   e.waitUntil(net.then((res) => putRuntime(req, res.clone())).catch(() => {}));

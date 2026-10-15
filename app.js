@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v54';   // audyt 2026-10 F2b: bugi MP (host 2 karty, timeout gotowości, auto-dalej, rejoin coop, liga, treść dopiero w PLAY)
+const APP_VERSION = 'v55';   // audyt 2026-10 F3: silnik quizu (pool+dedup, liczby dokładnie, tasowanie ABCD, kanoniczna odsłona + ciekawostki, trwały seen-set)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw jasny/ciemny: segment w ustawieniach menu (#themeSeg, jak układ gry);

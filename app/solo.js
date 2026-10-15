@@ -2,7 +2,7 @@
  * mecz solo (rundy × kategorie × pytania), sprawdzanie odpowiedzi. Self-wiring przy imporcie
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
-import { norm, evaluateGuess, textMatch } from '../core/scoring.js';
+import { norm, evaluateGuess, evaluateQuiz, quizKey } from '../core/scoring.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance } from '../core/match.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
@@ -18,7 +18,7 @@ import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio 
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
 import { ERAS, STYLES, READY, LYRICS, QUIZ, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, catLabel, buildMatch, randomPools,
-  plLoad, plSave, plMerge, plFetch, addLateQuizCats } from './catalog.js';
+  plLoad, plSave, plMerge, plFetch, addLateQuizCats, quizFreshPool, quizTake } from './catalog.js';
 
 /* ============ stan ============ */
 let selectedEra = null;     // klucz lub 'rnd'
@@ -340,21 +340,22 @@ function newQuizRound(){
   disableRoundControls();
   const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
   const cat = ALL_CATS[eraKey];
-  let pool=((cat&&cat.questions)||[]).filter(q=>q.prompt && !seenTracks.has(norm(q.prompt)));
-  if(!pool.length){ ((cat&&cat.questions)||[]).forEach(q=>seenTracks.delete(norm(q.prompt))); pool=((cat&&cat.questions)||[]).slice(); }
+  // F3 #5: trwały seen-set per kategoria (localStorage) — pytania nie wracają między meczami, reset po wyczerpaniu
+  const pool=quizFreshPool(eraKey, (cat&&cat.questions)||[]);
   if(!pool.length){ busy=false; flash('Ta kategoria nie ma pytań.'); return; }
   // #3 (opcjonalnie): tryb trenera — częściej pytania wcześniej oblane (tylko quiz solo)
   let q;
   if(quizRepeat && pool.length>1){
     const stats=loadQuizStats();
-    const failed=pool.filter(x=>{ const st=stats[quizStatKey(eraKey,x)]; return st && st.w>(st.r||0); });
+    const failed=pool.filter(x=>{ const st=quizStatOf(stats, eraKey, x); return st && st.w>(st.r||0); });
     q = (failed.length && Math.random()<0.7) ? failed[Math.floor(Math.random()*failed.length)] : pool[Math.floor(Math.random()*pool.length)];
   } else {
     q = pool[Math.floor(Math.random()*pool.length)];
   }
-  const mc=parseMC(q.prompt);
-  current={prompt:q.prompt, slots:q.slots, answers:q.answers, era:eraKey, track:q.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:'', mc, statKey:quizStatKey(eraKey,q)};
-  seenTracks.add(norm(q.prompt));
+  // F3 #3: ABCD tasowane w runtime (litera poprawnej przemapowana); statKey liczony z treści BEZ opcji (#6 trenera)
+  const sq=quizTake(eraKey, q);
+  const mc=sq.mc || null;
+  current={prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', era:eraKey, track:sq.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:'', mc, statKey:quizStatKey(eraKey,q)};
   busy=false;
   renderSoloForm();
   showPrompt(mc?mc.question:q.prompt);
@@ -364,17 +365,7 @@ function newQuizRound(){
   if(mc){ const fb=document.querySelector('#quizForm .mc-opt'); if(fb) fb.focus({preventScroll:true}); }
   else { const first=document.getElementById('qf_'+(q.slots[0]&&q.slots[0].key)); if(first) first.focus({preventScroll:true}); }
 }
-// pytanie multiple-choice: rozdziel treść od opcji „A) … B) …". 2–4 opcje (na przyszłość też 3).
-// null = pytanie otwarte. Renderowane pionowo (jeden przycisk pod drugim), więc liczba dowolna.
-function parseMC(prompt){
-  const lines=(prompt||'').split('\n');
-  const first=lines.findIndex(l=>/^[ABCD]\)/.test(l.trim()));
-  if(first<0) return null;
-  const options=[];
-  for(let i=first;i<lines.length;i++){ const m=lines[i].trim().match(/^([ABCD])\)\s*(.+)$/); if(m) options.push({letter:m[1],text:m[2].trim()}); }
-  if(options.length<2 || options.length>4) return null;
-  return { question: lines.slice(0,first).join('\n').trim(), options };
-}
+// parseMC / shuffleMC (tasowanie ABCD) → core/scoring.js; current.mc = {question, options, correct}
 // zaznacz opcję ABCD (jedna na raz); ocena dopiero przy „Sprawdź"
 function selectMC(btn){
   if(!btn || btn.disabled) return;
@@ -555,29 +546,31 @@ function check(){
   document.getElementById('replay').disabled=false; // można dosłuchać
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
-// ocena quizu (solo): per slot dowolny wariant przez textMatch; trafienie = wszystkie sloty
+// ocena quizu (solo): core/scoring.evaluateQuiz; trafienie = wszystkie sloty
 function checkQuiz(){
   setIcon('play');
   const mc=current.mc;
   const slots=current.slots||[];
-  const okBySlot={};
-  let roundOk, guessLabel='';
+  // F3: wspólny silnik (core/scoring.evaluateQuiz) — ABCD po WYBRANEJ opcji, `pool` = sloty wymienne z dedup
+  const guesses={};
+  let guessLabel='';
   if(mc){
     const sel=document.querySelector('#quizForm .mc-opt.sel');
-    const guess=sel?sel.dataset.letter:'';
-    guessLabel=guess;
-    roundOk=(current.answers.a||[]).some(v=>textMatch(guess, v));
+    const k=(slots[0]&&slots[0].key)||'a';
+    guesses[k]=sel?sel.dataset.letter:'';
+    if(sel) guessLabel=sel.dataset.letter+') '+((sel.querySelector('.mc-tx')||{}).textContent||'');
   } else {
-    slots.forEach(s=>{ const guess=val('qf_'+s.key); okBySlot[s.key]=(current.answers[s.key]||[]).some(v=>textMatch(guess, v)); });
-    roundOk=slots.length && slots.every(s=>okBySlot[s.key]);
+    slots.forEach(s=>{ guesses[s.key]=val('qf_'+s.key); });
   }
+  const ev=evaluateQuiz(current, guesses);
+  const okBySlot=ev.bySlot, roundOk=ev.ok;
   total++; if(roundOk){score++;streak++;} else streak=0;
   updateScore();
   if(mode==='quiz' && current.statKey) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł
   if(session){ const s=matchSlot(session.match); session.results.push({track:current.prompt, artist:'', okTitle:roundOk, okArtist:roundOk, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   const r=document.getElementById('rmeta'); r.innerHTML='';
   if(mc){
-    const correctLetter=(current.answers.a[0]||'').toUpperCase();
+    const correctLetter=mc.correct||'';
     document.querySelectorAll('#quizForm .mc-opt').forEach(b=>{   // zielona = poprawna, czerwona = błędny wybór
       const wasSel=b.classList.contains('sel'); b.disabled=true; b.classList.remove('sel');
       b.setAttribute('aria-pressed', wasSel?'true':'false');
@@ -589,14 +582,16 @@ function checkQuiz(){
       if(mark){ const m=document.createElement('span'); m.className='mc-mark'; m.textContent=mark; b.appendChild(m);
         b.setAttribute('aria-label', `${b.dataset.letter}) ${tx} — ${desc}`); }
     });
-    const correctTxt=current.answers.a[1]||current.answers.a[0]||'';
-    r.appendChild(line(roundOk,'odpowiedź', correctLetter+') '+correctTxt + (guessLabel?` (Ty: ${guessLabel})`:' (nie wybrano)')));
+    const k=(slots[0]&&slots[0].key)||'a';
+    r.appendChild(line(roundOk,'odpowiedź', ev.display[k] + (guessLabel?` (Ty: ${guessLabel})`:' (nie wybrano)')));
   } else {
-    slots.forEach(s=>{ const guess=val('qf_'+s.key);
-      const correct=(current.answers[s.key]||[]).join(' / ');
-      r.appendChild(line(okBySlot[s.key], s.label||s.key, correct + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)')));
+    // F3 #4: tylko forma KANONICZNA (answers[k][0] / pozycja puli), nie lista wariantów; „Ty: …" przy każdym polu
+    slots.forEach(s=>{ const guess=guesses[s.key];
+      r.appendChild(line(okBySlot[s.key], s.label||s.key, (ev.display[s.key]||'—') + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)')));
     });
+    if(ev.others.length) r.appendChild(noteLine('inne poprawne', ev.others.join(', ')));
   }
+  if(current.fun) r.appendChild(noteLine('ciekawostka', '💡 '+current.fun));
   const img=document.getElementById('art'); if(img) img.style.display='none';
   const rh=document.getElementById('revealHead');
   if(rh){ const cls=roundOk?'win':'fail'; const ic=roundOk?'✓':'✗';
@@ -634,7 +629,9 @@ document.addEventListener('keydown',e=>{
 /* ===== #3: tryb trenera (solo quiz) — statystyki trafień + faworyzowanie oblanych ===== */
 const QUIZ_STATS_KEY='stacjaQuizStats', QUIZ_REPEAT_KEY='stacjaQuizRepeat';
 let quizRepeat = (()=>{ try{ return localStorage.getItem(QUIZ_REPEAT_KEY)==='1'; }catch(_e){ return false; } })();
-function quizStatKey(cat, q){ return cat+'::'+norm((q&&q.prompt)||''); }
+// F3 #6: klucz = treść BEZ opcji ABCD (quizKey) → stabilny po tasowaniu; stary klucz (pełny prompt) czytany wstecznie
+function quizStatKey(cat, q){ return cat+'::'+quizKey(q); }
+function quizStatOf(stats, cat, q){ return stats[quizStatKey(cat,q)] || stats[cat+'::'+norm((q&&q.prompt)||'')]; }
 function loadQuizStats(){ try{ return JSON.parse(localStorage.getItem(QUIZ_STATS_KEY)||'{}'); }catch(_e){ return {}; } }
 function recordQuizStat(key, ok){
   try{ const s=loadQuizStats(); const e=s[key]||{r:0,w:0}; if(ok)e.r++; else e.w++; s[key]=e;
@@ -647,10 +644,16 @@ function syncRepeatBtn(){ const b=document.getElementById('quizRepeat'); if(b) b
   syncRepeatBtn();
 })();
 
+// wiersz informacyjny odsłony (bez ✓/✗): „inne poprawne", „ciekawostka" — tekst ESCAPOWANY
+function noteLine(k,v){
+  const d=document.createElement('div'); d.className='rline rnote';
+  d.innerHTML=`<span class="mk" style="color:var(--muted)">·</span><span class="v"><span class="k">${escapeHtml(k)}</span>${escapeHtml(v)}</span>`;
+  return d;
+}
 function line(ok,k,v){
   const d=document.createElement('div'); d.className='rline';
   d.innerHTML=`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>
-    <span class="v"><span class="k">${k}</span>${escapeHtml(v)}</span>`;
+    <span class="v"><span class="k">${escapeHtml(k)}</span>${escapeHtml(v)}</span>`;
   return d;
 }
 

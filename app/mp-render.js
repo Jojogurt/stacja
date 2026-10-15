@@ -532,21 +532,28 @@ function mpRenderQuizReveal(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
   const rv=mpRevealMine(r);   // okBySlot/locked mojej drużyny
   const isMC=/\nA\)/.test(r.prompt||'');   // pytanie ABCD: opcje w treści, jeden slot „litera lub odpowiedź"
+  // F3 #4: tylko forma KANONICZNA — rv.display (silnik: ABCD „X) tekst", pula = trafione pozycje/kolejne),
+  // fallback dla starego hosta/serwera bez display: answers[k][0] (ABCD: „litera) tekst")
+  const disp=(rv.display&&typeof rv.display==='object')?rv.display:null;
   const rows=(r.slots||[]).map(s=>{
     const ok=!!(rv.okBySlot&&rv.okBySlot[s.key]);
     const variants=(r.answers&&r.answers[s.key])||[];
-    // ABCD: pokaż poprawną opcję zwięźle „A) Tekst" (zamiast wszystkich wariantów); bez zbędnego labelu po lewej
-    const correct = isMC ? escapeHtml((variants[0]||'')+(variants[1]?') '+variants[1]:'')) : (variants.map(escapeHtml).join(' / ')||'—');
+    const canon = disp && disp[s.key]!=null ? String(disp[s.key])
+      : (isMC ? (variants[0]||'')+(variants[1]?') '+variants[1]:'') : String(variants[0]||''));
+    const correct = escapeHtml(canon)||'—';
     const team=(rv.locked&&rv.locked[s.key])||'';
     const kLabel = isMC ? '' : `<span class="k">${escapeHtml((s.label||s.key).toUpperCase())}</span>`;
     return `<div class="rv-slot${isMC?' mc':''}">${kLabel}
       <span class="v">${correct}${team?`<small class="rv-team">drużyna: „${escapeHtml(team)}"</small>`:''}</span>
       <span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span></div>`;
   }).join('');
+  const others=Array.isArray(rv.others)&&rv.others.length
+    ? `<div class="rv-team rv-others">inne poprawne: ${rv.others.map(x=>escapeHtml(x)).join(', ')}</div>` : '';
+  const fun=r.fun ? `<div class="rv-team rv-fun">💡 ${escapeHtml(r.fun)}</div>` : '';
   return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}${mpHr()}
     <div class="rv-card quiz">
       <div class="rv-prompt">${escapeHtml(r.prompt||'')}</div>
-      ${rows}
+      ${rows}${others}${fun}
     </div>
     ${mpRevealBanner(rv)}
     ${mpRevealStandingsHTML(r.ranking)}

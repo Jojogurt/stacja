@@ -3,7 +3,7 @@
  * Dane kategorii i wrappery związane z ALL_CATS wstrzykiwane przez initMp (app/ nie zależy od app.js).
  * Powiązania zwrotne MP↔social: initMp woła initSocial; mp importuje showScreen/render* z social. */
 import { shuffle, escapeHtml } from '../core/util.js';
-import { norm } from '../core/scoring.js';
+import { norm, quizKey } from '../core/scoring.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, slotsFor, teamOf } from '../core/mpReducer.js';
@@ -23,7 +23,7 @@ import { stopAudio } from './audio.js';
 import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle } from './social.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
-  catLabel, buildMatch, randomPools, plLoad, plFetch } from './catalog.js';
+  catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickRounds, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
@@ -582,12 +582,17 @@ async function mpHostNewRound(){
   mpBroadcast(); mpRender();
   const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
   if(S.game.mode==='quiz'){
-    const qs=((ALL_CATS[catKey]&&ALL_CATS[catKey].questions)||[]).filter(q=>q.prompt&&!S.hostSeen.has(norm(q.prompt)));
-    if(!qs.length){ S.game.phase=MP.NOLYRIC; S.game.netReason='noquiz'; mpBroadcast(); mpRender(); return; }
+    // F3 #5: host (relay) losuje po stronie klienta → ten sam trwały seen-set co solo (+ hostSeen w obrębie meczu)
+    const all=((ALL_CATS[catKey]&&ALL_CATS[catKey].questions)||[]).filter(q=>q.prompt&&!S.hostSeen.has(quizKey(q)));
+    if(!all.length){ S.game.phase=MP.NOLYRIC; S.game.netReason='noquiz'; mpBroadcast(); mpRender(); return; }
+    const qs=quizFreshPool(catKey, all);
     const q=qs[Math.floor(Math.random()*qs.length)];
-    S.hostCurrent={prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
-    S.hostSeen.add(norm(q.prompt));
-    S.game.answerSlots=q.slots; S.game.prompt=q.prompt; S.game.preview=''; S.game.lyric=''; S.game.ttsUrl='';
+    // F3 #3: tasowanie ABCD po stronie AUTORYTATYWNEJ (host) — wszyscy widzą ten sam prompt; litera/answers
+    // zostają w S.hostCurrent (sekret hosta) i trafiają do stanu dopiero w reveal
+    const sq=quizTake(catKey, q);
+    S.hostCurrent={prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', mc:sq.mc||null, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
+    S.hostSeen.add(quizKey(q));
+    S.game.answerSlots=sq.slots; S.game.prompt=sq.prompt; S.game.preview=''; S.game.lyric=''; S.game.ttsUrl='';
   } else if(S.game.mode==='lektor'){
     const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!S.hostSeen.has(norm(s.title)));
     if(!songs.length){ S.game.phase=MP.NOLYRIC; mpBroadcast(); mpRender(); return; }

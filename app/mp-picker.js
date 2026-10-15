@@ -190,7 +190,12 @@ function mpBuildPools(cats, modes){
       });
     }
     if(Array.isArray(c.questions) && c.questions.length){   // wiedza ogólna — pytania lecą do DO (DO re-clampuje)
-      out.questions=c.questions.map(q=>({ prompt:q.prompt, slots:q.slots, answers:q.answers }));
+      // F3: + pool (sloty wymienne), difficulty, fun (SPEC v2). Stary serwer je wytnie → ocena per slot z answers (spłaszczona pula)
+      out.questions=c.questions.map(q=>{
+        const o={ prompt:q.prompt, slots:q.slots, answers:q.answers };
+        if(Array.isArray(q.pool)) o.pool=q.pool; if(q.difficulty) o.difficulty=q.difficulty; if(q.fun) o.fun=q.fun;
+        return o;
+      });
     }
     pools[k]=out;
   }

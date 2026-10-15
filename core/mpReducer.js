@@ -20,7 +20,7 @@
  *   - scores:  {[teamId]: liczba}                              — wynik per drużyna
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm } from './scoring.js';
+import { textMatch, norm, evaluateQuiz } from './scoring.js';
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -170,11 +170,18 @@ function evaluateTeam(game, teamId, current, match){
   // QUIZ (wiedza ogólna): current.answers = {slot:[warianty]} → slot trafiony, gdy guess pasuje do
   // DOWOLNEGO wariantu. MUZYKA: porównanie z polem utworu (SLOT_FIELD). Ta sama funkcja match.
   const hasAnswers = !!(current && current.answers && typeof current.answers==='object');
-  const slotOk = (key, guess)=> hasAnswers
-    ? (current.answers[key]||[]).some(v=> match(guess||'', v))
-    : match(guess||'', current[SLOT_FIELD[key]] || '');
+  // F3: QUIZ → wspólny silnik evaluateQuiz (ABCD po wybranej opcji, `pool` = sloty wymienne z dedup,
+  // inaczej per slot). Odpowiedź drużyny = górka głosów per slot — to samo „Connery" w dwóch slotach
+  // zalicza tylko jeden (skojarzenie dwudzielne). MUZYKA: porównanie z polem utworu (SLOT_FIELD).
+  const quizEval = (vals)=> evaluateQuiz(current, vals||{}, match, slots);
+  const evalAll = (vals)=>{
+    if(hasAnswers) return quizEval(vals);
+    const bySlot={}; slots.forEach(s=>{ bySlot[s.key]=match((vals&&vals[s.key])||'', current[SLOT_FIELD[s.key]] || ''); });
+    return { ok: slots.every(s=>bySlot[s.key]), bySlot };
+  };
+  const ev = evalAll(locked);
   const okBySlot = {};
-  slots.forEach(s=>{ okBySlot[s.key] = slotOk(s.key, locked[s.key]||''); });
+  slots.forEach(s=>{ okBySlot[s.key] = !!ev.bySlot[s.key]; });
   const teamOk = slots.every(s=>okBySlot[s.key]);
   const okTitle = !!okBySlot.title, okArtist = !!okBySlot.artist;
   // pewniacy = gracze drużyny, którzy postawili „pewniaka" (bkt.sure)
@@ -184,11 +191,13 @@ function evaluateTeam(game, teamId, current, match){
   // kto PIERWSZY w drużynie zaproponował komplet trafnych slotów (bonus/MVP)
   let firstBy=null, firstById=null;
   for(const p of (bkt.proposals||[])){
-    if(slots.every(s=> slotOk(s.key, (p.values&&p.values[s.key])||''))){ firstBy=p.byName; firstById=p.by; break; }
+    if(evalAll(p.values||{}).ok){ firstBy=p.byName; firstById=p.by; break; }
   }
   const lockedAll = {};
   slots.forEach(s=>{ lockedAll[s.key] = locked[s.key]||''; });
-  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById,
+  // F3 #4: formy kanoniczne do odsłony (per drużyna — przy `pool` zależą od tego, co drużyna trafiła)
+  const display = hasAnswers ? ev.display : undefined, others = hasAnswers ? ev.others : undefined;
+  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others,
     pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure };
 }
 /* ---- ocena CAŁEGO pytania: każda drużyna osobno + ranking — czysta ----
@@ -211,6 +220,7 @@ export function evaluateAnswer(game, current, match=textMatch){
     track:current.track, artist:current.artist, year:current.year, album:current.album, art:current.art,
     kind: hasAnswers ? 'quiz' : 'music', prompt: current.prompt || '',
     slots, answers: hasAnswers ? current.answers : null,
+    fun: hasAnswers ? String(current.fun||'') : '',          // F3 #4: ciekawostka (💡) — dopiero w odsłonie
     byTeam: perTeam, ranking,
     ...flat,   // coop → okTitle/okArtist/okBySlot/teamOk/locked/firstBy/pewniacy/gained/pewniakWin/pewniakLose
   };

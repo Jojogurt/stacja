@@ -1,6 +1,7 @@
 /* test/run.js — lekki runner dla czystego rdzenia (zero zależności).
  * Uruchom: node test/run.js */
-import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess, artistMatch } from '../core/scoring.js';
+import { norm, lev, textMatch, deLatin, yearMatch, evaluateGuess, artistMatch, numTokens, parseMC, shuffleMC, quizKey,
+  evaluateQuiz, poolOf, freshQuestions, rememberSeen, QUIZ_SEEN_LIMIT } from '../core/scoring.js';
 import { modesFor, buildMatch, matchSlot, matchAdvance, randomPools, QPC, CPR, ALL_MODES } from '../core/match.js';
 import { reduceAction, countReady, evaluateAnswer, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
@@ -673,6 +674,129 @@ group('scoring.zasady-2026-07: 4.3 przedimki tylko przy sensownym rdzeniu', ()=>
 group('scoring.zasady-2026-07: 4.4 leet warunkowo (strona z cyfrą ≥6 znaków)', ()=>{
   ok(textMatch('sos','50s')===false, 'sos ✗ 50s (kod <6 znaków — brak de-leet)');
   ok(textMatch('problem','PRO8L3M')===true, 'istniejący leet ≥6 znaków ✓ (bez regresji)');
+});
+
+/* ===================== F3: silnik oceny quizu (SPEC v2) ===================== */
+group('F3 #6 textMatch: liczby/numeracja dokładnie (literówka w liczbie = źle)', ()=>{
+  const NO=[['Apollo 12','Apollo 11'],['August III','August II'],['Ludwik XV','Ludwik XIV'],['Mieszko II','Mieszko I'],
+    ['An-225','An-22'],['An-22','An-225'],['1011','101'],['101','1011'],['Henryk IV','Henryk V'],['Henryk V','Henryk IV'],
+    ['Elżbieta I','Elżbieta II'],['Zygmunt III Waza','Zygmunt II Waza'],['Airbus A380','Airbus A320'],['Fiat 125p','Fiat 126p'],
+    ['Symphony No. 9','Symphony No. 5'],['16 lipca 1410','15 lipca 1410'],['-40','40'],['minus 40','-40'],['Windows 98','Windows 95']];
+  NO.forEach(([g,a])=>ok(textMatch(g,a)===false, `${g} ✗ ${a}`));
+  const YES=[['apollo11','Apollo 11'],['Apollo 11','Apollo 11'],['ludwik 14','Ludwik XIV'],['Ludwik XIV','ludwik xiv'],
+    ['mieszko 1','Mieszko I'],['Karol I Stuart','karol 1 stuart'],['20','20%'],['-40','−40'],['1939 - 1945','1939-1945'],
+    ['blink 182','Blink-182'],['99 luftbalons','99 Luftballons'],['1999','1999'],['22','22'],['007','7'],
+    ['PRO8L3M','Problem'],['problem','PRO8L3M'],['Romeo i Julia','Romeo i Julia'],['Kazimierz III Wielki','kazimierz iii wielki']];
+  YES.forEach(([g,a])=>ok(textMatch(g,a)===true, `${g} ✓ ${a}`));
+  eq(numTokens('An-22'),['22'],'numTokens: łącznik w nazwie ≠ minus');
+  eq(numTokens('temperatura -40°C'),['-40'],'numTokens: minus przed liczbą po spacji zachowany');
+  eq(numTokens('Romeo i Julia'),[],'numTokens: polski spójnik „i" to nie I');
+  eq(numTokens('Mieszko I'),['1'],'numTokens: końcowe I = 1');
+  eq(numTokens('PRO8L3M'),[],'numTokens: cyfry wewnątrz słowa = leet, nie liczba');
+  ok(artistMatch('Queen & David Bowie','Queen & David Bowie'), 'artistMatch bez regresji');
+});
+group('F3 #1 evaluateQuiz: `pool` = sloty wymienne, dopasowanie optymalne + dedup', ()=>{
+  const slots=[{key:'a',label:'aktor 1'},{key:'b',label:'aktor 2'},{key:'c',label:'aktor 3'}];
+  const pool=[['Sean Connery','Connery'],['Roger Moore','Moore'],['Daniel Craig','Craig'],['Pierce Brosnan','Brosnan']];
+  const flat=pool.flat();
+  const q={prompt:'Wymień trzech aktorów Bonda.', slots, answers:{a:flat,b:flat,c:flat}, pool};
+  const r1=evaluateQuiz(q,{a:'Daniel Craig',b:'Roger Moore',c:'Sean Connery'});
+  ok(r1.ok,'dowolna kolejność → ✓'); eq(r1.matched,[2,1,0],'matched = indeksy pozycji puli');
+  eq(r1.display,{a:'Daniel Craig',b:'Roger Moore',c:'Sean Connery'},'display = kanoniczne trafionych');
+  eq(r1.others,['Pierce Brosnan'],'others = reszta puli');
+  const r2=evaluateQuiz(q,{a:'Connery',b:'Sean Connery',c:'connery'});
+  ok(!r2.ok,'to samo 3× → ✗'); eq([r2.bySlot.a,r2.bySlot.b,r2.bySlot.c].filter(Boolean).length,1,'zalicza się tylko jedno pole');
+  const r3=evaluateQuiz(q,{a:'Craig',b:'Moore',c:''});
+  ok(!r3.ok && r3.bySlot.a && r3.bySlot.b && !r3.bySlot.c,'puste pole ✗, reszta ✓');
+  eq(r3.display.c,'Sean Connery','display pustego pola = kolejna nietrafiona pozycja');
+  eq(r3.others,['Pierce Brosnan'],'others bez pozycji pokazanej w display');
+  // optymalne (nie zachłanne): pole a pasuje do 2 pozycji, pole b tylko do jednej z nich
+  const qx={slots:[{key:'a'},{key:'b'}], answers:{a:['x'],b:['x']}, pool:[['Jan Kowalski','Kowalski'],['Anna Kowalska','Kowalska']]};
+  const rx=evaluateQuiz(qx,{a:'Kowalsk',b:'Jan Kowalski'});
+  ok(rx.ok, 'skojarzenie optymalne: a→Kowalska, b→Kowalski (zachłanne dałoby ✗)');
+  const qOwady={slots:[{key:'a'},{key:'b'},{key:'c'}], answers:{}, pool:[['mucha'],['pszczoła'],['mrówka'],['komar']]};
+  ok(!evaluateQuiz(qOwady,{a:'mucha',b:'mucha',c:'mucha'}).ok, '#5: „mucha ×3" → ✗');
+  ok(evaluateQuiz(qOwady,{a:'mrowka',b:'mucha',c:'pszczola'}).ok, 'bez diakrytyków, dowolna kolejność → ✓');
+  // bez pool → per slot jak dotąd (sloty uporządkowane), display = answers[k][0]
+  const qo={slots:[{key:'dir'},{key:'year'}], answers:{dir:['Quentin Tarantino','Tarantino'],year:['1994']}};
+  const ro=evaluateQuiz(qo,{dir:'tarantino',year:'1994'});
+  ok(ro.ok,'sloty uporządkowane: per slot'); eq(ro.display,{dir:'Quentin Tarantino',year:'1994'},'display = answers[k][0]');
+  ok(!evaluateQuiz(qo,{dir:'1994',year:'tarantino'}).ok,'sloty uporządkowane: zamiana pól ✗');
+  // kompatybilność: stary serwer obciął `pool` → ocena per slot ze spłaszczonej puli (bez dedup, bez crasha)
+  const old={...q}; delete old.pool;
+  ok(evaluateQuiz(old,{a:'Daniel Craig',b:'Roger Moore',c:'Sean Connery'}).ok,'bez pool: spłaszczona pula w answers zalicza dowolną kolejność');
+  eq(poolOf({pool:[[],['  '],'x',['A',5,'a2']]}),[['A','a2']],'poolOf: sanityzacja (puste/nie-stringi wycięte)');
+  eq(poolOf({pool:[]}),null,'poolOf: pusta pula → null');
+});
+group('F3 #3 ABCD: parseMC / shuffleMC / ocena po wybranej opcji', ()=>{
+  const q={prompt:'Która witamina?\nA) A\nB) C\nC) D\nD) B12', slots:[{key:'a',label:'litera lub odpowiedź'}],
+    answers:{a:['C','Witamina D','d','witamina d']}};
+  eq(parseMC(q.prompt).options.map(o=>o.letter).join(''),'ABCD','parseMC: 4 opcje');
+  ok(parseMC('Pytanie otwarte?')===null,'parseMC: otwarte → null');
+  // #13: litera D (B12) NIE zaliczana przez alias „d"
+  ok(!evaluateQuiz(q,{a:'D'}).ok,'#13: wybór D (B12) ✗ mimo aliasu „d"');
+  ok(evaluateQuiz(q,{a:'C'}).ok,'wybór C ✓ (dane nietasowane)');
+  ok(evaluateQuiz(q,{a:'witamina d'}).ok,'MP: tekst wariantu ✓');
+  ok(!evaluateQuiz(q,{a:'B12'}).ok,'MP: tekst złej opcji ✗');
+  // deterministyczne rng → znana permutacja; poprawna litera przemapowana
+  const seq=[0.99,0.0,0.5]; let i=0; const rng=()=>seq[(i++)%seq.length];
+  const s=shuffleMC(q, rng);
+  const corr=s.mc.options.find(o=>o.letter===s.mc.correct);
+  eq(corr.text,'D','po tasowaniu poprawna litera wskazuje opcję „D" (witamina D)');
+  eq(s.answers.a[0], s.mc.correct, 'answers.a[0] = nowa litera'); eq(s.answers.a[1],'D','answers.a[1] = tekst poprawnej opcji');
+  ok(!s.answers.a.slice(1).some(v=>norm(v).length<=1 && v!=='D'),'aliasy jednoliterowe a–d usunięte');
+  ok(s.prompt.startsWith('Która witamina?\nA) ') && parseMC(s.prompt).options.length===4,'prompt przebudowany z nowymi literami');
+  eq(parseMC(s.prompt).options.map(o=>o.text).sort(),['A','B12','C','D'],'te same opcje, inna kolejność');
+  ok(evaluateQuiz(s,{a:s.mc.correct}).ok,'ocena po wybranej opcji (nowa litera) ✓');
+  const wrong=s.mc.options.find(o=>o.letter!==s.mc.correct);
+  ok(!evaluateQuiz(s,{a:wrong.letter}).ok,'inna opcja ✗');
+  ok(!evaluateQuiz(s,{a:'C'}).ok || s.mc.correct==='C','stara litera z danych nie zalicza (chyba że trafiła na to samo miejsce)');
+  eq(evaluateQuiz(s,{a:s.mc.correct}).display.a, s.mc.correct+') D','display = „X) tekst" poprawnej opcji');
+  eq(quizKey(s), quizKey(q), 'quizKey stabilny po tasowaniu (treść bez opcji)');
+  eq(quizKey(q),'ktora witamina','quizKey = norm(treści bez opcji)');
+  // rozkład: poprawna nie zawsze na tej samej pozycji
+  const letters=new Set(); for(let k=0;k<40;k++) letters.add(shuffleMC(q).mc.correct);
+  ok(letters.size>=3,'Math.random: poprawna litera się zmienia ('+[...letters].join('')+')');
+  const open={prompt:'Stolica?', slots:[{key:'a'}], answers:{a:['Canberra']}};
+  ok(shuffleMC(open)===open,'pytanie otwarte → bez zmian');
+  const bad={prompt:'Q?\nA) x\nB) y', slots:[{key:'a'}], answers:{a:['zzz']}};
+  ok(shuffleMC(bad).mc.correct===null && shuffleMC(bad).prompt===bad.prompt,'nieustalona poprawna → bez tasowania');
+});
+group('F3 #1/#4 mpReducer.evaluateAnswer: pool + dedup w odpowiedzi drużyny, display/others/fun', ()=>{
+  const slots=[{key:'a',label:'kraj 1'},{key:'b',label:'kraj 2'},{key:'c',label:'kraj 3'}];
+  const pool=[['Litwa'],['Łotwa'],['Estonia']]; const flat=pool.flat();
+  const cur={prompt:'Wymień państwa bałtyckie.', slots, answers:{a:flat,b:flat,c:flat}, pool, fun:'<b>Ciekawostka</b>'};
+  const g=coopG({members:['u1'], answerSlots:slots,
+    proposals:[{by:'u1',byName:'A',values:{a:'Estonia',b:'Łotwa',c:'Litwa'}}],
+    votes:{ a:{u1:'Estonia'}, b:{u1:'Łotwa'}, c:{u1:'Litwa'} } });
+  const e=evaluateAnswer(g, cur);
+  ok(e.reveal.teamOk,'MP: odwrócona kolejność ✓'); eq(e.reveal.firstBy,'A','firstBy przez evaluateQuiz');
+  eq(e.reveal.display,{a:'Estonia',b:'Łotwa',c:'Litwa'},'reveal.display (kanoniczne)');
+  eq(e.reveal.fun,'<b>Ciekawostka</b>','reveal.fun (escape robi render)');
+  const g2=coopG({members:['u1','u2'], answerSlots:slots,
+    votes:{ a:{u1:'Litwa'}, b:{u1:'litwa'}, c:{u2:'Litwa'} } });
+  const e2=evaluateAnswer(g2, cur);
+  ok(!e2.reveal.teamOk,'MP: „Litwa ×3" → ✗ (dedup)');
+  eq(Object.values(e2.reveal.okBySlot).filter(Boolean).length,1,'MP: zalicza się jedno pole');
+  eq(e2.reveal.others,[],'others puste (2 nietrafione pokazane w display)');
+  const mcq=shuffleMC({prompt:'Q?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta', slots:[{key:'a',label:'odp'}], answers:{a:['B','Beta']}}, ()=>0);
+  const g3=coopG({members:['u1'], answerSlots:mcq.slots, votes:{a:{u1:mcq.mc.correct.toLowerCase()}}});
+  ok(evaluateAnswer(g3, mcq).reveal.teamOk,'MP ABCD: litera po tasowaniu ✓');
+  const g4=coopG({members:['u1'], answerSlots:mcq.slots, votes:{a:{u1:'B'}}});
+  ok(evaluateAnswer(g4, mcq).reveal.teamOk === (mcq.mc.correct==='B'),'MP ABCD: stara litera z danych nie liczy się');
+  const music=evaluateAnswer(coopG({members:['u1'], votes:{title:{u1:'Hey Jude'},artist:{u1:'Beatles'}}}), {track:'Hey Jude',artist:'The Beatles'});
+  ok(music.reveal.teamOk && music.reveal.fun==='','muzyka: bez zmian, brak fun');
+});
+group('F3 #5 seen-set: freshQuestions / rememberSeen (reset po wyczerpaniu, limit)', ()=>{
+  const qs=[{prompt:'P1?\nA) a\nB) b'},{prompt:'P2'},{prompt:'P3'}];
+  const k=qs.map(quizKey);
+  eq(freshQuestions(qs,[k[0]]).pool.map(quizKey),[k[1],k[2]],'zagrane odfiltrowane');
+  const ex=freshQuestions(qs,[k[0],k[2],k[1]]);
+  ok(ex.reset && ex.pool.length===2 && !ex.pool.some(q=>quizKey(q)===k[1]),'wyczerpane → reset bez ostatnio zagranego');
+  eq(freshQuestions([qs[1]],[k[1]]).pool.length,1,'jedno pytanie → reset zwraca je');
+  eq(rememberSeen(['a','b'],'a'),['b','a'],'rememberSeen: bez duplikatów, najnowszy na końcu');
+  let big=[]; for(let i=0;i<QUIZ_SEEN_LIMIT+50;i++) big=rememberSeen(big,'k'+i);
+  eq(big.length,QUIZ_SEEN_LIMIT,'limit '+QUIZ_SEEN_LIMIT); eq(big[big.length-1],'k'+(QUIZ_SEEN_LIMIT+49),'zostają najnowsze');
 });
 
 // 2.2: globalny cap czasu na resolveFromArtists — wiszący itunes nie kręci spinnera minutami

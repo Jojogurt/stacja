@@ -35,6 +35,16 @@ const catsByKind=(window)=>{
 // dopiero w grupie MP (reszta testów działa jak dotąd z pustym base → wariant „bez backendu").
 const { window, fetchCalls, wsInstances, audioInstances } = await bootApp({ serverAuthority:true });
 window.__MP_REVEAL_AUTO_MS__ = 600000;   // F2b #6: auto-„dalej" na odsłonie wyłączony w siatce (test F2b ustawia krótko)
+// F3: siatka nie zależy od danych w toku — brak kategorii quizu (np. pusty questions.js, a data/ ładuje
+// quiz-loader, którego jsdom nie odpala) → fixture dopięta zdarzeniem stacja:quiz (ścieżka F2a #8)
+if(!Object.keys((window.CATEGORIES&&window.CATEGORIES.quiz)||{}).length){
+  window.CATEGORIES.quiz = window.CATEGORIES.quiz || {};
+  window.CATEGORIES.quiz['test-quiz'] = { kind:'quiz', label:'Test quiz',
+    questions:[{ prompt:'Stolica Polski?', slots:[{key:'a',label:'miasto'}], answers:{a:['Warszawa']} }] };
+  window.dispatchEvent(new window.CustomEvent('stacja:quiz'));
+  await settle(2);
+}
+const optByText=(t)=>[...window.document.querySelectorAll('#quizForm .mc-opt')].find(b=>((b.querySelector('.mc-tx')||{}).textContent||'')===t);
 
 await group('load: app.js montuje się bez wyjątku', async ()=>{
   ok(window.STACJA_VERSION, 'STACJA_VERSION ustawione: '+window.STACJA_VERSION);
@@ -110,8 +120,8 @@ await group('quiz ABCD (solo): przyciski opcji + wybór + ocena + odsłona', asy
     ok(opts.length===4, 'ABCD: 4 przyciski opcji (jest: '+opts.length+')');
     ok(!$(window,'qf_a'), 'ABCD: brak pola tekstowego (klikasz zamiast pisać)');
     ok(!$(window,'lyricBox').textContent.includes('Alfa'), 'ABCD: opcje poza treścią pytania (w przyciskach)');
-    const bBtn=opts.find(b=>b.dataset.letter==='B');
-    ok(bBtn, 'ABCD: jest opcja B'); bBtn.click();
+    const bBtn=optByText('Beta');   // F3: opcje tasowane w runtime — szukamy po TEKŚCIE, nie po literze z danych
+    ok(bBtn, 'ABCD: jest opcja „Beta"'); bBtn.click();
     ok(bBtn.classList.contains('sel'), 'ABCD: klik zaznacza opcję (.sel)');
     ok(window.document.querySelectorAll('#quizForm .mc-opt.sel').length===1, 'ABCD: zaznaczona dokładnie jedna');
     click(window,'check');
@@ -138,12 +148,82 @@ await group('quiz ABC (solo): 3 opcje też renderują się jako przyciski', asyn
     const opts=[...window.document.querySelectorAll('#quizForm .mc-opt')];
     ok(opts.length===3, 'ABC: 3 przyciski opcji (jest: '+opts.length+')');
     ok(opts.map(b=>b.dataset.letter).join('')==='ABC', 'ABC: litery A,B,C');
-    const cBtn=opts.find(b=>b.dataset.letter==='C'); cBtn.click();
+    const cBtn=optByText('Trzecia'); cBtn.click();
     click(window,'check');
     await settle(6);
-    ok($(window,'revealHead').className.includes('win'), 'ABC: poprawna (C) → win');
-    ok(cBtn.classList.contains('ok'), 'ABC: opcja C na zielono');
+    ok($(window,'revealHead').className.includes('win'), 'ABC: poprawna („Trzecia") → win');
+    ok(cBtn.classList.contains('ok'), 'ABC: poprawna opcja na zielono');
   } finally { cat.questions=orig; }
+});
+
+/* ======== F3: silnik oceny quizu (SPEC v2) — solo ======== */
+await group('F3 solo: ABCD tasowane w runtime + ocena po wybranej opcji + statKey trenera bez opcji', async ()=>{
+  resetSelection(window);
+  const C=window.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  const cat=C.quiz[qKey]; const orig=cat.questions; const rnd=Math.random;
+  cat.questions=[{ prompt:'F3 ABCD?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta', slots:[{key:'a',label:'odp'}], answers:{ a:['B','Beta','b'] } }];
+  try{
+    Math.random=()=>0;   // deterministyczne tasowanie: [Alfa,Beta,Gamma,Delta] → [Beta,Gamma,Delta,Alfa]
+    const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===qKey);
+    if(tk && !tk.classList.contains('on')) tk.click();
+    click(window,'matchStart'); await settle(10);
+    Math.random=rnd;
+    const opts=[...window.document.querySelectorAll('#quizForm .mc-opt')];
+    eq2(opts.map(b=>b.dataset.letter+':'+b.querySelector('.mc-tx').textContent).join(','), 'A:Beta,B:Gamma,C:Delta,D:Alfa', 'opcje potasowane, litery A–D od nowa');
+    const old=opts.find(b=>b.dataset.letter==='B');   // litera poprawnej Z DANYCH — teraz to „Gamma"
+    old.click(); click(window,'check'); await settle(6);
+    ok($(window,'revealHead').className.includes('fail'), 'litera z danych (B=Gamma) ✗ — ocena po opcji, alias „b" nie zalicza');
+    ok(optByText('Beta').classList.contains('ok'), 'poprawna („Beta", teraz A) na zielono');
+    const rm=txt(window,'rmeta');
+    ok(/A\) Beta/.test(rm) && /Ty: B\) Gamma/.test(rm), 'odsłona: „A) Beta" + „Ty: B) Gamma" — '+rm.replace(/\s+/g,' '));
+    const stats=JSON.parse(window.localStorage.getItem('stacjaQuizStats')||'{}');
+    ok(stats[qKey+'::f3 abcd'] && stats[qKey+'::f3 abcd'].w>=1, '#6: statKey = kategoria::treść bez opcji (stabilny po tasowaniu)');
+    ok(!Object.keys(stats).some(k=>/f3 abcd .*alfa/.test(k)), '#6: brak klucza z opcjami');
+  } finally { Math.random=rnd; cat.questions=orig; }
+  click(window,'sessEnd'); await settle(2);
+});
+
+await group('F3 solo: `pool` — dowolna kolejność ✓, ten sam wpis 2× ✗, kanoniczna odpowiedź + „Ty:" + 💡 (escape)', async ()=>{
+  const C=window.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  const cat=C.quiz[qKey]; const orig=cat.questions;
+  const flat=['Litwa','Łotwa','Lotwa','Estonia'];
+  cat.questions=[{ prompt:'Wymień dwa państwa bałtyckie.', slots:[{key:'a',label:'kraj 1'},{key:'b',label:'kraj 2'}],
+    answers:{a:flat,b:flat}, pool:[['Litwa'],['Łotwa','Lotwa'],['Estonia']], fun:'<img src=x onerror="window.__f3xss=1">Estonia ma wyspy' }];
+  try{
+    await f2aStartMatch(qKey, null);
+    $(window,'qf_a').value='Estonia'; $(window,'qf_b').value='lotwa';
+    click(window,'check'); await settle(6);
+    ok($(window,'revealHead').className.includes('win'), 'odwrócona kolejność → win');
+    const rm=txt(window,'rmeta');
+    ok(/Estonia \(Ty: Estonia\)/.test(rm) && /Łotwa \(Ty: lotwa\)/.test(rm), 'kanoniczna forma + „Ty:" przy polu — '+rm.replace(/\s+/g,' '));
+    ok(!/ \/ /.test(rm), 'bez listy wariantów „a / b"');
+    ok(/inne poprawne/.test(rm) && /Litwa/.test(rm), '„inne poprawne: Litwa"');
+    ok(/💡/.test(rm) && !$(window,'rmeta').querySelector('img') && !window.__f3xss, 'ciekawostka 💡 escapowana (brak <img>)');
+    click(window,'next'); await settle(10);
+    // pula 1 pytania wyczerpana → trwały seen-set resetuje się → to samo pytanie wraca (bez „brak pytań")
+    ok($(window,'qf_a'), 'kolejne pytanie po wyczerpaniu puli (reset seen-setu)');
+    $(window,'qf_a').value='Litwa'; $(window,'qf_b').value='litwa';
+    click(window,'check'); await settle(6);
+    ok($(window,'revealHead').className.includes('fail'), '„Litwa ×2" → fail (dedup)');
+    const seen=JSON.parse(window.localStorage.getItem('stacjaQuizSeen')||'{}');
+    ok(Array.isArray(seen[qKey]) && seen[qKey].includes('wymien dwa panstwa baltyckie'), '#5: trwały seen-set per kategoria w localStorage');
+  } finally { cat.questions=orig; }
+  click(window,'sessEnd'); await settle(2);
+});
+
+await group('F3 solo: trwały seen-set — pytanie nie wraca w kolejnym meczu, dopóki pula się nie wyczerpie', async ()=>{
+  const C=window.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  const cat=C.quiz[qKey]; const orig=cat.questions;
+  cat.questions=['S1','S2','S3'].map(p=>({ prompt:p+'?', slots:[{key:'a',label:'x'}], answers:{a:['x']} }));
+  window.localStorage.removeItem('stacjaQuizSeen');
+  try{
+    const shown=[];
+    for(let i=0;i<3;i++){ await f2aStartMatch(qKey, null); shown.push(txt(window,'lyricBox').replace('pytanie','').trim()); click(window,'sessEnd'); await settle(2); }
+    eq2(new Set(shown).size, 3, '3 mecze po 1. pytaniu → 3 różne pytania ('+shown.join(',')+')');
+    await f2aStartMatch(qKey, null);
+    ok(/S\d\?/.test(txt(window,'lyricBox')), 'po wyczerpaniu puli → reset (jest pytanie)');
+  } finally { cat.questions=orig; }
+  click(window,'sessEnd'); await settle(2);
 });
 
 await group('ekrany: nawigacja menu → body class (showScreen)', async ()=>{
@@ -289,13 +369,13 @@ await group('F2a #20: ABCD — aria-pressed + ✓/✗ tekstem; gałka z aria-lab
     await f2aStartMatch(qKey, null);
     const opts=[...window.document.querySelectorAll('#quizForm .mc-opt')];
     ok(opts.every(b=>b.getAttribute('aria-pressed')==='false'), 'opcje startują z aria-pressed=false');
-    const A=opts.find(b=>b.dataset.letter==='A'), B=opts.find(b=>b.dataset.letter==='B');
+    const A=optByText('Alfa'), B=optByText('Beta');   // F3: A = błędna, B = poprawna (po tekście — opcje tasowane)
     A.click();
     ok(A.getAttribute('aria-pressed')==='true' && B.getAttribute('aria-pressed')==='false', 'wybór → aria-pressed=true tylko na wybranej');
     click(window,'check'); await settle(2);
     ok((B.querySelector('.mc-mark')||{}).textContent==='✓' && /poprawna/.test(B.getAttribute('aria-label')||''), 'poprawna: ✓ w treści + aria-label');
     ok((A.querySelector('.mc-mark')||{}).textContent==='✗' && /błędny/.test(A.getAttribute('aria-label')||''), 'błędny wybór: ✗ w treści + aria-label');
-    ok(!(opts.find(b=>b.dataset.letter==='C').querySelector('.mc-mark')), 'pozostałe opcje bez znacznika');
+    ok(!(optByText('Gamma').querySelector('.mc-mark')), 'pozostałe opcje bez znacznika');
   } finally { cat.questions=orig; }
   click(window,'sessEnd'); await settle(2);
   const { audio } = catsByKind(window);
@@ -524,6 +604,26 @@ await group('MP: odsłona ABCD — opcje w pionie (\\n) + bez labelu „litera l
   ok(!/LITERA LUB ODPOWIEDŹ/i.test(rv), 'ABCD reveal: usunięty zbędny label „litera lub odpowiedź"');
   ok(!/undefined is not|Cannot read/.test(rv), 'ABCD reveal render bez wyjątku');
   w.mpAdvance && w.mpAdvance();   // zamknij odsłonę u siebie (nie zostawiaj „reveal pending" następnej grupie)
+});
+
+await group('F3 MP: odsłona quizu — forma kanoniczna (display), „inne poprawne", 💡 escapowana', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'q',mode:'quiz'}],
+    mode:'quiz', catKey:'q', catLabel:'Wiedza',
+    reveal:{ kind:'quiz', prompt:'Wymień dwóch aktorów Bonda.',
+      slots:[{key:'a',label:'aktor 1'},{key:'b',label:'aktor 2'}],
+      answers:{ a:['Sean Connery','Connery','Roger Moore','Moore'], b:['Sean Connery','Connery','Roger Moore','Moore'] },
+      display:{ a:'Roger Moore', b:'Sean Connery' }, others:['Daniel Craig','<b>X</b>'], okBySlot:{a:true,b:false},
+      locked:{a:'moore',b:'moore'}, teamOk:false, fun:'<img src=x onerror="window.__f3mp=1">Lazenby raz' },
+    proposals:[], votes:{}, passed:[], playNonce:8, timer:0 });
+  await settle(6);
+  const rv=$(w,'mpRoom').innerHTML;
+  ok(/Roger Moore/.test(rv) && /Sean Connery/.test(rv) && !/Connery \/ /.test(rv), 'kanoniczne formy, bez listy wariantów');
+  ok(/inne poprawne: Daniel Craig, &lt;b&gt;X&lt;\/b&gt;/.test(rv), '„inne poprawne" escapowane');
+  ok(/💡 &lt;img/.test(rv) && !$(w,'mpRoom').querySelector('.rv-card img') && !w.__f3mp, 'ciekawostka 💡 escapowana');
+  ok(/drużyna: „moore"/.test(rv), 'odpowiedź drużyny przy polu');
+  w.mpAdvance && w.mpAdvance();
 });
 
 await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emotek; board nadpisywalny', async ()=>{

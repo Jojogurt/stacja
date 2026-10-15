@@ -31,7 +31,7 @@ import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { norm } from '../core/scoring.js';
+import { norm, quizKey, shuffleMC } from '../core/scoring.js';
 import { MP_SNIP_WINDOW_S, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
 import { resolveTrackServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
@@ -44,6 +44,10 @@ const POOL_MAX_QUESTIONS = 200;      // cap pytań (wiedza ogólna) na kategori�
 const POOL_MAX_SLOTS = 6;            // cap slotów odpowiedzi na pytanie
 const POOL_MAX_VARIANTS = 12;        // cap wariantów poprawnej odpowiedzi na slot
 const POOL_PROMPT_MAX = 600;         // max długość treści pytania
+const POOL_MAX_ITEMS = 24;           // F3: `pool` (sloty wymienne) — max pozycji na pytanie
+const POOL_MAX_ALIASES = 8;          //     max aliasów na pozycję
+const POOL_ALIAS_MAX = 120;          //     max długość aliasu
+const FUN_MAX = 300;                 //     ciekawostka (odsłona)
 const NAME_MAX = 40;                 // 3.3: cap długości nicka (?name= / track / byName)
 const EVENT_PAYLOAD_MAX = 500;       // 3.3: cap rozmiaru payloadu ulotnego eventu (po JSON.stringify)
 const REACTIONS = ['😂','🔥','🎉','🤔','😱','🖕'];   // 3.3: whitelist emotek (musi = app/mp-render.js)
@@ -84,7 +88,17 @@ function clampQuestion(q){
     answers[s.key]=arr.slice(0, POOL_MAX_VARIANTS).map(v=>String(v).slice(0, POOL_PROMPT_MAX)).filter(Boolean);
   }
   if(!slots.every(s=>answers[s.key].length)) return null;   // każdy slot musi mieć ≥1 wariant
-  return { prompt, slots, answers };
+  const out={ prompt, slots, answers };
+  // F3 (SPEC v2): pool = lista list stringów (capy liczby/długości; puste wycięte), difficulty 1..3, fun = tekst
+  if(Array.isArray(q.pool)){
+    const pool=q.pool.slice(0, POOL_MAX_ITEMS).filter(Array.isArray)
+      .map(it=>it.slice(0, POOL_MAX_ALIASES).filter(v=>typeof v==='string').map(v=>v.trim().slice(0, POOL_ALIAS_MAX)).filter(Boolean))
+      .filter(it=>it.length);
+    if(pool.length) out.pool=pool;
+  }
+  const d=Number(q.difficulty); if(d===1 || d===2 || d===3) out.difficulty=d;
+  const fun=clipText(q.fun, FUN_MAX); if(fun) out.fun=fun;
+  return out;
 }
 
 // przytnij przychodzące pule: ogranicz liczbę kategorii/utworów i długość tekstów (anty-flood/anty-OOM)
@@ -417,13 +431,18 @@ export class GameAuthority extends Server {
 
     if(this.game.mode==='quiz'){
       // WIEDZA OGÓLNA: wylosuj pytanie z puli (bez audio). answers = SEKRET (zostaje na serwerze).
-      const qs=(cat.questions||[]).filter(q=>q && q.prompt && !this.hostSeen.has(norm(q.prompt)));
+      // F3 #5: seen-set tylko w obrębie meczu (hostSeen) — trwały seen-set jest per urządzenie (solo/relay-host)
+      const qs=(cat.questions||[]).filter(q=>q && q.prompt && !this.hostSeen.has(quizKey(q)));
       if(!qs.length){ this.game.phase=MP.NOLYRIC; this.game.netReason='noquiz'; this.broadcastState(); await this.persist(); return; }
       const q=qs[Math.floor(Math.random()*qs.length)];
-      this.current={ prompt:q.prompt, slots:q.slots, answers:q.answers, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:'' };
-      this.hostSeen.add(norm(q.prompt));
-      this.game.answerSlots=q.slots; this.game.prompt=''; this.game.preview=''; this.game.lyric=''; this.game.ttsUrl='';
-      hidden.prompt=q.prompt;                       // F2b #11: treść pytania dopiero w PLAY
+      // F3 #3: tasowanie ABCD TU (strona autorytatywna) — wspólne dla wszystkich; litera/answers/pool/fun = SEKRET
+      // w this.current (do game.reveal dopiero przy lock); klient widzi tylko potasowany prompt (od PLAY)
+      const sq=shuffleMC(q);
+      this.current={ prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', mc:sq.mc||null,
+        track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:'' };
+      this.hostSeen.add(quizKey(q));
+      this.game.answerSlots=sq.slots; this.game.prompt=''; this.game.preview=''; this.game.lyric=''; this.game.ttsUrl='';
+      hidden.prompt=sq.prompt;                      // F2b #11: treść pytania dopiero w PLAY
     } else if(this.game.mode==='lektor'){
       const songs=(cat.songs||[]).filter(x=>x.lyric && !this.hostSeen.has(norm(x.title)));
       if(!songs.length){ this.game.phase=MP.NOLYRIC; this.broadcastState(); await this.persist(); return; }

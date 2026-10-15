@@ -601,5 +601,75 @@ await group('F2b #12: duplikat ready nie powoduje broadcastu (bez kaskady re-arm
   eq(b.sent.filter(m=>m.t==='state').length, before, '#12: 5× to samo ready → 0 broadcastów');
 });
 
+/* ==================== F3: silnik oceny quizu (SPEC v2) po stronie serwera ==================== */
+const BALT={ prompt:'Wymień państwa bałtyckie.', slots:[{key:'a',label:'kraj 1'},{key:'b',label:'kraj 2'},{key:'c',label:'kraj 3'}],
+  answers:{ a:['Litwa','Łotwa','Estonia'], b:['Litwa','Łotwa','Estonia'], c:['Litwa','Łotwa','Estonia'] },
+  pool:[['Litwa'],['Łotwa'],['Estonia']], difficulty:2, fun:'<i>Estonia</i> ma ~2200 wysp.' };
+const ABCD={ prompt:'Gdzie powstają krwinki czerwone?\nA) W szpiku kostnym\nB) W sercu\nC) W nadnerczach\nD) W żołądku',
+  slots:[{key:'a',label:'odp'}], answers:{ a:['A','W szpiku kostnym','szpik'] }, fun:'U płodu też w wątrobie.' };
+const onePool=(q)=>({ q1:{ label:'Quiz', kind:'quiz', questions:[q] } });
+
+await group('F3: clampQuestion przepuszcza pool/difficulty/fun (sanityzacja)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  const evil={ ...BALT, pool:[...BALT.pool, [], [5, null, '  '], 'x', Array(50).fill('y'), ['z'.repeat(500)]],
+    difficulty:'2', fun:'f'.repeat(1000) };
+  const many={ ...BALT, prompt:'Q2', pool:Array.from({length:60},(_,i)=>['p'+i]), difficulty:7, fun:{ x:1 } };
+  await room.msg(a, { t:'start', config:CONFIG({ pools:{ q1:{ label:'Quiz', kind:'quiz', questions:[evil, many] } } }) });
+  const [q, q2]=room.pools.q1.questions;
+  ok(Array.isArray(q.pool), 'pool przepuszczony');
+  eq(q.pool.slice(0,3), [['Litwa'],['Łotwa'],['Estonia']], 'pozycje puli zachowane');
+  ok(q.pool.every(it=>Array.isArray(it) && it.length && it.every(v=>typeof v==='string' && v.length && v.length<=120)), 'puste/nie-stringi wycięte, długość aliasu ≤120');
+  ok(q.pool.every(it=>it.length<=8), 'max 8 aliasów na pozycję');
+  eq(q.difficulty, 2, 'difficulty 1..3 (liczba)');
+  eq(q.fun.length, 300, 'fun przycięty do 300');
+  eq(q2.pool.length, 24, 'max 24 pozycje puli');
+  ok(!('difficulty' in q2) && !('fun' in q2), 'difficulty spoza 1..3 / fun nie-tekst → pominięte');
+});
+
+await group('F3: pool — sloty wymienne z dedup (ocena serwera) + fun w odsłonie', async ()=>{
+  for(const [vals, want, msg] of [
+    [{a:'Estonia',b:'Litwa',c:'Łotwa'}, true, 'dowolna kolejność → ✓'],
+    [{a:'Litwa',b:'Litwa',c:'Litwa'}, false, '„Litwa ×3" → ✗ (dedup)'],
+  ]){
+    const { room } = await makeRoom();
+    const a=room.join('A','Ala');
+    await room.msg(a, { t:'start', config:CONFIG({ pools:onePool(BALT) }) });
+    await readyAll(room, a);
+    eq(room.game.phase, MP.PLAY, 'PLAY');
+    await room.msg(a, { t:'action', action:{ type:'propose', values:vals } });
+    await room.msg(a, { t:'lock' });
+    const rv=a.last('state').game.reveal;
+    eq(rv.teamOk, want, msg);
+    eq(rv.fun, BALT.fun, 'reveal.fun (surowy tekst — escape robi klient)');
+    if(want) eq(rv.display, {a:'Estonia',b:'Litwa',c:'Łotwa'}, 'reveal.display = kanoniczne trafione');
+  }
+});
+
+await group('F3: ABCD tasowane na serwerze — wspólny prompt, litera nie wycieka przed REVEAL, ocena po opcji', async ()=>{
+  const letters=new Set();
+  for(let i=0;i<16;i++){
+    const { room } = await makeRoom();
+    const a=room.join('A','Ala'), b=room.join('B','Bo');
+    await room.msg(a, { t:'start', config:CONFIG({ pools:onePool(ABCD) }) });
+    await readyAll(room, a, b);
+    const ga=a.last('state').game, gb=b.last('state').game;
+    eq(ga.prompt, gb.prompt, 'ten sam (potasowany) prompt u wszystkich');
+    const correct=room.current.mc.correct; letters.add(correct);
+    ok(new RegExp('\\n'+correct+'\\) W szpiku kostnym').test(ga.prompt), 'prompt: poprawna opcja pod nową literą');
+    // nic z sekretu w stanie przed REVEAL (answers/mc/pool/fun)
+    const pre=JSON.stringify(b.sent.filter(m=>m.t==='state'));
+    ok(!/"answers"|"mc"|"correct"|płodu/.test(pre), 'answers/mc/fun nie wyciekają przed REVEAL');
+    const wrong=['A','B','C','D'].find(l=>l!==correct);
+    await room.msg(b, { t:'action', action:{ type:'propose', values:{ a: i%2 ? correct.toLowerCase() : wrong } } });
+    await room.msg(a, { t:'lock' });
+    const rv=a.last('state').game.reveal;
+    eq(rv.teamOk, !!(i%2), i%2 ? 'wybór poprawnej opcji (nowa litera) ✓' : 'inna litera ✗');
+    eq(rv.display.a, correct+') W szpiku kostnym', 'reveal.display = „X) tekst"');
+    eq(rv.answers.a[0], correct, 'reveal.answers.a[0] = przemapowana litera (stary klient)');
+  }
+  ok(letters.size>=2, 'poprawna litera zmienia się między meczami ('+[...letters].join('')+')');
+});
+
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

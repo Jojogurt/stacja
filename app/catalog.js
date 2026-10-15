@@ -6,6 +6,8 @@
  * to ten sam obiekt/tablica we wszystkich importach (żywe wiązania ES), więc zmiana widoczna wszędzie. */
 import { modesFor as _modesFor, catLabel as _catLabel, buildMatch as _buildMatch,
   randomPools as _randomPools, matchHeader as _matchHeader } from '../core/match.js';
+import { quizKey, freshQuestions, rememberSeen, shuffleMC } from '../core/scoring.js';
+import { lsGet, lsSet } from './dom.js';
 
 const CATS = (window.CATEGORIES) || {decades:{},styles:{}};
 export const ERAS = CATS.decades || {};
@@ -65,4 +67,23 @@ export async function plFetch(url){
   const pls=plLoad(); pls[key]={label:d.name||'Playlista', songs, kind:'playlist'}; plSave(pls);
   plMerge();
   return { key, name:d.name||'', count:songs.length };
+}
+
+/* ===== F3 #5: trwały seen-set quizu (localStorage, per kategoria) — wspólny dla solo i hosta MP (relay) =====
+ * Klucz pytania = quizKey (znormalizowana treść BEZ opcji ABCD → stabilny po tasowaniu). Ostatnie
+ * QUIZ_SEEN_LIMIT na kategorię; wyczerpana pula → reset kategorii (bez ostatnio zagranego). */
+const QUIZ_SEEN_KEY = 'stacjaQuizSeen';
+function seenLoad(){ try{ const o=JSON.parse(lsGet(QUIZ_SEEN_KEY,'{}')||'{}'); return (o && typeof o==='object' && !Array.isArray(o)) ? o : {}; }catch(_e){ return {}; } }
+export function quizSeenGet(catKey){ const v=seenLoad()[catKey]; return Array.isArray(v) ? v.filter(k=>typeof k==='string') : []; }
+export function quizSeenSet(catKey, keys){ const o=seenLoad(); o[catKey]=keys; lsSet(QUIZ_SEEN_KEY, JSON.stringify(o)); }
+// pula niezagranych pytań kategorii (reset trwałego zbioru, gdy wyczerpana)
+export function quizFreshPool(catKey, questions){
+  const r=freshQuestions(questions, quizSeenGet(catKey));
+  if(r.reset) quizSeenSet(catKey, []);
+  return r.pool;
+}
+// zapamiętaj zagrane pytanie i zwróć je POTASOWANE (ABCD w runtime; otwarte bez zmian)
+export function quizTake(catKey, q){
+  quizSeenSet(catKey, rememberSeen(quizSeenGet(catKey), quizKey(q)));
+  return shuffleMC(q);
 }
