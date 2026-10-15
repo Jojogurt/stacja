@@ -1,257 +1,57 @@
 {
   "label": "Medycyna",
   "kind": "quiz",
-  "desc": "50 pytań · poziom średni",
+  "desc": "50 pytań",
   "questions": [
-    {
-      "prompt": "Który narząd produkuje insulinę?",
-      "slots": [{ "key": "a", "label": "narząd" }],
-      "answers": { "a": ["trzustka"] }
-    },
-    {
-      "prompt": "Ile komór ma serce człowieka?",
-      "slots": [{ "key": "a", "label": "liczba" }],
-      "answers": { "a": ["dwie", "2", "dwa"] }
-    },
-    {
-      "prompt": "Jak nazywa się lekarz zajmujący się leczeniem dzieci?",
-      "slots": [{ "key": "a", "label": "specjalista" }],
-      "answers": { "a": ["pediatra"] }
-    },
-    {
-      "prompt": "Jak nazywa się lekarz specjalizujący się w chorobach serca?",
-      "slots": [{ "key": "a", "label": "specjalista" }],
-      "answers": { "a": ["kardiolog"] }
-    },
-    {
-      "prompt": "Kto odkrył penicylinę?",
-      "slots": [{ "key": "a", "label": "naukowiec" }],
-      "answers": { "a": ["Alexander Fleming", "Fleming"] }
-    },
-    {
-      "prompt": "Jaki czerwony barwnik w krwinkach przenosi tlen?",
-      "slots": [{ "key": "a", "label": "białko" }],
-      "answers": { "a": ["hemoglobina"] }
-    },
-    {
-      "prompt": "Jak nazywa się największy narząd wewnętrzny człowieka, pełniący m.in. funkcje odtruwające?",
-      "slots": [{ "key": "a", "label": "narząd" }],
-      "answers": { "a": ["wątroba"] }
-    },
-    {
-      "prompt": "Jaki numer alarmowy obowiązuje w całej Unii Europejskiej?",
-      "slots": [{ "key": "a", "label": "numer" }],
-      "answers": { "a": ["112"] }
-    },
-    {
-      "prompt": "Jak nazywa się skrót oznaczający resuscytację krążeniowo-oddechową (uciskanie klatki i oddechy ratownicze)?",
-      "slots": [{ "key": "a", "label": "skrót" }],
-      "answers": { "a": ["RKO"] }
-    },
-    {
-      "prompt": "Jaka jest w przybliżeniu prawidłowa temperatura ciała człowieka w stopniach Celsjusza?",
-      "slots": [{ "key": "a", "label": "temperatura" }],
-      "answers": { "a": ["36,6", "36.6", "37"] }
-    },
-    {
-      "prompt": "Które krwinki odpowiadają za odporność i zwalczanie infekcji?",
-      "slots": [{ "key": "a", "label": "krwinki" }],
-      "answers": { "a": ["białe krwinki", "leukocyty", "biale krwinki"] }
-    },
-    {
-      "prompt": "Jak nazywają się czerwone krwinki?",
-      "slots": [{ "key": "a", "label": "krwinki" }],
-      "answers": { "a": ["erytrocyty", "czerwone krwinki"] }
-    },
-    {
-      "prompt": "Jak nazywa się choroba polegająca na zaburzeniu poziomu cukru we krwi związanym z insuliną?",
-      "slots": [{ "key": "a", "label": "choroba" }],
-      "answers": { "a": ["cukrzyca"] }
-    },
-    {
-      "prompt": "Jak nazywa się nagłe niedokrwienie mięśnia sercowego, potocznie „atak serca”?",
-      "slots": [{ "key": "a", "label": "choroba" }],
-      "answers": { "a": ["zawał serca", "zawał", "zawal serca", "zawal"] }
-    },
-    {
-      "prompt": "Kto odkrył promienie X (rentgenowskie)?",
-      "slots": [{ "key": "a", "label": "naukowiec" }],
-      "answers": { "a": ["Wilhelm Röntgen", "Röntgen", "Rentgen", "Roentgen"] }
-    },
-    {
-      "prompt": "Jak nazywa się dziedzina medycyny zajmująca się znieczulaniem pacjentów do operacji?",
-      "slots": [{ "key": "a", "label": "dziedzina" }],
-      "answers": { "a": ["anestezjologia", "anestezja"] }
-    },
-    {
-      "prompt": "Ile (w przybliżeniu) kości ma szkielet dorosłego człowieka?",
-      "slots": [{ "key": "a", "label": "liczba" }],
-      "answers": { "a": ["206", "około 206", "okolo 206"] }
-    },
-    {
-      "prompt": "Jaki narząd jest odpowiedzialny za wymianę gazową — pobieranie tlenu i oddawanie dwutlenku węgla?",
-      "slots": [{ "key": "a", "label": "narząd" }],
-      "answers": { "a": ["płuca", "pluca"] }
-    },
-    {
-      "prompt": "Jak nazywa się najdłuższa kość w ciele człowieka?",
-      "slots": [{ "key": "a", "label": "kość" }],
-      "answers": { "a": ["kość udowa", "kosc udowa", "udowa"] }
-    },
-    {
-      "prompt": "Jak nazywa się lekarz zajmujący się chorobami skóry?",
-      "slots": [{ "key": "a", "label": "specjalista" }],
-      "answers": { "a": ["dermatolog"] }
-    },
-    {
-      "prompt": "Witamina D jest wytwarzana w skórze pod wpływem czego?",
-      "slots": [{ "key": "a", "label": "czynnik" }],
-      "answers": { "a": ["światła słonecznego", "słońca", "promieni UV", "swiatla slonecznego", "slonca"] }
-    },
-    {
-      "prompt": "Niedobór której witaminy powoduje szkorbut?",
-      "slots": [{ "key": "a", "label": "witamina" }],
-      "answers": { "a": ["witamina C", "C", "kwas askorbinowy"] }
-    },
-    {
-      "prompt": "Jak nazywa się płyn ustrojowy krążący w naczyniach i przenoszący tlen oraz składniki odżywcze?",
-      "slots": [{ "key": "a", "label": "płyn" }],
-      "answers": { "a": ["krew"] }
-    },
-    {
-      "prompt": "Jak nazywa się centralny narząd układu nerwowego mieszczący się w czaszce?",
-      "slots": [{ "key": "a", "label": "narząd" }],
-      "answers": { "a": ["mózg", "mozg"] }
-    },
-    {
-      "prompt": "Jak nazywa się główna tętnica wychodząca z serca?",
-      "slots": [{ "key": "a", "label": "naczynie" }],
-      "answers": { "a": ["aorta"] }
-    },
-    {
-      "prompt": "Jak nazywa się lekarz zajmujący się leczeniem zębów?",
-      "slots": [{ "key": "a", "label": "specjalista" }],
-      "answers": { "a": ["stomatolog", "dentysta"] }
-    },
-    {
-      "prompt": "Jaki gruczoł w szyi reguluje metabolizm poprzez produkcję hormonów?",
-      "slots": [{ "key": "a", "label": "gruczoł" }],
-      "answers": { "a": ["tarczyca"] }
-    },
-    {
-      "prompt": "Jak nazywa się stan, w którym organizm reaguje nadmiernie na zwykle nieszkodliwą substancję, np. pyłki czy sierść?",
-      "slots": [{ "key": "a", "label": "stan" }],
-      "answers": { "a": ["alergia", "uczulenie"] }
-    },
-    {
-      "prompt": "Jak nazywa się para narządów filtrujących krew i produkujących mocz?",
-      "slots": [{ "key": "a", "label": "narządy" }],
-      "answers": { "a": ["nerki"] }
-    },
-    {
-      "prompt": "Jak nazywa się zabieg diagnostyczny wykorzystujący ultradźwięki, popularnie wykonywany m.in. w ciąży?",
-      "slots": [{ "key": "a", "label": "badanie" }],
-      "answers": { "a": ["USG", "ultrasonografia"] }
-    },
-    {
-      "prompt": "Co lekarze nazywają „diagnozą”?",
-      "slots": [{ "key": "a", "label": "znaczenie" }],
-      "answers": { "a": ["rozpoznanie choroby", "rozpoznanie", "określenie choroby"] }
-    },
-    {
-      "prompt": "Która grupa krwi w układzie AB0 jest uznawana za uniwersalnego dawcę krwinek czerwonych?",
-      "slots": [{ "key": "a", "label": "grupa" }],
-      "answers": { "a": ["0", "zero", "grupa 0"] }
-    },
-    {
-      "prompt": "Kto, jako dwukrotna noblistka, zajmowała się m.in. promieniotwórczością wykorzystywaną później w medycynie?",
-      "slots": [{ "key": "a", "label": "postać" }],
-      "answers": { "a": ["Maria Skłodowska-Curie", "Maria Curie", "Skłodowska-Curie", "Sklodowska-Curie"] }
-    },
-    {
-      "prompt": "Jak nazywa się mięsień oddechowy oddzielający klatkę piersiową od jamy brzusznej?",
-      "slots": [{ "key": "a", "label": "mięsień" }],
-      "answers": { "a": ["przepona"] }
-    },
-    {
-      "prompt": "Jak nazywa się układ odpowiedzialny za obronę organizmu przed drobnoustrojami?",
-      "slots": [{ "key": "a", "label": "układ" }],
-      "answers": { "a": ["układ odpornościowy", "układ immunologiczny", "uklad odpornosciowy", "odpornościowy"] }
-    },
-    {
-      "prompt": "Który zmysł jest związany z narządem oka?",
-      "slots": [{ "key": "a", "label": "zmysł" }],
-      "answers": { "a": ["wzrok"] }
-    },
-    {
-      "prompt": "Jak nazywa się preparat podawany w celu uodpornienia organizmu na daną chorobę zakaźną?",
-      "slots": [{ "key": "a", "label": "preparat" }],
-      "answers": { "a": ["szczepionka"] }
-    },
-    {
-      "prompt": "Jak nazywa się lekarz wykonujący operacje chirurgiczne?",
-      "slots": [{ "key": "a", "label": "specjalista" }],
-      "answers": { "a": ["chirurg"] }
-    },
-    {
-      "prompt": "Jak nazywają się drobne pęcherzyki w płucach, w których zachodzi wymiana gazowa?",
-      "slots": [{ "key": "a", "label": "struktura" }],
-      "answers": { "a": ["pęcherzyki płucne", "pecherzyki plucne", "alweole"] }
-    },
-    {
-      "prompt": "Czy grypa jest wywoływana przez bakterię czy przez wirusa?\nA) Bakterię\nB) Wirusa\nC) Grzyba",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Wirusa", "wirus", "wirusa"] }
-    },
-    {
-      "prompt": "Ile litrów krwi (w przybliżeniu) ma dorosły człowiek?\nA) Około 1–2 litry\nB) Około 5 litrów\nC) Około 10 litrów\nD) Około 15 litrów",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Około 5 litrów", "5 litrów", "5 litrow", "okolo 5 litrow"] }
-    },
-    {
-      "prompt": "Który narząd jest odpowiedzialny za trawienie pokarmu za pomocą kwasu solnego?\nA) Wątroba\nB) Trzustka\nC) Żołądek\nD) Śledziona",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["C", "Żołądek", "żołądek", "zoladek"] }
-    },
-    {
-      "prompt": "Na jaki rodzaj drobnoustrojów działają antybiotyki (nie na wirusy)?",
-      "slots": [{ "key": "a", "label": "drobnoustroje" }],
-      "answers": { "a": ["bakterie", "bakteria"] }
-    },
-    {
-      "prompt": "Jak nazywa się największy organ ludzkiego ciała w ogóle?\nA) Wątroba\nB) Skóra\nC) Płuca\nD) Jelita",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Skóra", "skóra", "skora"] }
-    },
-    {
-      "prompt": "Czerwone krwinki powstają głównie w:\nA) Wątrobie\nB) Szpiku kostnym\nC) Śledzionie\nD) Nerkach",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Szpiku kostnym", "szpik kostny", "szpiku kostnym", "szpik"] }
-    },
-    {
-      "prompt": "Ile kości znajduje się w dłoni jednej ręki człowieka?\nA) 14\nB) 27\nC) 33\nD) 40",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "27"] }
-    },
-    {
-      "prompt": "Który z wymienionych jest hormonem regulującym poziom cukru we krwi?\nA) Adrenalina\nB) Insulina\nC) Tyroksyna\nD) Melatonina",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Insulina", "insulina"] }
-    },
-    {
-      "prompt": "Jak nazywa się najmniejsza kość w ciele człowieka, znajdująca się w uchu?\nA) Strzemiączko\nB) Kość łzowa\nC) Rzepka",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["A", "Strzemiączko", "strzemiączko", "strzemiaczko"] }
-    },
-    {
-      "prompt": "Który organ pełni rolę „pompy” napędzającej krążenie krwi?\nA) Płuca\nB) Serce\nC) Wątroba\nD) Nerki",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Serce", "serce"] }
-    },
-    {
-      "prompt": "Jak nazywa się część krwi będąca płynem, w którym zawieszone są krwinki?\nA) Limfa\nB) Osocze\nC) Surowica",
-      "slots": [{ "key": "a", "label": "litera lub odpowiedź" }],
-      "answers": { "a": ["B", "Osocze", "osocze"] }
-    }
+    {"prompt":"Jaki numer alarmowy obowiązuje w całej Unii Europejskiej?","slots":[{"key":"a","label":"numer"}],"answers":{"a":["112"]},"difficulty":1,"fun":"Pod 112 zgłosisz pożar, wypadek i zagrożenie życia — także z telefonu bez karty SIM."},
+    {"prompt":"Jak nazywa się zestaw działań ratunkowych — uciskanie klatki piersiowej i oddechy ratownicze — przy nagłym zatrzymaniu krążenia?","slots":[{"key":"a","label":"procedura"}],"answers":{"a":["RKO","resuscytacja krążeniowo-oddechowa","resuscytacja","reanimacja","CPR"]},"difficulty":1},
+    {"prompt":"W jakim stosunku liczby uciśnięć klatki piersiowej do oddechów ratowniczych prowadzi się resuscytację dorosłego?","slots":[{"key":"a","label":"stosunek"}],"answers":{"a":["30:2","30 do 2","30 uciśnięć i 2 oddechy","30 na 2"]},"difficulty":2,"fun":"Uciskać należy w tempie 100–120 uciśnięć na minutę."},
+    {"prompt":"Jaka jest prawidłowa temperatura ciała zdrowego dorosłego człowieka w stopniach Celsjusza?","slots":[{"key":"a","label":"temperatura"}],"answers":{"a":["36,6","36,6°C","36,6 stopnia","36,6 stopni","37"]},"difficulty":1},
+    {"prompt":"Jaki francuski lekarz wynalazł stetoskop w 1816 roku?","slots":[{"key":"a","label":"lekarz"}],"answers":{"a":["René Laennec","Laennec"]},"difficulty":3,"fun":"Pierwszy stetoskop był zwiniętym w rulon arkuszem papieru."},
+    {"prompt":"Kto w 1928 roku odkrył penicylinę, gdy na jego szalce z bakteriami wyrosła pleśń?\nA) Howard Florey\nB) Ernst Chain\nC) Alexander Fleming\nD) Selman Waksman","slots":[{"key":"a","label":"uczony"}],"answers":{"a":["C","Alexander Fleming","Fleming"]},"difficulty":1,"fun":"W 1945 roku Nobla dostał wraz z Howardem Florey'em i Ernstem Chainem."},
+    {"prompt":"Kto w 1895 roku odkrył promienie, które nazwał promieniami X?\nA) Henri Becquerel\nB) Max Planck\nC) Ernest Rutherford\nD) Wilhelm Röntgen","slots":[{"key":"a","label":"uczony"}],"answers":{"a":["D","Wilhelm Röntgen","Röntgen","Rentgen","Roentgen","Wilhelm Conrad Röntgen"]},"difficulty":2,"fun":"Za to odkrycie dostał pierwszą w historii Nagrodę Nobla z fizyki w 1901 roku."},
+    {"prompt":"Jaka dwukrotna noblistka zorganizowała w czasie I wojny światowej wozy z aparatami rentgenowskimi dla rannych na froncie?","slots":[{"key":"a","label":"uczona"}],"answers":{"a":["Maria Skłodowska-Curie","Skłodowska-Curie","Maria Curie","Curie"]},"difficulty":2,"fun":"Wozy rentgenowskie nazywano „małymi Curie”."},
+    {"prompt":"Który typ cukrzycy odpowiada za około 90% wszystkich zachorowań?","slots":[{"key":"a","label":"typ"}],"answers":{"a":["typ 2","2","cukrzyca typu 2","drugi","typu 2"]},"difficulty":2},
+    {"prompt":"Którzy dwaj kanadyjscy badacze w 1921 roku w Toronto jako pierwsi wyodrębnili insulinę?","slots":[{"key":"a","label":"badacz 1"},{"key":"b","label":"badacz 2"}],"answers":{"a":["Frederick Banting","Banting","Charles Best","Best"],"b":["Frederick Banting","Banting","Charles Best","Best"]},"pool":[["Frederick Banting","Banting"],["Charles Best","Best"]],"difficulty":3,"fun":"Banting podzielił się swoją częścią Nagrody Nobla z Bestem."},
+    {"prompt":"Który francuski uczony w 1885 roku podał pierwszą szczepionkę przeciw wściekliźnie?\nA) Joseph Lister\nB) Louis Pasteur\nC) Paul Ehrlich\nD) Emil von Behring","slots":[{"key":"a","label":"uczony"}],"answers":{"a":["B","Louis Pasteur","Pasteur","Ludwik Pasteur"]},"difficulty":2},
+    {"prompt":"Który angielski lekarz w 1796 roku zaszczepił chłopca ospą krowią i zapoczątkował szczepienia?\nA) John Snow\nB) Edward Jenner\nC) William Harvey\nD) Thomas Sydenham","slots":[{"key":"a","label":"lekarz"}],"answers":{"a":["B","Edward Jenner","Jenner"]},"difficulty":2,"fun":"Słowo „vaccine” pochodzi od łacińskiego „vacca” — krowa."},
+    {"prompt":"Jaka jedyna choroba zakaźna człowieka została całkowicie wyeliminowana dzięki szczepieniom — WHO ogłosiła to w 1980 roku?","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["ospa prawdziwa","ospa","czarna ospa"]},"difficulty":2},
+    {"prompt":"Który węgierski lekarz w XIX wieku wprowadził mycie rąk w szpitalu położniczym, ratując matki przed gorączką połogową?\nA) Ferdinand Sauerbruch\nB) Ignaz Semmelweis\nC) Rudolf Virchow\nD) Theodor Billroth","slots":[{"key":"a","label":"lekarz"}],"answers":{"a":["B","Ignaz Semmelweis","Semmelweis","Ignác Semmelweis"]},"difficulty":2,"fun":"Za życia jego odkrycie było wyśmiewane przez kolegów po fachu."},
+    {"prompt":"Jakiego starożytnego Greka z wyspy Kos nazywa się ojcem medycyny?","slots":[{"key":"a","label":"lekarz"}],"answers":{"a":["Hipokrates","Hipokrates z Kos"]},"difficulty":1},
+    {"prompt":"Z kory jakiego drzewa pozyskano salicynę, prekursor aspiryny?","slots":[{"key":"a","label":"drzewo"}],"answers":{"a":["wierzba","wierzby","kora wierzby"]},"difficulty":3,"fun":"Aspiryna trafiła na rynek w 1899 roku dzięki firmie Bayer."},
+    {"prompt":"Na którą z tych grup drobnoustrojów antybiotyki nie działają?\nA) Gronkowce\nB) Paciorkowce\nC) Pałeczki okrężnicy\nD) Wirusy","slots":[{"key":"a","label":"drobnoustroje"}],"answers":{"a":["D","Wirusy"]},"difficulty":1,"fun":"Nadużywanie antybiotyków sprzyja powstawaniu bakterii lekoopornych."},
+    {"prompt":"Jaką nazwę nosi pandemia grypy z lat 1918–1920, która pochłonęła dziesiątki milionów ofiar?","slots":[{"key":"a","label":"pandemia"}],"answers":{"a":["hiszpanka","grypa hiszpanka"]},"difficulty":2,"fun":"Nazwa wzięła się stąd, że neutralna Hiszpania pisała o epidemii, gdy inne kraje cenzurowały wieści."},
+    {"prompt":"Jaka choroba, wywoływana przez pałeczkę Yersinia pestis, w XIV wieku zabiła około jednej trzeciej mieszkańców Europy?","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["dżuma","czarna śmierć"]},"difficulty":1},
+    {"prompt":"Brak której witaminy powoduje szkorbut, plagę dawnych żeglarzy?","slots":[{"key":"a","label":"witamina"}],"answers":{"a":["witamina C","C","kwas askorbinowy"]},"difficulty":1,"fun":"Brytyjska marynarka podawała załogom sok z limonek, stąd przezwisko „limeys”."},
+    {"prompt":"Niedobór której witaminy wywołuje u dzieci krzywicę?","slots":[{"key":"a","label":"witamina"}],"answers":{"a":["witamina D","D","cholekalcyferol"]},"difficulty":2},
+    {"prompt":"Które zwierzę przenosi zarodźca malarii, jednej z najgroźniejszych chorób tropikalnych?","slots":[{"key":"a","label":"zwierzę"}],"answers":{"a":["komar","komary","widliszek","Anopheles"]},"difficulty":1,"fun":"Komary uchodzą za najgroźniejsze dla ludzi zwierzęta na świecie."},
+    {"prompt":"Jaki pajęczak przenosi boreliozę, wczepiając się w skórę człowieka?","slots":[{"key":"a","label":"pajęczak"}],"answers":{"a":["kleszcz","kleszcze"]},"difficulty":1},
+    {"prompt":"Jaką szczepionką przeciw gruźlicy szczepi się w Polsce dzieci w pierwszej dobie życia?\nA) MMR\nB) DTP\nC) BCG\nD) HPV","slots":[{"key":"a","label":"szczepionka"}],"answers":{"a":["C","BCG","szczepionka BCG"]},"difficulty":3},
+    {"prompt":"Który niemiecki lekarz w 1882 roku odkrył prątek gruźlicy?","slots":[{"key":"a","label":"lekarz"}],"answers":{"a":["Robert Koch","Koch"]},"difficulty":3,"fun":"Za badania nad gruźlicą dostał Nagrodę Nobla w 1905 roku."},
+    {"prompt":"Kto w 1901 roku odkrył grupy krwi układu AB0?","slots":[{"key":"a","label":"uczony"}],"answers":{"a":["Karl Landsteiner","Landsteiner"]},"difficulty":3,"fun":"Nobla za to odkrycie dostał w 1930 roku."},
+    {"prompt":"Który południowoafrykański chirurg w 1967 roku przeprowadził pierwszy przeszczep serca u człowieka?\nA) Michael DeBakey\nB) Christiaan Barnard\nC) Denton Cooley\nD) Alfred Blalock","slots":[{"key":"a","label":"chirurg"}],"answers":{"a":["B","Christiaan Barnard","Barnard"]},"difficulty":2,"fun":"Pacjent żył po zabiegu 18 dni."},
+    {"prompt":"Który polski kardiochirurg w 1985 roku przeprowadził w Zabrzu pierwszy udany przeszczep serca w Polsce?","slots":[{"key":"a","label":"kardiochirurg"}],"answers":{"a":["Zbigniew Religa","Religa"]},"difficulty":2},
+    {"prompt":"Który lwowski uczony stworzył pierwszą skuteczną szczepionkę przeciw tyfusowi plamistemu, hodując zarazki w jelitach wszy?","slots":[{"key":"a","label":"uczony"}],"answers":{"a":["Rudolf Weigl","Weigl"]},"difficulty":3,"fun":"Jego szczepionka uratowała życie wielu osobom w gettach podczas II wojny światowej."},
+    {"prompt":"Jaki gaz o potocznej nazwie „gaz rozweselający” bywa stosowany w stomatologii jako środek znieczulający?\nA) Tlenek węgla\nB) Metan\nC) Argon\nD) Podtlenek azotu","slots":[{"key":"a","label":"gaz"}],"answers":{"a":["D","Podtlenek azotu","tlenek diazotu"]},"difficulty":3,"fun":"Użyto go do znieczulenia już w 1844 roku w Stanach Zjednoczonych."},
+    {"prompt":"Jak nazywa się dziedzina medycyny, w której lekarz usypia pacjenta przed operacją i czuwa nad nim w trakcie zabiegu?","slots":[{"key":"a","label":"specjalizacja"}],"answers":{"a":["anestezjologia","anestezjolog","anestezjologia i intensywna terapia"]},"difficulty":2},
+    {"prompt":"Jakie badanie rejestruje czynność elektryczną serca?\nA) EEG\nB) EMG\nC) USG\nD) EKG","slots":[{"key":"a","label":"badanie"}],"answers":{"a":["D","EKG","elektrokardiogram","elektrokardiografia"]},"difficulty":1,"fun":"Pierwszy praktyczny elektrokardiograf zbudował Willem Einthoven, laureat Nobla z 1924 roku."},
+    {"prompt":"Które badanie wykorzystuje fale dźwiękowe o wysokiej częstotliwości, a nie promieniowanie jonizujące?","slots":[{"key":"a","label":"badanie"}],"answers":{"a":["USG","ultrasonografia","ultrasonograf","ultradźwięki"]},"difficulty":1},
+    {"prompt":"W którym badaniu obrazowym pacjent leży w wąskiej tubie, a obraz powstaje dzięki silnemu polu magnetycznemu i falom radiowym?","slots":[{"key":"a","label":"badanie"}],"answers":{"a":["rezonans magnetyczny","MRI","MR","NMR","rezonans"]},"difficulty":2},
+    {"prompt":"Jaka choroba neurodegeneracyjna, opisana w 1906 roku przez niemieckiego lekarza, jest najczęstszą przyczyną demencji?","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["choroba Alzheimera","Alzheimer","Alzheimera"]},"difficulty":1},
+    {"prompt":"Drżenie rąk w spoczynku i spowolnienie ruchów to objawy choroby nazwanej od londyńskiego lekarza. Jakiej?\nA) Choroby Wilsona\nB) Choroby Huntingtona\nC) Choroby Parkinsona\nD) Choroby Hashimoto","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["C","Choroby Parkinsona","Parkinson","choroba Parkinsona","Parkinsona"]},"difficulty":2},
+    {"prompt":"Jaka choroba genetyczna jest spowodowana dodatkowym chromosomem 21?","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["zespół Downa","Down","Downa","trisomia 21"]},"difficulty":2},
+    {"prompt":"Jaka choroba dziedziczna, zwana „chorobą królów”, polega na nieprawidłowym krzepnięciu krwi?\nA) Talasemia\nB) Hemofilia\nC) Anemia sierpowata\nD) Białaczka","slots":[{"key":"a","label":"choroba"}],"answers":{"a":["B","Hemofilia","krwawiączka"]},"difficulty":2,"fun":"Chorował na nią carewicz Aleksy, syn ostatniego cara Rosji."},
+    {"prompt":"Jaka wada wzroku polega na nierozróżnianiu niektórych barw, najczęściej czerwieni i zieleni?","slots":[{"key":"a","label":"wada wzroku"}],"answers":{"a":["daltonizm"]},"difficulty":2,"fun":"Nazwa pochodzi od chemika Johna Daltona, który sam miał tę wadę."},
+    {"prompt":"Jakie ciśnienie krwi, w mm Hg, uważa się za optymalne u dorosłego człowieka?","slots":[{"key":"a","label":"ciśnienie"}],"answers":{"a":["120/80","120 na 80"]},"difficulty":2},
+    {"prompt":"Jaki parametr krwi mierzy się glukometrem?","slots":[{"key":"a","label":"parametr"}],"answers":{"a":["poziom glukozy","glukoza","cukier","poziom cukru","stężenie glukozy"]},"difficulty":1},
+    {"prompt":"Jak brzmi po polsku zasada etyki lekarskiej „primum non nocere”?","slots":[{"key":"a","label":"zasada"}],"answers":{"a":["po pierwsze nie szkodzić","nie szkodzić"]},"difficulty":2},
+    {"prompt":"Którego greckiego boga medycyny symbolizuje laska z owiniętym wokół niej wężem?\nA) Hermesa\nB) Asklepiosa\nC) Apollina\nD) Hefajstosa","slots":[{"key":"a","label":"bóg"}],"answers":{"a":["B","Asklepiosa","Asklepios","Eskulap","Eskulapa","Aesculapius"]},"difficulty":2,"fun":"Dwa węże i skrzydła to kaduceusz Hermesa — symbol handlu, nie medycyny."},
+    {"prompt":"Jaki skrót oznacza zespół nabytego niedoboru odporności, będący skutkiem zakażenia wirusem HIV?","slots":[{"key":"a","label":"skrót"}],"answers":{"a":["AIDS","SIDA"]},"difficulty":1},
+    {"prompt":"Jaki wirus wywołuje chorobę COVID-19?","slots":[{"key":"a","label":"wirus"}],"answers":{"a":["SARS-CoV-2","koronawirus SARS-CoV-2","koronawirus"]},"difficulty":2},
+    {"prompt":"Jak popularnie nazywa się BSE, czyli gąbczastą encefalopatię bydła, która mogła przenosić się na ludzi?","slots":[{"key":"a","label":"nazwa potoczna"}],"answers":{"a":["choroba szalonych krów","choroba wściekłych krów","szalone krowy"]},"difficulty":2},
+    {"prompt":"Od nazwy jakiej małpy pochodzi oznaczenie Rh w grupach krwi?","slots":[{"key":"a","label":"małpa"}],"answers":{"a":["rezus","makak rezus","małpa rezus","makak"]},"difficulty":3},
+    {"prompt":"Jak brzmi rozwinięcie skrótu BMI, wskaźnika wyliczanego z wagi i wzrostu?","slots":[{"key":"a","label":"wskaźnik"}],"answers":{"a":["wskaźnik masy ciała","Body Mass Index","indeks masy ciała"]},"difficulty":2},
+    {"prompt":"Który lekarz specjalista zajmuje się chorobami nerek?\nA) Nefrolog\nB) Reumatolog\nC) Hematolog\nD) Gastroenterolog","slots":[{"key":"a","label":"specjalista"}],"answers":{"a":["A","Nefrolog","nefrologia"]},"difficulty":2},
+    {"prompt":"Jakimi pacjentami zajmuje się neonatolog?","slots":[{"key":"a","label":"pacjenci"}],"answers":{"a":["noworodkami","noworodki","noworodków","noworodek"]},"difficulty":3}
   ]
 }
