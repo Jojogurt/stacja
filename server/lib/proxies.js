@@ -1,5 +1,5 @@
 /* server/lib/proxies.js — proxy zewnętrznych źródeł (port z Supabase Edge Functions).
- *   GET /tracks?artist=<term>  → { source, results:[{trackName,artistName,collectionName,releaseDate,previewUrl,artworkUrl100}] }
+ *   GET /tracks?artist=<term>  → { source, results:[{trackName,artistName,collectionName,releaseDate,previewUrl,artworkUrl100,primaryGenreName}] }
  *   GET /tracks?q=<artysta tytuł> → j.w., ale wyszukiwanie utworu (bez attribute=artistTerm) — F5 playlisty
  *   GET /spotify?url=<link>     → { name, count, tracks:[{title,artist,preview}] }
  *   GET /audio?u=<https url>    → bajty audio + CORS + Range (allowlista hostów)
@@ -20,6 +20,7 @@ async function fromItunes(artist, song = false) {
   return (d.results || []).map((t) => ({
     trackName: t.trackName, artistName: t.artistName, collectionName: t.collectionName || '',
     releaseDate: t.releaseDate || '', previewUrl: t.previewUrl || '', artworkUrl100: t.artworkUrl100 || '',
+    primaryGenreName: t.primaryGenreName || '',   // gust: gatunek (core normalize → genre)
   })).filter((t) => t.previewUrl);
 }
 async function fromDeezer(artist, song = false) {

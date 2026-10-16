@@ -2065,5 +2065,148 @@ await group('EKSP. MP: obroty — chipy z nowym serwerem (oś czasu nigdy), PLAY
   } finally { globalThis.fetch=prevFetch; eksWebAudio(false); }
   w.mpLeaveConfirmed('room'); await settle(4);
 });
+
+/* ===== „Twój gust" (etap 1): kafelek, sesja „Oceń 20" (fałszywy iTunes), półka, sync, ❤️ w odsłonie solo i MP ===== */
+await group('Twój gust: kafelek → ekran (sync z serwerem) → sesja 👍/❤️/👎/pomiń/gest/klawisz → półka → ❤️ w odsłonie', async ()=>{
+  const w=window, d=w.document, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  const tasteMod=await import('../app/taste.js'), gustMod=await import('../app/gust.js');
+  const realWait=(ms)=>new Promise(r=>setTimeout(r,ms));
+  const until=async(fn, n=60)=>{ for(let i=0;i<n && !fn();i++) await settle(2); return fn(); };
+  const srv={ posts:[], dels:[], gets:0 };
+  const J=(o, st=200)=>Promise.resolve({ ok:st<400, status:st, json:()=>Promise.resolve(o) });
+  globalThis.fetch=(url, opts={})=>{
+    const u=new URL(String(url), 'https://stacja.test/');
+    if(u.pathname==='/api/session') return J({ id:'gust-user', token:'tok-gust' });
+    if(u.pathname==='/api/taste'){
+      if(opts.method==='POST'){ srv.posts.push(JSON.parse(opts.body)); return J({ ok:true }); }
+      if(opts.method==='DELETE'){ srv.dels.push(u.searchParams.get('key')); return J({ ok:true }); }
+      srv.gets++;
+      return J({ items:[{ trackKey:'srv|server song', title:'Server Song', artist:'Srv', year:'1977', genre:'Disco', art:'https://x/s.jpg', cat:'70s', rating:2, source:'swipe', ts:5 }] });
+    }
+    const term=u.searchParams.get('term')||u.searchParams.get('artist')||u.searchParams.get('q')||'X';
+    return J({ results:[{ trackName:'Gust Song', artistName:term, previewUrl:'https://x/gust.m4a', collectionName:'A', releaseDate:'1985-01-01', artworkUrl100:'https://x/100x100.jpg', primaryGenreName:'Rock' }] });
+  };
+  w.STACJA_CONFIG.roomsBase='https://w.test';
+  try{
+    // kafelek w menu: 3 w rzędzie (Drużyna / Profil / Twój gust)
+    w.document.body.className='menu';
+    const row=d.querySelector('#menu .mh-row');
+    eq2(row && row.querySelectorAll('.mh-mini').length, 3, 'menu: 3 kafelki w rzędzie');
+    ok($(w,'goGust') && /Twój gust/.test($(w,'goGust').textContent), 'kafelek „Twój gust"');
+    $(w,'goGust').click();
+    ok(d.body.classList.contains('gust'), 'body.gust po kliknięciu kafelka');
+    eq2(txt(w,'scrTitle'), 'Twój gust', 'nagłówek ekranu');
+    await until(()=>srv.gets>0 && /Server Song/.test($(w,'gustBody').innerHTML));
+    ok(srv.gets===1, 'wejście na ekran → GET /api/taste (merge z serwerem)');
+    ok(/Server Song/.test($(w,'gustBody').innerHTML), 'półka: ❤️ z serwera dociągnięte');
+    ok(/zapisane na koncie/.test(d.querySelector('[data-taste-sync]').textContent), 'sync: „zapisane na koncie"');
+    const sp=d.querySelector('.gu-link.sp'), am=d.querySelector('.gu-link.am');
+    eq2(sp && sp.getAttribute('href'), 'https://open.spotify.com/search/Srv%20Server%20Song', 'link Spotify (wyszukiwanie)');
+    eq2(am && am.getAttribute('href'), 'https://music.apple.com/pl/search?term=Srv%20Server%20Song', 'link Apple Music');
+    ok(sp.getAttribute('target')==='_blank' && /noopener/.test(sp.getAttribute('rel')), 'linki w nowej karcie (noopener)');
+
+    // sesja „Oceń 20"
+    const plays0=audioInstances.reduce((a,x)=>a+x.plays,0);
+    d.querySelector('[data-gu-start]').click();
+    await until(()=>$(w,'guCard'));
+    ok($(w,'guCard'), 'sesja: karta utworu');
+    ok(/Gust Song/.test($(w,'guCard').textContent) && /1985 · Rock/.test($(w,'guCard').textContent), 'karta: tytuł + rok · gatunek (primaryGenreName)');
+    eq2(d.querySelector('[data-gu-pn]').textContent, '0/20', 'pasek postępu 0/20');
+    await until(()=>audioInstances.reduce((a,x)=>a+x.plays,0)>plays0);
+    ok(audioInstances.some(a=>a.src==='https://x/gust.m4a' && !a.paused), 'zajawka gra automatycznie (trwały element listen.js)');
+    const ratingsLS=()=>Object.values(JSON.parse(w.localStorage.getItem('stacjaTaste')||'{}')).filter(x=>x.rating);
+    const rateBtn=v=>d.querySelector(`[data-gu-rate="${v}"]`);
+    const step=async(fn)=>{ const before=$(w,'guCard'); fn(); await realWait(300); await until(()=>$(w,'guCard') && $(w,'guCard')!==before); };
+    await step(()=>rateBtn(1).click());
+    eq2(d.querySelector('[data-gu-pn]').textContent, '1/20', 'po 👍 → 1/20');
+    await step(()=>rateBtn(2).click());
+    await step(()=>rateBtn(-1).click());
+    await step(()=>d.querySelector('[data-gu-skip]').click());
+    const swiped=ratingsLS().filter(x=>x.source==='swipe' && x.artist!=='Srv');
+    eq2(swiped.map(x=>x.rating).join(','), '1,2,-1', 'localStorage: 👍=1, ❤️=2, 👎=-1 (pomiń bez oceny)');
+    ok(swiped.every(x=>x.genre==='Rock' && x.year==='1985' && x.trackKey && x.ts), 'ocena: gatunek, rok, klucz, ts');
+    eq2(d.querySelector('[data-gu-pn]').textContent, '4/20', 'pomiń też przesuwa postęp (4/20)');
+    // gest: przeciągnięcie w prawo (pointer events) → 👍
+    const card=$(w,'guCard');
+    const pe=(t, x, y)=>card.dispatchEvent(new w.MouseEvent(t, { clientX:x, clientY:y, bubbles:true }));
+    await step(()=>{ pe('pointerdown', 100, 100); pe('pointermove', 180, 105); pe('pointermove', 240, 110); pe('pointerup', 240, 110); });
+    eq2(ratingsLS().filter(x=>x.source==='swipe' && x.artist!=='Srv').length, 4, 'gest w prawo → ocena');
+    eq2(ratingsLS().filter(x=>x.artist!=='Srv').pop().rating, 1, 'gest w prawo = 👍');
+    // krótki ruch → karta wraca (bez oceny)
+    const c2=$(w,'guCard'); const pe2=(t, x, y)=>c2.dispatchEvent(new w.MouseEvent(t, { clientX:x, clientY:y, bubbles:true }));
+    pe2('pointerdown', 100, 100); pe2('pointermove', 130, 100); pe2('pointerup', 130, 100); await realWait(30);
+    eq2(ratingsLS().filter(x=>x.artist!=='Srv').length, 4, 'krótki gest → bez oceny');
+    // klawiatura: ← = 👎
+    await step(()=>d.dispatchEvent(new w.KeyboardEvent('keydown', { key:'ArrowLeft', bubbles:true })));
+    eq2(ratingsLS().filter(x=>x.artist!=='Srv').pop().rating, -1, 'klawisz ← = 👎');
+    // sync: kolejka → POST /api/taste
+    await tasteMod.tasteFlush();
+    const pushed=srv.posts.flatMap(p=>p.items);
+    ok(pushed.length>=5 && pushed.every(x=>x.trackKey && [-1,1,2].includes(x.rating) && !('syn' in x)), 'sync: oceny wysłane POST /api/taste (bez flagi syn) — '+pushed.length);
+    ok(srv.posts.every(p=>p.items.length<=50), 'batch ≤ 50');
+    // zakończ → podsumowanie
+    d.querySelector('[data-gu-end]').click(); await settle(2);
+    ok(/Sesja zakończona/.test($(w,'gustBody').textContent), 'zakończenie → podsumowanie');
+    ok(/Oceń kolejne 20/.test($(w,'gustBody').textContent), 'CTA „Oceń kolejne 20"');
+    const sumNums=[...d.querySelectorAll('#gustBody .pf-st b')].map(b=>b.textContent);
+    eq2(sumNums[0], '5', 'podsumowanie: ocenione w sesji = 5');
+    d.querySelector('[data-gu-home]').click(); await settle(2);
+    // półka: 2 ❤️ (serwer + sesja), sortowanie, odsłuch, usuń
+    const items=()=>[...d.querySelectorAll('.gu-item')];
+    eq2(items().length, 2, 'półka: 2 utwory ❤️');
+    d.querySelector('[data-gu-sort="artist"]').click(); await settle(1);
+    const arts=items().map(i=>i.querySelector('.gu-meta span').textContent);
+    ok(arts.slice().sort((a,b)=>a.localeCompare(b,'pl',{sensitivity:'base'})).join('|')===arts.join('|'), 'sortowanie po wykonawcy');
+    ok(d.querySelector('[data-gu-sort="artist"]').getAttribute('aria-pressed')==='true', 'sort: aria-pressed');
+    const pl=items().find(i=>!/Server Song/.test(i.textContent)).querySelector('[data-gu-play]');   // utwór z sesji (fałszywy iTunes zna „Gust Song")
+    pl.click(); await until(()=>pl.isConnected && pl.textContent==='■');
+    eq2(pl.textContent, '■', 'półka ▶ → gra (■)');
+    const srvItem=items().find(i=>/Server Song/.test(i.textContent));
+    srvItem.querySelector('[data-gu-del]').click(); await settle(2);
+    eq2(items().length, 1, 'usuń z półki');
+    await tasteMod.tasteFlush();
+    eq2(srv.dels.join(','), 'srv|server song', 'sync: DELETE /api/taste?key=');
+    // stan pusty: usuń ostatni
+    items()[0].querySelector('[data-gu-del]').click(); await settle(2);
+    ok(/Półka jest pusta/.test($(w,'gustBody').textContent) && d.querySelector('.gu-empty [data-gu-start]'), 'pusta półka → stan pusty z CTA');
+
+    // ❤️ w odsłonie SOLO
+    w.STACJA_CONFIG.roomsBase='';
+    $(w,'toMenu').click(); await settle(2);
+    resetSelection(w);
+    const { audio:catKey } = catsByKind(w);
+    const tk=[...d.querySelectorAll('.tick:not(.rnd)')].find(t=>t.dataset.era===catKey); tk.click();
+    const musicChip=modeChip(w, /muzyka/); if(musicChip && !musicChip.classList.contains('on')) musicChip.click();
+    $(w,'goSolo') && $(w,'goSolo').click(); await settle(2);
+    click(w,'matchStart'); await until(()=>$(w,'check') && !$(w,'check').disabled);
+    click(w,'check'); await settle(4);
+    const heart=d.querySelector('#rmeta .taste-heart');
+    ok(heart, 'odsłona solo: przycisk ❤️');
+    eq2(heart && heart.getAttribute('aria-pressed'), 'false', '❤️ aria-pressed=false');
+    const n0=+((d.querySelector('#rmeta [data-taste-shelfn]')||{}).textContent||'').replace(/\D/g,'');
+    heart.click(); await settle(1);
+    eq2(heart.getAttribute('aria-pressed'), 'true', '❤️ klik → aria-pressed=true');
+    eq2(d.querySelector('#rmeta [data-taste-shelfn]').textContent, 'na półce: '+(n0+1), 'licznik „na półce: N" rośnie');
+    const rv=ratingsLS().filter(x=>x.source==='reveal');
+    ok(rv.length===1 && rv[0].rating===2 && rv[0].cat===catKey, 'localStorage: rating 2, source reveal, kategoria meczu');
+    heart.click(); await settle(1);
+    ok(heart.getAttribute('aria-pressed')==='false' && !ratingsLS().some(x=>x.source==='reveal'), '❤️ toggle → zdjęte z półki');
+    heart.click(); await settle(1);
+    $(w,'toMenu').click(); await settle(2);
+
+    // ❤️ w odsłonie MP (lokalnie u gracza — bez ramek do serwera)
+    const ws=await f6bRoom();
+    const sent0=ws.sent.length;
+    ws.pushState(revealState(ws, { playNonce:9301, reveal:{ ...revealState(ws).reveal, track:'Hey Jude (Remastered 2015)', art:'https://x/hj.jpg' } })); await settle(6);
+    const mh=d.querySelector('#mpRoom .taste-heart');
+    ok(mh && /na półkę/.test(mh.textContent), 'odsłona MP: ❤️ „na półkę"');
+    mh.click(); await settle(2);
+    const mh2=d.querySelector('#mpRoom .taste-heart');
+    ok(mh2 && mh2.getAttribute('aria-pressed')==='true', 'MP ❤️ → aria-pressed=true (po re-renderze też)');
+    ok(ratingsLS().some(x=>x.title==='Hey Jude' && x.artist==='Beatles' && x.rating===2 && x.cat==='d80'), 'MP: ❤️ zapisane lokalnie (tytuł bez remasteru, kategoria)');
+    ok(!ws.sent.slice(sent0).some(m=>/taste|heart/i.test(JSON.stringify(m))), 'MP: bez zmian protokołu (nic nie poszło do pokoju)');
+    w.mpLeaveConfirmed('room'); await settle(4);
+  } finally { globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; }
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

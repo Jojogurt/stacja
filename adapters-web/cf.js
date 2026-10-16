@@ -82,3 +82,11 @@ export const friendRespond  = (id, accept) => wrap(call('/api/friend/respond', {
 export const friendsList    = ()           => wrap(call('/api/friends'));
 export const pendingFriends = ()           => wrap(call('/api/friends/pending'));
 export const sentFriends    = ()           => wrap(call('/api/friends/sent'));
+
+/* ---- „Twój gust": oceny utworów (GET/POST/DELETE /api/taste) ----
+ * Rzucają błędem z `status` (404 = stary Worker bez /api/taste → klient zostaje lokalny; app/taste.js decyduje).
+ * hasSession(): token już jest — synchronizacja przy starcie NIE tworzy profilu na serwerze. */
+export const hasSession  = () => !!getToken();
+export const tasteFetch  = ()      => call('/api/taste').then(d => (d && Array.isArray(d.items)) ? d.items : []);
+export const tastePush   = (items) => call('/api/taste', { method: 'POST', body: { items } });
+export const tasteDelete = (key)   => call('/api/taste?key=' + encodeURIComponent(key), { method: 'DELETE' });

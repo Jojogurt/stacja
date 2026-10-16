@@ -18,6 +18,7 @@ import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // E
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
 import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
+import { tasteHeartHTML } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
 import { catLektorLang } from '../core/lektorVoice.js';
@@ -971,6 +972,7 @@ function check(){
   if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
   if(tStage!=null) r.appendChild(noteLine('tempo', `zgadywane przy ${fmtRate(tempoRate(qm, tStage))} · mnożnik ×${String(sc.mult).replace('.',',')} · teraz oryginał 1×`));
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  revealTaste(r, [current]);   // „Twój gust": ❤️ na półkę
   if(mode==='lektor' && current.lyric){
     const d=document.createElement('div'); d.className='rline';
     d.innerHTML='<span class="mk" style="color:var(--muted)">„</span>'+
@@ -1058,6 +1060,7 @@ function checkQuiz(){
     r.insertAdjacentHTML('beforeend', listenHTML(current.listen));
   }
   if(abcd){ const meta=[current.album, current.year].filter(Boolean).join(' · '); if(meta) r.appendChild(noteLine('album', meta)); }
+  revealTaste(r, abcd ? [current] : (current.listen||[]));   // „Twój gust": ❤️ (ABCD muzyki — utwór; Łamigłówki — utwory-rozwiązania)
   const img=document.getElementById('art');
   if(img){ if(abcd && current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
   const rh=document.getElementById('revealHead');
@@ -1139,6 +1142,7 @@ function checkTimeline(){
   r.appendChild(guessLine(okTitle, 'Tytuł', displayTitle(current.track), gt, okTitle && norm(gt)!==norm(current.track) ? 'literówka OK' : '', sc.parts.title));
   r.appendChild(guessLine(okArtist, 'Wykonawca', current.artist, ga, '', sc.parts.artist));
   r.appendChild(noteLine('oś czasu', timelineSummary(tl.cards)));
+  revealTaste(r, [current]);
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
   if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
@@ -1183,6 +1187,7 @@ function checkArtistQ(){
   } else {
     const played=(current.playedClips || current.clips.filter(c=>c.ok)).length ? (current.playedClips || current.clips.filter(c=>c.ok)) : current.clips;
     r.appendChild(noteLine('zagrały', played.map((c,i)=>(i+1)+'. '+displayTitle(c.track)).join(' · ')));
+    revealTaste(r, played);   // „Twój gust": ❤️ per zagrany utwór składanki (okładka = album, bez utworu → bez ❤️)
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
@@ -1218,6 +1223,7 @@ function checkYear(){
   r.appendChild(guessLine(ys.points>0, 'Rok', String(parseYear(current.year)||current.year), parseYear(gy)!=null?String(parseYear(gy)):'', tag, sc.parts.year));
   r.appendChild(noteLine('utwór', displayTitle(current.track)+' — '+current.artist));
   if(current.yearNote) r.appendChild(noteLine('uwaga', current.yearNote));
+  revealTaste(r, [current]);
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
   if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
@@ -1276,6 +1282,12 @@ function syncRepeatBtn(){ const b=document.getElementById('quizRepeat'); if(b) b
   syncRepeatBtn();
 })();
 
+// „Twój gust": ❤️ „na półkę" w odsłonie — utwory pytania (tytuł = forma wyświetlana, kategoria ze slotu meczu)
+function revealTaste(r, tracks){
+  const s=session && matchSlot(session.match);
+  const h=tasteHeartHTML((tracks||[]).map(t=>t && ({ ...t, title:displayTitle(t.title!=null ? t.title : t.track) })), { cat:s ? s.cat : '' });
+  if(h) r.insertAdjacentHTML('beforeend', h);
+}
 // wiersz informacyjny odsłony (bez ✓/✗): „inne poprawne", „ciekawostka" — tekst ESCAPOWANY
 function noteLine(k,v){
   const d=document.createElement('div'); d.className='rline rnote';

@@ -86,7 +86,7 @@
   @keyframes tickpop{0%{transform:scale(1)}40%{transform:scale(1.09)}100%{transform:scale(1)}}
   /* wejście ekranów */
   body:not(.menu):not(.mp) .top{animation:scrIn .3s cubic-bezier(.2,.8,.2,1) both}
-  body.solo:not(.playing) .dial, body.mp #mp, body.liga #liga, body.profil #profil{animation:scrIn .32s cubic-bezier(.2,.8,.2,1) both}
+  body.solo:not(.playing) .dial, body.mp #mp, body.liga #liga, body.profil #profil, body.gust #gust{animation:scrIn .32s cubic-bezier(.2,.8,.2,1) both}
   /* menu — wejście kaskadowe */
   body.menu .mh-hero{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both}
   body.menu .mh-card.solo{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.06s}
@@ -459,9 +459,10 @@
   /* ekrany: menu / solo / mp / liga / profil */
   #menu{display:none}
   body.menu #menu{display:block}
-  #liga,#profil{display:none}
+  #liga,#profil,#gust{display:none}
   body.liga #liga{display:block}
   body.profil #profil{display:block}
+  body.gust #gust{display:block}
   .menu-sub{display:flex;gap:12px;margin-top:2px}
   .menu-sub button{flex:1;font-family:var(--display);font-weight:800;font-size:14px;letter-spacing:.02em;
     color:var(--text);background:var(--panel);border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;
@@ -1453,6 +1454,101 @@
     .bb-loader i:nth-child(3){animation-delay:.3s}
   }
   @keyframes bbBounce{0%,80%,100%{transform:translateY(0);opacity:.55}40%{transform:translateY(-10px);opacity:1}}
+  /* ===== „Twój gust" (etap 1): kafelek, ❤️ w odsłonie, sesja oceniania (karta + gesty), półka ===== */
+  .mh-row{gap:10px}
+  .mh-mini{min-width:0;padding:14px 6px;font-size:14px;line-height:1.15;text-align:center}
+  .mh-mini.gust span{color:var(--red)}
+  @media (max-width:360px){ .mh-mini{font-size:13px;padding:12px 4px} .mh-mini span{font-size:24px} }
+  /* ❤️ „na półkę" w odsłonie (solo #rmeta i karta MP) */
+  .taste-row{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:10px}
+  .taste-heart{display:inline-flex;align-items:center;gap:6px;min-height:40px;max-width:100%;font-family:var(--display);font-weight:800;font-size:var(--fs-sm);
+    color:var(--ink);background:var(--surface);border:2px solid var(--line);border-bottom-width:3px;border-radius:999px;padding:6px 14px 6px 10px;cursor:pointer}
+  .taste-heart .th-ic{font-size:18px;line-height:1}
+  .taste-heart .th-tx{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .taste-heart.on{color:var(--fail-ink);background:var(--fail-bg);border-color:var(--fail-line)}
+  .taste-heart:active{transform:translateY(2px);border-bottom-width:2px}
+  .taste-heart:focus-visible,.gu-b:focus-visible,.gu-card:focus-visible,.gu-play:focus-visible,.gu-del:focus-visible,.gu-link:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+  .taste-shelfn{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted)}
+  @media (prefers-reduced-motion: no-preference){ .taste-heart.pop .th-ic{animation:jPop .36s cubic-bezier(.2,.8,.2,1)} }
+  /* ekran */
+  .gu-body{padding-bottom:10px}
+  .gu-stats{margin-bottom:8px}
+  .pf-st.r{background:var(--fail-bg);border-color:var(--fail-line)} .pf-st.r b{color:var(--fail-ink)}
+  .gu-sync{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);text-align:center;margin:0 0 14px}
+  .gu-sync[data-state="synced"]{color:var(--ok-ink)}
+  .mh-card.gust{background:var(--red);box-shadow:0 5px 0 var(--red-d)}
+  .mh-card.gust .ic{font-size:26px}
+  .mh-card.gust .tx b{font-size:19px}
+  .gu-shelf-head{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:4px 0 8px}
+  .gu-shelf-head .pf-lbl{margin:0 2px}
+  .gu-n{font-family:var(--display);font-weight:800;font-size:12px;color:var(--muted)}
+  .gu-sort button{padding:6px 10px}
+  .gu-shelf{display:flex;flex-direction:column;gap:10px}
+  .gu-item{display:grid;grid-template-columns:56px minmax(0,1fr);gap:6px 12px;align-items:center;background:var(--panel);border:2px solid var(--line);border-radius:16px;padding:10px}
+  .gu-art{width:56px;height:56px;border-radius:10px;object-fit:cover;background:var(--panel2);display:flex;align-items:center;justify-content:center;font-size:22px;color:var(--muted)}
+  .gu-meta{display:flex;flex-direction:column;min-width:0}
+  .gu-meta b{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gu-meta span{font-weight:700;font-size:var(--fs-sm);color:var(--ink);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .gu-meta small{font-weight:700;font-size:12px;color:var(--muted)}
+  .gu-acts{grid-column:1 / -1;display:flex;align-items:center;gap:6px}
+  .gu-play,.gu-del{flex:0 0 auto;width:40px;height:36px;border-radius:12px;border:2px solid var(--line);background:var(--surface);color:var(--ink);font-size:15px;font-weight:900;cursor:pointer}
+  .gu-play{border-color:var(--blue);color:var(--blue-d);background:var(--info-bg)}
+  .gu-play.on{background:var(--blue);color:#fff}
+  .gu-del{color:var(--muted)}
+  .gu-link{flex:1 1 0;min-width:0;text-align:center;font-family:var(--display);font-weight:800;font-size:13px;text-decoration:none;border-radius:12px;padding:8px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .gu-link.sp{color:#0F7A38;background:rgba(30,215,96,.14);border:2px solid rgba(30,215,96,.38)}
+  .gu-link.am{color:#C8143A;background:rgba(250,36,60,.09);border:2px solid rgba(250,36,60,.28)}
+  html.dark .gu-link.sp{color:#5BE38E} html.dark .gu-link.am{color:#FF8098}
+  .gu-empty{display:flex;flex-direction:column;align-items:center;gap:6px;text-align:center;background:var(--panel2);border:2px dashed var(--line);border-radius:18px;padding:22px 16px;color:var(--muted);font-weight:700}
+  .gu-empty b{font-family:var(--display);font-weight:900;font-size:17px;color:var(--ink)}
+  .gu-empty-ic{font-size:30px}
+  .gu-empty-cta{margin-top:8px;padding:12px 18px;font-size:15px}
+  .gu-wide{display:block;width:100%;padding:13px 16px;font-size:15px}
+  /* sesja */
+  .gu-sess{display:flex;flex-direction:column;align-items:stretch;gap:12px}
+  .gu-top{display:flex;align-items:center;gap:10px}
+  .gu-prog{flex:1;height:12px;border-radius:99px;background:var(--track);overflow:hidden}
+  .gu-prog i{display:block;height:100%;background:var(--green);border-radius:99px;transition:width .3s}
+  .gu-pn{font-family:var(--display);font-weight:900;font-size:14px;color:var(--muted);min-width:38px;text-align:right}
+  .gu-x{width:36px;height:36px;border-radius:50%;border:2px solid var(--line);background:var(--surface);color:var(--muted);font-weight:900;cursor:pointer}
+  .gu-stage{display:flex;justify-content:center;min-height:380px}
+  .gu-card{position:relative;width:100%;max-width:340px;background:var(--panel);border:2px solid var(--line);border-bottom-width:5px;border-radius:24px;padding:12px;
+    touch-action:none;user-select:none;-webkit-user-select:none;cursor:grab;transition:transform .2s ease, opacity .2s ease}
+  .gu-card.drag{transition:none;cursor:grabbing}
+  .gu-card.loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;min-height:360px;cursor:default;color:var(--muted);font-weight:800;text-align:center}
+  .gu-card.fly{transition:transform .26s ease-in, opacity .26s ease-in;opacity:0}
+  .gu-card.fly-r{transform:translateX(130%) rotate(16deg) !important}
+  .gu-card.fly-l{transform:translateX(-130%) rotate(-16deg) !important}
+  .gu-card.fly-u{transform:translateY(-120%) scale(.9) !important}
+  .gu-card.fly-d{transform:translateY(30%) scale(.92) !important}
+  .gu-cover{position:relative;aspect-ratio:1/1;border-radius:16px;overflow:hidden;background:var(--panel2)}
+  .gu-cover img{width:100%;height:100%;object-fit:cover;display:block;pointer-events:none}
+  .gu-cover-ph{width:100%;height:100%;display:flex;align-items:center;justify-content:center;font-size:64px;color:var(--muted)}
+  .gu-stamp{position:absolute;top:14px;font-size:44px;opacity:0;transition:opacity .12s;filter:drop-shadow(0 2px 6px rgba(0,0,0,.35))}
+  .gu-stamp.down{right:14px} .gu-stamp.up{left:14px} .gu-stamp.heart{left:50%;transform:translateX(-50%)}
+  .gu-card[data-dir="l"] .gu-stamp.down,.gu-card[data-dir="r"] .gu-stamp.up,.gu-card[data-dir="u"] .gu-stamp.heart,
+  .gu-card.fly-l .gu-stamp.down,.gu-card.fly-r .gu-stamp.up,.gu-card.fly-u .gu-stamp.heart{opacity:1}
+  .gu-replay{position:absolute;right:10px;bottom:10px;width:52px;height:52px;border-radius:50%;border:none;background:rgba(0,0,0,.55);color:#fff;font-size:20px;font-weight:900;cursor:pointer}
+  .gu-replay.on{background:var(--green)}
+  .gu-ct{display:flex;flex-direction:column;align-items:center;text-align:center;padding:12px 4px 4px;min-width:0}
+  .gu-ct b{font-family:var(--display);font-weight:900;font-size:20px;color:var(--ink);line-height:1.2;overflow-wrap:anywhere}
+  .gu-ct span{font-weight:800;font-size:var(--fs-md);color:var(--ink);overflow-wrap:anywhere}
+  .gu-ct small{font-weight:700;font-size:var(--fs-xs);color:var(--muted);margin-top:2px}
+  .gu-btns{display:flex;justify-content:center;align-items:center;gap:18px}
+  .gu-b{width:64px;height:64px;border-radius:50%;font-size:28px;line-height:1;cursor:pointer;background:var(--surface);border:2px solid var(--line);border-bottom-width:5px}
+  .gu-b.heart{width:76px;height:76px;font-size:34px;border-color:var(--fail-line);background:var(--fail-bg)}
+  .gu-b.down{border-color:var(--line)} .gu-b.up{border-color:var(--info-line);background:var(--info-bg)}
+  .gu-b:active{transform:translateY(3px);border-bottom-width:2px}
+  .gu-b:disabled,.gu-skip:disabled{opacity:.45;cursor:default}
+  .gu-skip{align-self:center;font-family:var(--display);font-weight:800;font-size:var(--fs-md);color:var(--muted);background:none;border:none;padding:8px 14px;cursor:pointer}
+  .gu-hint{font-weight:700;font-size:12px;color:var(--muted);text-align:center;margin-top:-6px}
+  .gu-sum{display:flex;flex-direction:column;align-items:stretch;text-align:center;gap:10px}
+  .gu-sum-ic{font-size:44px}
+  .gu-sum-big{font-family:var(--display);font-weight:900;font-size:24px;color:var(--ink)}
+  .gu-sum-sub{font-weight:700;font-size:var(--fs-sm);color:var(--muted);margin-top:-4px}
+  .gu-sum .mh-card{text-align:left;margin:4px 0 0}
+  @media (max-width:360px){ .gu-link{font-size:12px;padding:8px 4px} .gu-play,.gu-del{width:36px} .gu-acts{gap:5px} .mh-card.gust .tx b{font-size:17px} .mh-card.gust{gap:12px;padding:16px} .gu-stage{min-height:340px} .gu-b{width:58px;height:58px;font-size:25px} .gu-b.heart{width:68px;height:68px;font-size:30px} .gu-btns{gap:14px} .gu-ct b{font-size:18px} }
+  @media (prefers-reduced-motion: reduce){ .gu-card,.gu-card.fly{transition:none} .gu-prog i{transition:none} }
 </style>
 <script>/* motyw przed renderem — bez mignięcia. F6a (R-U7): brak wyboru / 'system' → prefers-color-scheme */try{var _t=localStorage.getItem('stacjaTheme');if(_t==='dark'||(_t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');}catch(e){try{if(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark');}catch(_e){}}</script>
 </head>
@@ -1482,6 +1578,7 @@
     <div class="mh-row">
       <button class="mh-mini" id="goLiga"><span><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M164.38 181.1a52 52 0 1 0-72.76 0a75.9 75.9 0 0 0-30 28.89a12 12 0 0 0 20.78 12a53 53 0 0 1 91.22 0a12 12 0 1 0 20.78-12a75.9 75.9 0 0 0-30.02-28.89M100 144a28 28 0 1 1 28 28a28 28 0 0 1-28-28m147.21 9.59a12 12 0 0 1-16.81-2.39c-8.33-11.09-19.85-19.59-29.33-21.64a12 12 0 0 1-1.82-22.91a20 20 0 1 0-24.78-28.3a12 12 0 1 1-21-11.6a44 44 0 1 1 73.28 48.35a92.2 92.2 0 0 1 22.85 21.69a12 12 0 0 1-2.39 16.8m-192.28-24c-9.48 2.05-21 10.55-29.33 21.65a12 12 0 0 1-19.19-14.45a92.4 92.4 0 0 1 22.85-21.69a44 44 0 1 1 73.28-48.35a12 12 0 1 1-21 11.6a20 20 0 1 0-24.78 28.3a12 12 0 0 1-1.82 22.91Z"/></svg></span>Drużyna</button>
       <button class="mh-mini" id="goProfil"><span><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M234.38 210a123.36 123.36 0 0 0-60.78-53.23a76 76 0 1 0-91.2 0A123.36 123.36 0 0 0 21.62 210a12 12 0 1 0 20.77 12c18.12-31.32 50.12-50 85.61-50s67.49 18.69 85.61 50a12 12 0 0 0 20.77-12M76 96a52 52 0 1 1 52 52a52.06 52.06 0 0 1-52-52"/></svg></span>Profil</button>
+      <button class="mh-mini gust" id="goGust"><span aria-hidden="true"><svg viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M178 36c-20.09 0-37.92 7.93-50 21.56C115.92 43.93 98.09 36 78 36a66.08 66.08 0 0 0-66 66c0 72.34 105.81 130.14 110.31 132.57a12 12 0 0 0 11.38 0C138.19 232.14 244 174.34 244 102a66.08 66.08 0 0 0-66-66m-5.49 142.36a328.7 328.7 0 0 1-44.51 31.8a328.7 328.7 0 0 1-44.51-31.8C61.82 159.77 36 131.42 36 102a42 42 0 0 1 42-42c17.8 0 32.7 9.4 38.89 24.54a12 12 0 0 0 22.22 0C145.3 69.4 160.2 60 178 60a42 42 0 0 1 42 42c0 29.42-25.82 57.77-47.49 76.36"/></svg></span>Twój gust</button>
     </div>
     <div class="mh-setting">
       <span>Układ gry ze znajomymi</span>
@@ -1525,6 +1622,10 @@
       <small class="pf-edit-hint">Tak widzą Cię znajomi i drużyna.</small>
     </div>
     <div class="profil-stats" id="profilStats"></div>
+  </section>
+
+  <section id="gust">
+    <div class="gu-body" id="gustBody"></div>
   </section>
 
   <section id="mp">

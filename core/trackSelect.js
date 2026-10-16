@@ -177,7 +177,8 @@ export function pickTrack(results, artist, seen, opts={}){
 function normalize(t){
   return { track:t.trackName, artist:t.artistName, year:(t.releaseDate||'').slice(0,4),
     album:t.collectionName||'', preview:t.previewUrl,
-    art:(t.artworkUrl100||'').replace('100x100','300x300') };
+    art:(t.artworkUrl100||'').replace('100x100','300x300'),
+    genre:String(t.primaryGenreName||'').slice(0,60) };   // gust: gatunek iTunes (Deezer/stary proxy → '')
 }
 
 /* ---------- F5 #6: cache wyników per zapytanie w obrębie sesji ----------
@@ -242,20 +243,21 @@ async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS, rnd=Mat
   const deadline=Date.now()+capMs;
   let anyResponse=false;
   for(const s of shuffle(pool, rnd)){
-    let preview=s.preview||'', art='';
+    let preview=s.preview||'', art='', genre='', itYear='';
     if(!preview){
       for(const [term, opts] of songTerms(s)){
         const remaining=deadline-Date.now(); if(remaining<=0) break;
         try{
           const res=await withTimeout(Promise.resolve(itunes(term, opts)), remaining); anyResponse=true;
           const t=matchSong(res, s);
-          if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); break; }
+          if(t){ preview=t.previewUrl; art=(t.artworkUrl100||'').replace('100x100','300x300'); genre=String(t.primaryGenreName||'').slice(0,60); itYear=String(t.releaseDate||'').slice(0,4); break; }
         }catch(e){ /* błąd/timeout — następny wariant */ }
       }
     }
     if(preview){ seen.add(norm(s.title));
-      const t={ track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art };
+      const t={ track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art, genre };
       if(s.year) t.yearSrc='data';   // F8a: rok z danych playlisty (kuratorowany), nie z iTunes
+      else if(itYear) t.itYear=itYear;   // gust: rok wydania z iTunes TYLKO informacyjnie (tryby gry dalej używają `year`)
       return t; }
     seen.add(norm(s.title));
     if(Date.now()>=deadline) break;

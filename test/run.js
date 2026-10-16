@@ -23,6 +23,9 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 import { createFeed, resetFeed, pushChat, ingestFeed, FEED_CAP } from '../core/chatFeed.js';
+import { trackKey, isTrackKey, sanitizeRating, parseStore, rate, unrate, toggleHeart, ratingOf, activeRatings, capStore, tasteCounts,
+  shelfItems, mergeTaste, markSynced, dropTombs, batches, genreGroup, catGroup, decadeOf, tasteCandidates, pickTasteSession, planCat,
+  seenForArtist, TASTE_MAX, SESSION_N, SESSION_SPARE } from '../core/taste.js';
 
 let pass=0, fail=0;
 function ok(cond, msg){ if(cond){ pass++; } else { fail++; console.error('  ✗ '+msg); } }
@@ -2149,5 +2152,173 @@ group('EKSP. obroty: etapy tempa, mnożniki, płyta, MP', ()=>{
   eq(evaluateAnswer({ ...g, mode:'fastmo' }, { track:'Hey Jude', artist:'Beatles' }).perTeam.all.gained, 120, 'MP fastmo: 100 × 1.2');
   eq(evaluateAnswer({ ...g, mode:'music' }, { track:'Hey Jude', artist:'Beatles' }).perTeam.all.gained, 100, 'MP muzyka bez zmian');
 });
+
+/* ===== „Twój gust" (etap 1): core/taste.js ===== */
+group('gust: trackKey — klucz utworu (norm + displayTitle), isTrackKey', ()=>{
+  eq(trackKey('The Beatles', 'Hey Jude'), 'beatles|hey jude', 'przedimek, małe litery');
+  eq(trackKey('Queen', 'Bohemian Rhapsody (2011 Remaster)'), trackKey('Queen', 'Bohemian Rhapsody'), 'remaster ≡ oryginał');
+  eq(trackKey('Queen', 'Bohemian Rhapsody - Remastered 2011'), trackKey('Queen', 'Bohemian Rhapsody'), '„ - Remastered" ≡ oryginał');
+  eq(trackKey('Myslovitz', 'Długość dźwięku samotności'), 'myslovitz|dlugosc dzwieku samotnosci', 'diakrytyki (ł → l)');
+  eq(trackKey('', 'X'), '', 'brak wykonawcy → pusty klucz');
+  eq(trackKey('A', '   '), '', 'pusty tytuł → pusty klucz');
+  ok(isTrackKey('queen|bohemian rhapsody') && !isTrackKey('<script>|x') && !isTrackKey('bez-kreski') && !isTrackKey(5), 'isTrackKey');
+});
+group('gust: sanitizeRating — pola, walidacja, ts', ()=>{
+  const now=1_000_000;
+  const r=sanitizeRating({ title:' Hey  Jude ', artist:'The Beatles', year:'1968-08-26', genre:'Rock', art:'https://x/a.jpg', cat:'60s', rating:2, source:'reveal', ts:500, trackKey:'cudzy|klucz', extra:'x' }, now);
+  eq(r, { trackKey:'beatles|hey jude', title:'Hey Jude', artist:'The Beatles', year:'1968', genre:'Rock', art:'https://x/a.jpg', cat:'60s', rating:2, source:'reveal', ts:500 }, 'pełna ocena (klucz liczony, rok 4 cyfry, bez obcych pól)');
+  eq(sanitizeRating({ title:'a', artist:'b', rating:0 }, now), null, 'rating 0 → null');
+  eq(sanitizeRating({ title:'a', artist:'b', rating:3 }, now), null, 'rating 3 → null');
+  eq(sanitizeRating(null, now), null, 'null → null');
+  const b=sanitizeRating({ title:'a', artist:'b', rating:-1, art:'javascript:alert(1)', cat:'x"><img', year:'zz', source:'?', ts:now+2*86400000 }, now);
+  eq([b.art, b.cat, b.year, b.source, b.ts], ['', '', '', 'swipe', now], 'złe art/cat/rok/source → bezpieczne; ts z przyszłości → teraz');
+  eq(sanitizeRating({ title:'a', artist:'b', rating:1, art:'http://x/a.jpg' }, now).art, '', 'okładka tylko https');
+  eq(sanitizeRating({ title:'x'.repeat(500), artist:'b', rating:1 }, now).title.length, 200, 'tytuł przycięty do 200');
+});
+group('gust: rate / toggleHeart / unrate (nagrobek) / ratingOf / tasteCounts / półka', ()=>{
+  let st={};
+  const hj={ track:'Hey Jude (Remastered 2015)', artist:'The Beatles', year:'1968', art:'https://x/1.jpg', genre:'Rock' };
+  const r1=rate(st, hj, 1, { source:'swipe', now:100 }); st=r1.store;
+  eq(r1.item.title, 'Hey Jude (Remastered 2015)', 'rate: tytuł z `track`');
+  eq(ratingOf(st, trackKey('The Beatles','Hey Jude')), 1, '👍 zapisane pod kluczem bez remasteru');
+  let t=toggleHeart(st, { title:'Hey Jude', artist:'The Beatles' }, { now:200 }); st=t.store;
+  ok(t.on && ratingOf(st, t.key)===2, '❤️ toggle: 👍 → ❤️');
+  eq(st[t.key].source, 'reveal', 'toggleHeart domyślnie source=reveal');
+  t=toggleHeart(st, { title:'Hey Jude', artist:'The Beatles' }, { now:300 }); st=t.store;
+  ok(!t.on && ratingOf(st, t.key)===0 && st[t.key].rating===0 && st[t.key].ts===300, '❤️ toggle 2×: zdjęte z półki → nagrobek z ts');
+  eq(activeRatings(st).length, 0, 'nagrobek nie liczy się jako ocena');
+  eq(unrate(st, t.key).changed, false, 'unrate nagrobka → bez zmian');
+  st=rate(st, { title:'B', artist:'Z', year:'1999' }, 2, { now:400 }).store;
+  st=rate(st, { title:'A', artist:'Y', year:'1975' }, 2, { now:500 }).store;
+  st=rate(st, { title:'C', artist:'X' }, -1, { now:600 }).store;
+  eq(tasteCounts(st), { total:3, hearts:2, up:0, down:1 }, 'liczniki');
+  eq(shelfItems(st,'recent').map(x=>x.title), ['A','B'], 'półka: ostatnio');
+  eq(shelfItems(st,'artist').map(x=>x.artist), ['Y','Z'], 'półka: wykonawca A→Z');
+  eq(shelfItems(st,'year').map(x=>x.year), ['1975','1999'], 'półka: rok rosnąco');
+  eq(rate({}, { title:'', artist:'x' }, 1).item, null, 'pusty tytuł → brak oceny');
+  const u=unrate(st, trackKey('Y','A'), { now:700 });
+  ok(u.changed && ratingOf(u.store, trackKey('Y','A'))===0, 'unrate → nagrobek');
+});
+group('gust: capStore — limit ocen (❤️ chronione najdłużej), parseStore', ()=>{
+  let st={};
+  st=rate(st, { title:'h1', artist:'a' }, 2, { now:1 }).store;
+  for(let i=0;i<5;i++) st=rate(st, { title:'u'+i, artist:'a' }, 1, { now:10+i }).store;
+  const c=capStore(st, 3);
+  eq(activeRatings(c).map(x=>x.title).sort(), ['h1','u3','u4'], 'ponad limit → najpierw najstarsze 👍, ❤️ zostaje');
+  ok(TASTE_MAX===2000, 'TASTE_MAX = 2000');
+  const raw=JSON.stringify({ ...st, 'zly': { rating:7 }, 'a|tomb': { rating:0, ts:5, syn:true }, [trackKey('a','h1')]: { ...st[trackKey('a','h1')], syn:true } });
+  const p=parseStore(raw);
+  ok(p['a|tomb'] && p['a|tomb'].rating===0 && p['a|tomb'].syn, 'parseStore: nagrobek + syn zachowane');
+  ok(!p.zly && p[trackKey('a','h1')].syn===true, 'parseStore: śmieci odrzucone, syn zachowany');
+  eq(parseStore('{zepsuty'), {}, 'zepsuty JSON → {}');
+  eq(parseStore('[1,2]'), {}, 'tablica → {}');
+});
+group('gust: mergeTaste — last-write-wins, push/del, usunięte na innym urządzeniu', ()=>{
+  const now=10_000;
+  const S=(title, rating, ts)=>({ title, artist:'X', rating, ts });
+  const k=t=>trackKey('X', t);
+  let local={};
+  local=rate(local, S('newer-local'), 1, { now:500 }).store;          // lokalnie nowsze → push
+  local=rate(local, S('older-local'), 1, { now:100 }).store;          // serwer nowszy → nadpisz
+  local=rate(local, S('only-local'), 2, { now:300 }).store;           // nie ma na serwerze, bez syn → push
+  local={ ...local, [k('synced-gone')]: { ...sanitizeRating(S('synced-gone', 1, 50), now), syn:true } };   // syn + brak na serwerze → usunięte gdzie indziej
+  local={ ...local, [k('tomb')]: { trackKey:k('tomb'), rating:0, ts:900 } };              // nagrobek nowszy niż serwer → del
+  local={ ...local, [k('tomb-gone')]: { trackKey:k('tomb-gone'), rating:0, ts:900 } };    // nagrobek, serwer nie ma → znika
+  const server=[ S('newer-local', -1, 200), S('older-local', 2, 400), S('tomb', 2, 100), S('server-only', 1, 50), { junk:true } ];
+  const m=mergeTaste(local, server, now);
+  eq(m.store[k('newer-local')].rating, 1, 'lokalnie nowsza ocena zostaje');
+  eq(m.store[k('older-local')].rating, 2, 'serwer nowszy → nadpisuje');
+  ok(m.store[k('older-local')].syn, 'z serwera → syn');
+  ok(m.store[k('server-only')] && m.store[k('server-only')].syn, 'tylko na serwerze → dociągnięte');
+  ok(!m.store[k('synced-gone')], 'syn + brak na serwerze → usunięte (skasowane na innym urządzeniu)');
+  ok(!m.store[k('tomb-gone')], 'nagrobek bez wpisu na serwerze → znika');
+  eq(m.push.map(x=>x.title).sort(), ['newer-local','only-local'], 'push: lokalnie nowsze + niewysłane');
+  ok(m.push.every(x=>!('syn' in x)), 'push bez flagi syn');
+  eq(m.del, [k('tomb')], 'del: nagrobek nowszy niż serwer');
+  const ms=markSynced(m.store, [m.store[k('newer-local')], { trackKey:k('only-local'), ts:1 }]);
+  ok(ms[k('newer-local')].syn && !ms[k('only-local')].syn, 'markSynced: tylko gdy ts się zgadza (nie zmienione w locie)');
+  ok(!dropTombs(m.store, [k('tomb')])[k('tomb')], 'dropTombs: nagrobek po DELETE znika');
+  ok(dropTombs(m.store, [k('newer-local')])[k('newer-local')], 'dropTombs nie rusza aktywnej oceny');
+  eq(batches([1,2,3,4,5], 2), [[1,2],[3,4],[5]], 'batches');
+});
+group('gust: grupy gatunków, dekady, kategorie', ()=>{
+  eq(['Pop','Hard Rock','Heavy Metal','Hip-Hop/Rap','R&B/Soul','Dance','Electronic','Alternative','Soundtrack','',undefined].map(genreGroup),
+    ['pop','rock','metal','hiphop','hiphop','dance','dance','rock','inne','',''], 'genreGroup (iTunes primaryGenreName)');
+  eq([['rap-pl','rap PL'],['disco-polo','disco polo'],['rock-world','rock świat'],['metal','metal'],['hits-now','hity dziś'],['dz-film','filmy i gry'],['80s','lata 80'],['unplugged','akustycznie / unplugged']].map(([k,l])=>catGroup(k,l)),
+    ['hiphop','dance','rock','metal','pop','inne','','rock'], 'catGroup z klucza/etykiety');
+  eq(['1984','1984-05-01','2021','1899','',null,'abc'].map(decadeOf), ['1980','1980','2020','','','',''], 'decadeOf');
+});
+// fixture: 7 dekad × artyści, style z częścią tych samych artystów, playlista z utworami
+const TASTE_CATS={
+  '60s':{ label:'lata 60', range:'1960–69', artists:['A60','B60','C60','D60'] },
+  '70s':{ label:'lata 70', range:'1970–79', artists:['A70','B70','C70','D70'] },
+  '80s':{ label:'lata 80', range:'1980–89', artists:['A80','B80','C80','D80','E80'] },
+  '90s':{ label:'lata 90', range:'1990–99', artists:['A90','B90','C90','D90'] },
+  '00s':{ label:'lata 2000', range:'2000–09', artists:['A00','B00','C00','D00'] },
+  '10s':{ label:'lata 2010', range:'2010–19', artists:['A10','B10','C10','D10'] },
+  '20s':{ label:'lata 2020', range:'2020–', artists:['A20','B20','C20','D20'] },
+  'rock-world':{ label:'rock świat', artists:['A60','A70','A80','B80','A90','A00','A10'] },
+  'pop-world':{ label:'pop świat', artists:['B60','B70','C80','B90','B00','B10','A20'] },
+  'metal':{ label:'metal', artists:['C70','D80','C90'] },
+  'rap-pl':{ label:'rap PL', artists:['C00','C10','B20','C20'] },
+  'dance-90':{ label:'eurodance', artists:['D90','E80','D00','D10','D20'] },
+  'dz-top':{ label:'światowe hity', songs:[{ title:'Hit One', artist:'Solo Star', year:1985 }, { title:'Hit Two', artist:'Duo', year:2015 }, { title:'Akustyk', artist:'Duo', match:'acoustic' }] },
+  'quizik':{ kind:'quiz', label:'quiz', questions:[] },
+};
+group('gust: tasteCandidates — wykonawcy (dekada × grupa z krzyżowania kategorii) + utwory playlist', ()=>{
+  const pool=tasteCandidates(TASTE_CATS);
+  const a80=pool.find(c=>c.artist==='A80');
+  eq([a80.cat, a80.decade, a80.group], ['80s','1980','rock'], 'artysta dekady dostaje grupę ze stylu');
+  const d20=pool.find(c=>c.artist==='D20');
+  eq([d20.decade, d20.group], ['2020','dance'], 'otwarta dekada „2020–" → 2020');
+  eq(pool.filter(c=>c.artist==='A80').length, 1, 'bez duplikatów wykonawcy (dekada + styl)');
+  const hit=pool.find(c=>c.title==='Hit One');
+  eq([hit.decade, hit.group, hit.year], ['1980','pop','1985'], 'utwór playlisty: dekada z roku, grupa z kategorii');
+  ok(!pool.some(c=>c.title==='Akustyk'), 'utwory z `match` (wersje akustyczne) pominięte');
+  ok(!pool.some(c=>c.cat==='quizik'), 'kategorie quiz/lyrics pominięte');
+  eq(planCat(a80, TASTE_CATS), { artists:['A80'], range:'1980–89' }, 'planCat: wykonawca + zakres dekady');
+  eq(planCat(hit, TASTE_CATS), { songs:[{ title:'Hit One', artist:'Solo Star', year:'1985' }] }, 'planCat: utwór playlisty');
+});
+group('gust: pickTasteSession — 20 różnorodnych (pokrycie dekad × gatunków), adaptacja do profilu, bez ocenionych', ()=>{
+  const pool=tasteCandidates(TASTE_CATS);
+  const seeded=(seed)=>{ let s=seed; return ()=>{ s=(s*16807)%2147483647; return (s-1)/2147483646; }; };
+  const plan=pickTasteSession(pool, {}, seeded(7));
+  eq(plan.length, Math.min(pool.length, SESSION_N+SESSION_SPARE), 'plan = n + zapas (ograniczony pulą)');
+  const first=plan.slice(0, SESSION_N);
+  eq(new Set(first.map(c=>c.decade).filter(Boolean)).size, 7, 'pierwsze 20: wszystkie 7 dekad');
+  eq(new Set(first.map(c=>c.group).filter(Boolean)).size, 5, 'pierwsze 20: wszystkie 5 grup gatunków');
+  eq(new Set(first.map(c=>c.artist)).size, first.length, 'bez powtórki wykonawcy w sesji');
+  const firstTen=plan.slice(0, 7);
+  eq(new Set(firstTen.map(c=>c.decade)).size, 7, 'pierwsze 7 kart = 7 różnych dekad (różnorodność od startu)');
+  eq(JSON.stringify(pickTasteSession(pool, {}, seeded(7))), JSON.stringify(plan), 'deterministyczny przy tym samym rnd');
+  // profil „zalany" latami 80 i rockiem → sesja odsuwa się od nich
+  let st={};
+  for(let i=0;i<30;i++) st=rate(st, { title:'R'+i, artist:'Rocker'+i, year:'198'+(i%10), genre:'Rock' }, 1, { now:i+1 }).store;
+  let n80=0, nRock=0, b80=0, bRock=0;
+  for(let sd=1; sd<=20; sd++){
+    const p=pickTasteSession(pool, st, seeded(sd)).slice(0, 10), b=pickTasteSession(pool, {}, seeded(sd)).slice(0, 10);
+    n80+=p.filter(c=>c.decade==='1980').length; nRock+=p.filter(c=>c.group==='rock').length;
+    b80+=b.filter(c=>c.decade==='1980').length; bRock+=b.filter(c=>c.group==='rock').length;
+  }
+  ok(n80<b80, `adaptacja: mniej lat 80 przy profilu pełnym lat 80 (${n80} < ${b80})`);
+  ok(nRock<bRock, `adaptacja: mniej rocka przy profilu pełnym rocka (${nRock} < ${bRock})`);
+  // utwór playlisty już oceniony → nie trafia do planu
+  const rated=rate({}, { title:'Hit One', artist:'Solo Star' }, 1).store;
+  ok(!pickTasteSession(pool, rated, seeded(3), { n:200, spare:0 }).some(c=>c.title==='Hit One'), 'oceniony utwór playlisty pominięty');
+  eq(pickTasteSession([], {}, seeded(1)), [], 'pusta pula → pusty plan');
+  // seen dla resolveTrack: ocenione tytuły tego wykonawcy
+  const sn=seenForArtist(rate({}, { title:'Song (Remastered)', artist:'The Band' }, 1).store, 'the band');
+  ok(sn.has('song'), 'seenForArtist: tytuły ocenione u wykonawcy (norm)');
+});
+await (async ()=>{
+  console.log('• gust: normalize() — gatunek iTunes (primaryGenreName) w rozwiązanym utworze; Deezer → pusty');
+  const it=async()=>[{ trackName:'Song', artistName:'Band', previewUrl:'p', releaseDate:'1985-01-01', primaryGenreName:'Rock' }];
+  const r=await resolveTrack({ cat:{ artists:['Band'] }, seen:new Set(), recent:[], itunes:it });
+  eq(r.genre, 'Rock', 'artysta: genre z primaryGenreName');
+  const dz=async()=>[{ trackName:'Song', artistName:'Band', previewUrl:'p', releaseDate:'' }];
+  eq((await resolveTrack({ cat:{ artists:['Band'] }, seen:new Set(), recent:[], itunes:dz })).genre, '', 'bez gatunku (Deezer) → ""');
+  const pl=await resolveTrack({ cat:{ songs:[{ title:'Song', artist:'Band' }] }, seen:new Set(), itunes:it });
+  eq(pl.genre, 'Rock', 'utwór playlisty: genre z dopasowanego wyniku');
+})();
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

@@ -23,9 +23,9 @@ export function initSocial(deps){
 }
 
 /* ---- wejście / wyjście z trybu ---- */
-const SCR_HEAD={ solo:'Ułóż mecz', liga:'Drużyna i znajomi', profil:'Profil' };
+const SCR_HEAD={ solo:'Ułóż mecz', liga:'Drużyna i znajomi', profil:'Profil', gust:'Twój gust' };
 export function showScreen(s){
-  document.body.classList.remove('menu','solo','mp','liga','profil','salon'); document.body.classList.add(s);   // 'salon' (ekran-monitor TV) dokłada/zdejmuje mpRender
+  document.body.classList.remove('menu','solo','mp','liga','profil','gust','salon'); document.body.classList.add(s);   // 'salon' (ekran-monitor TV) dokłada/zdejmuje mpRender
   if(s==='mp') mpPrefillName();
   const tt=$m('scrTitle'); if(tt) tt.textContent=SCR_HEAD[s]||'';
   // F6a (F12): powiadom moduły (solo: „Kontynuuj mecz" w menu, nagłówek rundy zamiast „Ułóż mecz")
