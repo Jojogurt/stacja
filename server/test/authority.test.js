@@ -865,6 +865,33 @@ await group('EKSP.: „od tyłu krótko" — offset okna od autorytetu, ukryty d
   const r=a.last('state').game.reveal;
   eq(r.kind, 'music', 'odsłona jak muzyka'); ok(r.teamOk && r.gained>=100, 'trafienie tytuł+wykonawca punktuje jak muzyka');
 });
+/* ==================== EKSPERYMENT: „zwolnione obroty"/„przyspieszone" w MP (tempo lokalne), „oś czasu" tylko solo ==================== */
+await group('EKSP.: presence ogłasza obroty (bez osi czasu); start z samą osią czasu → brak meczu', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); stubResolver(room);
+  const pr=a.last('presence');
+  ok(pr.modes.includes('slowmo') && pr.modes.includes('fastmo'), 'presence.modes: slowmo + fastmo');
+  ok(!pr.modes.includes('timeline'), 'oś czasu tylko solo');
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['timeline'], format:'coop', pools:audioPools() } });
+  ok(!room.game || room.game.phase==null, 'start z samą osią czasu → zignorowany');
+});
+await group('EKSP.: „zwolnione obroty" — flaga trybu w stanie, pytanie jak muzyka, mnożnik ×1.5 (fastmo ×1.2)', async ()=>{
+  for(const [mode, mult] of [['slowmo',1.5],['fastmo',1.2]]){
+    const { room } = await makeRoom();
+    const a=room.join('A','Ala'), b=room.join('B','Bo'); stubResolver(room);
+    await room.msg(a, { t:'start', config:{ questions:5, modes:[mode], format:'coop', pools:audioPools() } });
+    let g=a.last('state').game;
+    eq([g.phase, g.mode], [MP.ARMING, mode], mode+': ARMING, flaga trybu w stanie gry');
+    eq(g.preview, TRACK.preview, mode+': zwykła zajawka (tempo liczy klient)'); eq(g.answerSlots, null, mode+': sloty tytuł+wykonawca');
+    for(const c of [a,b]) await room.msg(c, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+    await room.msg(b, { t:'action', action:{ type:'propose', values:{ title:'Africa', artist:'Toto' } } });
+    room.game.playAt=null;   // bez bonusu za szybkość → czysty mnożnik
+    await room.msg(a, { t:'lock' });
+    const r=a.last('state').game.reveal;
+    eq(r.kind, 'music', mode+': odsłona jak muzyka'); ok(r.teamOk, mode+': trafienie');
+    eq(r.gained, Math.round(100*mult), mode+': 100 × '+mult);
+  }
+});
 
 /* ==================== Łamigłówki: track/tracks/display/partial ==================== */
 const REBUS={ prompt:'🟣 🌧️\n🎵 tytuł · hit lat 80.', slots:[{key:'a',label:'tytuł'}], answers:{ a:['Purple Rain'] },

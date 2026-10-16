@@ -22,7 +22,7 @@
  *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList } from './scoring.js';
+import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult } from './scoring.js';
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -234,7 +234,8 @@ function evaluateTeam(game, teamId, current, match, timing){
   const sc = hasAnswers
     ? scoreRound({ quizOk:teamOk, quizFrac, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
     : yearQ ? scoreRound({ yearPts:ev.year.points, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })   // F8a: rok
-    : scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure });
+    // EKSPERYMENT: „zwolnione obroty"/„przyspieszone" — MP bez etapów (stałe 0.6× / 1.5×) → mnożnik etapu 0 (×1.5 / ×1.2)
+    : scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure, mult:tempoMult(game.mode, 0) });
   const gained = sc.points;
   // kto PIERWSZY w drużynie zaproponował komplet trafnych slotów (bonus/MVP)
   let firstBy=null, firstById=null;
@@ -250,7 +251,7 @@ function evaluateTeam(game, teamId, current, match, timing){
   const yearEval = yearQ ? { pts:ev.year.points, diff:ev.year.diff, tier:ev.year.tier } : undefined;
   return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits, yearEval,
     pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
-    streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult } };
+    streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult, mult:sc.mult } };
 }
 /* ---- ocena CAŁEGO pytania: każda drużyna osobno + ranking — czysta ----
  * reveal niesie wspólne fakty utworu + `byTeam` (wynik każdej drużyny) + `ranking`.

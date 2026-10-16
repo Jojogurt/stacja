@@ -257,6 +257,19 @@ export function revsnipMult(stage){
 }
 /* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (8 → 16 → 32 → 64 bloki → pełna) jak intro (×2.0 → ×1.0) */
 export const coverMult = stage => introMult(stage);
+/* EKSPERYMENT: „zwolnione obroty" — mnożnik wg etapu tempa (0.6× → ×1.5, „szybciej" 0.75× → ×1.0);
+ * „przyspieszone" (1.5×, jeden etap) → ×1.2. Szybkość/seria jak w muzyce (mnożnik NIE zastępuje bonusu za szybkość). */
+export const SLOWMO_MULTS = [1.5, 1.0];
+export const FASTMO_MULT = 1.2;
+export function tempoMult(mode, stage){
+  if(mode==='fastmo') return FASTMO_MULT;
+  if(mode!=='slowmo') return 1;
+  const i=Math.floor(Number(stage));
+  return SLOWMO_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(SLOWMO_MULTS.length-1, i)) : 0];
+}
+/* EKSPERYMENT: „oś czasu" (Hitster) — 100 za kartę wstawioną we właściwą szczelinę + opcjonalne „żetony":
+ * tytuł +20, wykonawca +20 (niezależnie od miejsca). Pełne trafienie (seria/statystyki) = dobre miejsce na osi. */
+export const TIMELINE_PTS = { place:100, title:20, artist:20 };
 /* EKSPERYMENT: tryby „tylko wykonawca" (składanka, okładka): trafiony wykonawca = ARTIST_ONLY_PTS (jak ABCD/quiz),
  * okładka: + album (bonus PTS.album, niezależny od wykonawcy). Pełne trafienie (seria/statystyki) = wykonawca. */
 export const ARTIST_ONLY_PTS = 100;
@@ -268,19 +281,21 @@ function quizPartPts(frac){
   return Number.isFinite(f) && f>0 ? Math.round(PTS.quiz*Math.min(1, f)) : 0;
 }
 // rdzeń punktacji (bez mnożnika trybu) — z niego też limit SCORE_MAX_PER_Q
-function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, quizFrac, yearPts, artistOnly=false,
+function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, quizFrac, yearPts, artistOnly=false, placeOk,
   elapsedMs=null, limitMs=0, streak=0, sure=false } = {}){
   const isQuiz = quizOk!==undefined && quizOk!==null;
   const isYear = !isQuiz && yearPts!==undefined && yearPts!==null;   // F8a: tryb „rok" — punkty z yearScore
-  const isArtist = !isQuiz && !isYear && artistOnly===true;           // EKSPERYMENT: składanka / okładka
+  const isPlace = !isQuiz && !isYear && placeOk!==undefined && placeOk!==null;   // EKSPERYMENT: oś czasu
+  const isArtist = !isQuiz && !isYear && !isPlace && artistOnly===true;   // EKSPERYMENT: składanka / okładka
   const yp = isYear ? Math.max(0, Math.min(YEAR_PTS.exact, Math.round(+yearPts)||0)) : 0;
   const parts = isQuiz
     ? { title:0, artist:0, year:0, album:0, quiz: quizOk ? PTS.quiz : quizPartPts(quizFrac) }
     : isYear ? { title:0, artist:0, year:yp, album:0, quiz:0 }
+    : isPlace ? { title: okTitle?TIMELINE_PTS.title:0, artist: okArtist?TIMELINE_PTS.artist:0, year:0, album:0, quiz:0, place: placeOk?TIMELINE_PTS.place:0 }
     : isArtist ? { title:0, artist: okArtist?ARTIST_ONLY_PTS:0, year:0, album: okAlbum?PTS.album:0, quiz:0 }
     : { title: okTitle?PTS.title:0, artist: okArtist?PTS.artist:0, year: okYear?PTS.year:0, album: okAlbum?PTS.album:0, quiz:0 };
-  const full = isQuiz ? !!quizOk : isYear ? yp>=YEAR_OK_PTS : isArtist ? !!okArtist : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
-  const base = parts.title + parts.artist + parts.year + parts.album + parts.quiz;
+  const full = isQuiz ? !!quizOk : isYear ? yp>=YEAR_OK_PTS : isPlace ? !!placeOk : isArtist ? !!okArtist : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
+  const base = parts.title + parts.artist + parts.year + parts.album + parts.quiz + (parts.place||0);
   const speed = base>0 ? speedFactor(elapsedMs, limitMs) : 1;
   const sMult = full ? streakMult(streak) : 1;
   const sureMult = sure ? (full ? SURE_MULT : 0) : 1;
@@ -310,6 +325,9 @@ export function scoreLegend(mode){
   if(mode==='intro') return `im wcześniej, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
   if(mode==='medley') return `wykonawca ${ARTIST_ONLY_PTS} · szybkość · seria`;
   if(mode==='cover') return `wykonawca ${ARTIST_ONLY_PTS} · album +${PTS.album} · im mniej widać, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
+  if(mode==='timeline') return `dobre miejsce na osi ${TIMELINE_PTS.place} · tytuł +${TIMELINE_PTS.title} · wykonawca +${TIMELINE_PTS.artist} · szybkość · seria`;
+  if(mode==='slowmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 0.6× ${fmtX(SLOWMO_MULTS[0])} → 0.75× ${fmtX(SLOWMO_MULTS[SLOWMO_MULTS.length-1])}`;
+  if(mode==='fastmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 1.5× ${fmtX(FASTMO_MULT)}`;
   if(mode==='revsnip') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · szybkość · „dłużej" ${fmtX(REVSNIP_MULTS[REVSNIP_MULTS.length-1])}`;
   return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok ±2 +${PTS.year} · album +${PTS.album} · szybkość do +${Math.round(SPEED_BONUS_MAX*100)}% · seria ×1,5 / ×2`;
 }

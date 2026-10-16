@@ -116,8 +116,8 @@ const CATS={
   gk:{label:'wiedza', kind:'quiz', questions:[{prompt:'q',slots:[{key:'a',label:'odp'}],answers:{a:['x']}}]},
 };
 group('match.modesFor', ()=>{
-  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip','piano'],'audio bez tekstu (EKSP.: + fortepian) (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
-  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','piano','lektor'],'audio + lektor (jest lyric)');
+  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip','piano','slowmo','fastmo'],'audio bez tekstu (EKSP.: + fortepian) (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
+  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','piano','slowmo','fastmo','lektor'],'audio + lektor (jest lyric)');
   eq(modesFor('lyr',CATS),['lektor'],'kind=lyrics → tylko lektor');
   eq(modesFor('gk',CATS),['quiz'],'kind=quiz → tylko quiz');
   ok(!modesFor('d80',CATS).includes('quiz'),'muzyka nigdy nie ma trybu quiz');
@@ -1356,14 +1356,14 @@ group('F8a trackSelect: wiarygodność roku', ()=>{
 group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
   ok(['intro','abcd','year'].every(m=>ALL_MODES.includes(m) && MODE_LABEL[m]), 'nowe tryby w ALL_MODES + etykiety');
   eq(MODE_LABEL.intro,'⏱ intro','etykieta intro');
-  eq(SOLO_ONLY_MODES,['intro','medley','cover','piano'],'intro (EKSP.: + składanka, okładka, fortepian) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
+  eq(SOLO_ONLY_MODES,['intro','medley','cover','piano','timeline'],'intro (EKSP.: + składanka, okładka, fortepian) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
   const C={ dek:{label:'80', range:'1980–89', artists:['A','B','C']}, pl:{label:'pl', songs:[1,2,3,4,5].map(i=>({title:'t'+i,artist:'a'+i,year:'199'+i}))},
     pl2:{label:'pl2', songs:[{title:'x',artist:'y'},{title:'z',artist:'w'}]}, lyr:{label:'l', kind:'lyrics', songs:[{title:'d'}]}, q:{label:'q', kind:'quiz', questions:[]},
     solo1:{label:'s', artists:['Only']} };
-  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','piano'],'dekada: wszystkie tryby audio');
-  eq(modesFor('pl',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover'],'playlista z rokiem: + rok (EKSP.: 5 wykonawców → składanka/okładka)');
-  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip','piano'],'2 utwory bez roku: bez ABCD/roku');
-  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover','piano'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
+  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','piano','timeline','slowmo','fastmo'],'dekada: wszystkie tryby audio');
+  eq(modesFor('pl',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','timeline','slowmo','fastmo'],'playlista z rokiem: + rok (EKSP.: 5 wykonawców → składanka/okładka)');
+  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip','piano','slowmo','fastmo'],'2 utwory bez roku: bez ABCD/roku');
+  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover','piano','slowmo','fastmo'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
   eq(modesFor('lyr',C),['lektor'],'teksty bez audio — bez nowych trybów'); eq(modesFor('q',C),['quiz'],'quiz bez nowych trybów');
   const mi=buildMatch(['dek'],['intro'],{questions:5},C); ok(!mi.error && mi.slots[0].mode==='intro', 'buildMatch: mecz intro');
   eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','zzz'] }).modes,['music','abcd','year'],'MP config: intro odrzucone (tylko solo)');
@@ -1923,6 +1923,123 @@ group('Łamigłówki: lint — oneLetterApart / ladderErrors / puzzleFieldErrors
   ok(LR9.puzzleFieldErrors({ slots:[{key:'a'},{key:'b'}], tracks:[{title:'A',artist:'B'}, null, null] }).length>=1, 'tracks dłuższe niż sloty → błąd');
   ok(LR9.puzzleFieldErrors({ slots:[{key:'a'}], tracks:[null] }).length>=1, 'same null → błąd');
   eq(LR9.puzzleFieldErrors({ slots:[{key:'a'},{key:'b'}], tracks:[{title:'A',artist:'B'}, null] }), [], 'tracks z null OK');
+});
+
+/* ===================== EKSPERYMENT: „oś czasu" (timeline) + „zwolnione/przyspieszone obroty" (slowmo/fastmo) ===================== */
+const TL = await import('../core/timeline.js');
+const T9 = await import('../core/timing.js');
+const S9 = await import('../core/scoring.js');
+const M9 = await import('../core/match.js');
+group('EKSP. oś czasu: karty, szczeliny, ocena (równy rok = poprawnie po obu stronach), wstawianie', ()=>{
+  const c=(y,t='t'+y)=>({ track:t, artist:'a', year:y, art:'' });
+  eq(TL.timelineCard({ track:'X', artist:'Y', year:'1984-05-01T00:00:00Z', art:'u' }), { track:'X', artist:'Y', year:1984, art:'u' }, 'karta z utworu (rok z daty)');
+  eq(TL.timelineCard({ track:'X', year:'' }), null, 'brak roku → null');
+  const cards=[c(1980), c(1985,'a'), c(1985,'b'), c(1990)];
+  eq(TL.gapCount(cards), 5, 'n kart → n+1 szczelin'); eq(TL.gapCount([]), 1, 'pusta oś → 1 szczelina');
+  eq(TL.gapBounds(cards,0), { lo:null, hi:1980 }, 'szczelina 0 = przed pierwszą');
+  eq(TL.gapBounds(cards,4), { lo:1990, hi:null }, 'ostatnia = po ostatniej');
+  eq(TL.gapBounds(cards,5), null, 'poza zakresem → null'); eq(TL.gapBounds(cards,1.5), null, 'nie-całkowita → null');
+  ok(TL.gapOk(cards,0,1975) && !TL.gapOk(cards,0,1981), 'przed pierwszą: ≤1980');
+  ok(TL.gapOk(cards,0,1980), 'rok równy pierwszej karcie — przed nią OK');
+  ok(TL.gapOk(cards,1,1980), 'rok równy pierwszej karcie — po niej też OK');
+  eq(TL.correctGaps(cards,1985), [1,2,3], '1985: obok obu kart 1985 i między nimi');
+  eq(TL.correctGaps(cards,1987), [3], '1987 → tylko między 1985 a 1990');
+  eq(TL.correctGaps(cards,2001), [4], 'po ostatniej');
+  ok(!TL.gapOk(cards,2,'abc') && !TL.gapOk(cards,-1,1985), 'śmieci → false');
+  eq(TL.correctGaps([],1999), [0], 'pusta oś: jedyna szczelina poprawna');
+  const ins=TL.insertCard(cards, c(1985,'nowa'), 1);
+  eq(ins.index, 1, 'poprawna szczelina gracza = miejsce wstawienia (równy rok)');
+  eq(ins.cards.map(x=>x.year), [1980,1985,1985,1985,1990], 'oś posortowana'); eq(cards.length, 4, 'wejście niemutowane');
+  const nat=TL.insertCard(cards, c(1986), 0);
+  eq(nat.index, 3, 'zła szczelina → miejsce naturalne (po ≤)');
+  eq(TL.insertCard([], c(1999)).index, 0, 'wstawienie do pustej osi');
+  eq(TL.sortCards([c(1990,'x'), c(1980), c(1990,'y')]).map(x=>x.track), ['t1980','x','y'], 'sortowanie stabilne');
+  eq(TL.gapLabel(cards,0), 'przed 1980', 'opis: przed'); eq(TL.gapLabel(cards,4), 'po 1990', 'opis: po');
+  eq(TL.gapLabel(cards,1), 'między 1980 a 1985', 'opis: między'); eq(TL.gapLabel(cards,2), 'obok 1985', 'opis: równe lata');
+  eq(TL.gapLabel([],0), 'pierwsza karta', 'opis: pusta oś');
+  eq([1,2,5,12,22,25].map(TL.cardsWord), ['karta','karty','kart','kart','karty','kart'], 'odmiana „karta"');
+  eq(TL.timelineSummary([c(1990), c(1979), c(1984)]), '3 karty · 1979–1990', 'podsumowanie osi');
+});
+group('EKSP. oś czasu: wiarygodny rok, kategorie, seria lat', ()=>{
+  const dek={ range:'1980–89', artists:['A'] };
+  ok(TL.timelineEligible({ year:'1984-01-01', yearSrc:'' }, dek), 'rok w dekadzie → wiarygodny');
+  ok(!TL.timelineEligible({ year:'2011-01-01' }, dek), 'remaster spoza dekady → niewiarygodny');
+  ok(!TL.timelineEligible({ year:'' }, dek), 'bez roku → nie');
+  ok(TL.timelineEligible({ year:'1999', yearSrc:'data' }, { songs:[] }), 'rok z danych playlisty → wiarygodny');
+  ok(!TL.timelineEligible({ error:true }, dek), 'błąd rozwiązania → nie');
+  ok(TL.timelineCapable(dek), 'dekada → oś czasu');
+  ok(!TL.timelineCapable({ artists:['A'], desc:'rock' }), 'styl bez zakresu lat → bez osi');
+  ok(TL.timelineCapable({ songs:[1,2,3,4].map(i=>({ title:'t', year:'199'+i })) }), 'playlista z rokiem w danych → oś');
+  ok(!TL.timelineCapable({ songs:[{year:'1990'},{},{},{}] }), 'playlista z rokiem u mniejszości → bez osi');
+  ok(!TL.timelineCapable({ kind:'quiz' }) && !TL.timelineCapable({ kind:'lyrics', songs:[] }), 'quiz/teksty bez osi');
+  ok(TL.yearRunOk([], 1984) && TL.yearRunOk([1984], 1984), '1–2 te same lata OK');
+  ok(!TL.yearRunOk([1990, 1984, 1984], 1984), 'trzeci raz z rzędu ten sam rok → unikaj');
+  ok(TL.yearRunOk([1984, 1990, 1984], 1984), 'nie z rzędu → OK');
+});
+{
+  const dek={ range:'1980–89', artists:['A'] };
+  const seq=(list)=>{ let i=0; return ()=>Promise.resolve(list[Math.min(i++, list.length-1)]); };
+  const r1=await TL.pickTimelineTrack({ resolve:seq([{ track:'remaster', year:'2012' }, { track:'ok', year:'1986' }]), cat:dek });
+  const r2=await TL.pickTimelineTrack({ resolve:seq([{ track:'a', year:'1984' }, { track:'b', year:'1987' }]), cat:dek, recentYears:[1984,1984] });
+  const r3=await TL.pickTimelineTrack({ resolve:seq([{ track:'a', year:'1984' }]), cat:dek, recentYears:[1984,1984], tries:3 });
+  const r4=await TL.pickTimelineTrack({ resolve:seq([{ track:'x', year:'2015' }]), cat:dek, tries:2 });
+  let calls=0;
+  const r5=await TL.pickTimelineTrack({ resolve:()=>{ calls++; return Promise.resolve({ error:true, reason:'offline' }); }, cat:dek });
+  let live=true;
+  const r6=await TL.pickTimelineTrack({ resolve:()=>{ live=false; return Promise.resolve({ track:'a', year:'1984' }); }, cat:dek, alive:()=>live });
+  group('EKSP. oś czasu: pickTimelineTrack — wiarygodny rok, bez 3. tego samego roku, zapasy', ()=>{
+    ok(r1.track && r1.track.track==='ok' && r1.card.year===1986, 'utwór z rokiem spoza dekady pominięty → następny');
+    ok(r2.track.track==='b' && !r2.relaxed, 'trzeci 1984 z rzędu pominięty → inny rok');
+    ok(r3.track && r3.relaxed && r3.card.year===1984, 'same 1984 → zapas (relaxed) zamiast błędu');
+    ok(r4.error && r4.reason==='noyear' && r4.track && r4.track.track==='x', 'brak wiarygodnego roku → błąd z grywalnym utworem (zagra jak muzyka)');
+    ok(r5.error && r5.reason==='offline' && calls===1 && r5.track===null, 'offline → od razu koniec');
+    ok(r6.aborted, 'runda porzucona w trakcie → aborted');
+  });
+}
+group('EKSP. oś czasu: punkty (100 + żetony 20/20, seria tylko przy dobrym miejscu), legenda, tryb tylko solo', ()=>{
+  eq(S9.scoreRound({ placeOk:true, elapsedMs:null }).points, 100, 'dobre miejsce = 100');
+  eq(S9.scoreRound({ placeOk:true, okTitle:true, okArtist:true, elapsedMs:null }).points, 140, '+ tytuł + wykonawca = 140');
+  eq(S9.scoreRound({ placeOk:false, okTitle:true, elapsedMs:null }).points, 20, 'pudło na osi, tytuł OK → 20');
+  eq(S9.scoreRound({ placeOk:false, elapsedMs:null, streak:5 }).points, 0, 'pudło → 0');
+  eq(S9.scoreRound({ placeOk:true, elapsedMs:null, streak:3 }).points, 150, 'seria ×1,5 przy dobrym miejscu');
+  eq(S9.scoreRound({ placeOk:false, okArtist:true, elapsedMs:null, streak:5 }).streakMult, 1, 'seria nie liczy się przy pudle');
+  eq(S9.scoreRound({ placeOk:true, elapsedMs:null }).parts.place, 100, 'parts.place');
+  ok(S9.scoreRound({ placeOk:true, okTitle:true, okArtist:true, elapsedMs:0, streak:9 }).points<=S9.SCORE_MAX_PER_Q, 'limit ligi bez zmian');
+  eq(S9.scoreRound({ okTitle:true, okArtist:true, elapsedMs:null }).parts.place, undefined, 'muzyka bez parts.place (format bez zmian)');
+  ok(/dobre miejsce na osi 100/.test(S9.scoreLegend('timeline')) && /tytuł \+20/.test(S9.scoreLegend('timeline')), 'legenda osi — '+S9.scoreLegend('timeline'));
+  ok(M9.ALL_MODES.includes('timeline') && M9.MODE_LABEL.timeline==='🕰 oś czasu' && M9.MODE_SHORT.timeline && M9.MODE_SUB.timeline, 'tryb + etykiety');
+  ok(!M9.MP_MODES.includes('timeline') && M9.SOLO_ONLY_MODES.includes('timeline'), 'oś czasu tylko solo');
+  eq(M9.sanitizeMpConfig({ modes:['music','timeline','slowmo','fastmo'] }).modes, ['music','slowmo','fastmo'], 'MP config: oś czasu odrzucona, tempo przyjęte');
+  const C={ dek:{ label:'80', range:'1980–89', artists:['A','B','C'] }, sty:{ label:'rock', artists:['A','B'] } };
+  ok(M9.modesFor('dek',C).includes('timeline') && !M9.modesFor('sty',C).includes('timeline'), 'modesFor: dekada tak, styl bez zakresu nie');
+  const m=M9.buildMatch(['dek','sty'],['timeline'],{questions:5},C); ok(!m.error && m.slots.every(s=>s.cat==='dek' && s.mode==='timeline'), 'buildMatch: oś tylko z kategorii z rokiem');
+  eq(T9.LISTEN_SECS.timeline, 15, 'faza „słuchaj" osi (MP przyszłościowo)');
+});
+group('EKSP. obroty: etapy tempa, mnożniki, płyta, MP', ()=>{
+  eq(T9.TEMPO_STAGES.slowmo, [0.6, 0.75], 'slowmo: 0.6× → 0.75× (bez 0.9×)'); eq(T9.TEMPO_STAGES.fastmo, [1.5], 'fastmo: 1.5×');
+  eq([T9.tempoRate('slowmo',0), T9.tempoRate('slowmo',1), T9.tempoRate('slowmo',9), T9.tempoRate('slowmo','x')], [0.6,0.75,0.75,0.6], 'tempoRate slowmo + clamp');
+  eq([T9.tempoRate('fastmo',0), T9.tempoRate('fastmo',3), T9.tempoRate('music',0)], [1.5,1.5,1], 'tempoRate fastmo / inne tryby = 1');
+  eq([T9.tempoNextStage('slowmo',0), T9.tempoNextStage('slowmo',1), T9.tempoNextStage('fastmo',0), T9.tempoNextStage('music',0)], [1,null,null,null], 'tempoNextStage');
+  ok(T9.isTempoMode('slowmo') && T9.isTempoMode('fastmo') && !T9.isTempoMode('music') && !T9.isTempoMode('constructor'), 'isTempoMode');
+  eq([T9.mpTempoRate('slowmo'), T9.mpTempoRate('fastmo'), T9.mpTempoRate('music')], [0.6,1.5,1], 'MP: stałe tempo (etap 0)');
+  eq([T9.vinylTurnSecs(1), T9.vinylTurnSecs(0.6), T9.vinylTurnSecs(1.5), T9.vinylTurnSecs(0), T9.vinylTurnSecs('x')].map(x=>+x.toFixed(2)), [1.8,3,1.2,1.8,1.8], 'obrót płyty ∝ 1/tempo (1.0× = 1,8 s)');
+  ok(T9.vinylTurnSecs(0.6)>T9.vinylTurnSecs(0.75) && T9.vinylTurnSecs(0.75)>T9.vinylTurnSecs(1.5), 'wolniej = dłuższy obrót');
+  eq([S9.tempoMult('slowmo',0), S9.tempoMult('slowmo',1), S9.tempoMult('slowmo',7), S9.tempoMult('fastmo',0), S9.tempoMult('music',0)], [1.5,1,1,1.2,1], 'mnożniki ×1.5 → ×1.0, fastmo ×1.2');
+  eq(S9.scoreRound({ okTitle:true, okArtist:true, elapsedMs:null, mult:S9.tempoMult('slowmo',0) }).points, 150, '100 × 1.5 = 150');
+  eq(S9.scoreRound({ okTitle:true, elapsedMs:null, mult:S9.tempoMult('fastmo',0) }).points, 60, '50 × 1.2 = 60');
+  ok(/0\.6× ×1\.5 → 0\.75× ×1\.0/.test(S9.scoreLegend('slowmo')), 'legenda slowmo — '+S9.scoreLegend('slowmo'));
+  ok(/1\.5× ×1\.2/.test(S9.scoreLegend('fastmo')), 'legenda fastmo — '+S9.scoreLegend('fastmo'));
+  ok(['slowmo','fastmo'].every(m=>M9.MP_MODES.includes(m) && !M9.SOLO_ONLY_MODES.includes(m)), 'tempo działa w MP');
+  ok(!M9.mpAvailableModes(null,true).includes('slowmo') && M9.mpAvailableModes(M9.MP_MODES,true).includes('fastmo'), 'stary serwer → bez tempa; nowy → z');
+  eq([M9.MODE_LABEL.slowmo, M9.MODE_LABEL.fastmo], ['🐢 zwolnione obroty','🐿 przyspieszone'], 'etykiety');
+  eq(M9.modesFor('lyr',{ lyr:{ kind:'lyrics', songs:[] } }), ['lektor'], 'teksty (bez audio) bez tempa');
+  ok(T9.LISTEN_SECS.slowmo>T9.LISTEN_SECS.music && T9.LISTEN_SECS.fastmo>0, 'MP: dłuższa faza „słuchaj" przy 0.6×');
+  // MP: mnożnik tempa w ocenie drużyny (stały etap 0)
+  const g={ phase:'play', mode:'slowmo', teams:[{id:'all',name:'D',members:['u1']}], byTeam:{ all:{ proposals:[], votes:{ title:{u1:'Hey Jude'}, artist:{u1:'Beatles'} }, sure:[], passed:[] } }, scores:{all:0} };
+  const ev=evaluateAnswer(g, { track:'Hey Jude', artist:'Beatles', year:'', album:'' });
+  eq(ev.perTeam.all.gained, 150, 'MP slowmo: trafienie 100 × 1.5');
+  eq(evaluateAnswer({ ...g, mode:'fastmo' }, { track:'Hey Jude', artist:'Beatles' }).perTeam.all.gained, 120, 'MP fastmo: 100 × 1.2');
+  eq(evaluateAnswer({ ...g, mode:'music' }, { track:'Hey Jude', artist:'Beatles' }).perTeam.all.gained, 100, 'MP muzyka bez zmian');
 });
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

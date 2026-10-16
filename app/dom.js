@@ -10,8 +10,14 @@ import { listenStop } from './listen.js';   // Łamigłówki: zamknięcie odsło
 export function lsGet(key, def=null){ try{ const v=localStorage.getItem(key); return v==null ? def : v; }catch(_e){ return def; } }
 export function lsSet(key, value){ try{ localStorage.setItem(key, String(value)); return true; }catch(_e){ return false; } }
 
+/* EKSPERYMENT (płyta winylowa, app/vinyl.js): obserwatorzy REALNEGO stanu odtwarzacza — ikona gałki (play/pause/wait)
+ * i postęp pierścienia to jedno źródło prawdy dla wszystkich torów audio (element, WebAudio), więc płyta słucha tego samego. */
+const knobObs=[], ringObs=[];
+export function onKnob(fn){ if(typeof fn==='function') knobObs.push(fn); }
+export function onRing(fn){ if(typeof fn==='function') ringObs.push(fn); }
 // ikona pokrętła odtwarzania: play / pause / wait (spinner)
 export function setIcon(mode){
+  knobObs.forEach(f=>{ try{ f(mode); }catch(_e){} });
   const i=document.getElementById('knobIcon');
   if(mode==='pause') i.innerHTML='<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
   else if(mode==='wait') i.innerHTML='<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>';
@@ -23,7 +29,8 @@ export function setIcon(mode){
 
 // pierścień postępu (0..1) wokół pokrętła
 export function setRing(p){ document.getElementById('ring').style.background=
-  `conic-gradient(var(--gold) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`; }
+  `conic-gradient(var(--gold) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`;
+  ringObs.forEach(f=>{ try{ f(p); }catch(_e){} }); }
 
 export function setState(t){ const e=document.getElementById('state'); e.classList.remove('err'); e.textContent=t; }
 export function flash(t){ const e=document.getElementById('state'); e.classList.add('err'); e.textContent=t; setIcon('play'); }

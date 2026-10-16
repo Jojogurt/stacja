@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v63';   // eksperyment: Łamigłówki — rebusy emoji, jedna litera różnicy; odsłuch rozwiązania w odsłonie, częściowe punkty
+const APP_VERSION = 'v64';   // eksperyment: oś czasu (Hitster, solo), zwolnione obroty 0.6/0.75 + przyspieszone 1.5 z winylem
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).

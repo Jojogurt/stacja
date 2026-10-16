@@ -11,8 +11,8 @@
 import { setIcon, setRing, setState } from './dom.js';
 import { lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { ensureCtx, ensureCtxResumed, unlockCtx } from './audioCtx.js';
-import { playReverse, unlockAudioElement, fetchAudioBytes, sliceBuffer, buildMedleyBuffer, playBuffer, decodeAudio } from '../adapters-web/webAudio.js';
-import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs, revsnipEnd, revsnipWindow, medleyClipStart, MEDLEY_CLIP_S, MEDLEY_GAP_S } from '../core/timing.js';
+import { playReverse, unlockAudioElement, fetchAudioBytes, sliceBuffer, buildMedleyBuffer, playBuffer, decodeAudio, setElementRate } from '../adapters-web/webAudio.js';
+import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs, revsnipEnd, revsnipWindow, medleyClipStart, MEDLEY_CLIP_S, MEDLEY_GAP_S, isTempoMode, tempoRate } from '../core/timing.js';
 import { MEDLEY_MIN } from '../core/trackSelect.js';
 import { registerMusicProbe, playSfx } from './sfx.js';
 
@@ -48,7 +48,7 @@ function ensureEl(){
   el.addEventListener('playing',()=>{ if(!round) return; setIcon('pause');
     if(round.mode==='intro'){ armIntroStop(); setState('intro '+introStageSecs(round.cur.introStage)+' s…'); return; }   // F8a
     if(round.mode==='medley'){ setState('składanka '+(round.ci+1)+'/'+round.cur.clips.length+'…'); return; }   // EKSPERYMENT (zapas na <audio>)
-    if(!round.said){ round.said=true; setState(round.mode==='snippet'?'słuchaj — krótki fragment!':(round.mode==='reverse'?'„od tyłu" niedostępne tutaj — gram normalnie':'słuchaj uważnie…')); } });
+    if(!round.said){ round.said=true; setState(round.mode==='snippet'?'słuchaj — krótki fragment!':(round.mode==='reverse'?'„od tyłu" niedostępne tutaj — gram normalnie':(round.mode==='tempo'?tempoPlayingState(round.rate):'słuchaj uważnie…'))); } });
   el.addEventListener('play',   ()=>{ if(round) setIcon('pause'); });
   el.addEventListener('pause',  ()=>{ if(round && round.stopT) clearTimeout(round.stopT); if(round && !el.ended) setIcon('play'); });   // F8a: pauza intro wstrzymuje timer etapu
   el.addEventListener('waiting',()=>{ if(round) setIcon('wait'); });
@@ -142,7 +142,7 @@ export async function loadMedley(cur, { onProgress, alive=()=>true }={}){
   return parts.length;
 }
 // wspólny start bufora WebAudio z obsługą iOS (kontekst wstrzymany poza gestem) i tokenem rundy
-async function startBuffer(make, { playingState, endState }){
+async function startBuffer(make, { playingState, endState, rate=1, offset=0, onEnd }){
   const gen=getGen();
   if(bufStartGen===gen) return;   // start tej rundy w toku (np. czeka na gest) — drugi klik nie gra drugi raz
   bufStartGen=gen;
@@ -155,7 +155,7 @@ async function startBuffer(make, { playingState, endState }){
     const buf=await make(ctx);
     if(getGen()!==gen || !getCurrent()) return;
     if(!buf) return 'fail';
-    revSrc=playBuffer(ctx, buf, { onProgress:f=>setRing(f), onEnded:()=>{ revSrc=null; setIcon('play'); setRing(1); setState(endState); } });
+    revSrc=playBuffer(ctx, buf, { rate, offset, onProgress:f=>setRing(f), onEnded:()=>{ revSrc=null; if(onEnd) onEnd(); setIcon('play'); setRing(1); setState(endState); } });
     setIcon('pause'); setState(playingState); armControls();
   } catch(_e){ return 'fail'; }
   finally { if(bufStartGen===gen) bufStartGen=null; }
@@ -207,6 +207,37 @@ async function startRevsnip(){
   }
 }
 
+/* ===== EKSPERYMENT: „zwolnione obroty" (0.6× → „szybciej" 0.75×) / „przyspieszone" (1.5×) =====
+ * Tor główny: WebAudio — AudioBufferSourceNode.playbackRate (resampling: tempo I wysokość jak płyta na złych
+ * obrotach). Dlaczego nie trwały <audio> z F2a? playbackRate + preservesPitch=false działa w Chrome/Firefox,
+ * ale Safari/iOS bywa niekonsekwentny (prefiks webkitPreservesPitch, część wersji ignoruje zmianę wysokości,
+ * a nowy .src przywraca defaultPlaybackRate) — a AudioContext odblokowany w geście („Zacznij mecz"/„Następny",
+ * jak „od tyłu") gra bufor z dokładnie zadanym tempem. Zdekodowana zajawka w revCache (pauza/„szybciej"/↻ bez
+ * ponownego pobierania). Pauza zapamiętuje miejsce (cur.tempoPos), „szybciej" gra dalej od tego samego miejsca.
+ * Zapas (CORS/dekodowanie padło): trwały element z playbackRate + preservesPitch=false (adapters-web/setElementRate).
+ * Odsłona (cur.tempoReveal): oryginał 1.0× na elemencie (zwykła ścieżka „muzyki"). */
+const tempoPlayingState = r => r<1 ? `słuchaj — płyta na ${String(r).replace('.',',')}×…` : `słuchaj — przyspieszone ${String(r).replace('.',',')}×!`;
+export function tempoPosition(){
+  if(revSrc && typeof revSrc.position==='function') return revSrc.position();
+  if(round && round.mode==='tempo' && el) return el.currentTime||0;
+  const cur=getCurrent(); return (cur && cur.tempoPos) || 0;
+}
+async function startTempo(){
+  const cur=getCurrent(), url=cur.preview, rate=tempoRate(getMode(), cur.tempoStage||0);
+  const res=await startBuffer(async(ctx)=>{
+    let dec = revCache && revCache.url===url ? revCache.decoded : null;
+    if(!dec){ setState('kładę płytę…'); dec=await decodeAudio(ctx, url, window.STACJA_CONFIG); revCache={ url, decoded:dec }; }
+    if((cur.tempoPos||0) >= (dec.duration||0)-0.25) cur.tempoPos=0;   // dograła do końca → od początku
+    return dec;
+  }, { rate, offset:cur.tempoPos||0, playingState:tempoPlayingState(rate), endState:'koniec · ↻ od nowa', onEnd:()=>{ cur.tempoPos=0; } });
+  if(res==='fail' && getCurrent()===cur){   // proxy/dekodowanie padło → trwały element z playbackRate (bez gwarancji wysokości na iOS)
+    loadEl(cur, 'tempo', rate);
+    const start=cur.tempoPos||0;
+    if(start>0){ const seek=()=>{ try{ el.currentTime=start; }catch(_e){} }; if(el.readyState>=1) seek(); else el.addEventListener('loadedmetadata', seek, { once:true }); }
+    playEl();
+  }
+}
+
 // F2a #9: odblokowanie w GEŚCIE (synchronicznie) — AudioContext („od tyłu") i trwały element.
 // Element odblokowujemy tylko, gdy nie gra (ciche WAV podmienia .src).
 export function unlockSoloAudio({ ctx=true } = {}){
@@ -222,10 +253,11 @@ function playEl(){
 }
 
 // załaduj zajawkę bieżącej rundy na trwały element
-function loadEl(cur, mode){
+function loadEl(cur, mode, rate=1){
   ensureEl();
-  round={ cur, mode, said:false, seeked:false, snipDone:false };
+  round={ cur, mode, said:false, seeked:false, snipDone:false, rate };
   el.muted=false;
+  setElementRate(el, rate);   // EKSPERYMENT: trwały element — tempo zawsze ustawiane (inne tryby: 1.0× z zachowaną wysokością)
   el.src=cur.preview;
   setIcon('wait'); setState('ładowanie…');
 }
@@ -241,6 +273,7 @@ export function startAudio(){
   if(mode==='revsnip'){ return startRevsnip(); }       // EKSPERYMENT
   if(mode==='medley'){ return startMedley(); }         // EKSPERYMENT
   if(mode==='snippet'){ return startSnippet(); }
+  if(isTempoMode(mode) && !current.tempoReveal){ return startTempo(); }   // EKSPERYMENT (odsłona: oryginał 1.0× na elemencie)
   if(mode==='intro' && !current.introFull){ return startIntro(); }   // F8a (po odsłonie ↻ gra całą zajawkę)
   loadEl(current, 'music');
   playEl();   // tekst stanu dopiero gdy dźwięk RZECZYWIŚCIE leci ('playing') — #5: nie udawaj, że gra
@@ -302,6 +335,10 @@ export function toggleAudio(){
     if(isSpeaking()){ lektorStop(); setIcon('play'); setState('pauza · ▶ wznów'); return; }   // czyta → stop
     lektorPlay(current.lyric, current.tts, setState, { lang:current.lang }); return;
   }
+  if(isTempoMode(mode) && !current.tempoReveal && !round){   // EKSPERYMENT: tempo na WebAudio — pauza ZAPAMIĘTUJE miejsce
+    if(revSrc){ current.tempoPos=tempoPosition(); stopAudio(); setIcon('play'); setState('pauza · ▶ wznów'); return; }
+    startAudio(); return;                                     // wznów od current.tempoPos (albo od początku)
+  }
   if((mode==='reverse' || mode==='revsnip' || mode==='medley') && !round){   // EKSPERYMENT: + bufory WebAudio
     if(revSrc){ stopAudio(); setIcon('play'); setState('pauza · ↻ od nowa'); return; }     // od tyłu: stop (replay od nowa)
     startAudio(); return;
@@ -318,6 +355,7 @@ export function replay(){
   const current=getCurrent(), mode=getMode();
   if(!current) return;
   if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState, { lang:current.lang }); return; }
+  current.tempoPos=0;   // EKSPERYMENT: ↻ od nowa = od początku zajawki (także w tempie)
   stopAudio(); startAudio();
 }
 

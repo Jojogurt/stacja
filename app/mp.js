@@ -10,12 +10,12 @@ import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond } from '../core/timing.js';
+import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond, isTempoMode, mpTempoRate } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
 import { ensureCtxResumed, unlockCtx } from './audioCtx.js';
-import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
+import { playReverse, unlockAudioElement, playBuffer, decodeAudio, setElementRate } from '../adapters-web/webAudio.js';
 import { cfChannel } from '../adapters-web/cfChannel.js';
 import { authorityChannel } from '../adapters-web/roomTransport.js';
 import { ensureSession, setHandle, recordMatch } from '../adapters-web/cf.js';
@@ -507,6 +507,7 @@ function mpArm(){
   // F6b (tryb #6): pilot (dźwięk tylko u hosta) nie buforuje zajawki — gotów od razu (oszczędza transfer)
   if(S.game.mode==='lektor' || !S.game.preview || !playsAudioLocally(S.game, mpMe.id)){ report(); return; }
   const a=mpEnsureAudio(); mpClearSnip(a); mpClearArmWait(a);   // listenery poprzedniej rundy precz (bez kumulacji)
+  setElementRate(a, 1);   // EKSPERYMENT: trwały element — tempo z poprzedniej rundy (zapas „obrotów") wraca do 1.0×
   if(a.src!==S.game.preview) a.src=S.game.preview;
   S.armPending=armNonce;
   let done=false;
@@ -532,7 +533,7 @@ function mpKnobTap(){
     if(speaking){ lektorStop(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }
     return mpPlayLocal();
   }
-  if(mode==='reverse' || mode==='revsnip'){   // EKSPERYMENT: + „od tyłu krótko" (okno z offsetem od autorytetu)
+  if(mode==='reverse' || mode==='revsnip' || isTempoMode(mode)){   // EKSPERYMENT: + „od tyłu krótko", + obroty (bufor WebAudio)
     if(S.revSrc){ mpStopRev(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }   // od tyłu: stop (replay od nowa)
     return mpPlayLocal();
   }
@@ -552,8 +553,10 @@ function mpPlayLocal(){
   if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}, { lang:lektorLang(S.game.lyricLang) }); return; }
   if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
   if(S.game.mode==='reverse' || S.game.mode==='revsnip'){ return mpPlayReverse(); }   // EKSPERYMENT: + od tyłu krótko
+  if(isTempoMode(S.game.mode) && S.game.phase!==MP.REVEAL){ return mpPlayTempo(); }   // EKSPERYMENT: zwolnione / przyspieszone obroty
   // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
   const a=mpEnsureAudio(); mpClearSnip(a);
+  setElementRate(a, 1);   // EKSPERYMENT: zawsze oryginalne tempo (zapas obrotów mógł zostawić inne)
   if(a.src!==S.game.preview) a.src=S.game.preview;
   mpSetKnob('wait'); mpSetPlayStatus('ładowanie…');   // od razu pokaż, że się wczytuje
   if(S.game.mode==='snippet'){
@@ -586,6 +589,31 @@ async function mpPlayReverse(){
   if(r.aborted) return;                       // cisza — runda już inna
   // CORS/dekodowanie padło → zagraj normalnie (ten sam trwały element z eventami)
   const a=mpEnsureAudio(); a.src=url; a.play().catch(mpPlayBlocked);
+}
+/* EKSPERYMENT: „zwolnione obroty" / „przyspieszone" w MP — tempo LOKALNE u każdego klienta, bez etapów (core/timing.mpTempoRate:
+ * stałe 0.6× / 1.5×); serwer/host niesie tylko game.mode (pytanie jak „muzyka", mnożnik w core/mpReducer). Tor jak „od tyłu":
+ * WebAudio AudioBufferSourceNode.playbackRate (tempo + wysokość; deterministycznie także na iOS), zajawka zdekodowana raz
+ * (S.tempoCache — ↻ bez ponownego pobierania). Zapas (CORS/dekodowanie): trwały element z playbackRate + preservesPitch=false. */
+async function mpPlayTempo(){
+  if(S.audio){ try{ S.audio.pause(); }catch(e){} }
+  const url=S.game.preview, rate=mpTempoRate(S.game.mode), tx=String(rate).replace('.',',')+'×';
+  mpSetKnob('wait'); mpSetPlayStatus('kładę płytę…');
+  try{
+    const ctx=await ensureCtxResumed();
+    let dec = S.tempoCache && S.tempoCache.url===url ? S.tempoCache.decoded : null;
+    if(!dec){ dec=await decodeAudio(ctx, url, window.STACJA_CONFIG); S.tempoCache={ url, decoded:dec }; }
+    if(!S.game || S.game.preview!==url) return;            // runda zmieniła się w trakcie dekodowania → cisza
+    mpStopRev();
+    S.revSrc=playBuffer(ctx, dec, { rate, onEnded:()=>{ S.revSrc=null; mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); } });
+    mpSetKnob('pause'); mpSetPlayStatus(rate<1 ? `🐢 gra wolniej (${tx})…` : `🐿 gra szybciej (${tx})…`);
+  }catch(_e){
+    if(!S.game || S.game.preview!==url) return;
+    const a=mpEnsureAudio(); mpClearSnip(a);
+    if(a.src!==url) a.src=url;
+    setElementRate(a, rate);
+    try{ a.currentTime=0; }catch(e){}
+    a.play().catch(mpPlayBlocked);
+  }
 }
 // host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
 function mpGo(){

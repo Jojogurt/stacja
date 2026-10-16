@@ -93,8 +93,38 @@ export function coverNextStage(stage){
   return i+1 < COVER_STAGES.length ? i+1 : null;
 }
 
+/* EKSPERYMENT: „zwolnione obroty" (slowmo) / „przyspieszone" (fastmo) — zajawka jak płyta na złych obrotach
+ * (zmiana tempa I wysokości). slowmo: etap 0 = 0.6×, „szybciej" → 0.75× (bez 0.9× — za blisko oryginału);
+ * fastmo: jeden etap 1.5× („chipmunk"). Odsłona gra oryginał 1.0×. MP: stałe tempo etapu 0 (bez etapów). */
+export const TEMPO_STAGES = { slowmo:[0.6, 0.75], fastmo:[1.5] };
+export const TEMPO_MODES = Object.keys(TEMPO_STAGES);
+export const isTempoMode = mode => Object.prototype.hasOwnProperty.call(TEMPO_STAGES, mode);
+// tempo etapu (przycięte do [0..ostatni]); tryb spoza tempa / śmieci → 1 (oryginał)
+export function tempoRate(mode, stage){
+  const st = isTempoMode(mode) ? TEMPO_STAGES[mode] : null;
+  if(!st) return 1;
+  const i = Math.floor(Number(stage));
+  return st[Number.isFinite(i) ? Math.max(0, Math.min(st.length-1, i)) : 0];
+}
+// następny etap (null = ostatni / tryb bez etapów)
+export function tempoNextStage(mode, stage){
+  const st = isTempoMode(mode) ? TEMPO_STAGES[mode] : null;
+  if(!st) return null;
+  const i = Math.max(0, Math.floor(Number(stage)) || 0);
+  return i+1 < st.length ? i+1 : null;
+}
+// MP: stałe tempo trybu (etap 0) — tempo jest lokalne u każdego klienta, serwer niesie tylko `mode`
+export const mpTempoRate = mode => tempoRate(mode, 0);
+/* płyta winylowa (UI): 1.0× = 33⅓ obr/min „wizualnie" ~1,8 s na obrót; czas obrotu odwrotnie proporcjonalny
+ * do tempa (0.6× → 3 s, 0.75× → 2,4 s, 1.5× → 1,2 s). Śmieci/≤0 → 1.0×. */
+export const VINYL_TURN_S = 1.8;
+export function vinylTurnSecs(rate){
+  const r = Number(rate);
+  return VINYL_TURN_S / (Number.isFinite(r) && r > 0 ? r : 1);
+}
+
 // ile sekund trwa faza „słuchaj" per tryb (gdy kategoria nie nadpisuje listenSecs)
-export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15, revsnip:12, medley:15, cover:15 };
+export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15, revsnip:12, medley:15, cover:15, slowmo:18, fastmo:12, timeline:15 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
 // F2b (#6): twardy limit fazy gotowości (ARMING) po stronie serwera — po nim pytanie rusza z tymi,

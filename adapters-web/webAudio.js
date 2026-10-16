@@ -96,18 +96,35 @@ export function buildMedleyBuffer(ctx, clips, { gap=0.25, tick=true }={}){
   }
   return out;
 }
-// odtwórz gotowy bufor → uchwyt {ok:true, source, stop()} (postęp onProgress(0..1), koniec onEnded)
-export function playBuffer(ctx, buf, { onProgress, onEnded }={}){
+// odtwórz gotowy bufor → uchwyt {ok:true, source, rate, stop(), position()} (postęp onProgress(0..1), koniec onEnded)
+// EKSPERYMENT („zwolnione/przyspieszone obroty"): `rate` = AudioBufferSourceNode.playbackRate — resampling, więc zmienia
+// tempo I wysokość jak płyta na złych obrotach (deterministycznie, także na iOS — ten sam tor co „od tyłu"); `offset` (s)
+// = start w buforze (wznowienie po pauzie / „szybciej" od tego samego miejsca). position() = bieżące miejsce w buforze (s).
+export function playBuffer(ctx, buf, { onProgress, onEnded, rate=1, offset=0 }={}){
   const src=ctx.createBufferSource(); src.buffer=buf;
+  const r=Number(rate)>0 ? Number(rate) : 1;
+  if(r!==1){ if(src.playbackRate && typeof src.playbackRate==='object') src.playbackRate.value=r; else src.playbackRate={ value:r }; }
   const gain=ctx.createGain(); gain.gain.value=1;                     // pewny tor sygnału
   src.connect(gain); gain.connect(ctx.destination);
   const t0=ctx.currentTime, dur=buf.duration || (buf.length/buf.sampleRate);
+  const off=Math.max(0, Math.min(dur, Number(offset)||0));
+  const position=()=>Math.min(dur, off + Math.max(0, ctx.currentTime-t0)*r);
   let timer=null;
   const clear=()=>{ if(timer){ clearInterval(timer); timer=null; } };
   src.onended=()=>{ clear(); if(onEnded) onEnded(); };
-  src.start();
-  if(onProgress) timer=setInterval(()=>{ if(onProgress) onProgress(Math.min(1,(ctx.currentTime-t0)/dur)); }, 100);
-  return { ok:true, source:src, stop(){ try{ src.onended=null; src.stop(); }catch(e){} clear(); } };
+  if(off>0) src.start(0, off); else src.start();
+  if(onProgress) timer=setInterval(()=>{ if(onProgress) onProgress(Math.min(1, position()/dur)); }, 100);
+  return { ok:true, source:src, rate:r, position, stop(){ try{ src.onended=null; src.stop(); }catch(e){} clear(); } };
+}
+/* EKSPERYMENT: tempo na elemencie <audio> (zapas, gdy WebAudio/CORS/dekodowanie padnie; MP nie używa — patrz app/mp.js).
+ * preservesPitch=false (+ mozPreservesPitch/webkitPreservesPitch) → zmienia się też wysokość. Uwaga: przy ładowaniu
+ * nowego .src przeglądarka przywraca playbackRate := defaultPlaybackRate, więc ustawiamy OBA. Gdy przeglądarka
+ * zignoruje preservesPitch (część wersji iOS), zajawka i tak gra wolniej/szybciej — tylko bez zmiany wysokości. */
+export function setElementRate(el, rate){
+  if(!el) return;
+  const r=Number(rate)>0 ? Number(rate) : 1, keep = r===1;
+  try{ el.defaultPlaybackRate=r; el.playbackRate=r; }catch(_e){}
+  for(const k of ['preservesPitch','mozPreservesPitch','webkitPreservesPitch']){ try{ el[k]=keep; }catch(_e){} }
 }
 
 // Odtwórz zajawkę „od tyłu". Zwraca uchwyt:

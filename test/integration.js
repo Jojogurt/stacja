@@ -1643,14 +1643,14 @@ const eksSources=[];
 function eksWebAudio(on){
   const P=window.AudioContext.prototype;
   const api={ decodeAudioData(){ return Promise.resolve(new EksBuf(2, 30*800, 800)); }, createBuffer(ch,len,sr){ return new EksBuf(ch,len,sr); },
-    createBufferSource(){ const src={ buffer:null, connect(){}, start(){ src.started=true; eksSources.push(src); }, stop(){ src.stopped=true; }, onended:null }; return src; },
+    createBufferSource(){ const src={ buffer:null, connect(){}, start(...a){ src.started=true; src.startArgs=a; eksSources.push(src); }, stop(){ src.stopped=true; }, onended:null }; return src; },
     createGain(){ return { gain:{ value:1 }, connect(){} }; } };
   for(const k of Object.keys(api)){ if(on) P[k]=api[k]; else delete P[k]; }
   if(on){ P.destination={}; P.currentTime=0; } else { delete P.destination; delete P.currentTime; }
 }
 const stateLog=[];
 const stateObs=new window.MutationObserver(()=>stateLog.push(txt(window,'state')));
-async function eksSolo(modeRe, run){
+async function eksSolo(modeRe, run, catKey){
   const w=window, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
   const P=w.HTMLCanvasElement.prototype, prevGC=P.getContext;
   const draws=[]; P.getContext=function(){ const cv=this; return { imageSmoothingEnabled:true, clearRect(){}, drawImage(src,x,y,wd,ht){ draws.push({ to:cv.width, w:wd, smooth:this.imageSmoothingEnabled }); } }; };
@@ -1660,7 +1660,7 @@ async function eksSolo(modeRe, run){
     $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
     const { audio } = catsByKind(w);
     ok(modeChip(w, modeRe), 'picker solo: chip trybu '+modeRe);
-    await f2aStartMatch(audio, modeRe);
+    await f2aStartMatch(catKey || audio, modeRe);
     for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
     ok(!$(w,'check').disabled, 'pytanie gotowe — stan: '+txt(w,'state'));
     await run(w, { draws });
@@ -1843,6 +1843,139 @@ await group('EKSP. solo: „fortepian" — gra zajawka COVERU, odpowiedź = tytu
     if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
     $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
   }
+});
+/* ===================== EKSPERYMENT: „oś czasu" (solo) — kotwica, szczeliny, wstawienie/odpadnięcie, podsumowanie ===================== */
+const soloMod = await import('../app/solo.js');   // ten sam singleton co w app.js
+const TLcore = await import('../core/timeline.js');
+await group('EKSP. solo: „oś czasu" — kotwica, szczeliny „tu", trafienie wsuwa kartę, pudło — karta odpada, oś w podsumowaniu', async ()=>{
+  await eksSolo(/oś czasu/, async (w)=>{
+    const body=w.document.body, d=()=>soloMod._timelineDebug();
+    ok(body.classList.contains('timeline-mode') && $(w,'form').classList.contains('quiz'), 'body.timeline-mode, pola tytuł/wykonawca muzyki schowane');
+    let dbg=d();
+    ok(dbg && dbg.cards.length===1 && dbg.cards[0].anchor && dbg.cards[0].year>=1980 && dbg.cards[0].year<=1989, 'kotwica: 1 karta z rokiem z dekady — '+JSON.stringify(dbg&&dbg.cards));
+    ok(dbg.card && dbg.card.year>=1980 && dbg.card.year<=1989, 'karta pytania z wiarygodnym rokiem — '+(dbg.card&&dbg.card.year));
+    const sc=$(w,'tlScroll'); ok(sc, 'oś w kontenerze ze scrollem (.tl-scroll)');
+    let gaps=[...w.document.querySelectorAll('#quizForm .tl-gap')];
+    ok(gaps.length===2 && gaps.every(b=>/^tu$/.test(b.textContent)), '2 szczeliny „tu" wokół kotwicy');
+    ok(w.document.querySelector('#quizForm .tl-card.tl-anchor .tl-y').textContent===String(dbg.cards[0].year), 'karta: rok duży (tl-y)');
+    ok(/Wstaw tutaj — (przed|po) \d{4}/.test(gaps[0].getAttribute('aria-label')||''), 'aria-label szczeliny — '+gaps[0].getAttribute('aria-label'));
+    ok(!/\d{4}/.test(txt(w,'quizForm').replace(String(dbg.cards[0].year),'')), 'rok pytanego utworu NIE jest widoczny przed odsłoną');
+    eq2(txt(w,'footLegend'), 'dobre miejsce na osi 100 · tytuł +20 · wykonawca +20 · szybkość · seria', 'legenda osi');
+    // trafienie: poprawna szczelina + tytuł (żeton +20)
+    const good=TLcore.correctGaps(dbg.cards, dbg.card.year);
+    gaps[good[0]].click(); await settle(1);
+    ok(gaps[good[0]].classList.contains('sel') && gaps[good[0]].getAttribute('aria-pressed')==='true', 'wybrana szczelina zaznaczona (aria-pressed)');
+    $(w,'qf_title').value=dbg.card.track;
+    click(w,'check'); await settle(2);
+    ok(/Dobre miejsce!/.test(txt(w,'revealHead')), 'nagłówek: dobre miejsce — '+txt(w,'revealHead'));
+    dbg=d(); ok(dbg.cards.length===2, 'karta zostaje na osi (2 karty)');
+    ok(w.document.querySelector('#quizForm .tl-card.tl-new'), 'nowa karta z animacją wsuwania (tl-new)');
+    ok(!w.document.querySelector('#quizForm .tl-gap'), 'po odsłonie bez szczelin');
+    const pts1=+txt(w,'sPoints'); ok(pts1>=120 && pts1<=180, 'punkty: 100 + tytuł 20 (+ szybkość) — '+pts1);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/Miejsce/.test(rm) && /rok/.test(rm) && rm.includes(String(dbg.cards[dbg.last].year)) && /2 karty/.test(rm), 'odsłona: miejsce, rok, oś — '+rm.slice(0,200));
+    ok($(w,'qf_title').disabled && $(w,'qf_title').value===dbg.cards[dbg.last].track, 'żeton tytułu zachowany i zablokowany');
+    // pytanie 2 — pudło (zła szczelina, jeśli istnieje)
+    click(w,'next'); await settle(4);
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    dbg=d();
+    gaps=[...w.document.querySelectorAll('#quizForm .tl-gap')];
+    ok(gaps.length===3, '3 szczeliny przy 2 kartach — '+gaps.length);
+    ok(w.document.querySelector(`#quizForm .tl-card[data-i="${dbg.last}"]`), 'ostatnio wstawiona karta na osi (auto-scroll do niej)');
+    const ok2=TLcore.correctGaps(dbg.cards, dbg.card.year), bad=[0,1,2].find(g=>!ok2.includes(g));
+    if(bad!=null){
+      gaps[bad].click(); click(w,'check'); await settle(2);
+      ok(/Pudło/.test(txt(w,'revealHead')) && /karta odpada/.test(txt(w,'revealHead')), 'pudło: karta odpada — '+txt(w,'revealHead'));
+      ok(d().cards.length===2, 'oś bez zmian (2 karty)');
+      const miss=w.document.querySelector('#quizForm .tl-card.tl-miss');
+      ok(miss && miss.querySelector('.tl-y').textContent===String(dbg.card.year), 'odpadła karta pokazana z rokiem tam, gdzie powinna była trafić');
+      ok(w.document.querySelector('#quizForm .tl-gap.no'), 'wybrana szczelina na czerwono');
+    } else ok(true, '(wszystkie szczeliny poprawne — równe lata; pudło pominięte)');
+    click(w,'sessEnd'); await settle(4);
+    const sum=txt(w,'sumList');
+    ok(/Twoja oś czasu — 2 karty/.test(sum) && w.document.querySelectorAll('#sumList .sum-tl .tl-card').length===2, 'podsumowanie: zbudowana oś (2 karty) — '+sum.slice(0,80));
+    ok(/oś czasu: 2 karty/.test(txt(w,'sumSub')), 'wynik: liczba kart — '+txt(w,'sumSub'));
+  }, '80s');
+  ok(!window.document.body.classList.contains('timeline-mode'), 'koniec meczu zdejmuje timeline-mode');
+});
+/* ===================== EKSPERYMENT: „zwolnione obroty" / „przyspieszone" (solo) — tempo WebAudio, płyta winylowa ===================== */
+const vinylMod = await import('../app/vinyl.js');
+await group('EKSP. solo: „zwolnione obroty" — 0.6× (WebAudio playbackRate), „szybciej" 0.75×, płyta kręci się wg tempa, pauza hamuje, odsłona 1.0× z okładką', async ()=>{
+  await eksSolo(/zwolnione obroty/, async (w)=>{
+    const body=w.document.body, v=$(w,'vinyl'), more=$(w,'introMore'), dbg=()=>soloAudioMod._soloAudioDebug();
+    ok(body.classList.contains('tempo-mode') && body.classList.contains('slowmo-mode'), 'body.tempo-mode (płyta zamiast gałki)');
+    for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
+    const src=dbg().revSrc && dbg().revSrc.source;
+    ok(src && src.started && src.playbackRate && src.playbackRate.value===0.6, 'bufor gra z playbackRate 0.6 — '+(src&&src.playbackRate&&src.playbackRate.value));
+    ok(v.dataset.rate==='0.6' && v.style.getPropertyValue('--vn-turn')==='3.00s', 'płyta: tempo 0.6× → obrót 3 s — '+v.style.getPropertyValue('--vn-turn'));
+    ok(v.dataset.state==='playing' && v.classList.contains('spinning') && v.classList.contains('arm-down'), 'gra → płyta się kręci, ramię opuszczone');
+    ok(v.getAttribute('role')==='button' && /Pauza — płyta gra \(0,6×\)/.test(v.getAttribute('aria-label')), 'dostępność: role=button + aria-label wg stanu — '+v.getAttribute('aria-label'));
+    ok(/^ ?\?$/.test(w.document.querySelector('#vinyl .vn-q').textContent) && $(w,'vinylArt').getAttribute('visibility')==='hidden', 'naklejka „?" (bez okładki przed odsłoną)');
+    ok(more && !more.disabled && /szybciej \(0,75×\)/.test(more.textContent), '„szybciej (0,75×)" — '+(more&&more.textContent));
+    eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 0.6× ×1.5 → 0.75× ×1.0', 'legenda');
+    // pauza (tap w płytę) → hamowanie, ramię odjeżdża; wznowienie od tego samego miejsca
+    v.click(); await settle(2);
+    ok(!dbg().revSrc && src.stopped, 'tap → pauza (źródło zatrzymane)');
+    ok(v.dataset.state==='paused' && !v.classList.contains('spinning') && !v.classList.contains('arm-down'), 'pauza → płyta hamuje, ramię w spoczynku');
+    v.dispatchEvent(new w.KeyboardEvent('keydown', { key:'Enter', bubbles:true, cancelable:true })); await settle(2);
+    for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
+    ok(dbg().revSrc && v.dataset.state==='playing', 'Enter na płycie → wznów');
+    // „szybciej" → 0.75×
+    more.click(); await settle(2);
+    for(let i=0;i<50 && !(dbg().revSrc && dbg().revSrc.source.playbackRate.value===0.75);i++) await settle(2);
+    ok(dbg().revSrc && dbg().revSrc.source.playbackRate.value===0.75, '„szybciej" → bufor 0.75×');
+    ok(v.dataset.rate==='0.75' && v.style.getPropertyValue('--vn-turn')==='2.40s' && v.classList.contains('spinning'), 'płyta przyspiesza (2,4 s/obrót) i kręci się dalej');
+    ok(more.disabled && /0,75× ✓/.test(more.textContent), 'brak etapu 0.9× — przycisk nieaktywny');
+    const dec=dbg().revCache; ok(dec && /\.m4a$/.test(dec.url), 'zajawka zdekodowana raz (cache)');
+    $(w,'fTitle').value='Zupełnie inny'; click(w,'check'); await settle(3);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/zgadywane przy 0,75×/.test(rm) && /mnożnik ×1/.test(rm), 'odsłona: tempo + mnożnik — '+rm.slice(0,220));
+    ok(v.classList.contains('revealed') && /a100x100|300x300|https:\/\/x\//.test($(w,'vinylArt').getAttribute('href')||'') && $(w,'vinylArt').getAttribute('visibility')==='visible', 'odsłona: naklejka → okładka albumu');
+    ok(v.dataset.rate==='1' && v.style.getPropertyValue('--vn-turn')==='1.80s', 'odsłona: płyta rozpędza się do 1.0× (1,8 s/obrót)');
+    const el=dbg().el; ok(dbg().round && el.playbackRate===1 && el.preservesPitch===true && /\.m4a$/.test(el.src), 'odsłona: oryginał 1.0× na trwałym elemencie');
+  });
+  ok(!window.document.body.classList.contains('tempo-mode'), 'koniec meczu zdejmuje tempo-mode');
+});
+await group('EKSP. solo: „przyspieszone" 1.5× + prefers-reduced-motion → płyta stoi, ramię bez animacji', async ()=>{
+  const w=window, prevMM=w.matchMedia;
+  w.matchMedia=(q)=>({ matches:/reduce/.test(String(q)), addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} });
+  try{
+    await eksSolo(/przyspieszone/, async (w)=>{
+      const v=$(w,'vinyl'), dbg=()=>soloAudioMod._soloAudioDebug();
+      for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
+      ok(dbg().revSrc && dbg().revSrc.source.playbackRate.value===1.5, 'bufor 1.5×');
+      ok(v.dataset.rate==='1.5' && v.style.getPropertyValue('--vn-turn')==='1.20s', 'obrót 1,2 s przy 1.5×');
+      ok(v.dataset.state==='playing' && v.classList.contains('still') && !v.classList.contains('spinning'), 'reduced-motion: gra, ale płyta statyczna (still, bez spinning)');
+      ok(vinylMod._vinylDebug().reduced, 'vinyl widzi reduced-motion');
+      ok(w.document.body.classList.contains('tempo-mode') && !w.document.body.classList.contains('slowmo-mode'), 'fastmo: bez „szybciej"');
+      eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 1.5× ×1.2', 'legenda fastmo');
+      const g=dbg().revSrc && dbg().revSrc;
+      ok(g, 'gra');
+    });
+  } finally { w.matchMedia=prevMM; }
+});
+await group('EKSP. MP: obroty — chipy z nowym serwerem (oś czasu nigdy), PLAY slowmo gra lokalnie 0.6× (WebAudio)', async ()=>{
+  const w=window, prevFetch=globalThis.fetch; const ws=await f6bRoom();
+  ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  let html=$(w,'mpRoom').innerHTML;
+  ok(!/mpToggleMode\('slowmo'\)/.test(html), 'stary serwer → bez obrotów');
+  ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','revsnip','slowmo','fastmo','quiz'] }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  html=$(w,'mpRoom').innerHTML;
+  ok(/mpToggleMode\('slowmo'\)/.test(html) && /mpToggleMode\('fastmo'\)/.test(html) && /zwolnione obroty/.test(html), 'nowy serwer → chipy obrotów');
+  ok(!/mpToggleMode\('timeline'\)/.test(html), 'oś czasu tylko solo');
+  globalThis.fetch=eksFetch; eksWebAudio(true); eksSources.length=0;
+  try{
+    ws.pushState(playState(ws, { playNonce:9101, mode:'slowmo', preview:'https://x/tempo.m4a' })); await settle(8);
+    ok(/zwolnione 0,6×/.test($(w,'mpRoom').innerHTML), 'nagłówek MP: „🐢 zwolnione 0,6×"');
+    let src=eksSources.filter(s=>!s.stopped).pop();
+    if(!src){ w.mpKnobTap(); for(let i=0;i<30 && !eksSources.filter(s=>!s.stopped).length;i++) await settle(2); src=eksSources.filter(s=>!s.stopped).pop(); }
+    ok(src && src.playbackRate && src.playbackRate.value===0.6, 'MP: zajawka gra lokalnie 0.6× — '+(src&&src.playbackRate&&src.playbackRate.value));
+    w.mpKnobTap(); await settle(2);
+    ok(src && src.stopped, 'gałka MP: stop (jak „od tyłu")');
+  } finally { globalThis.fetch=prevFetch; eksWebAudio(false); }
+  w.mpLeaveConfirmed('room'); await settle(4);
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

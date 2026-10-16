@@ -2,8 +2,10 @@
  * mecz solo (rundy × kategorie × pytania), sprawdzanie odpowiedzi. Self-wiring przy imporcie
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
-import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, quizPartialFrac, quizListen, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend, revsnipMult, coverMult } from '../core/scoring.js';
-import { introStageSecs, introNextStage, revsnipStageSecs, revsnipNextStage, coverNextStage, coverStageBlocks } from '../core/timing.js';
+import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, quizPartialFrac, quizListen, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend, revsnipMult, coverMult, tempoMult } from '../core/scoring.js';
+import { introStageSecs, introNextStage, revsnipStageSecs, revsnipNextStage, coverNextStage, coverStageBlocks, isTempoMode, tempoRate, tempoNextStage } from '../core/timing.js';
+import { pickTimelineTrack, gapOk, correctGaps, insertCard, gapLabel, cardsWord, timelineSummary } from '../core/timeline.js';   // EKSPERYMENT: oś czasu
+import { vinylPrepare, vinylRate, vinylReveal } from './vinyl.js';   // EKSPERYMENT: płyta winylowa (zwolnione / przyspieszone obroty)
 import { buildTrackMC, yearReliable, parseRange } from '../core/trackSelect.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, matchTotal, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
 import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailyShareText, matchShareText, resultGrid, DAILY_QUESTIONS } from '../core/daily.js';
@@ -22,7 +24,7 @@ import { catLektorLang } from '../core/lektorVoice.js';
 import { playClap, playSfx } from './sfx.js';
 import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
-import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio, loadMedley } from './audio.js';
+import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio, loadMedley, tempoPosition } from './audio.js';
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
 import { ERAS, STYLES, READY, LYRICS, QUIZ, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, catLabel, buildMatch, randomPools, modesFor,
@@ -300,6 +302,14 @@ async function newRound(){
     if(gen!==soloGen) return;
     if(p && (!p.error || p.reason==='offline')) t=p;   // offline → od razu komunikat (bez drugiej kaskady)
   }
+  // EKSPERYMENT „oś czasu": utwór z WIARYGODNYM rokiem (kilka prób, bez 3. tego samego roku z rzędu); pierwsze pytanie
+  // meczu najpierw kładzie kartę-kotwicę. Brak wiarygodnego roku → pytanie jak zwykła „muzyka" (cur.fallback).
+  let tlPick=null;
+  if(!t && mode==='timeline' && session && session.timeline){
+    tlPick=await resolveTimeline(cat, rnd, gen);
+    if(gen!==soloGen || tlPick.aborted) return;
+    t = tlPick.track || { error:true, reason: tlPick.reason==='offline' ? 'offline' : 'empty' };
+  }
   if(!t) t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd});
   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem.
   // F2a #3: `busy` należy wtedy już do nowszego stanu (abandonRound je zwolnił, nowa runda mogła je zająć) — nie ruszaj.
@@ -322,6 +332,8 @@ async function newRound(){
   if(mode==='revsnip') cur.revStage=0;                       // EKSPERYMENT: okno 3 s (koniec okna losowany po dekodowaniu)
   if(mode==='medley' || mode==='cover') cur.fallback=true;   // EKSPERYMENT: nie znaleziono wykonawcy/albumu → muzyka
   if(mode==='piano' && !t.coverArtist) cur.fallback=true;    // EKSPERYMENT: brak coveru fortepianowego → muzyka
+  if(mode==='timeline'){ if(tlPick && tlPick.card && !tlPick.noAnchor) cur.tlCard=tlPick.card; else cur.fallback=true; }   // EKSPERYMENT
+  if(isTempoMode(mode)){ cur.tempoStage=0; cur.tempoPos=0; vinylPrepare(tempoRate(mode, 0)); }   // EKSPERYMENT: płyta „?" w tempie etapu 0
   if(mode==='year'){
     if(parseYear(t.year)==null) cur.fallback=true;
     else if(!yearReliable(t.year, cat.range, t.yearSrc)) cur.yearNote='rok wg wydania w iTunes';
@@ -339,6 +351,21 @@ async function newRound(){
   dailyTouch();          // F8b: pierwsze grywalne pytanie Stacji dnia = próba dnia wykorzystana
   qStartAt=Date.now();   // F6a: od teraz liczy się czas odpowiedzi
   startAudio();
+}
+/* EKSPERYMENT „oś czasu": kotwica (pierwsze pytanie meczu) + utwór pytania — core/timeline.pickTimelineTrack */
+async function resolveTimeline(cat, rnd, gen){
+  const tl=session.timeline;
+  const resolve=()=>resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd});
+  const alive=()=>gen===soloGen;
+  if(!tl.cards.length){
+    setState('kładę kartę startową…');
+    const a=await pickTimelineTrack({ resolve, cat, recentYears:tl.years, alive });
+    if(a.aborted) return a;
+    if(!a.card) return { ...a, noAnchor:true };   // brak kotwicy (sieć / brak roku) → to pytanie jak „muzyka" albo błąd
+    tl.cards=[{ ...a.card, anchor:true }]; tl.years.push(a.card.year); tl.last=0;
+    setState('strojenie…');
+  }
+  return pickTimelineTrack({ resolve, cat, recentYears:tl.years, alive });
 }
 /* EKSPERYMENT: start pytania „tylko wykonawca" (składanka / okładka) po rozwiązaniu r (core/trackSelect.resolveMedley/Cover).
  * Składanka: wszystkie zajawki pobierane i dekodowane PRZED startem (pasek „ładuję składankę k/n"). */
@@ -379,8 +406,10 @@ function syncIntroBtn(){
   let nx=null, label='+ więcej';
   if(qm==='revsnip'){ nx=current ? revsnipNextStage(current.revStage||0) : null; label = nx!=null ? '+ dłużej ('+revsnipStageSecs(nx)+' s)' : 'dłużej ✓'; }
   else if(qm==='cover'){ nx=current ? coverNextStage(current.coverStage||0) : null; label = nx!=null ? 'wyraźniej' : 'pełna okładka'; }
+  else if(qm==='slowmo'){ nx=current ? tempoNextStage('slowmo', current.tempoStage||0) : null;   // EKSPERYMENT: 0.6× → 0.75×
+    label = nx!=null ? 'szybciej ('+fmtRate(tempoRate('slowmo', nx))+')' : 'tempo '+fmtRate(tempoRate('slowmo', current ? current.tempoStage||0 : 0))+' ✓'; }
   else { nx = current && mode==='intro' ? introNextStage(current.introStage) : null; label = nx!=null ? '+ więcej ('+introStageSecs(nx)+' s)' : '+ więcej'; }
-  b.disabled = !(live && nx!=null && (qm==='intro' || qm==='revsnip' || qm==='cover'));
+  b.disabled = !(live && nx!=null && (qm==='intro' || qm==='revsnip' || qm==='cover' || qm==='slowmo'));
   b.textContent = label;
 }
 function introMore(){
@@ -390,6 +419,12 @@ function introMore(){
     const nx=revsnipNextStage(current.revStage||0); if(nx==null) return;
     unlockSoloAudio({ctx:true});   // gest → AudioContext (iOS)
     current.revStage=nx; syncIntroBtn(); startAudio(); return;
+  }
+  if(qm==='slowmo'){    // EKSPERYMENT: „szybciej" 0.6× → 0.75× (mniejszy mnożnik) — gra dalej od tego samego miejsca
+    const nx=tempoNextStage('slowmo', current.tempoStage||0); if(nx==null) return;
+    unlockSoloAudio({ctx:true});   // gest → AudioContext (iOS)
+    current.tempoPos=tempoPosition(); current.tempoStage=nx; syncIntroBtn();
+    vinylRate(tempoRate('slowmo', nx)); startAudio(); return;
   }
   if(qm==='cover'){     // EKSPERYMENT: następny etap odsłony okładki (mniejszy mnożnik)
     const nx=coverNextStage(current.coverStage||0); if(nx==null) return;
@@ -402,6 +437,13 @@ function introMore(){
   startAudio();
 }
 (function wireIntroMore(){ const b=document.getElementById('introMore'); if(b) b.onclick=introMore; })();
+const fmtRate = r => String(r).replace('.', ',')+'×';
+// EKSPERYMENT: płyta winylowa = gałka w trybach tempa (tap / Enter / spacja = play/pauza)
+(function wireVinyl(){
+  const v=document.getElementById('vinyl'); if(!v) return;
+  v.onclick=()=>toggleAudio();
+  v.addEventListener('keydown', e=>{ if(e.key==='Enter' || e.key===' '){ e.preventDefault(); toggleAudio(); } });
+})();
 
 /* ============ audio (solo) → app/audio.js + app/audioCtx.js ============ */
 // stan gry (current/mode) i wznowienie rundy wstrzykiwane; uchwyty odtwarzacza żyją w module
@@ -433,6 +475,9 @@ function syncModeClasses(){
   const qm=qMode();
   document.body.classList.toggle('revsnip-mode', qm==='revsnip');
   document.body.classList.toggle('cover-mode', qm==='cover');
+  document.body.classList.toggle('tempo-mode', isTempoMode(qm));      // EKSPERYMENT: płyta winylowa zamiast gałki
+  document.body.classList.toggle('slowmo-mode', qm==='slowmo');       // „szybciej"
+  document.body.classList.toggle('timeline-mode', qm==='timeline');   // oś czasu
 }
 
 /* ============ przełącznik trybu muzyka/lektor ============ */
@@ -543,11 +588,13 @@ function renderSoloForm(){
   const isMC = (isQuiz || qm==='abcd') && !!(current && current.mc);   // F8a: ABCD muzyki = te same kafle .mc-opt
   const isYear = qm==='year' && !!current;                             // F8a: pole roku zamiast tytułu/wykonawcy
   const isArtist = (qm==='medley' || qm==='cover') && !!current;       // EKSPERYMENT: tylko wykonawca (+ album przy okładce)
-  form.classList.toggle('quiz', isQuiz || isMC || isYear || isArtist);
+  const isTl = qm==='timeline' && !!(current && current.tlCard && session && session.timeline);   // EKSPERYMENT: oś czasu
+  form.classList.toggle('quiz', isQuiz || isMC || isYear || isArtist || isTl);
   syncModeClasses();   // quiz-mode: ukryj gałkę/audio w decku; lektor-mode: pokaż „lepszy głos"
   syncLegend();        // F8b: stopka-legenda punktacji wg trybu bieżącego pytania
   const qf=document.getElementById('quizForm'); if(!qf) return;
   if(isYear){ renderYearForm(qf); return; }
+  if(isTl){ renderTimelineForm(qf); return; }
   if(isArtist){
     qf.innerHTML=`<div class="field"><label for="qf_artist">Wykonawca</label><input id="qf_artist" autocomplete="off" autocapitalize="off" placeholder="${qm==='medley'?'czyje to utwory?':'czyja to okładka?'}"></div>`+
       (qm==='cover' ? `<div class="field"><label for="qf_album">Album <small>(bonus +20)</small></label><input id="qf_album" autocomplete="off" autocapitalize="off" placeholder="opcjonalnie"></div>` : '');
@@ -615,10 +662,11 @@ function startSoloMatch(cats, modes, questions, opts={}){
   if(r.error){ const el=document.getElementById('matchInfo'); el.className='um-summary err'; el.textContent=r.error; return false; }
   if(session || busy) abandonRound();   // poprzedni mecz / losowanie w locie → porzuć (busy zwolnione, async unieważniony)
   hideOfflineOffer();
-  const hasReverse=r.slots.some(x=>['reverse','revsnip','medley'].includes(x.mode));   // AudioContext (WebAudio): od tyłu, EKSP.: od tyłu krótko, składanka
+  const hasReverse=r.slots.some(x=>['reverse','revsnip','medley','slowmo','fastmo'].includes(x.mode));   // AudioContext (WebAudio): od tyłu, EKSP.: od tyłu krótko, składanka, tempo
   const match={slots:r.slots, rounds:r.rounds, si:0, qi:0};
   if(r.qpc) match.qpc=r.qpc;
   session={match, results:[], hasReverse, cats:[...cats], modes:[...modes], questions:r.questions, daily:opts.daily||null};
+  if(r.slots.some(x=>x.mode==='timeline')) session.timeline={ cards:[], years:[], last:null };   // EKSPERYMENT: oś czasu meczu
   document.body.classList.toggle('daily', !!session.daily);
   // F2a #9: gest „Zacznij mecz" odblokowuje trwały element audio (iOS: per-element) i — gdy mecz ma
   // „od tyłu" — AudioContext; inaczej pierwsza zajawka po await kończyła się NotAllowedError
@@ -701,7 +749,7 @@ function endMatch(){
   abandonRound();   // 2.1/F2a #3: koniec meczu — porzuć async ostatniej rundy i zwolnij busy
   session=null;
   document.getElementById('session').classList.remove('live');
-  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','match-over','daily');
+  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','tempo-mode','slowmo-mode','timeline-mode','match-over','daily');
   hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
   soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
 }
@@ -735,7 +783,7 @@ function finishMatch(){
   stopAudio(); setIcon('play'); hideReveal();
   // F2a #10: deck/formularz pod podsumowaniem wyłączone (nic do sprawdzenia/odtworzenia z zakończonego meczu)
   resetForm(); hideLyric(); const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
-  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode'); document.body.classList.add('match-over'); coverHide();
+  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','tempo-mode','slowmo-mode','timeline-mode'); document.body.classList.add('match-over'); coverHide();
   setState('mecz zakończony');
   const cut = played < tot;
   document.getElementById('sumBig').textContent=hits+' / '+(cut?played:tot);
@@ -772,6 +820,14 @@ function finishMatch(){
       list.appendChild(d);
     });
   });
+  // EKSPERYMENT: zbudowana oś czasu (wynik trybu = liczba kart na osi + punkty)
+  if(session.timeline && session.timeline.cards.length){
+    const tc=session.timeline.cards;
+    const box=document.createElement('div'); box.className='sum-tl';
+    box.innerHTML=`<div class="band-label">🕰 Twoja oś czasu — ${escapeHtml(timelineSummary(tc))}</div>`+tc.map(c=>tlCardHTML(c)).join('');
+    list.prepend(box);
+    document.getElementById('sumSub').textContent+=` · oś czasu: ${tc.length} ${cardsWord(tc.length)}`;
+  }
   session=null;
   soloHead(daily ? 'Stacja dnia #'+daily.n : 'Wynik meczu');   // 5.7
   document.getElementById('session').classList.remove('live');  // body.playing zostaje → summary widoczne
@@ -828,7 +884,7 @@ function showDailyResult(info){
   session=null; document.getElementById('session').classList.remove('live');
   stopAudio(); setIcon('play'); hideReveal(); resetForm(); hideLyric(); hideOfflineOffer();
   const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
-  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode'); coverHide();
+  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','tempo-mode','slowmo-mode','timeline-mode'); coverHide();
   document.body.classList.add('playing','match-over','daily');
   document.getElementById('sumBig').textContent=rec.hits+' / '+rec.total;
   const sp=document.getElementById('sumPts'); if(sp) sp.textContent=(rec.points||0)+' pkt';
@@ -879,6 +935,7 @@ function check(){
   if(qm==='abcd' && current.mc){ return checkQuiz(); }   // F8a: ABCD muzyki — ocena po wybranym kaflu
   if(qm==='year'){ return checkYear(); }                 // F8a: rok wydania
   if(qm==='medley' || qm==='cover'){ return checkArtistQ(); }   // EKSPERYMENT: składanka / okładka
+  if(qm==='timeline' && current.tlCard && session && session.timeline){ return checkTimeline(); }   // EKSPERYMENT: oś czasu
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
   const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
@@ -889,8 +946,10 @@ function check(){
   // F6a (R2/R-U3): punkty — częściowe trafienie, rok/album +20, szybkość, seria
   // EKSPERYMENT: „od tyłu krótko" — etap „dłużej" (5 s) ×0,8 (szybkość/seria jak w muzyce)
   const rStage = qm==='revsnip' ? (current.revStage||0) : null;
+  // EKSPERYMENT: zwolnione / przyspieszone obroty — mnożnik etapu tempa (0.6× ×1.5 → 0.75× ×1.0; 1.5× ×1.2), szybkość/seria jak w muzyce
+  const tStage = isTempoMode(qm) ? (current.tempoStage||0) : null;
   const sc=scoreRound({ okTitle, okArtist, okYear, okAlbum, roundOk, elapsedMs: intro ? null : (qStartAt ? Date.now()-qStartAt : null), limitMs:SPEED_CAP_MS, streak,
-    mult: intro ? introMult(iStage) : (rStage!=null ? revsnipMult(rStage) : 1) });
+    mult: intro ? introMult(iStage) : (rStage!=null ? revsnipMult(rStage) : (tStage!=null ? tempoMult(qm, tStage) : 1)) });
   points+=sc.points;
   if(mode==='intro') current.introFull=true;   // F8a: po ocenie ↻ od nowa gra całą zajawkę (dosłuchanie)
   updateScore();
@@ -910,6 +969,7 @@ function check(){
   if(intro) r.appendChild(noteLine('intro', `${roundOk?'zgadłeś':'odpowiedź'} na etapie ${introStageSecs(iStage)} s · mnożnik ×${String(sc.mult).replace('.',',')}`));
   if(qm==='piano' && current.coverArtist) r.appendChild(noteLine('cover', '🎹 '+current.coverArtist));   // EKSPERYMENT: kto grał cover
   if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
+  if(tStage!=null) r.appendChild(noteLine('tempo', `zgadywane przy ${fmtRate(tempoRate(qm, tStage))} · mnożnik ×${String(sc.mult).replace('.',',')} · teraz oryginał 1×`));
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(mode==='lektor' && current.lyric){
     const d=document.createElement('div'); d.className='rline';
@@ -934,6 +994,8 @@ function check(){
   else playSfx(okTitle||okArtist ? 'ding' : 'buzz');   // F6b (U4): częściowe → „ding", pudło → „bzzt"
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać
+  // EKSPERYMENT: odsłona trybu tempa — naklejka → okładka, płyta rozpędza się do 1.0×, gra ORYGINAŁ (gest „Sprawdź")
+  if(tStage!=null){ current.tempoReveal=true; current.tempoPos=0; vinylReveal(current.art, 1); startAudio(); }
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 // ocena quizu (solo): core/scoring.evaluateQuiz; trafienie = wszystkie sloty
@@ -1007,6 +1069,90 @@ function checkQuiz(){
   if(roundOk){ confetti(); playClap(); } else playSfx(partHit ? 'ding' : 'buzz');   // Łamigłówki: częściowe → „ding"   // F6b (U4): pudło → „bzzt"
   document.getElementById('check').disabled=true;
   if(abcd) document.getElementById('replay').disabled=false;   // można dosłuchać
+  document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+/* ===== EKSPERYMENT: „oś czasu" (Hitster) — pionowa oś kart ze szczelinami „tu" + opcjonalne żetony tytuł/wykonawca =====
+ * Logika (szczeliny, ocena, wstawianie) w core/timeline.js. Oś czytelna na 320 px: karty kompaktowe (rok duży),
+ * scroll w obrębie osi (.tl-scroll) i auto-scroll do ostatnio wstawionej / odpadłej karty. */
+function tlCardHTML(c, cls='', i=null){
+  return `<div class="tl-card${c.anchor?' tl-anchor':''}${cls?' '+cls:''}"${i!=null?` data-i="${i}"`:''}><b class="tl-y">${c.year|0}</b>`+
+    `<span class="tl-t">${escapeHtml(c.track)}</span><span class="tl-a">${escapeHtml(c.artist)}</span></div>`;
+}
+// przewiń oś (tylko kontener osi — bez skoku strony) tak, by element był na środku
+function tlScrollTo(el){
+  const sc=document.getElementById('tlScroll'); if(!sc || !el) return;
+  try{ sc.scrollTop=Math.max(0, el.offsetTop - sc.clientHeight/2 + el.offsetHeight/2); }catch(_e){}
+}
+function selectGap(btn){
+  if(!btn || btn.disabled) return;
+  document.querySelectorAll('#quizForm .tl-gap').forEach(b=>{ const on=b===btn; b.classList.toggle('sel', on); b.setAttribute('aria-pressed', on?'true':'false'); b.textContent=on?'✓ tu':'tu'; });
+}
+/* res (po „Sprawdź"): {before, placeOk, gap, good, card} — trafienie: nowa karta wsuwa się na swoje miejsce;
+ * pudło: wybrana szczelina na czerwono, karta (z rokiem) pokazana tam, gdzie powinna była trafić — i odpada */
+function renderTimelineForm(qf, res){
+  const tl=session.timeline;
+  const cards = res && !res.placeOk ? res.before : tl.cards;
+  const n=tl.cards.length;
+  let rows='';
+  for(let g=0; g<=cards.length; g++){
+    if(!res) rows+=`<button type="button" class="tl-gap" data-gap="${g}" aria-pressed="false" aria-label="Wstaw tutaj — ${escapeHtml(gapLabel(cards, g))}">tu</button>`;
+    else if(!res.placeOk){
+      if(g===res.gap) rows+=`<button type="button" class="tl-gap no" disabled aria-label="Twój wybór — ${escapeHtml(gapLabel(cards, g))}">✗ tu</button>`;
+      if(g===res.good[0]) rows+=tlCardHTML(res.card, 'tl-miss');
+    }
+    if(g<cards.length) rows+=tlCardHTML(cards[g], res && res.placeOk && g===tl.last ? 'tl-new' : '', g);
+  }
+  const hint = res ? (res.placeOk ? 'karta zostaje ✓' : 'karta odpada') : 'gdzie pasuje ten utwór?';
+  const bonus = `<div class="row2 tl-bonus"><div class="field"><label for="qf_title">Tytuł <small>(+20)</small></label><input id="qf_title" autocomplete="off" autocapitalize="off" placeholder="opcjonalnie"></div>`+
+    `<div class="field"><label for="qf_artist">Wykonawca <small>(+20)</small></label><input id="qf_artist" autocomplete="off" autocapitalize="off" placeholder="opcjonalnie"></div></div>`;
+  const keep = res ? { t:val('qf_title'), a:val('qf_artist') } : null;
+  qf.innerHTML=`<div class="tl" role="group" aria-label="Oś czasu — wybierz miejsce dla utworu"><div class="tl-cap"><span>🕰 oś czasu · ${n} ${cardsWord(n)}</span><span>${escapeHtml(hint)}</span></div>`+
+    `<div class="tl-scroll" id="tlScroll">${rows}</div></div>`+bonus;
+  if(keep){ const ti=document.getElementById('qf_title'), ai=document.getElementById('qf_artist');
+    ti.value=keep.t; ai.value=keep.a; ti.disabled=true; ai.disabled=true; }
+  qf.querySelectorAll('.tl-gap:not([disabled])').forEach(b=>{ b.onclick=()=>selectGap(b); });
+  tlScrollTo(qf.querySelector('.tl-new, .tl-miss') || (tl.last!=null ? qf.querySelector(`.tl-card[data-i="${tl.last}"]`) : null));
+}
+// do testów (siatka jsdom): oś czasu meczu + karta bieżącego pytania
+export const _timelineDebug = () => (session && session.timeline) ? { cards:session.timeline.cards.slice(), last:session.timeline.last, card:current && current.tlCard } : null;
+function checkTimeline(){
+  stopAudio(); setIcon('play');
+  const tl=session.timeline, before=tl.cards, card=current.tlCard;
+  const sel=document.querySelector('#quizForm .tl-gap.sel');
+  const gap = sel ? +sel.dataset.gap : null;
+  const placeOk = gap!=null && gapOk(before, gap, card.year);
+  const gt=val('qf_title'), ga=val('qf_artist');
+  const okTitle = !!gt && textMatch(gt, current.track);
+  const okArtist = !!ga && artistMatch(ga, current.artist);
+  total++; if(placeOk){score++;streak++;} else streak=0;
+  const sc=scoreRound({ placeOk, okTitle, okArtist, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });
+  points+=sc.points;
+  updateScore();
+  const good=correctGaps(before, card.year);
+  if(placeOk){ const ins=insertCard(before, card, gap); tl.cards=ins.cards; tl.last=ins.index; }
+  tl.years.push(card.year);
+  if(session){ const s=matchSlot(session.match); pushResult({track:current.track, artist:current.artist, okTitle:placeOk, okArtist:placeOk, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  renderTimelineForm(document.getElementById('quizForm'), { before, placeOk, gap, good, card });
+  const r=document.getElementById('rmeta'); r.innerHTML='';
+  r.appendChild(guessLine(placeOk, 'Miejsce', gapLabel(before, good[0]), gap!=null ? gapLabel(before, gap) : '', '', sc.parts.place));
+  r.appendChild(noteLine('rok', String(card.year)));
+  r.appendChild(guessLine(okTitle, 'Tytuł', current.track, gt, okTitle && norm(gt)!==norm(current.track) ? 'literówka OK' : '', sc.parts.title));
+  r.appendChild(guessLine(okArtist, 'Wykonawca', current.artist, ga, '', sc.parts.artist));
+  r.appendChild(noteLine('oś czasu', timelineSummary(tl.cards)));
+  if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  const img=document.getElementById('art');
+  if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
+  const rh=document.getElementById('revealHead');
+  if(rh){
+    const cls = placeOk ? 'win' : ((okTitle||okArtist) ? 'part' : 'fail'), ic = placeOk ? '✓' : ((okTitle||okArtist) ? '≈' : '✗');
+    const sub = placeOk ? `karta zostaje na osi (${tl.cards.length} ${cardsWord(tl.cards.length)})` : (gap==null ? `nie wybrano miejsca · rok ${card.year}` : `rok ${card.year} — karta odpada`);
+    rh.className='rv-shead '+cls;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${placeOk?'Dobre miejsce!':'Pudło'}</b><small>${escapeHtml(sub)}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+  }
+  document.getElementById('reveal').classList.add('show');
+  if(placeOk){ confetti(); playClap(); } else playSfx((okTitle||okArtist) ? 'ding' : 'buzz');
+  document.getElementById('check').disabled=true;
+  document.getElementById('replay').disabled=false;
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 /* EKSPERYMENT: składanka / okładka — ocena WYKONAWCY (artistMatch: też człon duetu; forma z puli albo zapis iTunes),
@@ -1091,6 +1237,7 @@ function checkYear(){
 document.getElementById('check').onclick=check;
 document.getElementById('next').onclick=()=>{ unlockSoloAudio({ctx:session?session.hasReverse:false}); advance(); };   // F2a #9: gest → odblokuj
 document.getElementById('form').addEventListener('keydown',e=>{
+  if(e.target && e.target.closest && e.target.closest('.tl-gap')) return;   // EKSPERYMENT: Enter/spacja na „tu" = wybór szczeliny (natywny klik)
   // ABCD: klawisze A–D zaznaczają opcję (wygodne na desktopie)
   if((mode==='quiz' || qMode()==='abcd') && current && current.mc && /^[a-dA-D]$/.test(e.key)){
     const b=document.querySelector(`#quizForm .mc-opt[data-letter="${e.key.toUpperCase()}"]`);

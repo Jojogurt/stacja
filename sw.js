@@ -8,18 +8,19 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v63';
+const CACHE = 'stacja-v64';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
   './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
   './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
-  './core/timing.js', './core/picker.js', './core/chatFeed.js', './core/teams.js', './core/handles.js', './core/daily.js', './core/lektorVoice.js',
+  './core/timing.js', './core/timeline.js', './core/picker.js', './core/chatFeed.js', './core/teams.js', './core/handles.js', './core/daily.js', './core/lektorVoice.js',
   './app/dom.js', './app/lektor.js', './app/audioCtx.js', './app/audio.js',
   './app/catalog.js', './app/solo.js', './app/social.js', './app/catEditor.js',
   './app/mp-state.js', './app/mp-picker.js', './app/mp-render.js', './app/mp.js', './app/sfx.js', './app/icons.js', './app/daily.js',
   './app/cover.js',   // EKSPERYMENT: tryb „okładka"
   './app/listen.js',  // Łamigłówki: „▶ posłuchaj" w odsłonie
+  './app/vinyl.js',   // EKSPERYMENT: płyta winylowa (zwolnione / przyspieszone obroty)
   './click.wav', './clapping.wav',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',
