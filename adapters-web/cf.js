@@ -82,3 +82,17 @@ export const friendRespond  = (id, accept) => wrap(call('/api/friend/respond', {
 export const friendsList    = ()           => wrap(call('/api/friends'));
 export const pendingFriends = ()           => wrap(call('/api/friends/pending'));
 export const sentFriends    = ()           => wrap(call('/api/friends/sent'));
+
+/* ---- „Twój gust": oceny utworów (GET/POST/DELETE /api/taste) ----
+ * Rzucają błędem z `status` (404 = stary Worker bez /api/taste → klient zostaje lokalny; app/taste.js decyduje).
+ * hasSession(): token już jest — synchronizacja przy starcie NIE tworzy profilu na serwerze. */
+export const hasSession  = () => !!getToken();
+export const tasteFetch  = ()      => call('/api/taste').then(d => (d && Array.isArray(d.items)) ? d.items : []);
+export const tastePush   = (items) => call('/api/taste', { method: 'POST', body: { items } });
+export const tasteDelete = (key)   => call('/api/taste?key=' + encodeURIComponent(key), { method: 'DELETE' });
+// etap 2: GET z widocznością ({ items, visibility }) + zmiana widoczności własnego gustu ('friends' | 'hidden')
+export const tasteFetchAll = ()    => call('/api/taste').then(d => ({ items: (d && Array.isArray(d.items)) ? d.items : [], visibility: d && d.visibility }));
+export const tasteVisibilityPush = (v) => call('/api/taste/visibility', { method: 'POST', body: { visibility: v } });
+// etap 3: oceny znajomego do porównania (403 not_friends | hidden; 404 = stary Worker bez trasy). Rzuca z `status`.
+export const tasteCompareFetch = (friendId) => call('/api/taste/compare?friend=' + encodeURIComponent(friendId))
+  .then(d => ({ friend: (d && d.friend) || null, items: (d && Array.isArray(d.items)) ? d.items : [] }));

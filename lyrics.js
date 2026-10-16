@@ -560,8 +560,10 @@ window.CATEGORIES.lyrics = {
     ],
   },
 
-  'rap-pl': {
-    label: 'rap PL', desc: 'opis po PL — zgadnij', kind: 'lyrics',
+  // klucz `rap-pl-lektor` (NIE `rap-pl`): `rap-pl` to styl w categories.js — wspólny ALL_CATS, kolizja klucza
+  // sprawiała, że karta „rap PL" w Stylach grała tę kategorię lektora (test w test/run.js pilnuje unikalności kluczy)
+  'rap-pl-lektor': {
+    label: 'rap PL — opisy', desc: 'opis po PL — zgadnij', kind: 'lyrics',
     songs: [
       { title: 'Jestem Bogiem', artist: 'Paktofonika', year: '2000',
         lyric: 'Manifest wiary we własną wartość z jedynego albumu studyjnego katowickiego tria; po tragicznej śmierci autora najsłynniejszej zwrotki tytuł utworu dał nazwę filmowi biograficznemu z 2012 roku.' },

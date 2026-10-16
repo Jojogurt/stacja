@@ -13,8 +13,9 @@ import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, an
 import { REACTIONS } from '../core/chatFeed.js';   // F6b: whitelist emotek wspólna z serwerem (🖕 → 🍺)
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn, promptBodyHTML } from './dom.js';
-import { listenStart, listenHTML } from './listen.js';
-import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie „słuchaj"   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
+import { tasteHeartHTML } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie (lokalnie u gracza, bez protokołu)
+import { listenStart, listenHTML } from './listen.js';   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
+import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie „słuchaj"
 import { playClap, playSfx } from './sfx.js';
 import { ic } from './icons.js';
 import { mpPickerHTML } from './mp-picker.js';
@@ -579,6 +580,11 @@ function mpRenderPlay(g, head, st){
   mpTickTimer();
 }
 
+// „Twój gust": ❤️ przy utworze(ach) odsłony — dane z sieci tylko jako tekst (tasteHeartHTML escapuje, art tylko https)
+function mpTasteHTML(tracks){
+  return tasteHeartHTML(tracks.map(t=>t && ({ title:displayTitle(t.title!=null ? t.title : t.track), artist:t.artist, year:t.year, art:t.art, genre:t.genre })),
+    { cat:(S.game && typeof S.game.catKey==='string') ? S.game.catKey : '' });
+}
 // wynik MOJEJ drużyny z odsłony (per-drużyna). coop → byTeam.all; fallback na płaskie pola reveal.
 function mpRevealMine(r){ const tid=myTeamId&&myTeamId(); return (r && r.byTeam && tid && r.byTeam[tid]) || r || {}; }
 // ranking między drużynami (odsłona) — tylko nazwy + pkt + ✓/✗, BEZ cudzych odpowiedzi (izolacja).
@@ -636,6 +642,8 @@ function mpRenderRevealCard(snap){
     <div class="rv-card">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
       ${slot(rv.okTitle,'TYTUŁ',displayTitle(r.track))}${slot(rv.okArtist,'WYK.',r.artist)}
+      ${mpFromHTML(r)}
+      ${tv?'':mpTasteHTML([r])}
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':`<div class="rv-locked">odpowiedź drużyny: „${escapeHtml(locked.title||'—')} · ${escapeHtml(locked.artist||'—')}"</div>`}
@@ -644,6 +652,8 @@ function mpRenderRevealCard(snap){
     ${mpReactsBarHTML()}
     ${mpRevealNextHTML(last)}`;
 }
+// gust etap 3: „🎧 Gust stołu" — czyja półka (tekst z serwera → escapeHtml)
+function mpFromHTML(r){ return r && typeof r.from==='string' && r.from ? `<div class="rv-team rv-from" data-rv-from>🎧 z półki: <b>${escapeHtml(r.from.slice(0, 80))}</b></div>` : ''; }
 // F8a: odsłona trybu „rok" — karta utworu + rok wydania vs typ drużyny (dokładnie / ±1 / ±2 / dekada)
 const YEAR_TIER_TX = { exact:'dokładnie!', off1:'±1 rok', off2:'±2 lata', decade:'właściwa dekada', miss:'pudło' };
 function mpRenderYearReveal(snap){
@@ -661,6 +671,8 @@ function mpRenderYearReveal(snap){
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${r.album?`<span class="m">${escapeHtml(r.album)}</span>`:''}</div></div>
       <div class="rv-slot"><span class="k">ROK</span><span class="v">${escapeHtml(String(r.year||'—'))}${tier}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>
       ${note}
+      ${mpFromHTML(r)}
+      ${tv?'':mpTasteHTML([r])}
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits)}
@@ -700,6 +712,7 @@ function mpRenderQuizReveal(snap){
     <div class="rv-card quiz">
       <div class="rv-prompt">${promptHtml}</div>
       ${rows}${others}${fun}${listen}
+      ${tv?'':mpTasteHTML([...(r.track && r.artist ? [r] : []), ...(Array.isArray(r.listen) ? r.listen : [])])}
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits, isMC)}

@@ -24,7 +24,7 @@ export { GameAuthority } from './authorityRoom.js';        // autorytatywny pok√
 function cors(res){
   const h = new Headers(res.headers);
   h.set('Access-Control-Allow-Origin', '*');
-  h.set('Access-Control-Allow-Methods', 'GET,POST,OPTIONS');
+  h.set('Access-Control-Allow-Methods', 'GET,POST,DELETE,OPTIONS');   // DELETE: /api/taste?key=
   h.set('Access-Control-Allow-Headers', 'Authorization,Content-Type,Range');
   return new Response(res.body, { status: res.status, headers: h });
 }

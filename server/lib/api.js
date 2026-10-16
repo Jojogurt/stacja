@@ -5,6 +5,8 @@ import { insertMatch } from './recordMatch.js';
 import { verifyIdToken } from './oauth.js';
 import { MAX_QUESTIONS } from '../../core/match.js';
 import { SCORE_MAX_PER_Q } from '../../core/scoring.js';
+import { sanitizeRating, isTrackKey, isTasteVisibility, TASTE_MAX, TASTE_BATCH } from '../../core/taste.js';
+import { publicRating } from '../../core/tasteCompare.js';
 
 // 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
 // F1: limit pytań z core/match.js (to samo źródło co picker i clamp `start` w DO).
@@ -232,7 +234,132 @@ export async function handleApi(req, env, url){
     return json(results||[]);
   }
 
+  // ===== „Twój gust" (etap 1) — WYŁĄCZNIE własne oceny (profil z tokena); cudzych endpointy nie ujawniają =====
+  if(path==='/api/taste' && m==='GET'){
+    const { results } = await env.DB.prepare(
+      `SELECT track_key, title, artist, year, genre, art, cat, rating, source, ts FROM taste_ratings
+       WHERE profile_id=? ORDER BY ts DESC LIMIT ?`).bind(me, TASTE_MAX).all();
+    // etap 2: widoczność gustu (sync ustawienia między urządzeniami); stara baza bez kolumny → domyślnie 'friends'
+    let visibility='friends';
+    try{ const r=await env.DB.prepare(`SELECT taste_visibility FROM profiles WHERE id=?`).bind(me).first();
+      if(r && isTasteVisibility(r.taste_visibility)) visibility=r.taste_visibility; }catch(_e){}
+    return json({ items: (results||[]).map(tasteRow), visibility });
+  }
+  if(path==='/api/taste' && m==='POST'){
+    return tasteUpsert(env, me, await body(req));
+  }
+  if(path==='/api/taste' && m==='DELETE'){
+    const key=String(url.searchParams.get('key')||'');
+    if(!isTrackKey(key)) return err('bad_key');
+    if(await tasteRateLimited(env, me)) return err('rate_limited', 429);
+    await env.DB.prepare(`DELETE FROM taste_ratings WHERE profile_id=? AND track_key=?`).bind(me, key).run();
+    return json({ ok:true });
+  }
+  // etap 2 (pod etap 3): „Mój gust widzą znajomi / ukryty" — WYŁĄCZNIE własny profil (id z tokena, nie z body)
+  if(path==='/api/taste/visibility' && m==='POST'){
+    const p=await body(req), v=p && p.visibility;
+    if(!isTasteVisibility(v)) return err('bad_visibility');
+    await env.DB.prepare(`UPDATE profiles SET taste_visibility=? WHERE id=?`).bind(v, me).run();
+    return json({ ok:true, visibility:v });
+  }
+  // etap 3: porównanie gustu — oceny ZNAJOMEGO w ograniczonej formie (bez ts/source; ≤ TASTE_MAX). Porównanie liczy
+  // klient (core/tasteCompare.compareTaste — ten sam rdzeń; klient ma też oceny jeszcze niezsynchronizowane).
+  // Warunki: zaakceptowani znajomi (w dowolnym kierunku) ORAZ znajomy ma taste_visibility='friends'.
+  // Kolejność: rate-limit → znajomość (403 not_friends — także nieistniejący profil, bez wycieku istnienia) → ukryty (403 hidden).
+  if(path==='/api/taste/compare' && m==='GET'){
+    const friend=String(url.searchParams.get('friend')||'');
+    if(!friend || friend.length>64 || !/^[\w-]+$/.test(friend)) return err('bad_friend');
+    if(friend===me) return err('self');
+    if(await compareRateLimited(env, me)) return err('rate_limited', 429);
+    const fr=await env.DB.prepare(
+      `SELECT 1 FROM friend_requests WHERE status='accepted' AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) LIMIT 1`
+    ).bind(me, friend, friend, me).first();
+    if(!fr) return err('not_friends', 403);
+    const p=await env.DB.prepare(`SELECT handle, emoji, taste_visibility FROM profiles WHERE id=?`).bind(friend).first();
+    if(!p) return err('not_friends', 403);
+    if(p.taste_visibility!=='friends') return err('hidden', 403);
+    const { results } = await env.DB.prepare(
+      `SELECT title, artist, year, genre, art, cat, rating FROM taste_ratings WHERE profile_id=? ORDER BY ts DESC LIMIT ?`
+    ).bind(friend, TASTE_MAX).all();
+    return json({ friend:{ profile_id:friend, handle:p.handle||'gracz', emoji:p.emoji||'' }, visibility:'friends',
+      items:(results||[]).map(publicRating).filter(Boolean) });
+  }
+
   return err('not_found', 404);
+}
+
+/* ---- „Twój gust": upsert ocen (batch ≤ TASTE_BATCH), last-write-wins po ts, limit TASTE_MAX/profil ----
+ * Rate-limit per profil z tokena (D1 — liczniki w pamięci isolate'u nie działają): liczba wierszy zapisanych
+ * w oknie (updated_at). Sesja „Oceń 20" to ~20 ocen/kilka minut; 300/min i 3000/dobę to z dużym zapasem. */
+export const TASTE_LIMITS = [ { window:'-1 minutes', max:300 }, { window:'-1 day', max:3000 } ];
+const tasteRow = r => ({ trackKey:r.track_key, title:r.title, artist:r.artist, year:r.year||'', genre:r.genre||'',
+  art:r.art||'', cat:r.cat||'', rating:Number(r.rating), source:r.source||'swipe', ts:Number(r.ts)||0 });
+async function tasteRateLimited(env, me){
+  for(const l of TASTE_LIMITS){
+    const r=await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM taste_ratings WHERE profile_id=? AND updated_at > datetime('now', ?)`
+    ).bind(me, l.window).first();
+    if(r && (r.n|0) >= l.max) return true;
+  }
+  return false;
+}
+/* etap 3: rate-limit porównań per profil z tokena — log zapytań w D1 (taste_compare_log, 0005_taste.sql).
+ * Lista znajomych ładuje % leniwie (1 zapytanie / znajomy, klient trzyma wynik w pamięci) → 60/min i 600/dobę z zapasem.
+ * Każde zapytanie (także 403) liczy się do limitu — utrudnia sondowanie cudzych id. Stare wpisy (> doba) sprzątane. */
+export const COMPARE_LIMITS = [ { window:'-1 minutes', max:60 }, { window:'-1 day', max:600 } ];
+async function compareRateLimited(env, me){
+  for(const l of COMPARE_LIMITS){
+    const r=await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM taste_compare_log WHERE profile_id=? AND at > datetime('now', ?)`
+    ).bind(me, l.window).first();
+    if(r && (r.n|0) >= l.max) return true;
+  }
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM taste_compare_log WHERE profile_id=? AND at <= datetime('now', '-1 day')`).bind(me),
+    env.DB.prepare(`INSERT INTO taste_compare_log (profile_id, at) VALUES (?, datetime('now'))`).bind(me),
+  ]);
+  return false;
+}
+// walidacja + sanityzacja batcha → { items, rejected } albo { error } (czyste — testowane bez D1)
+export function validateTasteBatch(p, now=Date.now()){
+  const raw = p && Array.isArray(p.items) ? p.items : null;
+  if(!raw) return { error:'items_required' };
+  if(raw.length > TASTE_BATCH) return { error:'batch_too_large' };
+  const byKey=new Map(); let rejected=0;
+  for(const r of raw){
+    const s=sanitizeRating(r, now);
+    if(!s){ rejected++; continue; }
+    const prev=byKey.get(s.trackKey);
+    if(!prev || s.ts>=prev.ts) byKey.set(s.trackKey, s);   // duplikat w batchu → nowszy
+  }
+  return { items:[...byKey.values()], rejected };
+}
+async function tasteUpsert(env, me, p){
+  const v=validateTasteBatch(p);
+  if(v.error) return err(v.error);
+  if(!v.items.length) return json({ ok:true, saved:0, rejected:v.rejected });
+  if(await tasteRateLimited(env, me)) return err('rate_limited', 429);
+  let items=v.items, rejected=v.rejected;
+  const cnt=await env.DB.prepare(`SELECT COUNT(*) AS n FROM taste_ratings WHERE profile_id=?`).bind(me).first();
+  const have=(cnt && cnt.n|0) || 0;
+  if(have+items.length > TASTE_MAX){   // limit: aktualizacje istniejących zawsze, nowe tylko do TASTE_MAX
+    const q=items.map(()=>'?').join(',');
+    const { results } = await env.DB.prepare(`SELECT track_key FROM taste_ratings WHERE profile_id=? AND track_key IN (${q})`)
+      .bind(me, ...items.map(x=>x.trackKey)).all();
+    const exists=new Set((results||[]).map(r=>r.track_key));
+    let room=Math.max(0, TASTE_MAX-have);
+    items=items.filter(x=>{ if(exists.has(x.trackKey)) return true; if(room>0){ room--; return true; } rejected++; return false; });
+    if(!items.length) return json({ ok:true, saved:0, rejected, limit:TASTE_MAX });
+  }
+  await env.DB.batch(items.map(x=>env.DB.prepare(
+    `INSERT INTO taste_ratings (profile_id, track_key, title, artist, year, genre, art, cat, rating, source, ts, updated_at)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?, datetime('now'))
+     ON CONFLICT(profile_id, track_key) DO UPDATE SET title=excluded.title, artist=excluded.artist, year=excluded.year,
+       genre=excluded.genre, art=excluded.art, cat=excluded.cat, rating=excluded.rating, source=excluded.source,
+       ts=excluded.ts, updated_at=excluded.updated_at
+     WHERE excluded.ts >= taste_ratings.ts`
+  ).bind(me, x.trackKey, x.title, x.artist, x.year, x.genre, x.art, x.cat, x.rating, x.source, x.ts)));
+  return json({ ok:true, saved:items.length, rejected });
 }
 
 // F1 (#9): limity zapisu meczu przez KLIENTA (per profil z tokena; D1 — liczniki w pamięci

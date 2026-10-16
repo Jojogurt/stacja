@@ -1,15 +1,16 @@
 /* app.js — entry point STACJA: montaż modułów + bootstrap (wersja, motyw).
  * Cała logika żyje w core/ (czysty rdzeń, bez DOM) i app/ (warstwa DOM/sieć):
- *   app/solo.js — tryb solo · app/mp.js — multiplayer · app/social.js — ekrany/liga/profil
+ *   app/solo.js — tryb solo · app/mp.js — multiplayer · app/social.js — ekrany/liga/profil · app/gust.js — Twój gust
  *   app/audio·audioCtx·lektor·dom — odtwarzanie i prymitywy · app/catalog.js — dane kategorii.
  * Granica zależności: app/ zależy od core/, nigdy od app.js. */
 import './app/solo.js';                              // tryb SOLO (self-wiring; ciągnie catalog/audio/lektor/mp)
 import './app/sfx.js';                               // UI-dźwięki (klik na buttonach, oklaski przy trafieniu)
+import './app/gust.js';                              // „Twój gust": sesja ocen + półka (self-wiring kafelka #goGust)
 import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v65';   // eksperyment: covery gitarowe, kategoria akustycznie/unplugged (53, 17 PL), displayTitle bez dopisków remasteru
+const APP_VERSION = 'v66';   // Twój gust (ocenianie, półka, profil, zgodność, Gust stołu), nowy ekran ustawiania meczu, winyl wszędzie, poprawki trybów
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).

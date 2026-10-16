@@ -20,20 +20,22 @@ let playing = -1;       // indeks grającego utworu (-1 = cisza)
 let loading = -1;       // indeks rozwiązywanego utworu
 let gen = 0;            // token: każda nowa odsłona / stop unieważnia spóźnione rozwiązania
 let stopT = null;
+let snip = null;        // „Twój gust": zajawka spoza listy odsłony (sesja oceniania / półka) — { onState }
 const cache = new Map();   // klucz „artysta|tytuł" → preview URL ('' = nie znaleziono)
 
 function ensureEl(){
   if(el) return el;
   el = new Audio(); el.preload='auto';
-  el.addEventListener('ended', ()=>{ if(playing>=0) stopPlayback(); });
-  el.addEventListener('error', ()=>{ if(playing>=0 || loading>=0){ const i=playing>=0?playing:loading; playing=-1; loading=-1; mark(i, 'brak'); } });
+  el.addEventListener('ended', ()=>{ if(playing>=0 || snip) stopPlayback(); });
+  el.addEventListener('error', ()=>{ if(snip && playing<0){ if(stopT){ clearTimeout(stopT); stopT=null; } snipEnd('brak'); return; }
+    if(playing>=0 || loading>=0){ const i=playing>=0?playing:loading; playing=-1; loading=-1; mark(i, 'brak'); } });
   return el;
 }
 // odblokowanie w GEŚCIE (solo: „Sprawdź"; MP: dołączenie/start/gałka) — iOS odblokowuje per element
-export function unlockListen(){ try{ const e=ensureEl(); if(playing<0) unlockAudioElement(e); }catch(_e){} }
+export function unlockListen(){ try{ const e=ensureEl(); if(playing<0 && !snip) unlockAudioElement(e); }catch(_e){} }
 
 function keyOf(t){ return (t.artist+'|'+t.title).toLowerCase(); }
-async function resolvePreview(t){
+export async function resolvePreview(t){
   const k=keyOf(t);
   if(cache.has(k)) return cache.get(k);
   let url='';
@@ -66,11 +68,13 @@ function mark(i, state){
   });
 }
 
+function snipEnd(state){ const s=snip; snip=null; if(s && s.onState){ try{ s.onState(state); }catch(_e){} } }
 function stopPlayback(){
   if(stopT){ clearTimeout(stopT); stopT=null; }
   const was=playing; playing=-1;
   if(el){ try{ el.pause(); }catch(_e){} }
   if(was>=0) mark(was, '');
+  if(snip) snipEnd('stop');
 }
 // zatrzymaj odsłuch (nowa runda / dalej / wyjście) — unieważnia też rozwiązywanie w toku
 export function listenStop(){
@@ -108,6 +112,31 @@ export function listenStart(tracks, { auto=true, allowed:al=true }={}){
   return list.length;
 }
 export function listenTracks(){ return list.slice(); }
+
+/* „Twój gust": zajawka JEDNEGO utworu tym samym trwałym elementem (odblokowanym w geście — unlockListen).
+ * t = { preview?, title, artist } — bez preview szuka jak „▶ posłuchaj" (resolvePreview, cache). Gra `secs` sekund
+ * (start od `from` s — środek zajawki bywa ciekawszy niż cisza intra). onState('load'|'play'|'stop'|'brak').
+ * Każde kolejne snippetPlay / listenStop / listenPlay przerywa poprzednie (onState('stop')). */
+export async function snippetPlay(t, { secs=LISTEN_SECS, from=0, onState }={}){
+  listenStop();
+  const my=++gen;
+  snip={ onState };
+  try{ onState && onState('load'); }catch(_e){}
+  const url = (t && typeof t.preview==='string' && /^https?:\/\//.test(t.preview)) ? t.preview : (t ? await resolvePreview(t) : '');
+  if(my!==gen) return false;
+  if(!url){ snipEnd('brak'); return false; }
+  const a=ensureEl();
+  a.muted=false;
+  if(a.src!==url) a.src=url;
+  try{ a.currentTime=from||0; }catch(_e){}
+  try{ await a.play(); }
+  catch(_e){ if(my===gen && snip){ snipEnd('stop'); } return false; }   // autoplay zablokowany → gracz klika ▶
+  if(my!==gen) return false;
+  try{ snip && snip.onState && snip.onState('play'); }catch(_e){}
+  stopT=setTimeout(()=>{ if(my===gen) stopPlayback(); }, secs*1000);
+  return true;
+}
+export const snippetPlaying = () => !!snip;
 
 // HTML przycisków odsłony (MP render / solo) — tylko dane escapowane, indeks w data-listen
 export function listenHTML(tracks, { allowed:al=allowed }={}){

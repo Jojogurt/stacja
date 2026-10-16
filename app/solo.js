@@ -12,14 +12,16 @@ import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailySh
 import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, quickPool, restorePick } from '../core/picker.js';
-import { settingsSummary } from '../core/matchSetup.js';
+import { settingsSummary, SHELF_PRESET_KEY } from '../core/matchSetup.js';
 import { createMatchSetup, renderPreserving } from './matchSetup.js';   // wspólny komponent „Nowy mecz" (solo + host MP)
 import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolveInstrumental } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, setLive, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
 import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
-import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
+import { tasteHeartHTML, tasteStore, onTaste } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie + gotowiec „Z mojej półki"
+import { shelfCategory, shelfSongs, SHELF_PLAY_MIN, SHELF_QUESTIONS } from '../core/tasteCompare.js';   // etap 3: „Zagraj z półki" (+ gotowiec „Z mojej półki")
+import { showScreen, knownHandle } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
 import { catLektorLang } from '../core/lektorVoice.js';
 import { playClap, playSfx } from './sfx.js';
@@ -76,9 +78,24 @@ const soloSetup = createMatchSetup({
   onEdit:(k)=>{ openEditor(k); },
   onRemove:(k)=>plRemove(k),
   onAct:(act)=>{ if(act==='trener'){ quizRepeat=!quizRepeat; try{ localStorage.setItem(QUIZ_REPEAT_KEY, quizRepeat?'1':'0'); }catch(_e){} renderPicker(); } },
+  presetEnv:()=>({ shelf:shelfCount }),
 });
+/* „Twój gust": gotowiec „Z mojej półki" (core/matchSetup PRESETS) — kategoria TYMCZASOWA SHELF_PRESET_KEY z ❤️/👍 własnej
+ * półki (ta sama co „Zagraj z półki": core/tasteCompare.shelfCategory), tylko w ALL_CATS (bez ALL_KEYS → poza losowaniem,
+ * zakładkami i wyszukiwarką). Odświeżana przed każdym renderem pickera; < SHELF_PLAY_MIN utworów → usunięta (gotowiec
+ * nieaktywny z podpowiedzią). W trakcie meczu z półki nie podmieniamy/nie kasujemy kategorii (slot czyta ALL_CATS). */
+let shelfCount=0;
+function syncShelfCat(){
+  let songs=[]; try{ songs=shelfSongs(tasteStore()); }catch(_e){ songs=[]; }
+  shelfCount=songs.length;
+  const inUse=!!(session && (session.cats||[]).includes(SHELF_PRESET_KEY));
+  if(inUse && ALL_CATS[SHELF_PRESET_KEY]) return;
+  if(songs.length>=SHELF_PLAY_MIN) ALL_CATS[SHELF_PRESET_KEY]=shelfCategory(knownHandle()||'', songs, { label:'Moja półka' });
+  else { delete ALL_CATS[SHELF_PRESET_KEY]; soloCats.delete(SHELF_PRESET_KEY); }
+}
 function renderPicker(){
   if(!pickRoot) return;
+  syncShelfCat();
   if(twojeTools && twojeHold && twojeTools.parentNode!==twojeHold) twojeHold.appendChild(twojeTools);   // nie niszcz statycznych narzędzi
   renderPreserving(pickRoot, soloSetup.html());
   const slot=pickRoot.querySelector('[data-ms-slot="twoje"]'); if(slot && twojeTools) slot.appendChild(twojeTools);
@@ -136,7 +153,10 @@ let pendingCats=[];
 function saveSoloPick(){
   lsSet(PICK_KEY, JSON.stringify({ cats:[...soloCats], modes:[...soloModes].filter(m=>m!=='quiz'), questions:soloPick.questions, preset:soloPick.preset||null }));
 }
+// ocena zmieniona (odsłona / ekran „Twój gust") → odśwież gotowiec „Z mojej półki" (picker poza meczem)
+onTaste(()=>{ if(!document.body.classList.contains('playing')) renderPicker(); });
 (function restoreSoloPick(){
+  syncShelfCat();   // „Z mojej półki" w ALL_CATS PRZED odtworzeniem zapamiętanej puli
   let saved=null; try{ saved=JSON.parse(lsGet(PICK_KEY,'null')); }catch(_e){ saved=null; }
   if(saved && typeof saved==='object'){
     const r=restorePick(saved, ALL_CATS, ALL_MODES);
@@ -544,7 +564,7 @@ document.getElementById('skip').onclick=()=>{
 
 /* ============ MECZ solo: rundy × kategorie × pytania ============ */
 document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishMatch(); else endMatch(); };
-document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over','daily'); soloHead('Nowy mecz'); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over','daily'); soloHead('Nowy mecz'); renderPicker(); };
 
 function startMatch(){
   if(!soloSetup.summary().ok){ updateMatchInfo(); return; }
@@ -587,6 +607,17 @@ function startSoloMatch(cats, modes, questions, opts={}){
     startSoloMatch(cats, ['music'], QUICK_QUESTIONS);
   };
 })();
+/* „Twój gust" (etap 3): „Zagraj z półki" — mecz solo (10 pytań, tryb muzyka) z puli songs[] półki (moja / znajomego).
+ * Kategoria TYMCZASOWA: tylko w ALL_CATS (catLabel/rozwiązanie utworu), bez ALL_KEYS/pickera/localStorage — nie zapisuje się na stałe. */
+export const SHELF_CAT_KEY = 'polka-tmp';
+export function startShelfMatch(name, songs, { label='' }={}){
+  const list=Array.isArray(songs) ? songs.filter(s=>s && s.title && s.artist) : [];
+  if(list.length<SHELF_PLAY_MIN) return false;
+  ALL_CATS[SHELF_CAT_KEY]=shelfCategory(name, list, { label });
+  unlockCtx();
+  showScreen('solo');
+  return startSoloMatch([SHELF_CAT_KEY], ['music'], SHELF_QUESTIONS);
+}
 /* F6a (R-F10/F11): brak sieci → „Zagraj offline: Lektor / Wiedza" (kategorie z tekstami + paczki wiedzy) */
 function offlinePools(){
   const modes=['lektor','quiz'];
@@ -626,6 +657,7 @@ function syncContinue(){
     else if(scr==='solo'){
       if(session) soloHead(playHead());
       else if(document.body.classList.contains('match-over')) soloHead('Wynik meczu');
+      else renderPicker();   // „Z mojej półki": oceny mogły się zmienić (ekran gustu / odsłona)
     }
   });
 })();
@@ -647,6 +679,7 @@ function endMatch(){
   document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','tempo-mode','slowmo-mode','timeline-mode','match-over','daily');
   hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
   soloHead('Nowy mecz');   // 5.7: powrót do tytułu pickera
+  renderPicker();          // „Z mojej półki": ❤️ z odsłon meczu → odśwież gotowiec
 }
 function updateSessUI(){
   if(!session) return;
@@ -883,6 +916,7 @@ function check(){
   if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
   if(tStage!=null) r.appendChild(noteLine('tempo', `zgadywane przy ${fmtRate(tempoRate(qm, tStage))} · mnożnik ×${String(sc.mult).replace('.',',')} · teraz oryginał 1×`));
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  revealTaste(r, [current]);   // „Twój gust": ❤️ na półkę
   if(mode==='lektor' && current.lyric){
     const d=document.createElement('div'); d.className='rline';
     d.innerHTML='<span class="mk" style="color:var(--muted)">„</span>'+
@@ -970,6 +1004,7 @@ function checkQuiz(){
     r.insertAdjacentHTML('beforeend', listenHTML(current.listen));
   }
   if(abcd){ const meta=[current.album, current.year].filter(Boolean).join(' · '); if(meta) r.appendChild(noteLine('album', meta)); }
+  revealTaste(r, abcd ? [current] : (current.listen||[]));   // „Twój gust": ❤️ (ABCD muzyki — utwór; Łamigłówki — utwory-rozwiązania)
   const img=document.getElementById('art');
   if(img){ if(abcd && current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
   const rh=document.getElementById('revealHead');
@@ -1051,6 +1086,7 @@ function checkTimeline(){
   r.appendChild(guessLine(okTitle, 'Tytuł', displayTitle(current.track), gt, okTitle && norm(gt)!==norm(current.track) ? 'literówka OK' : '', sc.parts.title));
   r.appendChild(guessLine(okArtist, 'Wykonawca', current.artist, ga, '', sc.parts.artist));
   r.appendChild(noteLine('oś czasu', timelineSummary(tl.cards)));
+  revealTaste(r, [current]);
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
   if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
@@ -1095,6 +1131,7 @@ function checkArtistQ(){
   } else {
     const played=(current.playedClips || current.clips.filter(c=>c.ok)).length ? (current.playedClips || current.clips.filter(c=>c.ok)) : current.clips;
     r.appendChild(noteLine('zagrały', played.map((c,i)=>(i+1)+'. '+displayTitle(c.track)).join(' · ')));
+    revealTaste(r, played);   // „Twój gust": ❤️ per zagrany utwór składanki (okładka = album, bez utworu → bez ❤️)
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
@@ -1130,6 +1167,7 @@ function checkYear(){
   r.appendChild(guessLine(ys.points>0, 'Rok', String(parseYear(current.year)||current.year), parseYear(gy)!=null?String(parseYear(gy)):'', tag, sc.parts.year));
   r.appendChild(noteLine('utwór', displayTitle(current.track)+' — '+current.artist));
   if(current.yearNote) r.appendChild(noteLine('uwaga', current.yearNote));
+  revealTaste(r, [current]);
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
   if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
@@ -1180,6 +1218,12 @@ function recordQuizStat(key, ok){
     localStorage.setItem(QUIZ_STATS_KEY, JSON.stringify(s)); }catch(_e){}
 }
 
+// „Twój gust": ❤️ „na półkę" w odsłonie — utwory pytania (tytuł = forma wyświetlana, kategoria ze slotu meczu)
+function revealTaste(r, tracks){
+  const s=session && matchSlot(session.match);
+  const h=tasteHeartHTML((tracks||[]).map(t=>t && ({ ...t, title:displayTitle(t.title!=null ? t.title : t.track) })), { cat:s ? s.cat : '' });
+  if(h) r.insertAdjacentHTML('beforeend', h);
+}
 // wiersz informacyjny odsłony (bez ✓/✗): „inne poprawne", „ciekawostka" — tekst ESCAPOWANY
 function noteLine(k,v){
   const d=document.createElement('div'); d.className='rline rnote';

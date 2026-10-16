@@ -23,6 +23,15 @@ import { readFileSync, existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, normalize } from 'node:path';
 import { createFeed, resetFeed, pushChat, ingestFeed, FEED_CAP } from '../core/chatFeed.js';
+import { trackKey, isTrackKey, sanitizeRating, parseStore, rate, unrate, toggleHeart, ratingOf, activeRatings, capStore, tasteCounts,
+  shelfItems, mergeTaste, markSynced, dropTombs, batches, genreGroup, catGroup, decadeOf, tasteCandidates, pickTasteSession, planCat,
+  seenForArtist, TASTE_MAX, SESSION_N, SESSION_SPARE, isTasteVisibility, TASTE_VISIBILITY } from '../core/taste.js';
+import { profileGenre, catProfileGenre, catDecadeOf, itemDecade, isPolish, plArtists, isPlCat, pctRound, confidenceOf, topArtists,
+  ARCHETYPES, LOW_ARCHETYPE, pickArchetype, knownProfile, compareKnownLiked, buildTasteProfile, shareText, DECADES, PROFILE_GENRES,
+  CONF_MID, CONF_HIGH } from '../core/tasteProfile.js';
+import { compareTaste, cosine, verdictFor, VERDICTS, explainParts, sharedFavorites, recommendations, publicRating, sanitizeFriendRatings,
+  shelfSongs, canPlayShelf, shelfCategory, tableShelfPayload, sanitizeTableShelf, buildTablePool, tablePoolCategory, COMPARE_MIN, JACCARD_FULL,
+  SHELF_PLAY_MIN, TABLE_SHELF_MAX, TABLE_MIN_HEARTS, TABLE_KEY } from '../core/tasteCompare.js';
 
 let pass=0, fail=0;
 function ok(cond, msg){ if(cond){ pass++; } else { fail++; console.error('  ✗ '+msg); } }
@@ -735,6 +744,10 @@ await (async ()=>{
   const right=async()=>[{ trackName:'Beat It', artistName:'Michael Jackson', previewUrl:'beatit.m4a' }];
   const r2=await resolveTrack({ cat:{songs:[song]}, seen:new Set(), itunes:right });
   ok(r2.preview==='beatit.m4a' && r2.track==='Beat It', 'trafienie → zajawka tego samego utworu co odpowiedź');
+  // gust etap 3: „Gust stołu" — pole `from` utworu z puli przechodzi do wyniku (odsłona „z półki: <ksywa>")
+  const r3=await resolveTrack({ cat:{songs:[{ ...song, from:'Ala, Bo' }]}, seen:new Set(), itunes:right });
+  eq(r3.from, 'Ala, Bo', 'resolveFromSongs: from z półki → wynik');
+  ok(!('from' in r2), 'bez from w puli → brak pola');
 })();
 
 // F5: resolveTrack — dekada przez kolejnych wykonawców, playlista po „artysta tytuł", cache per sesja
@@ -1851,9 +1864,48 @@ group('Nowy mecz: gotowce — klucze kategorii ISTNIEJĄ w danych (categories.js
   const keys=new Set([...Object.keys(C.decades||{}), ...Object.keys(C.styles||{}), ...Object.keys(C.playlists||{})]);
   const idx=JSON.parse(readFileSync(join(ROOT,'data/quiz-index.json'),'utf8'));
   (Array.isArray(idx)?idx:idx.files).forEach(f=>keys.add(f.replace(/^quiz-|\.json$/g,'')));
-  eq(MS.PRESETS.map(p=>p.id), ['hity','pl','dek','lam','hard'], 'gotowce: hity, Polska klasyka, Lata 80·90·00, Łamigłówki, Hardcore');
-  MS.PRESETS.forEach(p=>{ const miss=p.cats.filter(k=>!keys.has(k)); eq(miss, [], `gotowiec ${p.id}: brakujące klucze`); });
-  ok(MS.PRESETS.every(p=>p.modes.every(m=>MM.ALL_MODES.includes(m))) && MS.PRESETS.every(p=>[5,15,30].includes(p.questions)), 'tryby i długości gotowców poprawne');
+  eq(MS.PRESETS.map(p=>p.id), ['hity','pl','dek','lam','hard','polka'], 'gotowce: hity, Polska klasyka, Lata 80·90·00, Łamigłówki, Hardcore, Z mojej półki');
+  MS.PRESETS.filter(p=>Array.isArray(p.cats)).forEach(p=>{ const miss=p.cats.filter(k=>!keys.has(k)); eq(miss, [], `gotowiec ${p.id}: brakujące klucze`); });
+  ok(!keys.has(MS.SHELF_PRESET_KEY), 'klucz kategorii półki nie koliduje z danymi');
+  ok(MS.PRESETS.every(p=>p.modes.every(m=>MM.ALL_MODES.includes(m))) && MS.PRESETS.every(p=>[5,10,15,30].includes(p.questions) && MM.clampQuestions(p.questions)===p.questions), 'tryby i długości gotowców poprawne');
+});
+group('Nowy mecz: gotowiec „Z mojej półki" (gust) — tylko solo, ≥ 8 polubionych, inaczej nieaktywny z podpowiedzią', ()=>{
+  const P=MS.PRESETS.find(p=>p.id==='polka');
+  ok(P && typeof P.cats==='function' && P.ctx==='solo', 'cats jako funkcja, kontekst solo');
+  eq(MS.resolvePreset(P, MS_CATS), null, 'bez kontekstu solo → ukryty (np. MP — tam „Gust stołu")');
+  eq(MS.resolvePreset(P, MS_CATS, MM.MP_MODES, { ctx:'mp', shelf:30 }), null, 'MP → ukryty');
+  const locked=MS.resolvePreset(P, MS_CATS, MM.ALL_MODES, { ctx:'solo', shelf:3 });
+  ok(locked && locked.disabled && locked.cats.length===0, 'za mało (brak kategorii półki) → nieaktywny, bez puli');
+  eq(locked.sub, 'polub min. 8 utworów (❤️/👍) — masz 3', 'podpowiedź z licznikiem');
+  ok(!MS.presetMatches(locked, [], new Set(), 10), 'nieaktywny gotowiec nigdy „nie pasuje" do wyboru');
+  const songs=n=>Array.from({ length:n }, (_,i)=>({ title:'T'+i, artist:'A'+i, year:'2001' }));
+  const C7={ ...MS_CATS, [MS.SHELF_PRESET_KEY]:{ label:'Moja półka', kind:'playlist', temp:true, songs:songs(7) } };
+  ok(MS.resolvePreset(P, C7, MM.ALL_MODES, { ctx:'solo', shelf:7 }).disabled, '7 utworów → nadal nieaktywny');
+  const C8={ ...MS_CATS, [MS.SHELF_PRESET_KEY]:{ label:'Moja półka', kind:'playlist', temp:true, songs:songs(8) } };
+  const r=MS.resolvePreset(P, C8, MM.ALL_MODES, { ctx:'solo', shelf:8 });
+  eq([r.disabled, r.cats, r.modes, r.questions, r.sub], [undefined, [MS.SHELF_PRESET_KEY], ['music','abcd'], 10, '10 pyt · muzyka, ABCD'], '≥ 8 → 10 pytań, muzyka + ABCD z półki');
+  eq(MS.presetsFor(C8, MM.ALL_MODES, undefined, { ctx:'solo', shelf:8 }).map(p=>p.id).pop(), 'polka', 'presetsFor(env solo) zawiera gotowiec półki');
+  ok(!MS.presetsFor(C8).some(p=>p.id==='polka'), 'presetsFor bez env → bez gotowca półki (wsteczna zgodność)');
+});
+group('Dane: klucze kategorii UNIKALNE między grupami (decades/styles/playlists/lyrics/quiz) — wspólny ALL_CATS', ()=>{
+  const ROOT=join(dirname(fileURLToPath(import.meta.url)),'..');
+  const win={};
+  for(const f of ['categories.js','playlists.js','lyrics.js','questions.js']) new Function('window', readFileSync(join(ROOT,f),'utf8'))(win);
+  const C=win.CATEGORIES||{};
+  const idx=JSON.parse(readFileSync(join(ROOT,'data/quiz-index.json'),'utf8'));
+  const quizFiles=(Array.isArray(idx)?idx:idx.files).map(f=>f.replace(/^quiz-/,'').replace(/\.json$/,''));
+  const groups={ decades:Object.keys(C.decades||{}), styles:Object.keys(C.styles||{}), playlists:Object.keys(C.playlists||{}),
+    lyrics:Object.keys(C.lyrics||{}), quiz:[...new Set([...Object.keys(C.quiz||{}), ...quizFiles])] };
+  ok(groups.decades.length && groups.styles.length && groups.lyrics.length, 'dane wczytane');
+  const owner={}, dup=[];
+  for(const [g, keys] of Object.entries(groups)) for(const k of keys){ if(owner[k]) dup.push(`${k} (${owner[k]} + ${g})`); else owner[k]=g; }
+  eq(dup, [], 'brak kolizji kluczy między grupami');
+  ok(C.styles['rap-pl'] && !C.lyrics['rap-pl'] && C.lyrics['rap-pl-lektor'] && C.lyrics['rap-pl-lektor'].kind==='lyrics', 'rap-pl = styl; kategoria lektora pod rap-pl-lektor');
+  eq(C.lyrics['rap-pl-lektor'].label, 'rap PL — opisy', 'etykieta kategorii lektora odróżnia ją od stylu');
+  ok(!['polka-moja','polka-tmp','gust-stolu'].some(k=>owner[k]), 'klucze tymczasowe gustu (półka / stół) nie kolidują z danymi');
+  const all={ ...C.decades, ...C.styles, ...C.playlists, ...C.lyrics, ...C.quiz };
+  ok(modesFor('rap-pl', all).includes('music') && !modesFor('rap-pl', all).includes('lektor'), 'rap-pl w scalonym ALL_CATS gra muzykę (styl), nie lektora');
+  ok(dailyPool(all).includes('rap-pl'), 'Stacja dnia: rap-pl (styl) w puli dnia');
 });
 group('Nowy mecz: resolvePreset / presetsFor / presetMatches', ()=>{
   const hity=MS.resolvePreset(MS.PRESETS[0], MS_CATS);
@@ -2297,6 +2349,430 @@ group('EKSP. obroty: etapy tempa, mnożniki, płyta, MP', ()=>{
   eq(ev.perTeam.all.gained, 150, 'MP slowmo: trafienie 100 × 1.5');
   eq(evaluateAnswer({ ...g, mode:'fastmo' }, { track:'Hey Jude', artist:'Beatles' }).perTeam.all.gained, 120, 'MP fastmo: 100 × 1.2');
   eq(evaluateAnswer({ ...g, mode:'music' }, { track:'Hey Jude', artist:'Beatles' }).perTeam.all.gained, 100, 'MP muzyka bez zmian');
+});
+
+/* ===== „Twój gust" (etap 1): core/taste.js ===== */
+group('gust: trackKey — klucz utworu (norm + displayTitle), isTrackKey', ()=>{
+  eq(trackKey('The Beatles', 'Hey Jude'), 'beatles|hey jude', 'przedimek, małe litery');
+  eq(trackKey('Queen', 'Bohemian Rhapsody (2011 Remaster)'), trackKey('Queen', 'Bohemian Rhapsody'), 'remaster ≡ oryginał');
+  eq(trackKey('Queen', 'Bohemian Rhapsody - Remastered 2011'), trackKey('Queen', 'Bohemian Rhapsody'), '„ - Remastered" ≡ oryginał');
+  eq(trackKey('Myslovitz', 'Długość dźwięku samotności'), 'myslovitz|dlugosc dzwieku samotnosci', 'diakrytyki (ł → l)');
+  eq(trackKey('', 'X'), '', 'brak wykonawcy → pusty klucz');
+  eq(trackKey('A', '   '), '', 'pusty tytuł → pusty klucz');
+  ok(isTrackKey('queen|bohemian rhapsody') && !isTrackKey('<script>|x') && !isTrackKey('bez-kreski') && !isTrackKey(5), 'isTrackKey');
+});
+group('gust: sanitizeRating — pola, walidacja, ts', ()=>{
+  const now=1_000_000;
+  const r=sanitizeRating({ title:' Hey  Jude ', artist:'The Beatles', year:'1968-08-26', genre:'Rock', art:'https://x/a.jpg', cat:'60s', rating:2, source:'reveal', ts:500, trackKey:'cudzy|klucz', extra:'x' }, now);
+  eq(r, { trackKey:'beatles|hey jude', title:'Hey Jude', artist:'The Beatles', year:'1968', genre:'Rock', art:'https://x/a.jpg', cat:'60s', rating:2, source:'reveal', ts:500 }, 'pełna ocena (klucz liczony, rok 4 cyfry, bez obcych pól)');
+  eq(sanitizeRating({ title:'a', artist:'b', rating:0 }, now), null, 'rating 0 → null');
+  eq(sanitizeRating({ title:'a', artist:'b', rating:3 }, now), null, 'rating 3 → null');
+  eq(sanitizeRating(null, now), null, 'null → null');
+  const b=sanitizeRating({ title:'a', artist:'b', rating:-1, art:'javascript:alert(1)', cat:'x"><img', year:'zz', source:'?', ts:now+2*86400000 }, now);
+  eq([b.art, b.cat, b.year, b.source, b.ts], ['', '', '', 'swipe', now], 'złe art/cat/rok/source → bezpieczne; ts z przyszłości → teraz');
+  eq(sanitizeRating({ title:'a', artist:'b', rating:1, art:'http://x/a.jpg' }, now).art, '', 'okładka tylko https');
+  eq(sanitizeRating({ title:'x'.repeat(500), artist:'b', rating:1 }, now).title.length, 200, 'tytuł przycięty do 200');
+});
+group('gust: rate / toggleHeart / unrate (nagrobek) / ratingOf / tasteCounts / półka', ()=>{
+  let st={};
+  const hj={ track:'Hey Jude (Remastered 2015)', artist:'The Beatles', year:'1968', art:'https://x/1.jpg', genre:'Rock' };
+  const r1=rate(st, hj, 1, { source:'swipe', now:100 }); st=r1.store;
+  eq(r1.item.title, 'Hey Jude (Remastered 2015)', 'rate: tytuł z `track`');
+  eq(ratingOf(st, trackKey('The Beatles','Hey Jude')), 1, '👍 zapisane pod kluczem bez remasteru');
+  let t=toggleHeart(st, { title:'Hey Jude', artist:'The Beatles' }, { now:200 }); st=t.store;
+  ok(t.on && ratingOf(st, t.key)===2, '❤️ toggle: 👍 → ❤️');
+  eq(st[t.key].source, 'reveal', 'toggleHeart domyślnie source=reveal');
+  t=toggleHeart(st, { title:'Hey Jude', artist:'The Beatles' }, { now:300 }); st=t.store;
+  ok(!t.on && ratingOf(st, t.key)===0 && st[t.key].rating===0 && st[t.key].ts===300, '❤️ toggle 2×: zdjęte z półki → nagrobek z ts');
+  eq(activeRatings(st).length, 0, 'nagrobek nie liczy się jako ocena');
+  eq(unrate(st, t.key).changed, false, 'unrate nagrobka → bez zmian');
+  st=rate(st, { title:'B', artist:'Z', year:'1999' }, 2, { now:400 }).store;
+  st=rate(st, { title:'A', artist:'Y', year:'1975' }, 2, { now:500 }).store;
+  st=rate(st, { title:'C', artist:'X' }, -1, { now:600 }).store;
+  eq(tasteCounts(st), { total:3, hearts:2, up:0, down:1 }, 'liczniki');
+  eq(shelfItems(st,'recent').map(x=>x.title), ['A','B'], 'półka: ostatnio');
+  eq(shelfItems(st,'artist').map(x=>x.artist), ['Y','Z'], 'półka: wykonawca A→Z');
+  eq(shelfItems(st,'year').map(x=>x.year), ['1975','1999'], 'półka: rok rosnąco');
+  eq(rate({}, { title:'', artist:'x' }, 1).item, null, 'pusty tytuł → brak oceny');
+  const u=unrate(st, trackKey('Y','A'), { now:700 });
+  ok(u.changed && ratingOf(u.store, trackKey('Y','A'))===0, 'unrate → nagrobek');
+});
+group('gust: capStore — limit ocen (❤️ chronione najdłużej), parseStore', ()=>{
+  let st={};
+  st=rate(st, { title:'h1', artist:'a' }, 2, { now:1 }).store;
+  for(let i=0;i<5;i++) st=rate(st, { title:'u'+i, artist:'a' }, 1, { now:10+i }).store;
+  const c=capStore(st, 3);
+  eq(activeRatings(c).map(x=>x.title).sort(), ['h1','u3','u4'], 'ponad limit → najpierw najstarsze 👍, ❤️ zostaje');
+  ok(TASTE_MAX===2000, 'TASTE_MAX = 2000');
+  const raw=JSON.stringify({ ...st, 'zly': { rating:7 }, 'a|tomb': { rating:0, ts:5, syn:true }, [trackKey('a','h1')]: { ...st[trackKey('a','h1')], syn:true } });
+  const p=parseStore(raw);
+  ok(p['a|tomb'] && p['a|tomb'].rating===0 && p['a|tomb'].syn, 'parseStore: nagrobek + syn zachowane');
+  ok(!p.zly && p[trackKey('a','h1')].syn===true, 'parseStore: śmieci odrzucone, syn zachowany');
+  eq(parseStore('{zepsuty'), {}, 'zepsuty JSON → {}');
+  eq(parseStore('[1,2]'), {}, 'tablica → {}');
+});
+group('gust: mergeTaste — last-write-wins, push/del, usunięte na innym urządzeniu', ()=>{
+  const now=10_000;
+  const S=(title, rating, ts)=>({ title, artist:'X', rating, ts });
+  const k=t=>trackKey('X', t);
+  let local={};
+  local=rate(local, S('newer-local'), 1, { now:500 }).store;          // lokalnie nowsze → push
+  local=rate(local, S('older-local'), 1, { now:100 }).store;          // serwer nowszy → nadpisz
+  local=rate(local, S('only-local'), 2, { now:300 }).store;           // nie ma na serwerze, bez syn → push
+  local={ ...local, [k('synced-gone')]: { ...sanitizeRating(S('synced-gone', 1, 50), now), syn:true } };   // syn + brak na serwerze → usunięte gdzie indziej
+  local={ ...local, [k('tomb')]: { trackKey:k('tomb'), rating:0, ts:900 } };              // nagrobek nowszy niż serwer → del
+  local={ ...local, [k('tomb-gone')]: { trackKey:k('tomb-gone'), rating:0, ts:900 } };    // nagrobek, serwer nie ma → znika
+  const server=[ S('newer-local', -1, 200), S('older-local', 2, 400), S('tomb', 2, 100), S('server-only', 1, 50), { junk:true } ];
+  const m=mergeTaste(local, server, now);
+  eq(m.store[k('newer-local')].rating, 1, 'lokalnie nowsza ocena zostaje');
+  eq(m.store[k('older-local')].rating, 2, 'serwer nowszy → nadpisuje');
+  ok(m.store[k('older-local')].syn, 'z serwera → syn');
+  ok(m.store[k('server-only')] && m.store[k('server-only')].syn, 'tylko na serwerze → dociągnięte');
+  ok(!m.store[k('synced-gone')], 'syn + brak na serwerze → usunięte (skasowane na innym urządzeniu)');
+  ok(!m.store[k('tomb-gone')], 'nagrobek bez wpisu na serwerze → znika');
+  eq(m.push.map(x=>x.title).sort(), ['newer-local','only-local'], 'push: lokalnie nowsze + niewysłane');
+  ok(m.push.every(x=>!('syn' in x)), 'push bez flagi syn');
+  eq(m.del, [k('tomb')], 'del: nagrobek nowszy niż serwer');
+  const ms=markSynced(m.store, [m.store[k('newer-local')], { trackKey:k('only-local'), ts:1 }]);
+  ok(ms[k('newer-local')].syn && !ms[k('only-local')].syn, 'markSynced: tylko gdy ts się zgadza (nie zmienione w locie)');
+  ok(!dropTombs(m.store, [k('tomb')])[k('tomb')], 'dropTombs: nagrobek po DELETE znika');
+  ok(dropTombs(m.store, [k('newer-local')])[k('newer-local')], 'dropTombs nie rusza aktywnej oceny');
+  eq(batches([1,2,3,4,5], 2), [[1,2],[3,4],[5]], 'batches');
+});
+group('gust: grupy gatunków, dekady, kategorie', ()=>{
+  eq(['Pop','Hard Rock','Heavy Metal','Hip-Hop/Rap','R&B/Soul','Dance','Electronic','Alternative','Soundtrack','',undefined].map(genreGroup),
+    ['pop','rock','metal','hiphop','hiphop','dance','dance','rock','inne','',''], 'genreGroup (iTunes primaryGenreName)');
+  eq([['rap-pl','rap PL'],['disco-polo','disco polo'],['rock-world','rock świat'],['metal','metal'],['hits-now','hity dziś'],['dz-film','filmy i gry'],['80s','lata 80'],['unplugged','akustycznie / unplugged']].map(([k,l])=>catGroup(k,l)),
+    ['hiphop','dance','rock','metal','pop','inne','','rock'], 'catGroup z klucza/etykiety');
+  eq(['1984','1984-05-01','2021','1899','',null,'abc'].map(decadeOf), ['1980','1980','2020','','','',''], 'decadeOf');
+});
+// fixture: 7 dekad × artyści, style z częścią tych samych artystów, playlista z utworami
+const TASTE_CATS={
+  '60s':{ label:'lata 60', range:'1960–69', artists:['A60','B60','C60','D60'] },
+  '70s':{ label:'lata 70', range:'1970–79', artists:['A70','B70','C70','D70'] },
+  '80s':{ label:'lata 80', range:'1980–89', artists:['A80','B80','C80','D80','E80'] },
+  '90s':{ label:'lata 90', range:'1990–99', artists:['A90','B90','C90','D90'] },
+  '00s':{ label:'lata 2000', range:'2000–09', artists:['A00','B00','C00','D00'] },
+  '10s':{ label:'lata 2010', range:'2010–19', artists:['A10','B10','C10','D10'] },
+  '20s':{ label:'lata 2020', range:'2020–', artists:['A20','B20','C20','D20'] },
+  'rock-world':{ label:'rock świat', artists:['A60','A70','A80','B80','A90','A00','A10'] },
+  'pop-world':{ label:'pop świat', artists:['B60','B70','C80','B90','B00','B10','A20'] },
+  'metal':{ label:'metal', artists:['C70','D80','C90'] },
+  'rap-pl':{ label:'rap PL', artists:['C00','C10','B20','C20'] },
+  'dance-90':{ label:'eurodance', artists:['D90','E80','D00','D10','D20'] },
+  'dz-top':{ label:'światowe hity', songs:[{ title:'Hit One', artist:'Solo Star', year:1985 }, { title:'Hit Two', artist:'Duo', year:2015 }, { title:'Akustyk', artist:'Duo', match:'acoustic' }] },
+  'quizik':{ kind:'quiz', label:'quiz', questions:[] },
+};
+group('gust: tasteCandidates — wykonawcy (dekada × grupa z krzyżowania kategorii) + utwory playlist', ()=>{
+  const pool=tasteCandidates(TASTE_CATS);
+  const a80=pool.find(c=>c.artist==='A80');
+  eq([a80.cat, a80.decade, a80.group], ['80s','1980','rock'], 'artysta dekady dostaje grupę ze stylu');
+  const d20=pool.find(c=>c.artist==='D20');
+  eq([d20.decade, d20.group], ['2020','dance'], 'otwarta dekada „2020–" → 2020');
+  eq(pool.filter(c=>c.artist==='A80').length, 1, 'bez duplikatów wykonawcy (dekada + styl)');
+  const hit=pool.find(c=>c.title==='Hit One');
+  eq([hit.decade, hit.group, hit.year], ['1980','pop','1985'], 'utwór playlisty: dekada z roku, grupa z kategorii');
+  ok(!pool.some(c=>c.title==='Akustyk'), 'utwory z `match` (wersje akustyczne) pominięte');
+  ok(!pool.some(c=>c.cat==='quizik'), 'kategorie quiz/lyrics pominięte');
+  eq(planCat(a80, TASTE_CATS), { artists:['A80'], range:'1980–89' }, 'planCat: wykonawca + zakres dekady');
+  eq(planCat(hit, TASTE_CATS), { songs:[{ title:'Hit One', artist:'Solo Star', year:'1985' }] }, 'planCat: utwór playlisty');
+});
+group('gust: pickTasteSession — 20 różnorodnych (pokrycie dekad × gatunków), adaptacja do profilu, bez ocenionych', ()=>{
+  const pool=tasteCandidates(TASTE_CATS);
+  const seeded=(seed)=>{ let s=seed; return ()=>{ s=(s*16807)%2147483647; return (s-1)/2147483646; }; };
+  const plan=pickTasteSession(pool, {}, seeded(7));
+  eq(plan.length, Math.min(pool.length, SESSION_N+SESSION_SPARE), 'plan = n + zapas (ograniczony pulą)');
+  const first=plan.slice(0, SESSION_N);
+  eq(new Set(first.map(c=>c.decade).filter(Boolean)).size, 7, 'pierwsze 20: wszystkie 7 dekad');
+  eq(new Set(first.map(c=>c.group).filter(Boolean)).size, 5, 'pierwsze 20: wszystkie 5 grup gatunków');
+  eq(new Set(first.map(c=>c.artist)).size, first.length, 'bez powtórki wykonawcy w sesji');
+  const firstTen=plan.slice(0, 7);
+  eq(new Set(firstTen.map(c=>c.decade)).size, 7, 'pierwsze 7 kart = 7 różnych dekad (różnorodność od startu)');
+  eq(JSON.stringify(pickTasteSession(pool, {}, seeded(7))), JSON.stringify(plan), 'deterministyczny przy tym samym rnd');
+  // profil „zalany" latami 80 i rockiem → sesja odsuwa się od nich
+  let st={};
+  for(let i=0;i<30;i++) st=rate(st, { title:'R'+i, artist:'Rocker'+i, year:'198'+(i%10), genre:'Rock' }, 1, { now:i+1 }).store;
+  let n80=0, nRock=0, b80=0, bRock=0;
+  for(let sd=1; sd<=20; sd++){
+    const p=pickTasteSession(pool, st, seeded(sd)).slice(0, 10), b=pickTasteSession(pool, {}, seeded(sd)).slice(0, 10);
+    n80+=p.filter(c=>c.decade==='1980').length; nRock+=p.filter(c=>c.group==='rock').length;
+    b80+=b.filter(c=>c.decade==='1980').length; bRock+=b.filter(c=>c.group==='rock').length;
+  }
+  ok(n80<b80, `adaptacja: mniej lat 80 przy profilu pełnym lat 80 (${n80} < ${b80})`);
+  ok(nRock<bRock, `adaptacja: mniej rocka przy profilu pełnym rocka (${nRock} < ${bRock})`);
+  // utwór playlisty już oceniony → nie trafia do planu
+  const rated=rate({}, { title:'Hit One', artist:'Solo Star' }, 1).store;
+  ok(!pickTasteSession(pool, rated, seeded(3), { n:200, spare:0 }).some(c=>c.title==='Hit One'), 'oceniony utwór playlisty pominięty');
+  eq(pickTasteSession([], {}, seeded(1)), [], 'pusta pula → pusty plan');
+  // seen dla resolveTrack: ocenione tytuły tego wykonawcy
+  const sn=seenForArtist(rate({}, { title:'Song (Remastered)', artist:'The Band' }, 1).store, 'the band');
+  ok(sn.has('song'), 'seenForArtist: tytuły ocenione u wykonawcy (norm)');
+});
+await (async ()=>{
+  console.log('• gust: normalize() — gatunek iTunes (primaryGenreName) w rozwiązanym utworze; Deezer → pusty');
+  const it=async()=>[{ trackName:'Song', artistName:'Band', previewUrl:'p', releaseDate:'1985-01-01', primaryGenreName:'Rock' }];
+  const r=await resolveTrack({ cat:{ artists:['Band'] }, seen:new Set(), recent:[], itunes:it });
+  eq(r.genre, 'Rock', 'artysta: genre z primaryGenreName');
+  const dz=async()=>[{ trackName:'Song', artistName:'Band', previewUrl:'p', releaseDate:'' }];
+  eq((await resolveTrack({ cat:{ artists:['Band'] }, seen:new Set(), recent:[], itunes:dz })).genre, '', 'bez gatunku (Deezer) → ""');
+  const pl=await resolveTrack({ cat:{ songs:[{ title:'Song', artist:'Band' }] }, seen:new Set(), itunes:it });
+  eq(pl.genre, 'Rock', 'utwór playlisty: genre z dopasowanego wyniku');
+})();
+
+/* ===== „Twój gust" (etap 2): core/tasteProfile.js — wektory, PL, „co znasz", pewność, archetypy, tekst ===== */
+const TP_CATS={
+  '80s':{ label:'lata 80', range:'1980–89', artists:['Maanam','Madonna'] },
+  '20s':{ label:'lata 2020', range:'2020–', artists:['sanah'] },
+  'rock-pl':{ label:'rock PL', artists:['Kult','Dżem','Myslovitz'] },
+  'disco-polo':{ label:'disco polo', artists:['Akcent'] },
+  'rock-world':{ label:'rock świat', artists:['Queen'] },
+  'metal':{ label:'metal', artists:['Metallica'] },
+  'pl:abc':{ label:'Moja playlista', kind:'playlist', songs:[{ title:'X', artist:'Foreign' }] },
+};
+// fabryka ocen: n ocen danego rodzaju (różne tytuły), ts rosnący
+let tpTs=1;
+const tpR=(n, o)=>Array.from({ length:n }, (_,i)=>({ trackKey:'k'+(tpTs)+'|t', title:'T'+(tpTs++), artist:o.artist||'A'+tpTs, year:o.year||'', genre:o.genre||'', cat:o.cat||'', rating:o.rating||1, ts:tpTs }));
+group('gust2: profileGenre (iTunes EN/PL → 9 grup) + catProfileGenre + dekady kategorii', ()=>{
+  const m={ 'Pop':'pop', 'K-Pop':'pop', 'Rock':'rock', 'Hard Rock':'rock', 'Blues':'rock', 'Hip-Hop/Rap':'hiphop', 'Rap':'hiphop',
+    'Dance':'dance', 'Electronic':'dance', 'Muzyka elektroniczna':'dance', 'House':'dance', 'Disco':'dance', 'R&B/Soul':'rnb', 'Soul':'rnb', 'Funk':'rnb',
+    'Alternative':'alt', 'Muzyka alternatywna':'alt', 'Indie Rock':'alt', 'Punk':'alt', 'Metal':'metal', 'Heavy Metal':'metal',
+    'Disco Polo':'plscena', 'Muzyka biesiadna':'plscena', 'Poezja śpiewana':'plscena', 'Singer/Songwriter':'pop', 'Jazz':'inne', 'Soundtrack':'inne', '':'' };
+  for(const [g,e] of Object.entries(m)) eq(profileGenre(g), e, `profileGenre(${JSON.stringify(g)})`);
+  eq(PROFILE_GENRES.length, 9, '9 grup gatunków (z „inne")');
+  eq(['rap-pl','disco-polo','rock-pl','dance-90','hits-now','evergreen-pl','metal','unplugged','80s'].map(k=>catProfileGenre(k, k==='dance-90'?'eurodance':'')),
+    ['hiphop','plscena','rock','dance','pop','pop','metal','rock',''], 'catProfileGenre: style categories.js; dekada → ""');
+  eq([catDecadeOf({ range:'1980–89' }), catDecadeOf({ range:'2020–' }), catDecadeOf({ range:'1960–99' }), catDecadeOf(null)], ['1980','2020','',''], 'dekada kategorii (≤10 lat / otwarta), szeroki zakres → ""');
+  eq([itemDecade({ year:'1957' }), itemDecade({ year:'1994' }), itemDecade({ year:'', cat:'80s' }, TP_CATS), itemDecade({ year:'abc' })], ['1960','1990','1980',''], 'itemDecade: <1960 → 60., rok > kategoria');
+});
+group('gust2: PL vs świat — kategoria PL, polskie znaki, znani wykonawcy PL, gatunek', ()=>{
+  const pls=plArtists(TP_CATS);
+  ok(pls.has('kult') && pls.has('akcent') && !pls.has('queen') && !pls.has('madonna') && !pls.has('foreign'), 'plArtists: z kategorii PL (rock-pl, disco-polo), bez playlist');
+  ok(isPlCat('rock-pl', TP_CATS['rock-pl']) && isPlCat('disco-polo', {}) && !isPlCat('pl:abc', TP_CATS['pl:abc']) && !isPlCat('rock-world', TP_CATS['rock-world']), 'isPlCat');
+  const o={ cats:TP_CATS, plSet:pls };
+  ok(isPolish({ artist:'Kult', cat:'80s' }, o), 'znany wykonawca PL (z rock-pl) w kategorii dekady');
+  ok(isPolish({ artist:'Zespół Nieznany' }, o), 'polskie znaki w wykonawcy');
+  ok(!isPolish({ artist:'Ramón Ayala' }, o), '„ó" samo nie wystarcza (hiszpański)');
+  ok(isPolish({ artist:'X', cat:'rock-pl' }, o) && isPolish({ artist:'Y', genre:'Disco Polo' }, o), 'kategoria PL / gatunek polskiej sceny');
+  ok(!isPolish({ artist:'Madonna', cat:'80s' }, o) && !isPolish(null, o), 'świat');
+});
+group('gust2: pctRound (suma 100) + pewność profilu + top artyści z półki', ()=>{
+  eq(pctRound([1/3, 1/3, 1/3]), [34, 33, 33], 'największe reszty → suma 100');
+  eq(pctRound([0, 0]), [0, 0], 'zera → zera');
+  eq(pctRound([0.5, 0.25, 0.25, 0]).reduce((a,b)=>a+b, 0), 100, 'suma 100');
+  eq([confidenceOf(0), confidenceOf(CONF_MID-1), confidenceOf(CONF_MID), confidenceOf(40), confidenceOf(CONF_HIGH)], ['low','low','mid','mid','high'], '<10 niska, 10–40 średnia, >40 wysoka');
+  const ta=topArtists([
+    { artist:'B', rating:2, ts:1 }, { artist:'a', rating:2, ts:2 }, { artist:'A', rating:2, ts:3 }, { artist:'C', rating:1, ts:9 },
+    { artist:'D', rating:2, ts:8 }, { artist:'E', rating:2, ts:7 }, { artist:'F', rating:2, ts:6 }, { artist:'G', rating:2, ts:5 } ], 5);
+  eq(ta.map(x=>x.artist+':'+x.n), ['A:2','D:1','E:1','F:1','G:1'], 'top 5: liczba ❤️ (bez 👍), remis → nowsze; nazwa z najnowszej oceny');
+});
+group('gust2: buildTasteProfile — wektory ważone ❤️=2/👍=1/👎=-1, udziały, PL, top', ()=>{
+  const r=[ ...tpR(4, { year:'1985', genre:'Rock', rating:2, artist:'Kult' }), ...tpR(2, { year:'1995', genre:'Pop', rating:1, artist:'Madonna' }),
+    ...tpR(2, { year:'1995', genre:'Pop', rating:-1, artist:'Madonna' }), ...tpR(3, { year:'2001', genre:'Hip-Hop/Rap', rating:-1, artist:'Eminem' }) ];
+  const p=buildTasteProfile(r, { cats:TP_CATS });
+  eq([p.total, p.hearts, p.up, p.down, p.liked], [11, 4, 2, 5, 6], 'liczniki');
+  eq(p.confidence, 'mid', '11 ocen → średnia pewność');
+  const d=k=>p.decades.find(x=>x.key===k), g=k=>p.genres.find(x=>x.key===k);
+  eq([d('1980').score, d('1990').score, d('2000').score], [8, 0, -3], 'wynik dekad: 4×❤️=8, 2×👍+2×👎=0, 3×👎=-3');
+  eq([d('1980').pct, d('1990').pct, d('2000').pct], [100, 0, 0], 'udziały: ujemne/zerowe kubełki → 0%');
+  eq(d('2000').n, 3, 'n = liczba ocen w kubełku (także 👎)');
+  eq(g('rock').pct, 100, 'gatunek: rock 100%');
+  eq(p.decades.map(x=>x.key), DECADES, 'wektor dekad: stała kolejność 60.…2020');
+  eq(p.topDecade.key+'|'+p.topGenre.key, '1980|rock', 'top dekada / gatunek');
+  eq([p.pl.pct, p.pl.worldPct], [80, 20], 'PL: waga polubień (Kult 4×2=8) / (8+2) = 80%');
+  eq(p.topArtists.map(x=>x.artist), ['Kult'], 'top artyści tylko z ❤️');
+  eq(p.archetype.id, 'polska-szkola', 'archetyp: PL ≥ 70% → Polska szkoła');
+  // magazyn (obiekt) z nagrobkiem też działa
+  const st={ 'a|b':{ trackKey:'a|b', title:'b', artist:'a', rating:2, year:'1970', genre:'Rock', ts:1 }, 'c|d':{ trackKey:'c|d', rating:0, ts:2 } };
+  eq(buildTasteProfile(st).total, 1, 'magazyn: nagrobki pominięte');
+  const e=buildTasteProfile({});
+  eq([e.total, e.confidence, e.archetype.id, e.topDecade, e.pl.pct], [0, 'low', 'poznajemy', null, 0], 'pusty profil → niska pewność, „Jeszcze cię poznajemy"');
+});
+group('gust2: archetypy — deterministyczne reguły (kolejność = priorytet), niska pewność → „Jeszcze cię poznajemy"', ()=>{
+  const ids=ARCHETYPES.map(a=>a.id);
+  ok(ids.length>=12 && ids.length<=16, '12–16 archetypów: '+ids.length);
+  eq(new Set(ids).size, ids.length, 'unikalne id');
+  ok(ARCHETYPES.every(a=>a.name && a.desc && a.emoji && a.when && typeof a.test==='function' && typeof a.why==='function'), 'każdy: nazwa, opis, emoji, warunek');
+  ok(ARCHETYPES.every(a=>!/kurw|chuj|pierd|jeb|debil|idiot|głup/i.test(a.name+a.desc)), 'bez wulgaryzmów / obraźliwych słów');
+  eq(ARCHETYPES[ARCHETYPES.length-1].id, 'zloty-srodek', 'fallback na końcu');
+  const prof=(spec)=>buildTasteProfile(spec.flatMap(([n,o])=>tpR(n, o)), { cats:TP_CATS });
+  const W={ artist:'Madonna' };
+  const cases=[
+    ['biesiada', [[12, { ...W, genre:'Disco Polo', year:'1997' }], [14, { ...W, genre:'Pop', year:'2015' }]]],
+    ['metal', [[8, { ...W, genre:'Metal', year:'1986' }], [10, { ...W, genre:'Pop', year:'2015' }]]],
+    ['hiphop', [[9, { ...W, genre:'Hip-Hop/Rap', year:'2015' }], [8, { ...W, genre:'Pop', year:'2016' }]]],
+    ['parkiet', [[6, { ...W, genre:'Dance', year:'1994' }], [10, { ...W, genre:'Pop', year:'2015' }]]],
+    ['groove', [[6, { ...W, genre:'R&B/Soul', year:'1999' }], [10, { ...W, genre:'Pop', year:'2015' }]]],
+    ['indie', [[6, { ...W, genre:'Alternative', year:'2008' }], [10, { ...W, genre:'Pop', year:'2015' }]]],
+    ['rock', [[9, { ...W, genre:'Rock', year:'1975' }], [8, { ...W, genre:'Pop', year:'1972' }]]],
+    ['sentymentalny', [[12, { ...W, genre:'Pop', year:'1968' }]]],
+    ['ejtis', [[12, { ...W, genre:'Pop', year:'1984' }], [1, { ...W, genre:'Rock', year:'2012', rating:-1 }]]],
+    ['dziecko90', [[12, { ...W, genre:'Pop', year:'1996' }]]],
+    ['mp3', [[12, { ...W, genre:'Pop', year:'2004' }]]],
+    ['lowca', [[12, { ...W, genre:'Pop', year:'2021' }]]],
+    ['pop', [[5, { ...W, genre:'Pop', year:'1975' }], [4, { ...W, genre:'Pop', year:'2004' }], [3, { ...W, genre:'Jazz', year:'1999' }]]],
+    ['zloty-srodek', [[3, { ...W, genre:'Jazz', year:'1975' }], [3, { ...W, genre:'Soundtrack', year:'2004' }], [3, { ...W, genre:'Country', year:'1999' }], [3, { ...W, genre:'Pop', year:'2012' }]]],
+    ['wszystkozerca', [[3, { ...W, genre:'Rock', year:'1975' }], [3, { ...W, genre:'Pop', year:'1985' }], [3, { ...W, genre:'Dance', year:'1995' }], [3, { ...W, genre:'Hip-Hop/Rap', year:'2005' }]]],
+    ['polska-szkola', [[12, { artist:'Kult', genre:'Rock', year:'1990' }], [2, { ...W, genre:'Pop', year:'1990' }]]],
+  ];
+  for(const [id, spec] of cases){ const p=prof(spec); eq(p.archetype.id, id, `archetyp ${id} (why: ${p.archetype.why})`); }
+  eq(new Set(cases.map(c=>c[0])).size, ARCHETYPES.length, 'każdy archetyp osiągalny (przypadek testowy na każdy)');
+  // niska pewność: < 10 ocen → poznajemy (nawet przy wyraźnym gatunku); brak polubień → poznajemy
+  const low=prof([[9, { ...W, genre:'Metal', year:'1986' }]]);
+  eq([low.confidence, low.archetype.id, low.archetype.why], ['low', LOW_ARCHETYPE.id, 'brakuje jeszcze 1 oceny'], '9 ocen → poznajemy + ile brakuje');
+  eq(prof([[12, { ...W, genre:'Metal', year:'1986', rating:-1 }]]).archetype.id, 'poznajemy', 'same 👎 → poznajemy');
+  // determinizm: ta sama lista w innej kolejności → ten sam archetyp
+  const spec=[[5, { ...W, genre:'Rock', year:'1975' }], [5, { ...W, genre:'Pop', year:'1995' }]];
+  const ra=spec.flatMap(([n,o])=>tpR(n, o));
+  eq(buildTasteProfile(ra.slice().reverse(), { cats:TP_CATS }).archetype.id, buildTasteProfile(ra, { cats:TP_CATS }).archetype.id, 'kolejność ocen nie zmienia archetypu');
+  eq(pickArchetype(null).id, 'poznajemy', 'pickArchetype(null) → poznajemy');
+});
+group('gust2: „co znasz" (byCat z gry) vs „co lubisz"', ()=>{
+  const k=knownProfile({ '80s':{ n:10, ok:8 }, 'rock-pl':{ n:6, ok:3 }, 'metal':{ n:2, ok:2 }, 'pl:abc':{ n:5, ok:5 }, 'nieznana':{ n:9, ok:1 }, 'zle':{ n:'x' }, '20s':{ n:4, ok:9 } }, TP_CATS);
+  eq(k.decades.map(x=>x.key+':'+x.pct), ['1980:80', '2020:100'], 'dekady: trafienia % (ok przycięte do n)');
+  eq(k.genres.map(x=>x.key+':'+x.pct), ['rock:50', 'metal:100'], 'gatunki z kategorii-stylów');
+  eq(k.total, 22, 'suma pytań w rozpoznanych kategoriach (bez playlist / nieznanych)');
+  const p=buildTasteProfile(tpR(12, { year:'1985', genre:'Rock', artist:'Madonna' }), { cats:TP_CATS, byCat:{ '80s':{ n:10, ok:8 }, 'rock-pl':{ n:6, ok:3 }, 'metal':{ n:2, ok:2 } } });
+  ok(p.known && p.compare, 'profil z byCat → known + compare');
+  eq(p.compare.decades.map(x=>`${x.key}:${x.liked}/${x.known}`), ['1980:100/80'], 'porównanie dekad: lubisz % vs znasz % (min. 5 pytań)');
+  eq(p.compare.genres.map(x=>x.key), ['rock'], 'metal (2 pytania) pominięty — za mało danych');
+  eq(p.compare.best.key, '1980', 'najlepiej znane');
+  eq(buildTasteProfile(tpR(3, { year:'1985' }), { byCat:{} }).compare, null, 'brak danych gry → brak sekcji');
+  eq(compareKnownLiked(p, { decades:[{ key:'1980', n:2, pct:50 }], genres:[] }), null, 'za mało pytań → null');
+});
+group('gust2: shareText — archetyp, top dekady/gatunki, top 3 artystów, link; ksywa tylko opcjonalnie', ()=>{
+  const p=buildTasteProfile([ ...tpR(10, { year:'1996', genre:'Pop', rating:2, artist:'Britney' }), ...tpR(2, { year:'1985', genre:'Rock', rating:2, artist:'Kult' }) ], { cats:TP_CATS });
+  const t=shareText(p, { url:'https://x.test/' });
+  ok(/Mój gust muzyczny — 💿 Dziecko lat 90\./.test(t), 'nagłówek z archetypem');
+  ok(/Dekady: lata 90\. \d+% · lata 80\. \d+%/.test(t) && /Gatunki: pop \d+% · rock \d+%/.test(t), 'top dekady i gatunki z %');
+  ok(/Na mojej półce: Britney, Kult/.test(t), 'top artyści');
+  ok(/https:\/\/x\.test\//.test(t) && /Uszy & Muzk/.test(t), 'link + nazwa aplikacji');
+  ok(!/gracz|@/.test(t), 'bez ksywy domyślnie');
+  ok(/Gust muzyczny: Zbyszek/.test(shareText(p, { handle:'Zbyszek' })), 'ksywa na życzenie');
+  const low=shareText(buildTasteProfile([]));
+  ok(/Jeszcze cię poznajemy/.test(low) && !/Dekady/.test(low), 'niska pewność: bez wektorów');
+});
+group('gust2: widoczność gustu — tylko friends|hidden', ()=>{
+  eq(TASTE_VISIBILITY, ['friends','hidden'], 'wartości');
+  ok(isTasteVisibility('friends') && isTasteVisibility('hidden') && !isTasteVisibility('public') && !isTasteVisibility('') && !isTasteVisibility(null), 'walidacja');
+});
+/* ===== „Twój gust" (etap 3): core/tasteCompare.js — zgodność, listy, werdykt, półki do gry ===== */
+let tcTs=1;
+const TC=(title, artist, year, genre, rating)=>sanitizeRating({ title, artist, year, genre, rating, ts:tcTs++ });
+// n ocen: utwory „S<i>" wykonawcy `artist`, rok/gatunek wspólne
+const TCN=(n, { artist='Art', year='1985', genre='Rock', rating=1, pre='S' }={})=>Array.from({ length:n }, (_,i)=>TC(pre+i, artist, year, genre, rating));
+group('gust3: cosinus, werdykty, opis składowych', ()=>{
+  eq(cosine([1,0],[1,0]), 1, 'identyczne → 1');
+  eq(cosine([1,0],[0,1]), 0, 'rozłączne → 0');
+  eq(cosine([0,0],[1,0]), null, 'pusty wektor → null (brak danych)');
+  ok(Math.abs(cosine([0.5,0.5],[1,0])-Math.SQRT1_2)<1e-9, 'kąt 45° → √2/2');
+  eq([100,85,84,70,55,40,25,24,0].map(x=>verdictFor(x).name), ['Bratnie dusze','Bratnie dusze','Wspólny parkiet','Wspólny parkiet','Zgrany duet',
+    'Lubicie się mimo wszystko','Różne stacje, jedna częstotliwość','Przeciwieństwa się przyciągają','Przeciwieństwa się przyciągają'], 'przedziały werdyktów');
+  ok(VERDICTS.every(v=>v.name && v.desc && v.emoji && !/głup|bezgust|beznadz|okropn|fataln/i.test(v.name+v.desc)), 'werdykty bez obrażania');
+  eq(explainParts({ genres:82, decades:64, common:12 }), 'gatunki 82% · dekady 64% · wspólne utwory 12', 'opis składowych');
+  eq(explainParts({ genres:null, decades:50, common:0 }), 'dekady 50% · wspólne utwory 0', 'brak wektora gatunków → pominięty');
+});
+group('gust3: compareTaste — identyczne gusty, przeciwne gusty, za mało danych', ()=>{
+  const mine=TCN(20, { rating:2 });
+  const same=compareTaste(mine, mine.map(x=>({ ...x })));
+  ok(same.enough, 'oba po ≥ '+COMPARE_MIN+' ocen → enough');
+  eq([same.score, same.parts.genres, same.parts.decades, same.parts.common], [100, 100, 100, 20], 'identyczne: 100%, składowe 100%, 20 wspólnych');
+  eq(same.verdict.name, 'Bratnie dusze', 'werdykt dla 100%');
+  eq(same.recs.length, 0, 'brak rekomendacji (wszystko ocenione)');
+  eq(same.shared.length, 20, 'wspólne ulubione (limit listy 30)');
+  const other=TCN(20, { artist:'Rap', year:'2015', genre:'Hip-Hop/Rap', rating:2, pre:'R' });
+  const diff=compareTaste(mine, other);
+  eq([diff.score, diff.parts.genres, diff.parts.decades, diff.parts.common], [0, 0, 0, 0], 'przeciwne gusty i 0 wspólnych → 0%');
+  eq(diff.verdict.name, 'Przeciwieństwa się przyciągają', 'werdykt dla 0%');
+  eq(diff.diffs.map(d=>d.kind+':'+d.key+':'+d.me+'/'+d.them), ['genre:rock:100/0', 'genre:hiphop:0/100', 'decade:1980:100/0'], 'różnicie się w: top 3 rozbieżności');
+  const few=compareTaste(TCN(5), mine);
+  ok(!few.enough && few.score===null && few.verdict===null, 'mniej niż '+COMPARE_MIN+' ocen u mnie → za mało danych');
+  eq([few.need.me, few.need.them], [COMPARE_MIN-5, 0], 'ile brakuje po każdej stronie');
+  ok(few.explain==='' && few.diffs.length===0, 'za mało danych: bez składowych i różnic');
+  eq(few.recs.length, 15, 'rekomendacje liczone mimo „za mało danych" (15 nieocenionych przeze mnie)');
+  const onlyDown=compareTaste(TCN(12, { rating:-1 }), mine);
+  ok(!onlyDown.enough && !onlyDown.need.likedMe, 'same 👎 (zero polubień) → za mało danych');
+});
+group('gust3: compareTaste — wzór 0.6 × wektory + 0.4 × wspólne (Jaccard z wygładzeniem)', ()=>{
+  // ten sam profil wektorów (rock, 80.), ale RÓŻNE utwory → wektory 100%, wspólne 0
+  const a=TCN(40, { rating:1, pre:'A' }), b=TCN(40, { rating:1, pre:'B' });
+  const r=compareTaste(a, b);
+  eq([r.parts.vector, r.parts.common], [100, 0], 'wektory 100%, 0 wspólnych');
+  // union=80 → w=80/92; common = w*0 + (1-w)*1 = 12/92 → 0.6 + 0.4*0.1304 = 0.652
+  eq(r.score, 65, 'wynik = round(100 × (0.6 + 0.4 × (1−w)))');
+  // małe zbiory: wygładzenie ciągnie składową „wspólne" ku podobieństwu wektorów
+  const s=compareTaste(TCN(10, { pre:'A' }), TCN(10, { pre:'B' }));
+  ok(s.score>r.score, 'mniejsze zbiory bez wspólnych → wyższy wynik (wygładzenie) — '+s.score+' > '+r.score);
+  // część wspólnych: 12 wspólnych z 40 → J = 12/68 ≈ 0.176 → min(1, J/0.3)
+  const c=compareTaste([...TCN(28, { pre:'A' }), ...TCN(12, { pre:'X' })], [...TCN(28, { pre:'B' }), ...TCN(12, { pre:'X' })]);
+  eq(c.parts.common, 12, '12 wspólnych');
+  const J=12/68, w=68/(68+12), exp=Math.round(100*(0.6+0.4*(w*Math.min(1, J/JACCARD_FULL)+(1-w))));
+  eq(c.score, exp, 'wynik zgodny ze wzorem ('+exp+')');
+  ok(c.score>r.score, 'wspólne utwory podnoszą wynik');
+  ok(/^gatunki 100% · dekady 100% · wspólne utwory 12$/.test(c.explain), 'wyjaśnienie: '+c.explain);
+  for(const x of [r, s, c]) ok(x.score>=0 && x.score<=100, 'wynik w 0–100');
+});
+group('gust3: wspólne ulubione i rekomendacje (sortowanie, nieocenione)', ()=>{
+  const mine=[TC('Wspólna', 'Kult', '1987', 'Rock', 2), TC('Ja lubię', 'Kult', '1990', 'Rock', 1), TC('Nie lubię', 'Doda', '2005', 'Pop', -1), TC('Pół', 'Maanam', '1984', 'Rock', 1)];
+  const theirs=[TC('Wspólna', 'Kult', '1987', 'Rock', 2), TC('Pół', 'Maanam', '1984', 'Rock', 2), TC('Nie lubię', 'Doda', '2005', 'Pop', 2),
+    TC('Polecam 👍', 'Abba', '1976', 'Pop', 1), TC('Polecam ❤️', 'Queen', '1980', 'Rock', 2), TC('Też Kult', 'Kult', '1995', 'Rock', 1), TC('Nie', 'Zenek', '2010', 'Disco Polo', -1)];
+  eq(sharedFavorites(mine, theirs).map(x=>`${x.title}:${x.mine}/${x.theirs}`), ['Wspólna:2/2', 'Pół:1/2'], 'wspólne: oboje ≥ 👍, podwójne ❤️ najwyżej');
+  const rec=recommendations(mine, theirs);
+  eq(rec.map(x=>x.title), ['Polecam ❤️', 'Też Kult', 'Polecam 👍'], 'rekomendacje: ❤️ przed 👍, potem wykonawcy, których lubię; bez ocenionych przeze mnie (też 👎) i bez jego 👎');
+  ok(rec[1].knownArtist && !rec[2].knownArtist, 'flaga „znany wykonawca"');
+  const store={}; mine.forEach(x=>{ store[x.trackKey]=x; });
+  store[trackKey('Abba', 'Polecam 👍')]={ trackKey:trackKey('Abba', 'Polecam 👍'), rating:0, ts:1 };   // nagrobek = nieoceniony
+  eq(recommendations(store, theirs).map(x=>x.title), ['Polecam ❤️', 'Też Kult', 'Polecam 👍'], 'magazyn z nagrobkiem: nagrobek ≠ ocena');
+});
+group('gust3: kształt ocen znajomego z API (publicRating / sanitizeFriendRatings)', ()=>{
+  eq(publicRating({ title:'A', artist:'B', year:'1999', genre:'Pop', art:'https://x/a.jpg', cat:'90s', rating:2, ts:5, source:'swipe', profile_id:'X' }),
+    { title:'A', artist:'B', year:'1999', genre:'Pop', art:'https://x/a.jpg', cat:'90s', rating:2 }, 'bez ts/source/profile_id');
+  eq(publicRating({ title:'A', artist:'B', rating:0 }), null, 'zła ocena → null');
+  const f=sanitizeFriendRatings([{ title:'Song', artist:'Art', rating:2, art:'javascript:alert(1)', year:'abcd' }, { title:'Song (2011 Remaster)', artist:'Art', rating:1 }, null, { title:'', artist:'x', rating:1 }]);
+  eq(f.length, 1, 'duplikat klucza / śmieci odrzucone');
+  eq([f[0].trackKey, f[0].art, f[0].year, f[0].ts, f[0].source], [trackKey('Art','Song'), '', '', undefined, undefined], 'klucz liczony, złe art/rok puste, bez ts/source');
+  eq(sanitizeFriendRatings(Array.from({ length:2100 }, (_,i)=>({ title:'t'+i, artist:'a', rating:1 }))).length, TASTE_MAX, 'max '+TASTE_MAX);
+  eq(sanitizeFriendRatings('x'), [], 'nie-tablica → []');
+});
+group('gust3: „Zagraj z półki" — songs[] z polubionych, min. '+SHELF_PLAY_MIN+', kategoria tymczasowa', ()=>{
+  const rs=[...TCN(5, { rating:1, pre:'U', year:'1999' }), ...TCN(3, { rating:2, pre:'H', year:'' }), TC('Zły', 'X', '2000', 'Pop', -1)];
+  const songs=shelfSongs(rs);
+  eq(songs.length, 8, 'tylko ❤️ i 👍 (bez 👎)');
+  eq(songs.slice(0,3).map(s=>s.title), ['H2','H1','H0'], '❤️ najpierw (najnowsze)');
+  ok(songs.every(s=>Object.keys(s).every(k=>['title','artist','year'].includes(k))), 'tylko tytuł/wykonawca/rok');
+  ok(!('year' in songs[0]) && songs[3].year==='1999', 'rok tylko gdy 4 cyfry');
+  ok(canPlayShelf(rs) && !canPlayShelf(rs.slice(0, 7)), 'min. '+SHELF_PLAY_MIN+' utworów do gry');
+  eq(shelfSongs(TCN(80)).length, 60, 'limit 60 utworów');
+  const c=shelfCategory('Ola', songs);
+  eq([c.label, c.kind, c.temp, c.songs.length], ['Półka Ola', 'playlist', true, 8], 'kategoria „Półka <ksywa>" (playlista, tymczasowa)');
+  eq(shelfCategory('', []).label, 'Półka znajomego', 'brak ksywy');
+  ok(modesFor('x', { x:c }).includes('music'), 'kategoria półki obsługuje tryb muzyka');
+  const m=buildMatch(['x'], ['music'], { questions:10 }, { x:c });
+  ok(!m.error && m.questions===10, 'mecz 10 pytań z półki');
+});
+group('gust3: MP „Gust stołu" — półka gracza, sanityzacja, pula stołu', ()=>{
+  const hearts=Array.from({ length:25 }, (_,i)=>TC('Hit '+i, 'Art '+i, '199'+(i%10), 'Pop', 2));
+  const p=tableShelfPayload([...hearts, ...TCN(5, { rating:1, pre:'U' })]);
+  eq(p.length, TABLE_SHELF_MAX, 'top '+TABLE_SHELF_MAX+' ❤️');
+  eq(p[0].title, 'Hit 24', 'najnowsze ❤️ najpierw');
+  ok(p.every(x=>Object.keys(x).every(k=>['title','artist','year'].includes(k))), 'tylko tytuł/wykonawca/rok (bez okładek, ocen, ts)');
+  eq(tableShelfPayload(hearts.slice(0, TABLE_MIN_HEARTS-1)), null, '< '+TABLE_MIN_HEARTS+' ❤️ → nic nie wysyłamy');
+  eq(tableShelfPayload(hearts, { visibility:'hidden' }), null, 'gust ukryty → nic nie wysyłamy');
+  const s=sanitizeTableShelf([{ title:'  A   b ', artist:'X', year:'1999', art:'https://x', rating:2 }, { title:'A b', artist:'x' }, { title:'<script>', artist:'' }, 'x', null,
+    { title:'T'.repeat(500), artist:'Y', year:'99999' }, ...Array.from({ length:40 }, (_,i)=>({ title:'z'+i, artist:'Z' }))]);
+  eq(s.length, TABLE_SHELF_MAX, 'max '+TABLE_SHELF_MAX+' pozycji');
+  eq(s[0], { title:'A b', artist:'X', year:'1999' }, 'tekst przycięty, tylko title/artist/year');
+  eq(s[1].title.length, 200, 'cap długości tytułu');
+  ok(!('year' in s[1]), 'zły rok wycięty');
+  eq(sanitizeTableShelf({}), [], 'nie-tablica → []');
+  const pool=buildTablePool([
+    { id:'a', name:'Ola', items:[{ title:'X', artist:'Q' }, { title:'A1', artist:'A' }, { title:'A2', artist:'A' }] },
+    { id:'b', name:'Kuba', items:[{ title:'X', artist:'Q' }, { title:'B1', artist:'B' }] },
+    { id:'c', name:'', items:[] },
+  ]);
+  eq(pool.map(x=>x.title+':'+x.from), ['X:Ola, Kuba', 'A1:Ola', 'B1:Kuba', 'A2:Ola'], 'po kolei od graczy; duplikat łączy ksywy; pusta półka pominięta');
+  eq(buildTablePool(Array.from({ length:8 }, (_,i)=>({ name:'p'+i, items:Array.from({ length:20 }, (_,j)=>({ title:'t'+j, artist:'a'+i })) }))).length, 120, 'cap puli 120');
+  const cat=tablePoolCategory(pool);
+  eq([cat.label, cat.kind, TABLE_KEY], ['🎧 Gust stołu', 'playlist', 'gust-stolu'], 'kategoria stołu');
 });
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

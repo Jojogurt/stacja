@@ -6,10 +6,10 @@ import { modesFor, ALL_MODES, MODE_FAMILIES, MODE_PICK_LABEL, MODE_SHORT, SOLO_O
 import { clampTimer } from './timing.js';
 import { plPick, pickSummary } from './picker.js';
 import { clipText } from './util.js';
+import { SHELF_PLAY_MIN, SHELF_QUESTIONS } from './tasteCompare.js';   // „Twój gust": gotowiec „Z mojej półki"
 
 /* ===== GOTOWCE („Szybki start") — jedno tapnięcie = kategorie + tryby + długość =====
- * `cats`: lista kluczy ALBO funkcja (allCats) → klucze (np. przyszły „Z mojej półki" z gałęzi gust liczy pulę
- * z gustu gracza). Klucze, których nie ma w runtime, są pomijane; gotowiec bez żadnej kategorii jest ukryty.
+ * `cats`: lista kluczy ALBO funkcja (allCats) → klucze (np. „Z mojej półki" — pula z gustu gracza). Klucze, których nie ma w runtime, są pomijane; gotowiec bez żadnej kategorii jest ukryty.
  * `modes` przycinane do trybów dostępnych w kontekście (MP: bez solo-only / nieznanych serwerowi) i zgodnych
  * z kategoriami. `sub` — własny podpis; brak → lista trybów. Dopisanie gotowca = nowy obiekt w tablicy. */
 export const PRESETS = [
@@ -18,11 +18,31 @@ export const PRESETS = [
   { id:'dek',   name:'Lata 80 · 90 · 00',  cats:['80s','90s','00s'],                      modes:['music','timeline'],             questions:15 },
   { id:'lam',   name:'Łamigłówki',         cats:['rebusy','jedna-litera'],                modes:['quiz'],                         questions:15, sub:'rebusy i litery' },
   { id:'hard',  name:'Hardcore',           cats:['80s','90s','rock-world'],               modes:['reverse','revsnip','slowmo'],   questions:15, sub:'od tyłu i obroty' },
+  // „Twój gust": pula z ❤️/👍 WŁASNEJ półki — kategoria tymczasowa SHELF_PRESET_KEY (app/solo.js rejestruje ją w ALL_CATS,
+  // gdy półka ma ≥ SHELF_PLAY_MIN utworów). Tylko solo (MP ma „🎧 Gust stołu"); za mało → nieaktywny z podpowiedzią.
+  { id:'polka', name:'Z mojej półki', ctx:'solo', cats:(allCats)=>shelfPresetKeys(allCats), modes:['music','abcd'], questions:SHELF_QUESTIONS,
+    locked:(allCats, env)=>shelfPresetLock(allCats, env) },
 ];
+export const SHELF_PRESET_KEY = 'polka-moja';
+const shelfN = (allCats) => { const c = allCats && allCats[SHELF_PRESET_KEY]; return c && Array.isArray(c.songs) ? c.songs.length : 0; };
+export function shelfPresetKeys(allCats){ return shelfN(allCats) >= SHELF_PLAY_MIN ? [SHELF_PRESET_KEY] : []; }
+// env.shelf = ile polubionych utworów ma półka gracza (app) — podpowiedź „masz N"
+export function shelfPresetLock(allCats, env = {}){
+  if(shelfN(allCats) >= SHELF_PLAY_MIN) return '';
+  const n = Math.max(0, Math.floor(Number(env && env.shelf)) || 0);
+  return `polub min. ${SHELF_PLAY_MIN} utworów (❤️/👍) — masz ${n}`;
+}
 
-// gotowiec → konkretna pula w tym kontekście albo null (brak kategorii / żaden tryb nie pasuje)
-export function resolvePreset(p, allCats, available = ALL_MODES){
+// gotowiec → konkretna pula w tym kontekście albo null (brak kategorii / żaden tryb nie pasuje).
+// env: { ctx:'solo'|'mp', shelf } — gotowiec z `ctx` tylko w tym kontekście; `locked(allCats, env)` → niepusty tekst =
+// gotowiec NIEAKTYWNY ({ disabled:true, sub:podpowiedź }, bez puli).
+export function resolvePreset(p, allCats, available = ALL_MODES, env = {}){
   if(!p || !allCats) return null;
+  if(p.ctx && (env || {}).ctx !== p.ctx) return null;
+  if(typeof p.locked === 'function'){
+    let lock = ''; try{ lock = p.locked(allCats, env || {}) || ''; }catch(_e){ lock = ''; }
+    if(lock) return { id:p.id, name:p.name, sub:String(lock), cats:[], modes:[], questions:clampQuestions(p.questions), disabled:true };
+  }
   let keys = [];
   try{ keys = typeof p.cats === 'function' ? p.cats(allCats) : p.cats; }catch(_e){ keys = []; }
   const cats = [...new Set((Array.isArray(keys) ? keys : []).filter(k => typeof k === 'string' && allCats[k]))];
@@ -36,12 +56,12 @@ export function resolvePreset(p, allCats, available = ALL_MODES){
   const tail = p.sub || modes.filter(m => m !== 'quiz').map(m => MODE_SHORT[m] || m).join(', ') || MODE_PICK_LABEL.quiz;
   return { id:p.id, name:p.name, sub:`${questions} pyt · ${tail}`, cats, modes, questions };
 }
-export function presetsFor(allCats, available = ALL_MODES, list = PRESETS){
-  return list.map(p => resolvePreset(p, allCats, available)).filter(Boolean);
+export function presetsFor(allCats, available = ALL_MODES, list = PRESETS, env = {}){
+  return list.map(p => resolvePreset(p, allCats, available, env)).filter(Boolean);
 }
 // czy bieżący wybór to dokładnie ten gotowiec (np. po odtworzeniu zapisanej puli)
 export function presetMatches(r, cats, modes, questions){
-  if(!r) return false;
+  if(!r || r.disabled) return false;
   const sameSet = (a, b) => a.size === b.size && [...a].every(x => b.has(x));
   return questions === r.questions && sameSet(new Set(cats), new Set(r.cats)) && sameSet(new Set(modes), new Set(r.modes));
 }

@@ -11,12 +11,38 @@ import { settingsSummary } from '../core/matchSetup.js';
 import { teamColor } from '../core/teams.js';
 import { createMatchSetup } from './matchSetup.js';
 import { ic } from './icons.js';
+import { TABLE_KEY, TABLE_LABEL, TABLE_MIN_SONGS } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
 
 let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render widoku pokoju)
 let mpGetPlayers = () => [];             // [{id,name}] obecni gracze (z mp.js) — do przypisania do drużyn
 let mpGetModes = () => MP_MODES;         // F8a: tryby dostępne w tym pokoju (relay: wszystkie MP; autorytet: znane serwerowi)
 let mpOnDraft = () => {};                // zmiana konfiguracji → mp.js rozsyła szkic gościom (debounce + limit po stronie serwera)
-export function initMpPicker(render, getPlayers, getModes, onDraft){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; if(onDraft) mpOnDraft = onDraft; }
+let mpGetTable = () => ({ cap:false, players:0, withShelf:0, songs:0 });   // gust etap 3: capability + licznik półek (mp.js)
+export function initMpPicker(render, getPlayers, getModes, onDraft, getTable){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; if(onDraft) mpOnDraft = onDraft; if(getTable) mpGetTable = getTable; }
+/* gust etap 3: „🎧 Gust stołu" — kategoria-ZAŚLEPKA w ALL_CATS (walidacja wyboru/trybów po stronie hosta jak dla playlisty
+ * z rokiem). Prawdziwą pulę składa serwer z półek graczy przy starcie (mpBuildPools wysyła tylko znacznik `table`).
+ * Poza ALL_KEYS i grupami kategorii → nie trafia do losowania, wyszukiwarki ani solo. W komponencie „Nowy mecz" to
+ * karta w zakładce „Twoje" (mpTableHTML); ukryta bez capability `tableTaste`, nieaktywna < TABLE_MIN_SONGS utworów. */
+ALL_CATS[TABLE_KEY] = { label:TABLE_LABEL, kind:'playlist', table:true,
+  songs:Array.from({ length:TABLE_MIN_SONGS }, (_,i)=>({ title:'?', artist:'gracz '+(i+1), year:'2000' })) };
+// wytnij stół z wyboru, gdy pokój go nie obsłuży (brak capability / za mało utworów) — przed KAŻDYM renderem pickera
+function mpTablePrune(){
+  const t=mpGetTable()||{};
+  const ok=!!t.cap && (t.songs|0)>=TABLE_MIN_SONGS;
+  if(!ok) mpPickCats.delete(TABLE_KEY);
+  return t;
+}
+function mpTableHTML(){
+  const t=mpTablePrune();
+  if(!t.cap) return '';   // stary serwer / relay → opcja ukryta
+  const okN=(t.songs|0)>=TABLE_MIN_SONGS;
+  const on=mpPickCats.has(TABLE_KEY);
+  const sub=`półki od ${t.withShelf|0}/${t.players|0} graczy · ${t.songs|0} utw.`;
+  const hint=okN ? 'pula z ❤️ graczy w pokoju — w odsłonie zobaczycie, czyja to półka'
+    : `potrzeba min. ${TABLE_MIN_SONGS} utworów z półek (gracze z ≥ 5 ❤️, gust nieukryty)`;
+  return `<div class="um-table"><button type="button" class="ms-cat ms-table${on?' on':''}" data-ms-cat="${TABLE_KEY}" data-mp-table${okN?'':' disabled aria-disabled="true"'} aria-pressed="${on?'true':'false'}"><b>${escapeHtml(TABLE_LABEL)}</b><small data-mp-table-n>${escapeHtml(sub)}</small></button>
+    <p class="ms-gnote um-table-hint">${escapeHtml(hint)}</p></div>`;
+}
 // F8a: dostępne tryby + wytnij z wyboru te, których pokój nie obsłuży (np. stary serwer nie zna 'abcd'/'year')
 function mpAvailModes(){ const av=mpGetModes()||MP_MODES; [...mpPickModes].forEach(m=>{ if(m!=='quiz' && !av.includes(m)) mpPickModes.delete(m); }); return av; }
 
@@ -113,7 +139,7 @@ function mpSettingsHTML(){
 }
 // zakładka „Twoje": import playlisty Spotify (własne kategorie z edytora tworzy się w solo — tu też widoczne)
 function mpTwojeHTML(){
-  return `<div class="ms-twoje-btns"><button type="button" class="ms-add" onclick="mpPlToggle()" aria-expanded="${mpPlOpen}" aria-controls="mpPlPanel">+ ze Spotify</button></div>`+
+  return mpTableHTML()+`<div class="ms-twoje-btns"><button type="button" class="ms-add" onclick="mpPlToggle()" aria-expanded="${mpPlOpen}" aria-controls="mpPlPanel">+ ze Spotify</button></div>`+
     `<div class="pl-panel${mpPlOpen?' show':''}" id="mpPlPanel"><input id="mpPlUrl" autocomplete="off" aria-label="Link do publicznej playlisty Spotify" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button type="button" onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus" role="status">${escapeHtml(mpPlStatus)}</div></div>`;
 }
 
@@ -140,6 +166,7 @@ function mpSetQuestions(q){ setup.setQuestions(q); }
 // szkic dla gości: wybór + ustawienia pokoju (sanityzowany po obu stronach: core/matchSetup.sanitizeDraft)
 function mpDraft(){ return { ...setup.draft(), timer:mpPickTimer, format:mpPickFormat, salon:mpPickSalon, audioHostOnly:mpPickAudioHostOnly() }; }
 function mpPickerHTML(){
+  mpTablePrune();   // gust etap 3: stół wycięty z wyboru, zanim komponent policzy podsumowanie (każda zakładka)
   return `<div class="mpnav">
       <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz do poczekalni">${ic('back')}</button>
       <span class="nav-title">Nowy mecz</span>
@@ -156,6 +183,7 @@ function mpBuildPools(cats, modes){
   const pools={};
   for(const k of cats){
     const c=ALL_CATS[k]; if(!c) continue;
+    if(c.table){ pools[k]={ label:c.label, kind:'playlist', table:true }; continue; }   // gust etap 3: pulę składa serwer z półek graczy
     const out={ label:c.label, range:c.range, kind:c.kind };
     if(wantLektor && c.lang) out.lang=c.lang;   // język opisów lektora (lyrics.js); serwer sanityzuje do 'pl'|'en'
     if(Array.isArray(c.artists) && c.artists.length) out.artists=c.artists.slice();

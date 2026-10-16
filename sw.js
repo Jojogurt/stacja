@@ -8,7 +8,7 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v65';
+const CACHE = 'stacja-v66';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -22,6 +22,9 @@ const SHELL = [
   './app/listen.js',  // Łamigłówki: „▶ posłuchaj" w odsłonie
   './app/vinyl.js',   // płyta winylowa = kontrolka odtwarzania (wszystkie tryby z dźwiękiem)
   './app/matchSetup.js',  // wspólny komponent ekranu „Nowy mecz” (solo + host MP)
+  './app/taste.js', './app/gust.js', './core/taste.js',   // „Twój gust": oceny, półka, sesja oceniania
+  './core/tasteProfile.js', './app/tasteCard.js',        // „Twój gust" etap 2: profil, archetyp, karta PNG
+  './core/tasteCompare.js',                              // „Twój gust" etap 3: porównanie, półki do gry
   './click.wav', './clapping.wav',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',

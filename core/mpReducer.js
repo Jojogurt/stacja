@@ -281,6 +281,7 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
     track:current.track, artist:current.artist, year:current.year, album:current.album, art:current.art,
     kind: hasAnswers ? 'quiz' : (yearQ ? 'year' : 'music'), prompt: current.prompt || '',
     yearNote: yearQ && current.yearNote ? String(current.yearNote) : '',   // F8a: „rok wg wydania w iTunes"
+    from: !hasAnswers && typeof current.from==='string' ? current.from.slice(0, 80) : '',   // gust etap 3: „Gust stołu" — z czyjej półki (dopiero w odsłonie)
     slots, answers: hasAnswers ? current.answers : null,
     fun: hasAnswers ? String(current.fun||'') : '',          // F3 #4: ciekawostka (💡) — dopiero w odsłonie
     // Łamigłówki: utwór(y)-rozwiązanie do odsłuchu (▶ posłuchaj) i duży rebus — TYLKO tu (reveal = po lock),

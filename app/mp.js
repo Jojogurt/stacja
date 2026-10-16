@@ -34,8 +34,10 @@ import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
 import { ic } from './icons.js';
+import { tableShelfPayload } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
+import { tasteStore, tasteVisibility } from './taste.js';
 
-initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH), ()=>mpDraftChanged());   // F8a: + tryby znane serwerowi   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
+initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH), ()=>mpDraftChanged(), ()=>mpTableInfo());   // F8a: + tryby znane serwerowi; szkic dla gości; gust etap 3: „Gust stołu" (capability + licznik półek)   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
 
 // wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
@@ -267,7 +269,7 @@ async function mpEnterRoom(code, asHost, groupId){
   mpErr('');
   if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
-  S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null;   // MVP-3: tag drużyny (host)
+  S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null; S.shelfSent=false;   // MVP-3: tag drużyny (host)
   lastRoomSave(code); mpSyncRoomBack();   // F6b (F6): przeładowanie karty w meczu → „Wróć do pokoju" w menu
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
@@ -289,6 +291,7 @@ async function mpEnterRoom(code, asHost, groupId){
   S.ch.on('broadcast',{event:'advanced'},({payload})=>{ const by=mpSender(payload); if(by) mpOnPlayerAdvanced({ ...payload, by }); });   // SALON: gracz kliknął „dalej" na odsłonie
   S.ch.on('status',{},(s)=>mpNetStatus(s));   // 5.6: wskaźnik reconnectu
   S.ch.on('presence',{event:'sync'},()=>{
+    mpMaybeShareShelf();   // gust etap 3: serwer zna „Gust stołu" → dosyłam swoją półkę (raz na pokój; transport ponawia po reconnect)
     const prevHost=S.host;                                          // 1.5: wykryj zmianę roli hosta (promote)
     // host = autorytatywny hostId z DO. F2b #3: także gdy hostId=null (stary serwer po wyjściu hosta
     // z duplikatem socketu) — dawniej klient zostawał przy S.host=true z przyciskami, które DO odrzucał.
@@ -312,6 +315,23 @@ async function mpEnterRoom(code, asHost, groupId){
   if(!S.timerInt) S.timerInt=setInterval(mpTickTimer, 500);
 }
 
+/* gust etap 3: „🎧 Gust stołu" — półka gracza (top 20 ❤️: tytuł/wykonawca/rok) do serwera-autorytetu.
+ * Tylko gdy serwer ogłasza capability 'tableTaste' (stary serwer / relay → nic nie wysyłamy), gracz ma ≥ 5 ❤️
+ * i NIE ukrył gustu (tableShelfPayload → null). Serwer trzyma półki w stanie pokoju (nie D1). */
+function mpMaybeShareShelf(){
+  if(!SERVER_AUTH || !S.ch || !S.ch.shareShelf || S.shelfSent) return;
+  if(!(S.ch.serverCaps||[]).includes('tableTaste')) return;
+  S.shelfSent=true;
+  const items=tableShelfPayload(tasteStore(), { visibility:tasteVisibility() });
+  if(items) S.ch.shareShelf(items);
+}
+// licznik dla pickera hosta: „półki od 3/4 graczy" (n = utwory przed usunięciem duplikatów — serwer i tak liczy sam)
+function mpTableInfo(){
+  const cap=!!(SERVER_AUTH && S.ch && (S.ch.serverCaps||[]).includes('tableTaste'));
+  const ids=new Set(mpMembers().map(m=>m.id));
+  const sh=(cap && Array.isArray(S.ch.shelves) ? S.ch.shelves : []).filter(x=>ids.has(x.id));
+  return { cap, players:ids.size, withShelf:sh.length, songs:sh.reduce((a,x)=>a+(x.n|0), 0) };
+}
 // F1 (#4): nadawca ulotnego eventu — `from` (serwer, z tokenu) ma pierwszeństwo przed `by` (klient)
 function mpSender(p){ return (p && typeof p==='object' && (p.from || p.by)) || null; }
 function mpMembers(){

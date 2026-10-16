@@ -69,6 +69,7 @@ const IC={
 /* cfg: { ctx:'solo'|'mp', pick:{cats:Set,modes:Set,questions,preset}, available()→tryby, render(), onStart(), onDice(),
  *        onChange?(), settingsHTML?()→string, settingsSummary()→string, twojeHTML?()→string, ownActions?,
  *        onEdit?(k), onRemove?(k), onAct?(act, el), gate?()→{ok:false,text}|null (np. MP: za mało drużyn),
+ *        presetEnv?()→{shelf} (dane dla gotowców zależnych od gracza — „Z mojej półki"),
  *        ids?:{start,dice,info}, startLabel? } */
 export function createMatchSetup(cfg){
   const ctx=cfg.ctx, pick=cfg.pick;
@@ -79,7 +80,9 @@ export function createMatchSetup(cfg){
   const avail=()=>{ try{ return cfg.available ? cfg.available() : ALL_MODES; }catch(_e){ return ALL_MODES; } };
   const saveUi=()=>lsSet(UI_KEY, JSON.stringify({ open:ui.open, settings:ui.settingsOpen }));
 
-  function presets(){ return presetsFor(ALL_CATS, avail()); }
+  // env gotowców: kontekst (gotowce z `ctx`) + dane kontekstu (solo: liczba utworów na półce — „Z mojej półki")
+  const presetEnv=()=>{ let e={}; try{ e=(cfg.presetEnv && cfg.presetEnv()) || {}; }catch(_e){ e={}; } return { ...e, ctx }; };
+  function presets(){ return presetsFor(ALL_CATS, avail(), undefined, presetEnv()); }
   function curPreset(){ return pick.preset ? presets().find(p=>p.id===pick.preset) || null : null; }
   function state(){
     syncQuizMode(pick.cats, pick.modes, ALL_CATS);
@@ -109,7 +112,7 @@ export function createMatchSetup(cfg){
     },
     setQuestions(q){ const L=MATCH_LENGTHS.find(x=>x.q===+q); if(!L) return; pick.questions=L.q; changed(); },
     applyPreset(pid){
-      const r=presets().find(p=>p.id===pid); if(!r) return;
+      const r=presets().find(p=>p.id===pid); if(!r || r.disabled) return;
       pick.cats.clear(); r.cats.forEach(k=>pick.cats.add(k));
       pick.modes.clear(); r.modes.forEach(m=>pick.modes.add(m));
       pick.questions=r.questions; pick.preset=r.id;
@@ -172,8 +175,10 @@ export function createMatchSetup(cfg){
 
   function presetsHTML(){
     const list=presets(); if(!list.length) return '';
-    const btns=list.map(p=>{ const on=pick.preset===p.id;
-      return `<button type="button" class="ms-preset${on?' on':''}" data-ms-preset="${escapeHtml(p.id)}" aria-pressed="${on}"><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.sub)}</small></button>`; }).join('');
+    const btns=list.map(p=>{ const on=!p.disabled && pick.preset===p.id;
+      // nieaktywny gotowiec (np. „Z mojej półki" bez ≥ 8 polubionych): disabled + podpowiedź w podpisie
+      const dis=p.disabled ? ` disabled aria-disabled="true" title="${escapeHtml(p.sub)}"` : '';
+      return `<button type="button" class="ms-preset${on?' on':''}${p.disabled?' locked':''}" data-ms-preset="${escapeHtml(p.id)}" aria-pressed="${on}"${dis}><b>${escapeHtml(p.name)}</b><small>${escapeHtml(p.sub)}</small></button>`; }).join('');
     return `<section class="ms-presets" aria-labelledby="${id('ph')}">
       <div class="ms-h"><h2 id="${id('ph')}">Szybki start</h2><span class="ms-note">jeden tap = gotowy mecz</span></div>
       <div class="ms-preset-grid">${btns}</div></section>`;

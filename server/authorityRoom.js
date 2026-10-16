@@ -17,6 +17,9 @@
  *   DO → klient:  {t:'state', game}  (BEZ sekretu — pełny utwór tylko w game.reveal przy REVEAL)
  *                 {t:'presence', members, hostId, modes}  (F8a: `modes` = tryby, które ten serwer zna —
  *                 capability dla pickera MP; stary serwer bez pola → klient ukrywa nowe tryby)
+ *                 + `caps:['tableTaste']` i `shelves:[{id,n}]` (gust etap 3: kto z OBECNYCH dosłał półkę i ile utworów)
+ *   klient → DO:  {t:'shelf', items:[{title,artist,year}]} — „🎧 Gust stołu": top ❤️ gracza (≤ 20, sanityzowane;
+ *                 [] = wycofaj). Trzymane w stanie pokoju (storage DO, sprzątane z pokojem) — NIGDY w D1.
  *
  * SEKRET: pełny utwór (current) trzymany POZA `game`; do `game.reveal` trafia dopiero przy lock.
  * PERSYSTENCJA: stan w `ctx.storage` (przeżyć eviction DO w trakcie meczu).
@@ -40,6 +43,7 @@ import { lektorLang, catLektorLang } from '../core/lektorVoice.js';   // język 
 import { mpSnipOffset, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
 import { resolveTrackServer, resolveDistractorsServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
+import { sanitizeTableShelf, buildTablePool, tablePoolCategory, TABLE_KEY, TABLE_MIN_SONGS } from '../core/tasteCompare.js';
 
 const ROOM_TTL_MS = 15*60*1000;      // sprzątanie storage pustego pokoju po 15 min (karencja na reconnect)
 const POOL_MAX_CATS = 24;            // defensywne capy pul (DO nie ufa rozmiarowi od klienta)
@@ -71,6 +75,8 @@ const RATE = {
   draft:  { rate:2,   burst:6 },   // szkic meczu (host w pickerze; klient i tak debounce'uje)
 };
 const SLOT_LABEL_MAX = 40;
+export const CAPS = ['tableTaste'];   // gust etap 3: capability w presence (stary serwer bez pola → klient chowa „Gust stołu")
+const SHELVES_MAX = 32;               // max półek w pamięci pokoju (anty-flood: tyle co rozsądny pokój)
 const CAT_TEXT_MAX = 80;             // label/range/kind kategorii
 const SONG_TEXT_MAX = 200;           // title/artist/album/year utworu
 const URL_MAX = 500;
@@ -149,6 +155,7 @@ export class GameAuthority extends Server {
   ready = new Set();      // id graczy zgłaszających gotowość w bieżącym armNonce
   hostSeen = new Set();   // anty-powtórki tytułów
   recent = [];            // anty-powtórki artystów
+  shelves = new Map();    // gust etap 3: id gracza → półka [{title,artist,year}] (≤ 20) — „Gust stołu"
   _autoLock = null;       // serwerowy timer auto-locka (koniec czasu pytania)
   // F2b #6: twardy limit fazy gotowości — po nim pytanie rusza z gotowymi (persist: armDeadline)
   armTimeoutMs = MP_ARM_TIMEOUT_MS;
@@ -164,7 +171,7 @@ export class GameAuthority extends Server {
     super(ctx, env);
     // wczytaj stan z trwałego magazynu (po eviccie/restarcie DO) zanim obsłużymy żądania
     ctx.blockConcurrencyWhile(async () => {
-      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden']);
+      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden','shelves']);
       this.game = s.get('game') || null;
       this.current = s.get('current') || null;
       this.pools = s.get('pools') || null;
@@ -175,6 +182,7 @@ export class GameAuthority extends Server {
       this.ready = new Set(s.get('ready') || []);
       this.armDeadline = s.get('armDeadline') || null;
       this.armHidden = s.get('armHidden') || null;
+      this.shelves = new Map(Array.isArray(s.get('shelves')) ? s.get('shelves') : []);
       // WZNÓW serwerowy auto-lock po restarcie (in-memory setTimeout ginie przy evikcji DO).
       if(this.game && this.game.phase===MP.PLAY && this.game.timer>0 && this.game.endsAt){
         this.scheduleAutoLock(Math.max(0, this.game.endsAt - Date.now()));   // auto-lock wg pozostałego czasu
@@ -190,7 +198,7 @@ export class GameAuthority extends Server {
     await this.ctx.storage.put({
       game:this.game, current:this.current, pools:this.pools,
       hostId:this.hostId, starterId:this.starterId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
-      armDeadline:this.armDeadline, armHidden:this.armHidden,
+      armDeadline:this.armDeadline, armHidden:this.armHidden, shelves:[...this.shelves],
     });
   }
 
@@ -268,7 +276,7 @@ export class GameAuthority extends Server {
     if([...this.getConnections()].length > 0) return;          // ktoś wrócił — nie kasuj
     await this.ctx.storage.deleteAll();                        // kasuje też alarm
     this.game=null; this.current=null; this.pools=null; this.hostId=null; this.starterId=null;
-    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null; this.draft=null;
+    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null; this.draft=null; this.shelves=new Map();
     this.clearAutoLock(); this.clearArmTimer();
   }
 
@@ -279,7 +287,7 @@ export class GameAuthority extends Server {
     if(!me) return;                                   // połączenie bez tożsamości (odrzucone w onConnect)
     // F1 (#14): token bucket per połączenie — flood dowolnym typem nie wzmacnia broadcastów/persist
     const kind = msg.t==='event' ? (msg.event==='draft' ? 'draft' : 'event') : msg.t==='action' ? 'action'
-      : (msg.t==='hello' || msg.t==='track') ? 'meta' : msg.t==='start' ? 'start' : null;
+      : (msg.t==='hello' || msg.t==='track' || msg.t==='shelf') ? 'meta' : msg.t==='start' ? 'start' : null;
     if(kind && !this.allowRate(conn, kind)) return;
 
     switch(msg.t){
@@ -293,6 +301,15 @@ export class GameAuthority extends Server {
         conn.setState({ id:(conn.state&&conn.state.id)||null, name:clipText(msg.name, NAME_MAX)||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
         this.pushPresence();
         return;
+
+      case 'shelf': {                                 // gust etap 3: półka gracza do „Gust stołu" (tylko własna — id z tokenu)
+        const items=sanitizeTableShelf(msg.items);
+        this.shelves.delete(me);                      // odśwież kolejność (najnowsze na końcu)
+        if(items.length) this.shelves.set(me, items);
+        while(this.shelves.size>SHELVES_MAX) this.shelves.delete(this.shelves.keys().next().value);
+        this.pushPresence(); await this.persist();
+        return;
+      }
 
       case 'event': {                                 // ulotne (emotki/czat/typing/„dalej") — relay do wszystkich
         // F1 (#1): TYLKO whitelista nazw. Dawniej dowolna nazwa (np. 'sync') szła do wszystkich i klient
@@ -382,7 +399,11 @@ export class GameAuthority extends Server {
     const s = salon!=null ? salon : (this.game && this.game.salon);
     return (s && this.hostId) ? ms.filter(m=>m.id!==this.hostId) : ms;
   }
-  pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId, modes:MP_MODES })); }
+  pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId, modes:MP_MODES,
+    caps:CAPS, shelves:this.shelfInfo() })); }
+  // gust etap 3: półki OBECNYCH (kolejność = kolejność w pokoju) — licznik dla hosta i źródło puli „Gust stołu"
+  presentShelves(){ return this.members().filter(m=>this.shelves.has(m.id)).map(m=>({ id:m.id, name:m.name||'gracz', items:this.shelves.get(m.id) })); }
+  shelfInfo(){ return this.presentShelves().map(s=>({ id:s.id, n:s.items.length })); }
   // 3.1: rozsyłka per-połączenie z okrojeniem cudzych bucketów drużyn (wyciek typów rywali w PLAY).
   broadcastState(){
     for(const c of this.getConnections()){
@@ -420,6 +441,11 @@ export class GameAuthority extends Server {
     const assignments = Array.isArray(config.assignments) ? config.assignments : undefined;
     const groupId = (typeof config.groupId==='string' && config.groupId) ? config.groupId.slice(0,64) : null;   // MVP-3: tag drużyny (sanityzowany)
     const pools = clampPools(config.pools);         // DEFENSYWNIE: nie ufaj rozmiarowi od klienta
+    // gust etap 3: „🎧 Gust stołu" — pulę składa SERWER z półek obecnych graczy (to, co przysłał host pod tym kluczem, ignorowane)
+    if(pools[TABLE_KEY]){
+      const songs=buildTablePool(this.presentShelves());
+      if(songs.length>=TABLE_MIN_SONGS) pools[TABLE_KEY]=tablePoolCategory(songs); else delete pools[TABLE_KEY];
+    }
     const catKeys = Object.keys(pools);
     const r = buildMatch(catKeys, modes, { questions }, pools);
     if(r.error || !r.slots) return;                 // klient waliduje przed wysłaniem — zignoruj zły config

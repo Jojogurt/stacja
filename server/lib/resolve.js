@@ -15,6 +15,7 @@ async function fromItunes(term, opts){
   return (d.results||[]).map(t=>({
     trackName:t.trackName, artistName:t.artistName, collectionName:t.collectionName||'',
     releaseDate:t.releaseDate||'', previewUrl:t.previewUrl||'', artworkUrl100:t.artworkUrl100||'',
+    primaryGenreName:t.primaryGenreName||'',   // gust: gatunek (normalize → genre)
   }));
 }
 async function fromDeezer(term, opts){

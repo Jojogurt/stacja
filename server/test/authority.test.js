@@ -997,5 +997,62 @@ await group('draft (relay): ROOM_EVENTS + tylko host relay, sanityzacja, koperto
   eq([d.payload.modes, d.payload.questions, d.payload.audioHostOnly], [['music'], 30, true], 'sanityzacja (nieznany tryb wycięty, salon ⇒ dźwięk u hosta)');
 });
 
+/* ==================== gust etap 3: „🎧 Gust stołu" — półki graczy, capability, pula od serwera ==================== */
+const SHELF=(pre, n=10, artist='Art')=>Array.from({ length:n }, (_,i)=>({ title:pre+' '+i, artist:artist+' '+pre, year:String(1980+i) }));
+function tableResolver(room){
+  room.resolver={ track: async({ cat, seen })=>{ const s=(cat.songs||[]).find(x=>!seen.has(x.title)) || cat.songs[0]; seen.add(s.title);
+    return { track:s.title, artist:s.artist, year:s.year||'', album:'', preview:'https://p/'+encodeURIComponent(s.title)+'.m4a', art:'', ...(s.from?{ from:s.from }:{}) }; },
+    distractors: async()=>[] };
+}
+await group('gust3: presence niesie caps tableTaste + licznik półek obecnych graczy', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo'), c=room.join('C','Cy');
+  let p=a.last('presence');
+  eq(p.caps, ['tableTaste'], 'capability tableTaste w presence');
+  eq(p.shelves, [], 'na starcie brak półek');
+  await room.msg(a, { t:'shelf', items:SHELF('a') });
+  await room.msg(b, { t:'shelf', items:SHELF('b', 30) });
+  p=c.last('presence');
+  eq(p.shelves, [{ id:'A', n:10 }, { id:'B', n:20 }], 'półki od 2/3 graczy; max 20 utworów na gracza');
+  ok(!JSON.stringify(p).includes('a 0'), 'presence bez tytułów — tylko liczniki');
+  await room.msg(b, { t:'shelf', items:[] });
+  eq(c.last('presence').shelves, [{ id:'A', n:10 }], 'pusta lista = wycofanie półki (gust ukryty)');
+  await room.msg(c, { t:'shelf', items:[{ title:'<img src=x onerror=1>', artist:'' }, 'x', null, { title:'T'.repeat(999), artist:'Y', year:'1e9' }] });
+  eq(room.shelves.get('C'), [{ title:'T'.repeat(200), artist:'Y' }], 'sanityzacja: śmieci odrzucone, tekst przycięty, zły rok wycięty');
+  await room.drop(a);
+  eq(c.last('presence').shelves.map(x=>x.id), ['C'], 'gracz wyszedł → jego półka nie liczy się (tylko obecni)');
+  const st=await room.ctx.storage.get('shelves');
+  ok(Array.isArray(st) && st.length>=1, 'półki w storage pokoju (przeżyją ewikcję DO; nie D1)');
+});
+await group('gust3: start z „Gust stołu" — pula od serwera z półek obecnych, odsłona „z półki: <ksywa>"', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo'); tableResolver(room);
+  await room.msg(a, { t:'shelf', items:SHELF('a', 6) });
+  await room.msg(b, { t:'shelf', items:[...SHELF('b', 5), { title:'a 0', artist:'Art a', year:'1980' }] });
+  // host podsyła pod kluczem stołu śmieci — serwer je ignoruje i składa pulę sam
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['music'], format:'coop', pools:{ 'gust-stolu':{ label:'🎧 Gust stołu', kind:'playlist', songs:[{ title:'Hack', artist:'Evil' }] } } } });
+  const pool=room.pools['gust-stolu'];
+  ok(pool && pool.songs.length===11, 'pula = 6 + 5 unikalnych utworów (duplikat połączony): '+(pool&&pool.songs.length));
+  ok(!pool.songs.some(s=>s.title==='Hack'), 'utwory hosta pod kluczem stołu zignorowane');
+  eq(pool.songs.find(s=>s.title==='a 0').from, 'Ala, Bo', 'wspólny utwór: „z półki: Ala, Bo"');
+  eq(pool.songs.slice(0,4).map(s=>s.from), ['Ala, Bo','Bo','Ala','Bo'], 'sprawiedliwie: po kolei od graczy (a0 — wspólny)');
+  eq(room.game.catLabel, '🎧 Gust stołu', 'etykieta kategorii w stanie');
+  const g=a.last('state').game;
+  ok(!JSON.stringify(g).includes('"from"'), 'ARMING: bez „z półki" (nie zdradza odpowiedzi)');
+  for(const c of [a,b]) await room.msg(c, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  ok(!JSON.stringify(b.last('state').game).includes('"from"'), 'PLAY: bez „z półki"');
+  await room.msg(a, { t:'lock' });
+  const r=b.last('state').game.reveal;
+  ok(r && /^(Ala|Bo|Ala, Bo)$/.test(r.from), 'odsłona: reveal.from = ksywa właściciela półki: '+(r&&r.from));
+});
+await group('gust3: „Gust stołu" za mało utworów (< 8) → kategoria wycięta; sama → brak meczu', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); tableResolver(room);
+  await room.msg(a, { t:'shelf', items:SHELF('a', 5) });
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['music'], format:'coop', pools:{ 'gust-stolu':{ label:'x', kind:'playlist' } } } });
+  eq(room.game, null, 'tylko stół z 5 utworami → start zignorowany');
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['music','quiz'], format:'coop', pools:{ 'gust-stolu':{ label:'x', kind:'playlist' }, ...quizPools() } } });
+  ok(room.game && !room.pools['gust-stolu'] && room.game.catKey==='q1', 'stół wycięty, mecz z pozostałych kategorii');
+});
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);
