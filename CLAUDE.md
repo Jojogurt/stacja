@@ -34,7 +34,8 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   (host-authority MP: akcje → stan), `phases.js` (FSM), `picker.js` (wybór kategorii/trybów,
   wspólny solo+MP), `chatFeed.js` (feed czatu MP + whitelist REACTIONS), `timing.js` (stałe/obliczenia
   czasowe, etapy intro), `trackSelect.js` (wybór utworu iTunes: dekada, wersje, popularność, dystraktory ABCD),
-  `daily.js` (Stacja dnia: seed daty, plan, seria, siatka do udostępnienia), `handles.js` (pule ksyw),
+  `daily.js` (Stacja dnia: seed daty, plan, seria, siatka do udostępnienia), `lektorVoice.js` (język lektora
+  pl|en z `lang` kategorii lyrics.js + wybór głosu systemowego/Pipera), `handles.js` (pule ksyw),
   `teams.js`, `matchRecord.js` (rekord meczu do ligi), `util.js` (+ walidatory safeColor/isSlotKey/num/clipText).
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
 - **`adapters-web/`** — webowe implementacje portów + transport (iTunes, Cloudflare, Realtime).
