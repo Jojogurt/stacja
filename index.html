@@ -94,8 +94,6 @@
   body.menu .mh-row{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.18s}
   body.menu .mh-setting{animation:scrIn .4s cubic-bezier(.2,.8,.2,1) both;animation-delay:.24s}
   /* mikrointerakcje */
-  .tick.on{animation:tickpop .22s ease}
-  .tick:active{transform:scale(.95)}
   .mh-card{transition:transform .08s}
   .mh-card:active{transform:translateY(3px)}
   .mh-mini{transition:transform .08s}
@@ -120,41 +118,10 @@
   .eyebrow{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
 
   /* ---- kategorie ---- */
-  .dial{position:relative;border:2px solid var(--line);border-radius:var(--r-md);background:var(--panel);
-    padding:14px 14px 16px}
-  .dial-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
-  .dial-head span{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.03em;color:var(--muted);text-transform:uppercase}
-  .dial-head span#dialNote{color:var(--green)}
-  .ticks{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px;overscroll-behavior-x:contain}
-  .ticks::-webkit-scrollbar{display:none}
-  /* rzędy kategorii (poprawka tymczasowa do czasu przeprojektowania ekranu): wąsko — poziomy scroll z PODPOWIEDZIĄ
-     (gradient + strzałka na krawędzi, gdy jest coś dalej; klasy more-l/more-r z app/rowScroll.js; kółko myszy przewija
-     poziomo); od 600 px — rzędy się ZAWIJAJĄ (siatka), bez ukrytego scrolla, którego nie da się przewinąć myszą. */
-  .ticks::before,.ticks::after{position:sticky;z-index:2;flex:0 0 34px;align-self:stretch;display:grid;place-items:center;
-    font-family:var(--display);font-weight:900;font-size:22px;color:var(--muted);pointer-events:none;opacity:0;transition:opacity .15s}
-  .ticks::before{content:'‹';left:0;margin-right:-42px;background:linear-gradient(to left, transparent, var(--ticks-fade,var(--panel)) 62%)}
-  .ticks::after{content:'›';right:0;margin-left:-42px;background:linear-gradient(to right, transparent, var(--ticks-fade,var(--panel)) 62%)}
-  .ticks.more-l::before,.ticks.more-r::after{opacity:1}
-  @media (min-width:600px){
-    .ticks,.grp-band .ticks{flex-wrap:wrap;overflow-x:visible}
-    .ticks::before,.ticks::after{display:none}
-  }
-  .tick{flex:0 0 auto;font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:0;
-    color:var(--ink);background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;border-radius:14px;
-    padding:9px 14px;cursor:pointer;transition:.12s;white-space:nowrap;position:relative}
-  .tick small{display:block;font-family:var(--body);font-weight:700;font-size:var(--fs-xs);letter-spacing:.02em;color:var(--muted);margin-top:2px;text-transform:uppercase}
-  .tick.on{color:#fff;background:var(--blue);border-color:var(--blue-d)}
-  .tick.on small{color:rgba(255,255,255,.85)}
-  .tick.rnd.on{background:var(--purple);border-color:#b15cf0}
-  .tick.gen.on{color:#fff;background:var(--green);border-color:var(--green-d)}
-  .tick.gen.on small{color:rgba(255,255,255,.85)}
-  .tick.pl.on{color:#fff;background:var(--gold);border-color:var(--gold-d)}
-  .tick.pl.on small{color:rgba(255,255,255,.9)}
+  .dial{position:relative}   /* ekran „Nowy mecz" — komponent .ms (app/matchSetup.js), style niżej */
   .band-label{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);letter-spacing:.04em;color:var(--muted);
     text-transform:uppercase;margin:14px 2px 8px}
   .band-label:first-of-type{margin-top:4px}
-  .pl-add{font-family:var(--display);font-weight:800;font-size:var(--fs-md);letter-spacing:.02em;color:#fff;background:var(--gold);
-    border:none;border-radius:9px;padding:4px 9px;cursor:pointer;margin-left:8px;text-transform:uppercase;vertical-align:middle;box-shadow:0 2px 0 var(--gold-d)}
   .pl-panel{display:none;gap:8px;margin-top:10px;grid-template-columns:1fr auto}
   .pl-panel.show{display:grid}
   .pl-panel input{background:var(--panel2);border:2px solid var(--line);border-radius:12px;color:var(--ink);
@@ -207,12 +174,6 @@
   .ce-chip button{width:16px;height:16px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:10px;line-height:14px;cursor:pointer}
   .ce-empty{font-size:var(--fs-xs);color:var(--muted)}
   .ce-actions{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
-  .tick .rm{position:absolute;top:-7px;right:-7px;width:18px;height:18px;border-radius:50%;border:2px solid #fff;
-    background:var(--red);color:#fff;font-size:11px;line-height:14px;cursor:pointer;display:none}
-  .tick .ed{position:absolute;top:-7px;right:15px;width:18px;height:18px;border-radius:50%;border:2px solid #fff;
-    background:var(--blue);color:#fff;font-size:10px;line-height:14px;cursor:pointer;display:none}
-  .tick.pl{padding-right:18px}
-  .tick.pl:hover .rm,.tick.pl.on .rm,.tick.pl:hover .ed,.tick.pl.on .ed{display:block}
 
   /* ---- play deck / gałka ---- */
   .deck{margin-top:16px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r-lg);padding:24px 20px 22px;text-align:center}
@@ -532,12 +493,6 @@
   body.solo:not(.playing) .foot, body.solo:not(.playing) .legend{display:none}
   body.solo.playing .dial{display:none}
   body.solo.playing #modePick{display:none}   /* tryb ustala slot meczu, nie ręcznie */
-  .match-rand{width:100%;margin-top:14px;font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.02em;
-    color:var(--purple);background:var(--panel);border:2px solid var(--purple);border-bottom-width:4px;border-radius:14px;
-    padding:12px;cursor:pointer;text-transform:uppercase}
-  .match-rand:active{transform:translateY(2px);border-bottom-width:2px}
-  .match-info{font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);text-align:center;margin-top:14px;min-height:16px}
-  .match-info.err{color:var(--red)}
   body.menu .to-menu{display:none}
   .menu-hero{text-align:center;color:var(--muted);font-family:var(--display);font-weight:800;font-size:13px;
     letter-spacing:.02em;margin:10px 0 22px;text-transform:uppercase}
@@ -1204,31 +1159,7 @@
   .nav-badge{justify-self:end;display:none;background:var(--ok-bg);color:var(--ok-ink);font-family:var(--display);font-weight:900;font-size:12px;padding:7px 11px;border-radius:11px;line-height:1}
   body.solo:not(.playing) .nav-badge{display:inline-block}
   body.solo.playing .dial{display:none}
-  .um-sec{margin-top:20px}
-  .um-sec:first-child{margin-top:2px}
-  .um-h{display:flex;align-items:center;gap:8px;margin-bottom:11px}
-  .um-h>span:first-child{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink)}
-  .um-h .note{margin-left:auto;font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted)}
-  .um-h .note.val{font-weight:900;font-size:15px;color:var(--green)}
-  .um-chips{display:flex;flex-wrap:wrap;gap:10px}
-  .grp-chip{font-family:var(--display);font-weight:800;font-size:var(--fs-sm);color:var(--muted);background:var(--surface);border:2px solid var(--line);
-    border-bottom-width:4px;border-radius:14px;padding:9px 13px;cursor:pointer;transition:transform .08s,border-bottom-width .08s;white-space:nowrap}
-  .grp-chip:active{transform:translateY(2px);border-bottom-width:2px}
-  .grp-chip.on{color:var(--ok-ink);background:var(--ok-bg);border-color:var(--green)}
-  /* F2a: ✓ ma ZAREZERWOWANE miejsce (niewidoczne, gdy nie zaznaczony) — chip nie zmienia szerokości przy kliknięciu */
-  .grp-chip::after{content:'✓';display:inline-block;width:1em;margin-left:.25em;text-align:center;visibility:hidden}
-  .grp-chip.on::after{visibility:visible}
-  .grp-chip.open{box-shadow:0 0 0 3px rgba(88,204,2,.16)}
-  .grp-chip.mode.on{color:var(--blue-d);background:var(--info-bg);border-color:var(--blue)}
-  .grp-chip.mode.open{box-shadow:none}
-  .grp-band{display:none;margin-top:11px}
-  .grp-band.open{display:block;animation:scrIn .25s cubic-bezier(.2,.8,.2,1) both}
-  .band-sub{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);letter-spacing:.03em;color:var(--muted);text-transform:uppercase;margin:0 2px 8px}
   .um-rounds{display:flex;gap:8px}
-  /* F6a (R-F2): segment długości meczu — nazwa + liczba pytań */
-  .um-lens button{display:flex;flex-direction:column;align-items:center;gap:1px;padding:9px 0}
-  .um-lens button b{font-weight:900;font-size:var(--fs-md)}
-  .um-lens button small{font-family:var(--body);font-weight:700;font-size:var(--fs-xs);opacity:.85}
   .um-rounds button{flex:1;text-align:center;font-family:var(--display);font-weight:900;font-size:var(--fs-lg);color:var(--muted);
     background:var(--surface);border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 0;cursor:pointer;transition:transform .08s}
   .um-rounds button:active{transform:translateY(2px);border-bottom-width:2px}
@@ -1248,28 +1179,6 @@
   .um-tnames{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:8px}
   .um-tname{flex:1;min-width:110px;font-family:var(--display);font-weight:800;font-size:13px;color:var(--ink);background:var(--panel);border:2px solid var(--line);border-radius:11px;padding:8px 10px}
   .um-tname:focus{outline:none;border-bottom-width:3px}
-  /* #3: przełącznik trenera (powtórki oblanych) */
-  .um-repeat{display:flex;align-items:center;gap:10px;width:100%;text-align:left;cursor:pointer;
-    font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);
-    background:var(--panel);border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;padding:12px 14px;transition:transform .08s,border-color .12s,background .12s}
-  .um-repeat:active{transform:translateY(2px);border-bottom-width:2px}
-  .um-repeat .ur-ic{font-size:16px;filter:grayscale(1);opacity:.55}
-  .um-repeat .ur-tx{flex:1}
-  .um-repeat .ur-state{font-weight:900;color:var(--muted)}
-  .um-repeat .ur-state::after{content:'wył.'}
-  .um-repeat.on{color:var(--ink);background:var(--ok-bg);border-color:var(--green)}
-  .um-repeat.on .ur-ic{filter:none;opacity:1}
-  .um-repeat.on .ur-state{color:var(--ok-ink)}
-  .um-repeat.on .ur-state::after{content:'wł.'}
-  .um-summary{font-family:var(--display);font-weight:700;font-size:var(--fs-xs);color:var(--muted);margin-top:14px;min-height:16px}
-  .um-summary b{font-weight:900;color:var(--ink)}
-  .um-summary.err{color:var(--red)}
-  .um-foot{display:flex;gap:12px;margin-top:14px}
-  .um-dice{width:56px;flex:0 0 auto;background:var(--purple);border:none;border-radius:18px;font-size:24px;cursor:pointer;box-shadow:0 5px 0 #A568CC}
-  .um-dice:active{transform:translateY(5px);box-shadow:none}
-  .um-start{flex:1;background:var(--green);border:none;border-radius:18px;padding:16px;box-shadow:0 5px 0 var(--green-d);
-    font-family:var(--display);font-weight:900;font-size:17px;letter-spacing:.05em;color:#fff;cursor:pointer;text-transform:uppercase}
-  .um-start:active{transform:translateY(5px);box-shadow:none}
 
   /* ===== F6b: Jeden głośnik, zatwierdź, wskaźnik faz, potwierdzenie wyjścia, TV Solo/Drużyny, kredyty odsłony ===== */
   .mp-knob.remote{background:var(--panel2);color:var(--muted);box-shadow:0 5px 0 var(--line);border:2px solid var(--line)}
@@ -1336,20 +1245,14 @@
   }
   html.dark body{background:var(--bg);color:var(--ink)}
   /* powierzchnie z hardcodowanym #fff / jasnym tłem → panel/muted */
-  html.dark .grp-chip,
   html.dark .um-rounds button,
   html.dark .mh-mini,
   html.dark .lenpick button,
   html.dark .mini button,
   html.dark .modepick button{background:var(--panel);color:var(--muted);border-color:var(--line)}
   html.dark .seg{background:var(--panel2)}
-  html.dark .grp-chip.on,
   html.dark .um-rounds button.on{background:rgba(88,204,2,.16);color:#7BD957;border-color:var(--green)}
-  html.dark .um-repeat.on{background:rgba(88,204,2,.16);color:var(--ink);border-color:var(--green)}
-  html.dark .um-repeat.on .ur-state{color:#7BD957}
-  html.dark .grp-chip.mode.on{background:rgba(28,176,246,.16);color:#5CC5FF;border-color:var(--blue)}
   html.dark .nav-badge{background:rgba(88,204,2,.18);color:#7BD957}
-  html.dark .um-summary b{color:var(--ink)}
   /* formularz / inputy */
   html.dark .check:disabled{background:var(--panel2);color:var(--muted);box-shadow:0 4px 0 var(--line)}
   html.dark .field input{color:var(--ink)}
@@ -1471,6 +1374,175 @@
     .bb-loader i:nth-child(3){animation-delay:.3s}
   }
   @keyframes bbBounce{0%,80%,100%{transform:translateY(0);opacity:.55}40%{transform:translateY(-10px);opacity:1}}
+  /* ===== „Nowy mecz" — wspólny komponent solo + host MP (app/matchSetup.js; makieta canvas-mecz) =====
+     Telefon: gotowce (2 kol.) → zwijane „Dostosuj mecz" → pasek startu PRZYKLEJONY do dołu (sticky w przepływie:
+     w naturalnym miejscu stoi pod treścią, więc niczego trwale nie zasłania). ≥900 px: dwie kolumny (kategorie |
+     tryby + ustawienia + start), max 1200 px. Kolory przez tokeny (jasny/ciemny). */
+  :root{
+    --cta:#4F9A00; --cta-d:#3F7D00;          /* ZACZNIJ: biały 19 px/900 na #4F9A00 = 3,5:1 (duży tekst ≥3:1) */
+    --sel:#1373A8; --sel-d:#0E5A85;          /* wybrany tryb / licznik zakładki: biały tekst 5,2:1 */
+    --chip-ink:#1373A8; --dis-line:#D9D9D9; --dis-ink:#A8A8A8;
+    --dice:#CE82FF; --dice-d:#A75FD6; --ms-page:#F7F7F7;
+  }
+  html.dark{ --chip-ink:#5CC5FF; --dis-line:#4a4368; --dis-ink:#7d7694; --ms-page:var(--bg); }
+  .sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+  .ms{display:flex;flex-direction:column;gap:20px;padding-top:4px;text-align:left;font-family:var(--display)}
+  .ms button{font-family:var(--display)}
+  .ms button:focus-visible,.ms input:focus-visible,.mpd button:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+  .ms h2{margin:0;font-family:var(--display);font-weight:900;font-size:17px;color:var(--ink)}
+  .ms-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:10px}
+  .ms-note{font-weight:700;font-size:var(--fs-xs);color:var(--muted);white-space:nowrap}
+  .ms-preset-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .ms-preset{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-height:78px;padding:12px;text-align:left;
+    border:2px solid var(--line);border-bottom-width:4px;border-radius:16px;background:var(--surface);color:var(--ink);cursor:pointer}
+  .ms-preset b{font-size:15px;font-weight:900;line-height:1.2}
+  .ms-preset small{font-size:13px;font-weight:700;color:var(--muted);line-height:1.3}
+  .ms-preset.on{border-color:var(--gold-d);background:var(--part-bg)}
+  .ms-custom-toggle,.ms-set-toggle{display:flex;align-items:center;gap:8px;width:100%;min-height:48px;padding:0 14px 0 16px;text-align:left;
+    border:2px solid var(--line);border-radius:16px;background:var(--panel2);color:var(--ink);cursor:pointer}
+  .ms-custom-toggle{border-bottom-width:4px;font-size:16px;font-weight:900}
+  .ms-custom-toggle>span,.ms-set-toggle>span{flex:1 0 auto;font-size:16px;font-weight:900;white-space:nowrap}
+  .ms-custom-toggle small,.ms-set-toggle small{flex:0 1 auto;min-width:0;font-size:13px;font-weight:800;color:var(--muted);text-align:right;line-height:1.25;padding:4px 0}
+  .ms-chev{flex:none;color:var(--muted);transition:transform .15s}
+  [aria-expanded="true"]>.ms-chev{transform:rotate(180deg)}
+  .ms-body,.ms-side{display:flex;flex-direction:column;gap:22px}
+  .ms-body[hidden]{display:none}
+  /* kategorie */
+  .ms-chips{display:flex;flex-wrap:wrap;gap:8px 6px;margin-bottom:12px}
+  .ms-chip{position:relative;display:inline-flex;align-items:center;gap:6px;min-height:36px;padding:0 10px 0 12px;border:2px solid var(--info-line);
+    border-radius:999px;background:var(--info-bg);color:var(--chip-ink);font-size:14px;font-weight:800;cursor:pointer;max-width:100%}
+  .ms-chip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .ms-chip svg{flex:none}
+  button.ms-chip::after{content:'';position:absolute;inset:-5px -1px}   /* cel dotyku 46 px przy 36 px wyglądu */
+  .ms-chip.ro{cursor:default;padding:0 12px;min-height:32px}
+  .ms-chip-clear{min-height:36px;padding:0 10px;border:none;background:none;color:var(--muted);font-size:13px;font-weight:800;text-decoration:underline;cursor:pointer}
+  .ms-catbar{display:flex;flex-direction:column;gap:10px;margin-bottom:12px}
+  .ms-tabs{display:flex;flex-wrap:wrap;gap:6px}
+  .ms-tab{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 12px;border:2px solid var(--line);border-radius:12px;
+    background:var(--panel2);color:var(--ink);font-size:14px;font-weight:900;cursor:pointer}
+  .ms-tab.on{background:var(--ink);border-color:var(--ink);color:var(--bg)}
+  .ms-tab-n{min-width:20px;height:20px;padding:0 6px;border-radius:10px;background:var(--sel);color:#fff;font-size:12px;font-weight:900;display:inline-flex;align-items:center;justify-content:center}
+  .ms-search{display:flex;align-items:center;gap:8px;min-height:44px;padding:0 4px 0 12px;border:2px solid var(--line);border-radius:12px;background:var(--surface);color:var(--muted)}
+  .ms-search:focus-within{border-color:var(--blue)}
+  .ms-search svg{flex:none}
+  .ms-search input{flex:1;min-width:0;border:none;outline:none;background:transparent;font-family:var(--body);font-weight:700;font-size:16px;color:var(--ink);padding:9px 0}
+  .ms-search input::placeholder{color:var(--muted);opacity:1}
+  .ms-search input::-webkit-search-cancel-button{display:none}
+  .ms .ms-search input:focus-visible{outline:none}
+  .ms-search-x{flex:none;width:40px;height:40px;border:none;background:none;color:var(--muted);border-radius:10px;cursor:pointer;display:flex;align-items:center;justify-content:center}
+  .ms-found,.ms-gnote,.ms-empty{margin:0 2px 10px;font-weight:700;font-size:var(--fs-xs);color:var(--muted)}
+  .ms-empty{margin-top:4px}
+  .ms-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .ms-cat{display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:2px;width:100%;min-height:64px;padding:10px 12px;text-align:left;
+    border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;background:var(--surface);color:var(--ink);cursor:pointer;min-width:0}
+  .ms-cat b{font-size:15px;font-weight:900;line-height:1.2;overflow-wrap:anywhere}
+  .ms-cat small{font-size:13px;font-weight:700;color:var(--muted);line-height:1.25;overflow-wrap:anywhere}
+  .ms-cat.on{border-color:var(--green-d);background:var(--ok-bg)}
+  .ms-cat:active,.ms-preset:active,.ms-len:active,.ms-pill:not(:disabled):active,.ms-custom-toggle:active{transform:translateY(2px)}
+  .ms-cat-wrap{position:relative;display:flex;min-width:0}
+  .ms-cat-wrap .ms-cat{min-height:84px;padding-right:48px}
+  .ms-cat-acts{position:absolute;top:2px;right:2px;bottom:6px;display:flex;flex-direction:column;gap:2px}
+  .ms-cat-act{flex:1;width:44px;min-height:36px;border:none;border-radius:10px;background:transparent;color:var(--muted);font-size:17px;font-weight:900;cursor:pointer}
+  .ms-cat-act.rm{color:var(--fail-ink)}
+  .ms-twoje-tools{margin-bottom:12px}
+  .ms-twoje-btns{display:flex;flex-wrap:wrap;gap:8px}
+  .ms-add{min-height:44px;padding:0 14px;border:2px solid var(--gold-d);border-bottom-width:4px;border-radius:12px;background:var(--part-bg);color:var(--ink);font-size:14px;font-weight:900;cursor:pointer}
+  .pl-panel button{font-family:var(--display);font-weight:800;color:#fff;background:var(--green-d);border:none;border-radius:12px;padding:0 16px;min-height:44px;cursor:pointer;text-transform:uppercase}
+  /* tryby */
+  .ms-fam{display:flex;flex-direction:column;gap:6px}
+  .ms-fam+.ms-fam{margin-top:12px}
+  .ms-fam-h{display:flex;align-items:baseline;gap:8px;flex-wrap:wrap}
+  .ms-fam-h b{font-size:14px;font-weight:900;color:var(--ink)}
+  .ms-fam-h span{font-size:13px;font-weight:700;color:var(--muted)}
+  .ms-pills{display:flex;flex-wrap:wrap;gap:6px}
+  .ms-pill{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:0 14px;border:2px solid var(--line);border-bottom-width:4px;border-radius:999px;
+    background:var(--surface);color:var(--ink);font-size:14px;font-weight:800;cursor:pointer}
+  .ms-pill.on{background:var(--sel);border-color:var(--sel-d);color:#fff}
+  .ms-pill:disabled{border:2px dashed var(--dis-line);background:var(--surface);color:var(--dis-ink);cursor:not-allowed}
+  .ms-pill small{font-size:12px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;opacity:.9}
+  .ms-pill.auto{cursor:default;border:2px dashed var(--dis-line);color:var(--muted)}
+  .ms-pill.auto.on{border:2px solid var(--sel-d);border-bottom-width:4px;background:var(--sel);color:#fff}
+  .ms-mnote{margin:12px 0 0;font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted);line-height:1.4}
+  /* ustawienia meczu */
+  .ms-set-toggle{border-radius:14px;background:var(--surface)}
+  .ms-set-body{display:flex;flex-direction:column;gap:10px;padding:12px 2px 2px}
+  .ms-set-body[hidden]{display:none}
+  .ms-sub{font-size:14px;font-weight:900;color:var(--ink);margin-top:4px}
+  .ms-sub-note{font-weight:700;font-size:13px;color:var(--muted);margin-left:6px}
+  .ms-lens{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+  .ms-len{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:2px;min-height:64px;padding:0 4px;
+    border:2px solid var(--line);border-bottom-width:4px;border-radius:14px;background:var(--surface);color:var(--ink);cursor:pointer}
+  .ms-len b{font-size:16px;font-weight:900}
+  .ms-len small{font-size:13px;font-weight:700;color:var(--muted)}
+  .ms-len.on{border-color:var(--green-d);background:var(--ok-bg)}
+  .ms-switch{display:flex;align-items:center;gap:10px;width:100%;min-height:56px;padding:8px 14px;text-align:left;border:2px solid var(--line);
+    border-radius:14px;background:var(--surface);color:var(--ink);cursor:pointer;margin-top:4px}
+  .ms-switch-tx{flex:1;display:flex;flex-direction:column;min-width:0}
+  .ms-switch-tx b{font-size:15px;font-weight:900}
+  .ms-switch-tx small{font-size:13px;font-weight:700;color:var(--muted)}
+  .ms-switch-st{flex:none;font-size:13px;font-weight:900;padding:4px 10px;border-radius:999px;background:var(--track);color:var(--muted)}
+  .ms-switch.on .ms-switch-st{background:var(--cta);color:#fff}
+  .ms .um-rounds button{font-size:15px;min-height:44px;padding:8px 0}
+  .ms .um-salon{display:flex;flex-direction:column;gap:8px;margin-top:6px}
+  .ms .um-salon .um-audiohost{margin-top:0}
+  /* pasek startu */
+  .ms-bar{position:sticky;bottom:0;z-index:20;display:flex;flex-direction:column;gap:10px;margin:4px -16px 0;
+    padding:12px 16px calc(14px + env(safe-area-inset-bottom));background:var(--bg);border-top:2px solid var(--line)}
+  .ms-sum{font-size:14px;font-weight:800;color:var(--ink);text-align:center;min-height:20px;overflow-wrap:anywhere}
+  .ms-sum.err{color:var(--muted)}
+  .ms-bar-row{display:flex;gap:10px}
+  .ms-dice{width:56px;height:54px;flex:none;border:none;border-bottom:4px solid var(--dice-d);border-radius:16px;background:var(--dice);color:#fff;
+    display:flex;align-items:center;justify-content:center;cursor:pointer}
+  .ms-start{flex:1;min-width:0;height:54px;border:none;border-bottom:4px solid var(--cta-d);border-radius:16px;background:var(--cta);color:#fff;
+    font-size:19px;font-weight:900;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+  .ms-start:disabled{background:var(--line);color:var(--muted);border-bottom-color:var(--dis-line);cursor:not-allowed}
+  .ms-dice:active,.ms-start:not(:disabled):active{transform:translateY(2px);border-bottom-width:2px}
+  /* MP: picker hosta bez ramki .mp-deck (komponent ma własny układ) */
+  .mp-deck.ms-host{background:none;border:none;padding:0;text-align:left;margin-bottom:0}
+  @media (max-width:360px){
+    .ms-preset{padding:10px} .ms-cat{padding:10px} .ms-tab{padding:0 10px}
+    .ms-custom-toggle small{display:none}
+  }
+  /* desktop: dwie kolumny (kategorie | tryby + ustawienia + start), pasek startu w prawej kolumnie */
+  @media (min-width:900px){
+    body.solo:not(.playing), body.mp.ms-wide{max-width:1200px;padding-left:24px;padding-right:24px}
+    body.solo:not(.playing){background:var(--ms-page)}
+    html:not(.dark) body.mp.ms-wide{background:var(--ms-page)}
+    .ms{display:grid;grid-template-columns:minmax(0,1.7fr) minmax(340px,1fr);grid-template-rows:auto auto 1fr;
+      grid-template-areas:"presets presets" "cats side" "cats bar";gap:20px;align-items:start}
+    .ms-presets{grid-area:presets}
+    .ms-preset-grid{grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px}
+    .ms-custom-toggle{display:none}
+    .ms-body,.ms-body[hidden]{display:contents}
+    .ms-cats{grid-area:cats}
+    .ms-side{grid-area:side;gap:16px}
+    .ms-panel,.ms-settings{background:var(--panel);border:2px solid var(--line);border-radius:20px;padding:20px}
+    .ms-settings{padding:12px}
+    .ms-set-toggle{border:none;background:none;padding:0 6px}
+    .ms h2{font-size:20px}
+    .ms-catbar{flex-direction:row;flex-wrap:wrap;align-items:center}
+    .ms-tabs{flex:1 1 auto}
+    .ms-search{flex:1 1 240px;min-width:220px}
+    .ms-grid{grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:10px}
+    .ms-bar{grid-area:bar;position:static;margin:0;padding:16px;border:2px solid var(--line);border-radius:20px;background:var(--panel)}
+  }
+
+  /* MP — widok gościa w poczekalni: „Mecz, który ustawia host" (szkic na żywo, core/matchSetup.sanitizeDraft) */
+  .mpd{margin:14px 20px 0;padding:14px;display:flex;flex-direction:column;gap:10px;border:2px solid var(--line);border-bottom-width:4px;border-radius:16px;background:var(--panel2);text-align:left}
+  .mpd-h{display:flex;justify-content:space-between;align-items:baseline;gap:8px}
+  .mpd-h h2{margin:0;font-family:var(--display);font-weight:900;font-size:17px;color:var(--ink)}
+  .mpd-live{font-family:var(--display);font-weight:800;font-size:13px;color:var(--chip-ink);white-space:nowrap}
+  .mpd-preset{font-family:var(--display);font-weight:900;font-size:16px;color:var(--part-ink)}
+  html:not(.dark) .mpd-preset{color:#9A6B00}   /* złoto na jasnym tle — 4,5:1 */
+  .mpd-row{display:flex;flex-direction:column;gap:6px}
+  .mpd-lbl{font-family:var(--display);font-weight:800;font-size:13px;color:var(--muted);letter-spacing:.03em}
+  .mpd-row .ms-chips{margin:0}
+  .mpd-modes{font-family:var(--display);font-weight:800;font-size:15px;color:var(--ink)}
+  .mpd-none{font-weight:700;font-size:13px;color:var(--muted)}
+  .mpd-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+  .mpd-cell{padding:8px 10px;border-radius:12px;background:var(--surface);border:2px solid var(--line);min-width:0}
+  .mpd-cell small{display:block;font-family:var(--body);font-weight:700;font-size:13px;color:var(--muted)}
+  .mpd-cell b{display:block;font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink);overflow-wrap:anywhere}
 </style>
 <script>/* motyw przed renderem — bez mignięcia. F6a (R-U7): brak wyboru / 'system' → prefers-color-scheme */try{var _t=localStorage.getItem('stacjaTheme');if(_t==='dark'||(_t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');}catch(e){try{if(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark');}catch(_e){}}</script>
 </head>
@@ -1580,47 +1652,23 @@
 
   <section class="dial">
     <span id="dialNote" hidden></span>
-
-    <div class="um-sec">
-      <div class="um-h"><span>Kategorie</span><span class="note" id="catCount">0 wybranych</span></div>
-      <div class="um-chips" id="grpChips">
-        <button class="grp-chip" data-grp="dekady"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M208 28h-20v-4a12 12 0 0 0-24 0v4H92v-4a12 12 0 0 0-24 0v4H48a20 20 0 0 0-20 20v160a20 20 0 0 0 20 20h160a20 20 0 0 0 20-20V48a20 20 0 0 0-20-20M68 52a12 12 0 0 0 24 0h72a12 12 0 0 0 24 0h16v24H52V52ZM52 204V100h152v104Zm92-76a16 16 0 1 1-16-16a16 16 0 0 1 16 16m48 0a16 16 0 1 1-16-16a16 16 0 0 1 16 16m-96 48a16 16 0 1 1-16-16a16 16 0 0 1 16 16m48 0a16 16 0 1 1-16-16a16 16 0 0 1 16 16m48 0a16 16 0 1 1-16-16a16 16 0 0 1 16 16"/></svg> Dekady</button>
-        <button class="grp-chip" data-grp="style"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M92.49 187.5a12 12 0 1 1-17 17l-24-24a12 12 0 0 1 17-17ZM112 120a24 24 0 1 0 24 24a24 24 0 0 0-24-24m140.49-59.52a12 12 0 0 1-14.12 2.12L182 119a73 73 0 0 1 5.36 18.68c2.51 17.58-2.2 33.35-13.27 44.42a46.1 46.1 0 0 1-15.73 10.29a4.32 4.32 0 0 0-2.39 4c-.53 15.61-6.16 29.22-16.28 39.34C129 246.37 114.5 252 98.13 252a77 77 0 0 1-10.77-.78c-19.47-2.78-38.73-12.85-54.23-28.35S7.56 188.11 4.78 168.64c-3-20.75 2.56-39.34 15.55-52.33c10.12-10.12 23.73-15.75 39.34-16.31a4.32 4.32 0 0 0 4-2.39a46.1 46.1 0 0 1 10.26-15.7C85 70.84 100.77 66.13 118.35 68.64A73 73 0 0 1 137 74l56.4-56.37a12 12 0 0 1 19.09-14.12l40 40a12 12 0 0 1 0 16.97M221 46l-11-11l-19 19l11 11Zm-74.31 63.28C135.53 98.09 121.39 92 109.34 92c-7.29 0-13.81 2.21-18.44 6.85a22.2 22.2 0 0 0-4.9 7.62A28.23 28.23 0 0 1 60.48 124c-6.57.22-15.93 2-23.18 9.26c-7.52 7.52-10.63 18.87-8.76 32c2.05 14.37 9.71 28.81 21.56 40.66s26.29 19.51 40.66 21.56c13.09 1.87 24.44-1.24 32-8.76c7.25-7.25 9-16.61 9.26-23.18A28.23 28.23 0 0 1 149.53 170a22.2 22.2 0 0 0 7.59-4.94c12.31-12.27 7.55-37.83-10.4-55.78Z"/></svg> Style</button>
-        <button class="grp-chip" data-grp="playlisty"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M28 64a12 12 0 0 1 12-12h176a12 12 0 0 1 0 24H40a12 12 0 0 1-12-12m12 76h116a12 12 0 0 0 0-24H40a12 12 0 0 0 0 24m68 40H40a12 12 0 0 0 0 24h68a12 12 0 0 0 0-24m143.49-52.55a12 12 0 0 1-14.94 8L212 128.13V192a36 36 0 1 1-24-33.94V112a12 12 0 0 1 15.45-11.49l40 12a12 12 0 0 1 8.04 14.94M188 192a12 12 0 1 0-12 12a12 12 0 0 0 12-12"/></svg> Playlisty</button>
-        <button class="grp-chip" data-grp="teksty"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M100 52H40a20 20 0 0 0-20 20v64a20 20 0 0 0 20 20h56v4a28 28 0 0 1-28 28a12 12 0 0 0 0 24a52.06 52.06 0 0 0 52-52V72a20 20 0 0 0-20-20m-4 80H44V76h52Zm120-80h-60a20 20 0 0 0-20 20v64a20 20 0 0 0 20 20h56v4a28 28 0 0 1-28 28a12 12 0 0 0 0 24a52.06 52.06 0 0 0 52-52V72a20 20 0 0 0-20-20m-4 80h-52V76h52Z"/></svg> Teksty</button>
-        <button class="grp-chip" data-grp="wiedza" id="grpWiedza" hidden><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M252 124a60.14 60.14 0 0 0-32-53.08a52 52 0 0 0-92-32.11a52 52 0 0 0-92 32.11a60 60 0 0 0 0 106.14a52 52 0 0 0 92 32.13a52 52 0 0 0 92-32.13A60.05 60.05 0 0 0 252 124M88 204a28 28 0 0 1-26.85-20.07c1 0 1.89.07 2.85.07h8a12 12 0 0 0 0-24h-8a36 36 0 0 1-12-69.95a12 12 0 0 0 8-11.32V72a28 28 0 0 1 56 0v60.18a51.6 51.6 0 0 0-7.2-3.85a12 12 0 1 0-9.6 22A28 28 0 0 1 88 204m104-44h-8a12 12 0 0 0 0 24h8c1 0 1.9 0 2.85-.07a28 28 0 1 1-38-33.61a12 12 0 1 0-9.6-22a51.6 51.6 0 0 0-7.2 3.85V72a28 28 0 0 1 56 0v6.73a12 12 0 0 0 8 11.32a36 36 0 0 1-12 70Zm16-44a12 12 0 0 1-12 12a40 40 0 0 1-40-40v-4a12 12 0 0 1 24 0v4a16 16 0 0 0 16 16a12 12 0 0 1 12 12M100 88a40 40 0 0 1-40 40a12 12 0 0 1 0-24a16 16 0 0 0 16-16v-4a12 12 0 0 1 24 0Z"/></svg> Wiedza</button>
-        <button class="grp-chip" data-grp="lamiglowki" id="grpLam" hidden>🧩 Łamigłówki</button>
-        <button class="grp-chip" data-grp="twoje"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M243 96a20.33 20.33 0 0 0-17.74-14l-56.59-4.57l-21.84-52.81a20.36 20.36 0 0 0-37.66 0L87.35 77.44L30.76 82a20.45 20.45 0 0 0-11.66 35.88l43.18 37.24l-13.2 55.7A20.37 20.37 0 0 0 79.57 233L128 203.19L176.43 233a20.39 20.39 0 0 0 30.49-22.15l-13.2-55.7l43.18-37.24A20.43 20.43 0 0 0 243 96m-70.47 45.7a12 12 0 0 0-3.84 11.86L181.58 208l-47.29-29.08a12 12 0 0 0-12.58 0L74.42 208l12.89-54.4a12 12 0 0 0-3.84-11.86l-42.27-36.5l55.4-4.47a12 12 0 0 0 10.13-7.38L128 41.89l21.27 51.5a12 12 0 0 0 10.13 7.38l55.4 4.47Z"/></svg> Twoje</button>
-      </div>
-      <div class="grp-band" data-band="dekady"><div class="ticks" id="ticks"></div></div>
-      <div class="grp-band" data-band="style"><div class="ticks" id="styleTicks"></div></div>
-      <div class="grp-band" data-band="playlisty"><div class="ticks" id="readyTicks"></div></div>
-      <div class="grp-band" data-band="teksty">
-        <div class="band-sub">tłumaczenia 🌐 (tryb lektor)</div>
-        <div class="ticks" id="lyricsTicks"></div>
-      </div>
-      <div class="grp-band" data-band="wiedza">
-        <div class="band-sub" id="quizBand">wiedza ogólna 🧠 (tryb quiz)</div>
-        <div class="ticks" id="quizTicks"></div>
-      </div>
-      <div class="grp-band" data-band="lamiglowki">
-        <div class="band-sub" id="lamBand">muzyczne łamigłówki słowne 🧩 (tryb quiz)</div>
-        <div class="ticks" id="lamTicks"></div>
-      </div>
-      <div class="grp-band" data-band="twoje">
-        <div class="band-sub">twoje kategorie <button class="pl-add" id="catNew">+ nowa</button> <button class="pl-add" id="plImport">+ ze Spotify</button></div>
-        <div class="ticks" id="plTicks"></div>
+    <!-- „Nowy mecz": wspólny komponent solo + host MP (app/matchSetup.js) — render w #msSolo -->
+    <div id="msSolo" class="ms-root"></div>
+    <!-- narzędzia zakładki „Twoje" (statyczny DOM: catEditor.js + import Spotify) — komponent przenosi je do slotu zakładki -->
+    <div id="soloTwojeHold" hidden>
+      <div class="ms-twoje-tools" id="soloTwojeTools">
+        <div class="ms-twoje-btns"><button type="button" class="ms-add" id="catNew">+ nowa kategoria</button><button type="button" class="ms-add" id="plImport" aria-expanded="false" aria-controls="plPanel">+ ze Spotify</button></div>
         <div class="pl-panel" id="plPanel">
-          <input id="plUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify">
+          <input id="plUrl" autocomplete="off" aria-label="Link do publicznej playlisty Spotify" placeholder="wklej link do publicznej playlisty Spotify">
           <button id="plGo">Importuj</button>
-          <div class="pl-status" id="plStatus"></div>
+          <div class="pl-status" id="plStatus" role="status"></div>
         </div>
         <!-- Edytor własnych kategorii (B-MVP): wyszukiwarka iTunes + koszyk + zapis -->
         <div class="cat-editor" id="catPanel">
           <div class="ce-head"><b id="catTitle">Nowa kategoria</b>
-            <input id="catName" maxlength="60" autocomplete="off" placeholder="nazwa (np. Wesele Ani)"></div>
+            <input id="catName" maxlength="60" autocomplete="off" aria-label="Nazwa kategorii" placeholder="nazwa (np. Wesele Ani)"></div>
           <div class="ce-search">
-            <input id="catSearchIn" autocomplete="off" placeholder="szukaj utworu lub wykonawcy…">
+            <input id="catSearchIn" autocomplete="off" aria-label="Szukaj utworu lub wykonawcy" placeholder="szukaj utworu lub wykonawcy…">
             <button id="catSearchGo">Szukaj</button>
           </div>
           <div class="ce-results" id="catResults"></div>
@@ -1637,31 +1685,6 @@
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="um-sec">
-      <div class="um-h"><span>Tryby pytań</span><span class="note">jak słyszysz utwór</span></div>
-      <div class="um-chips" id="modeTicks"></div>
-    </div>
-
-    <div class="um-sec">
-      <div class="um-h"><span>Długość meczu</span><span class="note val" id="lenVal">15 pytań</span></div>
-      <div class="um-rounds um-lens" id="lenPick">
-        <button data-q="5"><b>Krótki</b><small>5 pyt.</small></button>
-        <button data-q="15" class="on"><b>Standard</b><small>15 pyt.</small></button>
-        <button data-q="30"><b>Długi</b><small>30 pyt.</small></button>
-      </div>
-    </div>
-
-    <div class="um-sec">
-      <div class="um-h"><span>Trener</span><span class="note">quiz · solo</span></div>
-      <button class="um-repeat" id="quizRepeat" type="button"><span class="ur-ic">🔁</span><span class="ur-tx">Częściej pytania, które oblałeś</span><span class="ur-state"></span></button>
-    </div>
-
-    <div class="um-summary" id="matchInfo"></div>
-    <div class="um-foot">
-      <button class="um-dice" id="matchRandom" aria-label="Losuj kategorie i tryby"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M192 28H64a36 36 0 0 0-36 36v128a36 36 0 0 0 36 36h128a36 36 0 0 0 36-36V64a36 36 0 0 0-36-36m12 164a12 12 0 0 1-12 12H64a12 12 0 0 1-12-12V64a12 12 0 0 1 12-12h128a12 12 0 0 1 12 12ZM104 88a16 16 0 1 1-16-16a16 16 0 0 1 16 16m40 40a16 16 0 1 1-16-16a16 16 0 0 1 16 16m40-40a16 16 0 1 1-16-16a16 16 0 0 1 16 16m-80 80a16 16 0 1 1-16-16a16 16 0 0 1 16 16m80 0a16 16 0 1 1-16-16a16 16 0 0 1 16 16"/></svg></button>
-      <button class="um-start" id="matchStart">Zacznij mecz</button>
     </div>
   </section>
 

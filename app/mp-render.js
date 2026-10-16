@@ -18,6 +18,8 @@ import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie 
 import { playClap, playSfx } from './sfx.js';
 import { ic } from './icons.js';
 import { mpPickerHTML } from './mp-picker.js';
+import { renderPreserving } from './matchSetup.js';   // re-render pickera bez gubienia fokusu (wyszukiwarka/klawiatura)
+import { FORMAT_LABEL, timerLabel, draftModesText } from '../core/matchSetup.js';
 
 const $m = id => document.getElementById(id);
 
@@ -43,9 +45,23 @@ const curSkin = ()=> mpIsSalonHost() ? 'kolumny' : mpSkin();
 const renderSlots = (g)=> ((g && g.answerSlots) || slotsFor()).filter(s=>s && isSlotKey(s.key));
 const myBucket = ()=>{ const g=S.game, tid=myTeamId&&myTeamId(); return (g && g.byTeam && tid && g.byTeam[tid]) || {}; };
 
+// gość: „Mecz, który ustawia host" — szkic na żywo (S.draft, sanityzowany w core/matchSetup.sanitizeDraft).
+// Wszystkie teksty ze szkicu → escapeHtml (pochodzą z sieci).
+function mpDraftHTML(d){
+  if(!d) return '';
+  const chips=d.cats.map(c=>`<span class="ms-chip ro">${escapeHtml(c.l)}</span>`).join('')+(d.more?`<span class="ms-chip ro more">+${num(d.more)}</span>`:'');
+  const cell=(k,v)=>`<div class="mpd-cell"><small>${k}</small><b>${escapeHtml(v)}</b></div>`;
+  return `<section class="mpd" aria-labelledby="mpdH">
+      <div class="mpd-h"><h2 id="mpdH">Mecz, który ustawia host</h2><span class="mpd-live">na żywo</span></div>
+      ${d.preset?`<div class="mpd-preset">${escapeHtml(d.preset)}</div>`:''}
+      <div class="mpd-row"><span class="mpd-lbl">KATEGORIE</span>${d.cats.length?`<div class="ms-chips">${chips}</div>`:'<span class="mpd-none">host jeszcze nie wybrał</span>'}</div>
+      <div class="mpd-row"><span class="mpd-lbl">TRYBY</span><div class="mpd-modes">${escapeHtml(draftModesText(d.modes))}</div></div>
+      <div class="mpd-grid">${cell('długość', d.questions+' pytań')}${cell('format', FORMAT_LABEL[d.format]||FORMAT_LABEL.coop)}${cell('czas na odpowiedź', timerLabel(d.timer))}${cell('dźwięk', d.salon?'tylko na TV':d.audioHostOnly?'tylko u hosta':'u wszystkich')}</div>
+    </section>`;
+}
 function mpLobbyWaitHTML(){
   const ms=mpMembers();
-  const hostId = S.game ? S.game.hostId : (S.host ? mpMe.id : null);
+  const hostId = S.game ? S.game.hostId : (S.host ? mpMe.id : (S.ch && S.ch.hostId) || null);
   const cards = ms.map(m=>{
     const isHost = m.id===hostId, you = m.id===mpMe.id;
     const av = escapeHtml((m.name||'?').slice(0,1).toUpperCase());
@@ -56,16 +72,19 @@ function mpLobbyWaitHTML(){
     </div>`;
   }).join('') || `<div class="pcz-waitmsg">czekamy na graczy…</div>`;
   const n=ms.length, word = n===1?'osoba' : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? 'osoby' : 'osób';
+  const draft = !S.host ? mpDraftHTML(S.draft) : '';
   const foot = S.host
     ? `<button class="pcz-start" onclick="mpLobbyStart()">ZACZNIJ →</button>`
+    : S.draft ? `<div class="pcz-waitmsg" role="status">⏳ host układa mecz — zmiany widzisz na żywo; zacznie, gdy będzie gotowy</div>`
     : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
   return `<div class="pcz">
     <div class="pcz-hd">
       <div class="pcz-hd-r1"><button type="button" class="pcz-exit" onclick="mpConfirmLeave('lobby')">${ic('back')} wyjdź</button><span class="pcz-lbl">KOD POKOJU</span></div>
       <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(S.code||'····')}</span><button class="pcz-share" onclick="mpShare(this)">${ic('share')} Udostępnij</button></div>
     </div>
-    <div class="pcz-team"><span>Drużyna</span><span class="pcz-count">${n} ${word}</span></div>
+    <div class="pcz-team"><span>Przy stole</span><span class="pcz-count">${n} ${word}</span></div>
     <div class="pcz-list">${cards}</div>
+    ${draft}
     <div class="pcz-foot">${foot}</div>
   </div>`;
 }
@@ -122,9 +141,11 @@ function mpRender(){
     mpOnEnter(S.game, null, st);   // przejście picker/poczekalnia → animIn
     // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
     const building = S.host && S.roomStage==='build';
-    st.innerHTML = building ? mpPickerHTML() : mpLobbyWaitHTML();
+    document.body.classList.toggle('ms-wide', !!building);   // desktop ≥900 px: picker w dwóch kolumnach (max 1200 px)
+    if(building) renderPreserving(st, mpPickerHTML()); else st.innerHTML = mpLobbyWaitHTML();
     return;
   }
+  document.body.classList.remove('ms-wide');
   const g=S.game;
   const head=mpHeaderHTML(g);   // kompaktowy nagłówek 2-wierszowy (zawiera #mpCountdown)
   mpOnEnter(g, head, st);        // wszystkie efekty wejścia w scenę: migawka odsłony + confetti + oklaski + animIn

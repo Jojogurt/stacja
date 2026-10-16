@@ -1,31 +1,38 @@
-/* app/mp-picker.js — host-picker MP („ułóż mecz"): wybór kategorii/trybów/długości/timera + budowa puli.
- * Stan pickera zamknięty w module (czytany przez mpStart w mp.js). mpRender wstrzykiwany (initMpPicker)
- * — re-render po zmianie wyboru bez cyklu z mp.js. */
-import { ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, ALL_CATS, randomPools, plLoad, plFetch } from './catalog.js';
-import { MP_MODES, MODE_LABEL, MATCH_LENGTHS, DEFAULT_QUESTIONS } from '../core/match.js';
+/* app/mp-picker.js — host-picker MP („Nowy mecz"): ten sam komponent co solo (app/matchSetup.js) + ustawienia
+ * pokoju (timer, format Wspólna/Solo/Drużyny z przydziałem, tryb salonowy/TV, „dźwięk tylko u hosta") w sekcji
+ * „Ustawienia meczu". Stan pickera zamknięty w module (czytany przez mpStart w mp.js; Sety mutowane W MIEJSCU).
+ * mpRender wstrzykiwany (initMpPicker) — re-render po zmianie wyboru bez cyklu z mp.js. Każda zmiana konfiguracji
+ * woła `onDraft` (mp.js rozsyła gościom szkic „Mecz, który ustawia host" — na żywo). */
+import { ALL_CATS, randomPools, plFetch } from './catalog.js';
+import { MP_MODES, DEFAULT_QUESTIONS } from '../core/match.js';
 import { MP_TIMER_OPTIONS } from '../core/timing.js';
 import { escapeHtml } from '../core/util.js';
-import { pickSummary, pickSummaryText, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, quizGroupKeys } from '../core/picker.js';
+import { settingsSummary } from '../core/matchSetup.js';
 import { teamColor } from '../core/teams.js';
+import { createMatchSetup } from './matchSetup.js';
 import { ic } from './icons.js';
 
 let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render widoku pokoju)
 let mpGetPlayers = () => [];             // [{id,name}] obecni gracze (z mp.js) — do przypisania do drużyn
 let mpGetModes = () => MP_MODES;         // F8a: tryby dostępne w tym pokoju (relay: wszystkie MP; autorytet: znane serwerowi)
-export function initMpPicker(render, getPlayers, getModes){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; }
+let mpOnDraft = () => {};                // zmiana konfiguracji → mp.js rozsyła szkic gościom (debounce + limit po stronie serwera)
+export function initMpPicker(render, getPlayers, getModes, onDraft){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; if(onDraft) mpOnDraft = onDraft; }
 // F8a: dostępne tryby + wytnij z wyboru te, których pokój nie obsłuży (np. stary serwer nie zna 'abcd'/'year')
 function mpAvailModes(){ const av=mpGetModes()||MP_MODES; [...mpPickModes].forEach(m=>{ if(m!=='quiz' && !av.includes(m)) mpPickModes.delete(m); }); return av; }
 
-let mpPickCats=new Set(), mpPickModes=new Set(['music']), mpPickQuestions=DEFAULT_QUESTIONS, mpPickTimer=60;   // F6a: długość w pytaniach
+const mpPick={ cats:new Set(), modes:new Set(['music']), questions:DEFAULT_QUESTIONS, preset:null };
+const mpPickCats=mpPick.cats, mpPickModes=mpPick.modes;   // żywe referencje dla mp.js (mutowane w miejscu)
+let mpPickQuestions=DEFAULT_QUESTIONS, mpPickTimer=60;   // F6a: długość w pytaniach (lustro mpPick.questions dla mp.js)
 let mpPickSalon=false;   // tryb salonowy: TEN ekran tylko prowadzi i gra muzykę (TV), telefony = kontrolery
 let mpPickFormat='coop'; // format meczu: 'coop' (jedna drużyna) | 'solo' (każdy sam) | 'teams' (podział)
 // F6b (tryb #6 „Jeden głośnik"): zajawka/lektor tylko u hosta (pub: jeden telefon/głośnik na stół).
 // W salonie zawsze włączone (TV gra muzykę, telefony to piloty) — przełącznik pokazuje stan, ale jest zablokowany.
 let mpPickAudioHost=false;
+const changedCfg=()=>{ mpOnDraft(); mpRender(); };
 // F6b (#6): salon działa dla WSZYSTKICH formatów (TV w Solo/Drużynach pokazuje status drużyn bez ich odpowiedzi)
-function mpSetFormat(v){ mpPickFormat=v; mpRender(); }
-function mpSetSalon(v){ mpPickSalon=!!v; mpRender(); }
-function mpSetAudioHost(v){ if(mpPickSalon) return; mpPickAudioHost=!!v; mpRender(); }
+function mpSetFormat(v){ mpPickFormat=['coop','solo','teams'].includes(v)?v:'coop'; changedCfg(); }
+function mpSetSalon(v){ mpPickSalon=!!v; changedCfg(); }
+function mpSetAudioHost(v){ if(mpPickSalon) return; mpPickAudioHost=!!v; changedCfg(); }
 // efektywna flaga do configu meczu (salon ⇒ zawsze audio tylko u hosta)
 const mpPickAudioHostOnly = ()=> !!(mpPickAudioHost || mpPickSalon);
 
@@ -51,7 +58,7 @@ function mpTeamsFromAssign(players){
   ps.forEach(p=>{ const t=teams[mpAssignOf(p.id)]||teams[0]; t.members.push(p.id); });
   return teams.filter(t=>t.members.length);
 }
-let mpPlOpen=false, mpPlStatus='', mpPlStatusCls='';   // panel importu Spotify w pickerze MP
+let mpPlOpen=false, mpPlStatus='', mpPlStatusCls='';   // panel importu Spotify w zakładce „Twoje"
 function mpPlToggle(){ mpPlOpen=!mpPlOpen; mpRender(); }
 async function mpPlImport(){
   const inp=document.getElementById('mpPlUrl'); const url=(inp&&inp.value||'').trim();
@@ -61,126 +68,84 @@ async function mpPlImport(){
   setSt('','importuję…');
   try{
     const res=await plFetch(url);
-    mpPickCats.add(res.key);
     mpPlStatusCls='ok'; mpPlStatus='✓ '+res.name+' — '+res.count+' utw. Dodana.'; mpPlOpen=true;
-    mpRender();
+    setup.setPick({ cats:[...mpPickCats, res.key] });
   }catch(e){ setSt('err','Nie udało się: '+(e.message||e)); }
 }
-function mpToggleCat(k){ _togglePick(mpPickCats,k); mpRender(); }
-// F2b: delegacja kliknięć ticków kategorii (jeden listener na #mpStage, przeżywa re-render innerHTML)
-(function wireCatDelegation(){
-  const st=(typeof document!=='undefined') && document.getElementById('mpStage'); if(!st) return;
-  st.addEventListener('click', (e)=>{
-    const b=e.target && e.target.closest && e.target.closest('[data-mp-cat]');
-    if(b && st.contains(b)) mpToggleCat(b.dataset.mpCat);
-  });
-})();
-function mpToggleMode(m){ _togglePick(mpPickModes,m); mpRender(); }
-function mpSetQuestions(q){ mpPickQuestions=q; mpRender(); }
-function mpSetTimer(t){ mpPickTimer=t; mpRender(); }
-// chipy-grup (host-picker MP) — analogicznie do solo (ekran 02). Stan rozwinięcia trwa między re-renderami.
-let mpPickOpenGrp=new Set();
-const MP_GRP=[
-  {g:'dekady', lab:ic('calendar')+' Dekady', keys:()=>ERA_KEYS, cls:''},
-  {g:'style', lab:ic('guitar')+' Style', keys:()=>STYLE_KEYS, cls:'gen'},
-  {g:'playlisty', lab:ic('playlist')+' Playlisty', keys:()=>READY_KEYS, cls:'pl'},
-  {g:'teksty', lab:ic('quotes')+' Teksty', keys:()=>LYRICS_KEYS, cls:'gen'},
-  {g:'wiedza', lab:ic('brain')+' Wiedza', keys:()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'wiedza'), cls:'gen'},
-  {g:'lamiglowki', lab:'🧩 Łamigłówki', keys:()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'lamiglowki'), cls:'gen'},   // kategorie z group:'lamiglowki' 
-  {g:'twoje', lab:ic('star')+' Twoje', keys:()=>Object.keys(plLoad()), cls:'pl'},
-];
-const MP_GRP_SUB={teksty:'tłumaczenia 🌐 (tryb lektor)', wiedza:'wiedza ogólna 🧠 (tryb quiz)', lamiglowki:'muzyczne łamigłówki słowne 🧩 (tryb quiz)'};
-function mpToggleGrp(g){ if(mpPickOpenGrp.has(g)) mpPickOpenGrp.delete(g); else mpPickOpenGrp.add(g); mpRender(); }
-function mpSyncQuizMode(){ _syncQuizMode(mpPickCats, mpPickModes, ALL_CATS); }
-function mpPickerHTML(){
-  mpSyncQuizMode();
-  let grpChips='', grpBands='', nSel=0;
-  MP_GRP.forEach(d=>{
-    const keys=d.keys(); if(!keys.length && d.g!=='twoje') return;
-    const active=_grpActive(keys, mpPickCats); if(active) nSel++;
-    const open=mpPickOpenGrp.has(d.g);
-    grpChips+=`<button class="grp-chip${active?' on':''}${open?' open':''}" onclick="mpToggleGrp('${d.g}')">${d.lab}</button>`;
-    if(!open) return;
-    // F2b: klucz kategorii (np. własnej playlisty z localStorage) w data-mp-cat + delegacja kliknięć
-    // (wireCatDelegation) — klucz nigdy nie trafia do inline JS (`'` w kluczu łamał/wstrzykiwał onclick)
-    let inner;
-    if(d.g==='twoje'){
-      inner=`<div class="band-sub">twoje playlisty <button class="pl-add" onclick="mpPlToggle()">+ ze Spotify</button></div>`+
-        (keys.length? `<div class="ticks">`+keys.map(k=>`<button class="tick pl ${mpPickCats.has(k)?'on':''}" data-mp-cat="${escapeHtml(k)}">${escapeHtml(ALL_CATS[k].label)}<small>${(ALL_CATS[k].songs||[]).length} utw.</small></button>`).join('')+`</div>`
-          : `<div class="ticks"><span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span></div>`)+
-        `<div class="pl-panel${mpPlOpen?' show':''}"><input id="mpPlUrl" autocomplete="off" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus">${escapeHtml(mpPlStatus)}</div></div>`;
-    } else {
-      inner=(MP_GRP_SUB[d.g]?`<div class="band-sub">${MP_GRP_SUB[d.g]}</div>`:'')+
-        `<div class="ticks">`+keys.map(k=>`<button class="tick ${d.cls} ${mpPickCats.has(k)?'on':''}" data-mp-cat="${escapeHtml(k)}">${escapeHtml(ALL_CATS[k].label)}<small>${escapeHtml(ALL_CATS[k].range||ALL_CATS[k].desc||'')}</small></button>`).join('')+`</div>`;
-    }
-    grpBands+=`<div class="grp-band open">${inner}</div>`;
-  });
-  const availModes=mpAvailModes();
-  const modeChips=availModes.filter(m=>m!=='quiz').map(m=>`<button class="grp-chip mode ${mpPickModes.has(m)?'on':''}" onclick="mpToggleMode('${m}')">${MODE_LABEL[m]}</button>`).join('');
-  // F6a (R-F2): długość meczu w pytaniach (Krótki 5 · Standard 15 · Długi 30); DO przycina do MAX_QUESTIONS
-  const lenBtns=MATCH_LENGTHS.map(L=>`<button class="um-len${mpPickQuestions===L.q?' on':''}" onclick="mpSetQuestions(${L.q})"><b>${L.label}</b><small>${L.q} pyt.</small></button>`).join('');
-  const timerBtns=MP_TIMER_OPTIONS.map(v=>[v, v?v+'s':'bez']).map(([v,l])=>`<button class="${mpPickTimer===v?'on':''}" onclick="mpSetTimer(${v})">${l}</button>`).join('');
+function mpSetTimer(t){ mpPickTimer=MP_TIMER_OPTIONS.includes(+t)?+t:60; changedCfg(); }
+
+// ustawienia pokoju w „Ustawieniach meczu" (po długości): timer, format (+ przydział drużyn), salon/TV, dźwięk
+function teamsBad(){ return mpPickFormat==='teams' && mpTeamsFromAssign(mpGetPlayers()).length<2; }
+function mpSettingsHTML(){
+  const timerBtns=MP_TIMER_OPTIONS.map(v=>`<button type="button" class="${mpPickTimer===v?'on':''}" aria-pressed="${mpPickTimer===v}" onclick="mpSetTimer(${v})">${v?v+' s':'bez'}</button>`).join('');
   // format meczu: jak punktujemy (jedna drużyna / każdy sam / podział na drużyny).
   const fmtBtns=[['coop','Wspólna'],['solo','Solo'],['teams','Drużyny']].map(([v,l])=>
-    `<button class="${mpPickFormat===v?'on':''}" onclick="mpSetFormat('${v}')">${l}</button>`).join('');
+    `<button type="button" class="${mpPickFormat===v?'on':''}" aria-pressed="${mpPickFormat===v}" onclick="mpSetFormat('${v}')">${l}</button>`).join('');
   const fmtNote = mpPickFormat==='solo' ? 'każdy gra sam (ranking)' : mpPickFormat==='teams' ? 'podział na drużyny' : 'gracie jako jedna drużyna';
   // sekcja przypisania (format 'teams'): liczba drużyn + chipy graczy (tknięcie = zmiana drużyny)
-  let assignSec='', teamsBad=false;
+  let assignSec='';
   if(mpPickFormat==='teams'){
     const players=mpGetPlayers();
-    const built=mpTeamsFromAssign(players);
-    teamsBad = built.length<2;   // start tylko gdy ≥2 niepuste drużyny
-    const tcBtns=[2,3,4].map(n=>`<button class="${mpPickTeamCount===n?'on':''}" onclick="mpSetTeamCount(${n})">${n}</button>`).join('');
+    const tcBtns=[2,3,4].map(n=>`<button type="button" class="${mpPickTeamCount===n?'on':''}" aria-pressed="${mpPickTeamCount===n}" onclick="mpSetTeamCount(${n})">${n}</button>`).join('');
     // pola nazw drużyn (oninput BEZ re-render → focus nie ucieka); kolor = kolor drużyny
     const nameInputs=Array.from({length:mpPickTeamCount},(_,i)=>
-      `<input class="um-tname" style="border-color:${teamColor(i)}" maxlength="14" value="${escapeHtml(mpPickTeamNames[i]||'')}" placeholder="Drużyna ${i+1}" oninput="mpSetTeamName(${i}, this.value)">`).join('');
+      `<input class="um-tname" style="border-color:${teamColor(i)}" maxlength="14" aria-label="Nazwa drużyny ${i+1}" value="${escapeHtml(mpPickTeamNames[i]||'')}" placeholder="Drużyna ${i+1}" oninput="mpSetTeamName(${i}, this.value)">`).join('');
     const chips = players.length ? players.map(p=>{
       const ti=mpAssignOf(p.id), col=teamColor(ti), av=escapeHtml((p.name||'?').slice(0,1).toUpperCase());
-      return `<button class="um-assign-chip" style="border-color:${col}" data-pid="${escapeHtml(p.id)}" onclick="mpCycleAssign(this.dataset.pid)"><b style="background:${col}">${av}</b><span>${escapeHtml(p.name||'gracz')}</span><i style="background:${col}">D${ti+1}</i></button>`;
+      return `<button type="button" class="um-assign-chip" style="border-color:${col}" data-pid="${escapeHtml(p.id)}" onclick="mpCycleAssign(this.dataset.pid)" aria-label="${escapeHtml(p.name||'gracz')} — drużyna ${ti+1}, zmień"><b style="background:${col}">${av}</b><span>${escapeHtml(p.name||'gracz')}</span><i style="background:${col}">D${ti+1}</i></button>`;
     }).join('') : `<div class="um-assign-empty">czekamy na graczy w pokoju…</div>`;
-    assignSec=`<div class="um-sec"><div class="um-h"><span>Drużyny</span><span class="note">tknij gracza = zmień drużynę</span></div>
-        <div class="um-teamrow"><div class="um-rounds">${tcBtns}</div><button class="um-balance" onclick="mpBalance()">⚖️ równo</button></div>
+    assignSec=`<div class="ms-sub">Drużyny <span class="ms-sub-note">tknij gracza = zmień drużynę</span></div>
+        <div class="um-teamrow"><div class="um-rounds ms-seg" role="group" aria-label="Liczba drużyn">${tcBtns}</div><button type="button" class="um-balance" onclick="mpBalance()">⚖️ równo</button></div>
         <div class="um-tnames">${nameInputs}</div>
-        <div class="um-assign">${chips}</div></div>`;
+        <div class="um-assign">${chips}</div>`;
   }
-  const s=pickSummary(mpPickCats, mpPickModes, {questions:mpPickQuestions}, ALL_CATS);
-  const st=pickSummaryText(s);
-  const bad=!!s.error || teamsBad;
-  const info= s.error ? escapeHtml(s.error)
-    : teamsBad ? 'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju).'
-    : `${escapeHtml(st.head)}<b>${escapeHtml(st.total)}</b>${escapeHtml(st.from)}`;
-  const catCount=nSel+' '+plPick(nSel,'wybrana','wybrane','wybranych');
-  return `<div class="mpnav">
-      <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz">${ic('back')}</button>
-      <span class="nav-title">Ułóż mecz</span>
-      <button class="nav-menu" onclick="mpConfirmLeave('menu')" aria-label="menu">${ic('menu')}</button>
-    </div>
-    <div class="mp-deck">
-      <div class="um-sec"><div class="um-h"><span>Kategorie</span><span class="note">${catCount}</span></div>
-        <div class="um-chips">${grpChips}</div>${grpBands}</div>
-      <div class="um-sec"><div class="um-h"><span>Tryby pytań</span><span class="note">jak słyszysz utwór</span></div>
-        <div class="um-chips">${modeChips}</div></div>
-      <div class="um-sec"><div class="um-h"><span>Długość meczu</span><span class="note val">${mpPickQuestions} pytań</span></div>
-        <div class="um-rounds um-lens">${lenBtns}</div></div>
-      <div class="um-sec"><div class="um-h"><span>Timer pytania</span></div>
-        <div class="um-rounds">${timerBtns}</div></div>
-      <div class="um-sec"><div class="um-h"><span>Format</span><span class="note">${fmtNote}</span></div>
-        <div class="um-rounds">${fmtBtns}</div></div>
+  return `<div class="ms-sub">Czas na odpowiedź</div><div class="um-rounds ms-seg" role="group" aria-label="Czas na odpowiedź">${timerBtns}</div>
+      <div class="ms-sub">Format <span class="ms-sub-note">${fmtNote}</span></div><div class="um-rounds ms-seg" role="group" aria-label="Format meczu">${fmtBtns}</div>
       ${assignSec}
-      <div class="um-sec um-salon"><button class="um-salon-toggle${mpPickSalon?' on':''}" onclick="mpSetSalon(${mpPickSalon?'false':'true'})" role="switch" aria-checked="${mpPickSalon}">
-          <span class="um-salon-tx"><b>${ic('tv')} Tryb salonowy</b><small>${mpPickFormat==='coop'?'ten ekran tylko prowadzi i gra muzykę — gracze na telefonach':'ten ekran prowadzi, gra muzykę i pokazuje ranking — drużyny grają na telefonach'}</small></span>
+      <div class="um-salon"><button type="button" class="um-salon-toggle${mpPickSalon?' on':''}" onclick="mpSetSalon(${mpPickSalon?'false':'true'})" role="switch" aria-checked="${mpPickSalon}">
+          <span class="um-salon-tx"><b>${ic('tv')} Tryb salonowy (TV)</b><small>${mpPickFormat==='coop'?'ten ekran tylko prowadzi i gra muzykę — gracze na telefonach':'ten ekran prowadzi, gra muzykę i pokazuje ranking — drużyny grają na telefonach'}</small></span>
           <span class="um-salon-sw"><i></i></span>
         </button>
-        <button class="um-salon-toggle um-audiohost${mpPickAudioHostOnly()?' on':''}"${mpPickSalon?' disabled aria-disabled="true"':''} onclick="mpSetAudioHost(${mpPickAudioHost?'false':'true'})" role="switch" aria-checked="${mpPickAudioHostOnly()}">
+        <button type="button" class="um-salon-toggle um-audiohost${mpPickAudioHostOnly()?' on':''}"${mpPickSalon?' disabled aria-disabled="true"':''} onclick="mpSetAudioHost(${mpPickAudioHost?'false':'true'})" role="switch" aria-checked="${mpPickAudioHostOnly()}">
           <span class="um-salon-tx"><b>🔈 Dźwięk tylko u hosta</b><small>${mpPickSalon?'w trybie salonowym muzyka gra zawsze tylko na TV':'jeden głośnik na stół — telefony graczy nie grają zajawki ani lektora'}</small></span>
           <span class="um-salon-sw"><i></i></span>
-        </button></div>
-      <div class="um-summary ${bad?'err':''}">${info}</div>
-      <div class="um-foot">
-        <button class="um-dice" onclick="mpRandomPick()" aria-label="Losuj kategorie i tryby">${ic('dice')}</button>
-        <button class="um-start" ${bad?'disabled style="opacity:.55"':''} onclick="mpStart()">Zacznij mecz</button>
-      </div>
-    </div>`;
+        </button></div>`;
+}
+// zakładka „Twoje": import playlisty Spotify (własne kategorie z edytora tworzy się w solo — tu też widoczne)
+function mpTwojeHTML(){
+  return `<div class="ms-twoje-btns"><button type="button" class="ms-add" onclick="mpPlToggle()" aria-expanded="${mpPlOpen}" aria-controls="mpPlPanel">+ ze Spotify</button></div>`+
+    `<div class="pl-panel${mpPlOpen?' show':''}" id="mpPlPanel"><input id="mpPlUrl" autocomplete="off" aria-label="Link do publicznej playlisty Spotify" placeholder="wklej link do publicznej playlisty Spotify" onkeydown="if(event.key==='Enter')mpPlImport()"><button type="button" onclick="mpPlImport()">Importuj</button><div class="pl-status ${mpPlStatusCls}" id="mpPlStatus" role="status">${escapeHtml(mpPlStatus)}</div></div>`;
+}
+
+const setup=createMatchSetup({
+  ctx:'mp', pick:mpPick,
+  ids:{ start:'mpMatchStart', dice:'mpMatchRandom', info:'mpMatchInfo' },
+  available:()=>mpAvailModes(),
+  render:()=>mpRender(),
+  onChange:()=>{ mpPickQuestions=mpPick.questions; mpOnDraft(); },
+  onStart:()=>{ if(typeof window!=='undefined' && window.mpStart) window.mpStart(); },
+  onDice:()=>mpRandomPick(),
+  settingsSummary:()=>settingsSummary({ ctx:'mp', questions:mpPick.questions, format:mpPickFormat, timer:mpPickTimer, salon:mpPickSalon }),
+  settingsHTML:mpSettingsHTML,
+  twojeHTML:mpTwojeHTML,
+  gate:()=> teamsBad() ? { text:'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju).' } : null,
+});
+// delegacja kliknięć komponentu: jeden listener na #mpStage (przeżywa re-render innerHTML; klucze kategorii
+// tylko w data-ms-cat — nigdy w inline JS, F2b)
+(function wireDelegation(){ const st=(typeof document!=='undefined') && document.getElementById('mpStage'); if(st) setup.bind(st); })();
+function mpToggleCat(k){ setup.toggleCat(k); }
+function mpToggleMode(m){ setup.toggleMode(m); }
+function mpToggleGrp(g){ setup.setTab(g); }   // dawne „chipy-grupy" → zakładka grupy
+function mpSetQuestions(q){ setup.setQuestions(q); }
+// szkic dla gości: wybór + ustawienia pokoju (sanityzowany po obu stronach: core/matchSetup.sanitizeDraft)
+function mpDraft(){ return { ...setup.draft(), timer:mpPickTimer, format:mpPickFormat, salon:mpPickSalon, audioHostOnly:mpPickAudioHostOnly() }; }
+function mpPickerHTML(){
+  return `<div class="mpnav">
+      <button class="nav-back" onclick="mpLobbyBack()" aria-label="wstecz do poczekalni">${ic('back')}</button>
+      <span class="nav-title">Nowy mecz</span>
+      <button class="nav-menu" onclick="mpConfirmLeave('menu')" aria-label="menu">${ic('menu')}</button>
+    </div>
+    <div class="mp-deck ms-host">${setup.html()}</div>`;
 }
 // AUTORYTET: złóż MINIMALNĄ pulę kategorii do wysłania (cap payloadu `start`).
 // DO potrzebuje: artists; songs {title,artist,preview,year,album,match}; lyric/tts TYLKO dla lektora.
@@ -218,8 +183,8 @@ function mpBuildPools(cats, modes){
   }
   return pools;
 }
-function mpRandomPick(){ const {cats,modes}=randomPools(mpAvailModes()); mpPickCats=new Set(cats); mpPickModes=new Set(modes); mpRender(); }
+function mpRandomPick(){ const {cats,modes}=randomPools(mpAvailModes()); setup.setPick({ cats, modes }); }
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
 Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetAudioHost, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly };
+export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft };

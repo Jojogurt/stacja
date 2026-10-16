@@ -5,7 +5,6 @@
  * Granica zależności: app/ zależy od core/, nigdy od app.js. */
 import './app/solo.js';                              // tryb SOLO (self-wiring; ciągnie catalog/audio/lektor/mp)
 import './app/sfx.js';                               // UI-dźwięki (klik na buttonach, oklaski przy trafieniu)
-import './app/rowScroll.js';                         // rzędy kategorii: podpowiedź przewijania + kółko myszy (≥600 px: zawijanie)
 import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),

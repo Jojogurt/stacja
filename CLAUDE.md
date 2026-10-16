@@ -32,7 +32,7 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   Przenośny 1:1 na inną platformę i w pełni testowalny. Tu trafia logika gry:
   `match.js` (model meczu), `scoring.js` (dopasowanie odpowiedzi), `mpReducer.js`
   (host-authority MP: akcje → stan), `phases.js` (FSM), `picker.js` (wybór kategorii/trybów,
-  wspólny solo+MP), `chatFeed.js` (feed czatu MP + whitelist REACTIONS), `timing.js` (stałe/obliczenia
+  wspólny solo+MP), `matchSetup.js` (gotowce, rodziny trybów, filtr kategorii, szkic configu MP dla gości), `chatFeed.js` (feed czatu MP + whitelist REACTIONS), `timing.js` (stałe/obliczenia
   czasowe, etapy intro), `trackSelect.js` (wybór utworu iTunes: dekada, wersje, popularność, dystraktory ABCD),
   `guitarCovers.js` (tryb gitara: zaostrzona akceptacja coveru + kuratorowana lista wykonawców),
   `daily.js` (Stacja dnia: seed daty, plan, seria, siatka do udostępnienia), `lektorVoice.js` (język lektora
@@ -46,7 +46,7 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   przez solo i mp), `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js`
   (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `daily.js` (Stacja dnia:
   zapis, udostępnianie), `vinyl.js` (płyta winylowa = kontrolka play/pauza we wszystkich trybach z dźwiękiem, solo + MP),
-  `rowScroll.js` (rzędy kategorii: podpowiedź przewijania + kółko myszy), `sfx.js` (dźwięki WebAudio), `catEditor.js` (własne kategorie), `social.js` (router ekranów
+  `matchSetup.js` (wspólny komponent ekranu „Nowy mecz” solo + host MP: gotowce, kategorie, tryby, pasek startu; logika w `core/matchSetup.js`), `sfx.js` (dźwięki WebAudio), `catEditor.js` (własne kategorie), `social.js` (router ekranów
   `showScreen` + Drużyna/Znajomi/Profil/OAuth). **Multiplayer w 4 plikach**: `mp-state.js` (współdzielony
   obiekt stanu `S` + tożsamość `mpMe`), `mp-render.js` (widok: dyspozytor `mpRender` + buildery HTML),
   `mp-picker.js` (host-picker „ułóż mecz"), `mp.js` (transport/host/audio/czat; logika gry w `core/mpReducer`).

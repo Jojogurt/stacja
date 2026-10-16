@@ -18,7 +18,7 @@
  * stary serwer bez whitelisty). Nowy serwer dokłada `payload.from` (nadawca z tokenu).
  */
 // ulotne eventy przekazywane przez DO (musi = server/authorityRoom.js RELAY_EVENTS)
-export const RELAY_EVENTS = ['react', 'say', 'typing', 'advanced'];
+export const RELAY_EVENTS = ['react', 'say', 'typing', 'advanced', 'draft'];   // draft: szkic meczu od hosta — serwer przepuszcza tylko od hosta
 export function authorityChannel(code, cfg = {}) {
   const base = (window.STACJA_CONFIG && window.STACJA_CONFIG.roomsBase) || '';
   const wss = base.replace(/^http/, 'ws').replace(/\/+$/, '');

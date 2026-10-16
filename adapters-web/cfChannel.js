@@ -16,7 +16,7 @@
  *   .unsubscribe()                   zamknij i posprzątaj
  */
 // F1: eventy znane klientowi (musi ⊇ ROOM/TEAM/USER_EVENTS z server/gameRoom.js)
-export const CHANNEL_EVENTS = ['sync', 'act', 'react', 'say', 'typing', 'advanced', 'gamestart', 'invite'];
+export const CHANNEL_EVENTS = ['sync', 'act', 'react', 'say', 'typing', 'advanced', 'draft', 'gamestart', 'invite'];   // draft: szkic meczu od hosta (goście)
 
 export function cfChannel(code, cfg = {}) {
   const base = (window.STACJA_CONFIG && window.STACJA_CONFIG.roomsBase) || '';

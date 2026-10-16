@@ -12,18 +12,40 @@ const tick=()=>new Promise(r=>setTimeout(r,0));
 const settle=async(n=4)=>{ for(let i=0;i<n;i++) await tick(); };
 async function group(name, fn){ console.log('• '+name); try{ await fn(); }catch(e){ fail++; console.error('  ✗ WYJĄTEK: '+(e&&e.stack||e)); } }
 
-// twardy reset wyboru picker'a (jeden boot dzielony → testy muszą być izolowane):
-// odznacz wszystkie kategorie i wszystkie tryby, zdejmij „playing"
+/* „Nowy mecz" (app/matchSetup.js) — helpery pickera solo. Komponent re-renderuje się (innerHTML) po każdej zmianie,
+ * więc elementy wyszukujemy ZAWSZE na świeżo (stara referencja = odłączony węzeł, klik nic nie robi). */
+const soloRoot=(w)=>w.document.getElementById('msSolo');
+const soloOpen=(w)=>{ const t=soloRoot(w).querySelector('[data-ms-toggle="custom"]'); if(t && t.getAttribute('aria-expanded')!=='true') t.click(); };
+// karta kategorii: przełącza zakładki (i czyści wyszukiwarkę), aż znajdzie klucz
+const catCard=(w, key)=>{
+  const r=soloRoot(w); soloOpen(w);
+  const sel=`[data-ms-cat="${String(key).replace(/"/g,'\\"')}"]`;
+  let el=r.querySelector(sel); if(el) return el;
+  const x=r.querySelector('[data-ms-act="search-clear"]'); if(x) x.click();
+  for(const id of [...r.querySelectorAll('[data-ms-tab]')].map(b=>b.dataset.msTab)){
+    r.querySelector(`[data-ms-tab="${id}"]`).click();
+    el=r.querySelector(sel); if(el) return el;
+  }
+  return null;
+};
+const isOn=(el)=>!!el && el.getAttribute('aria-pressed')==='true';
+const pickCat=(w, key, on=true)=>{ const el=catCard(w,key); if(el && isOn(el)!==on) el.click(); return catCard(w,key); };
+// twardy reset wyboru pickera (jeden boot dzielony → testy muszą być izolowane):
+// wyczyść WSZYSTKIE kategorie (też te spoza widocznej zakładki) i tryby, zdejmij „playing"
 const resetSelection=(window)=>{
-  window.document.querySelectorAll('.tick.on').forEach(t=>t.click());
-  // F8a: kategoria bez ticka (np. dodana przez picker MP, wylosowana kostką) zostawała w puli solo →
-  // „wszystkie" (zaznacz → odznacz) czyści pulę w całości (flaky: mecz grał z obcej kategorii)
-  const all=window.document.querySelector('.tick.rnd');
-  if(all){ all.click(); if(all.classList.contains('on')) all.click(); }
-  window.document.querySelectorAll('#modeTicks .grp-chip.on').forEach(c=>c.click());
+  const r=soloRoot(window); soloOpen(window);
+  let b, n=0;
+  while((b=r.querySelector('[data-ms-unpick]')) && n++<300) b.click();
+  while((b=r.querySelector('[data-ms-mode][aria-pressed="true"]')) && n++<400) b.click();
   window.document.body.classList.remove('playing');
 };
-const modeChip=(window, re)=>[...window.document.querySelectorAll('#modeTicks .grp-chip')].find(c=>re.test(c.textContent));
+// pigułka trybu po etykiecie (np. /muzyka/, /od tyłu krótko/) — świeża
+const modeChip=(window, re)=>[...soloRoot(window).querySelectorAll('[data-ms-mode]')].find(c=>re.test(c.textContent));
+const soloInfo=(w)=>txt(w,'matchInfo').replace(/\s+/g,' ');
+// picker MP (host): pigułka trybu i czy aktywna (nie wyszarzona: solo-only / nieznana serwerowi)
+const mpPill=(w,m)=>w.document.querySelector(`#mpStage [data-ms-mode="${m}"]`);
+const mpModeOn=(w,m)=>{ const b=mpPill(w,m); return !!b && !b.disabled; };
+const mpModeWhy=(w,m)=>{ const b=mpPill(w,m); return (b && b.disabled && b.getAttribute('title'))||''; };
 
 // kategorie wg rodzaju (po załadowaniu window.CATEGORIES)
 const catsByKind=(window)=>{
@@ -53,21 +75,22 @@ const optByText=(t)=>[...window.document.querySelectorAll('#quizForm .mc-opt')].
 
 await group('load: app.js montuje się bez wyjątku', async ()=>{
   ok(window.STACJA_VERSION, 'STACJA_VERSION ustawione: '+window.STACJA_VERSION);
-  ok($(window,'ticks') && $(window,'ticks').querySelectorAll('.tick').length>0, 'tuner: ticki epok wyrenderowane');
-  ok($(window,'modeTicks') && $(window,'modeTicks').querySelectorAll('.grp-chip').length>0, 'chipy trybów wyrenderowane');
+  ok(soloRoot(window) && soloRoot(window).querySelectorAll('[data-ms-cat]').length>0, 'picker solo („Nowy mecz"): karty kategorii wyrenderowane');
+  ok(soloRoot(window).querySelectorAll('[data-ms-mode]').length>0, 'pigułki trybów wyrenderowane');
+  ok(soloRoot(window).querySelectorAll('[data-ms-preset]').length>=4, 'gotowce („Szybki start") wyrenderowane');
   ok($(window,'piperToggle') && /lepszy głos/.test($(window,'piperToggle').textContent), 'lektor: etykieta Pipera (moduł app/lektor.js)');
 });
 
 await group('picker: wybór kategorii → podsumowanie meczu (core/picker.js)', async ()=>{
-  const tickEl=$(window,'ticks').querySelector('.tick:not(.rnd)');
-  tickEl.click();
-  ok(/utworów/.test(txt(window,'matchInfo')), 'po wyborze kategorii: liczba utworów — '+txt(window,'matchInfo'));
-  // wyłącz jedyny tryb (music) → stan pusty „zaznacz…"
-  const modeBtn=$(window,'modeTicks').querySelector('.grp-chip.on')||$(window,'modeTicks').querySelector('.grp-chip');
-  modeBtn.click();
-  ok(/zaznacz/.test(txt(window,'matchInfo')), 'bez trybu: komunikat „zaznacz…"');
-  modeBtn.click(); // przywróć music
-  tickEl.click();  // odznacz kategorię (czysty stan na kolejne testy)
+  resetSelection(window);
+  ok(/Wybierz co najmniej jedną kategorię/.test(soloInfo(window)) && $(window,'matchStart').disabled, 'pusta pula: komunikat „Wybierz kategorię", ZACZNIJ zablokowany');
+  pickCat(window, '80s');
+  ok(/Wybierz co najmniej jeden tryb/.test(soloInfo(window)), 'kategoria bez trybu: „Wybierz tryb" — '+soloInfo(window));
+  modeChip(window,/muzyka/).click();
+  ok(/^15 utworów · 1 kat\. · 1 tryb/.test(soloInfo(window)) && !$(window,'matchStart').disabled, 'kategoria + muzyka: „15 utworów · 1 kat. · 1 tryb" — '+soloInfo(window));
+  modeChip(window,/muzyka/).click();   // wyłącz jedyny tryb → znowu brak
+  ok(/tryb/.test(soloInfo(window)) && $(window,'matchStart').disabled, 'bez trybu: start zablokowany');
+  modeChip(window,/muzyka/).click(); pickCat(window, '80s', false);   // czysty stan
 });
 
 await group('audio: mecz solo → newRound → startAudio (ścieżka audio)', async ()=>{
@@ -75,7 +98,7 @@ await group('audio: mecz solo → newRound → startAudio (ścieżka audio)', as
   const { audio:catKey } = catsByKind(window);
   ok(catKey, 'jest kategoria audio: '+catKey);
   // zaznacz TYLKO kategorię audio + tryb music (deterministycznie)
-  const tk=[...window.document.querySelectorAll('.tick:not(.rnd)')].find(t=>t.dataset.era===catKey);
+  const tk=catCard(window, catKey);
   ok(tk, 'jest tick kategorii audio');
   tk.click();
   const musicChip=modeChip(window, /muzyka/); if(musicChip && !musicChip.classList.contains('on')) musicChip.click();
@@ -92,7 +115,7 @@ await group('lektor: tryb lektor → płyta (play) → synteza mowy (app/lektor.
   if(!lyrKey){ ok(true, '(brak kategorii lyrics — pomijam)'); return; }
   resetSelection(window);
   // zaznacz TYLKO kategorię tekstów + TYLKO tryb lektor → pierwszy slot na pewno lektor
-  const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===lyrKey);
+  const tk=catCard(window, lyrKey);
   ok(tk, 'jest tick kategorii tekstów: '+lyrKey);
   if(tk && !tk.classList.contains('on')) tk.click();
   const lektorChip=modeChip(window, /lektor/);
@@ -118,7 +141,7 @@ await group('quiz ABCD (solo): przyciski opcji + wybór + ocena + odsłona', asy
   cat.questions=[{ prompt:'Pytanie testowe ABCD?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta',
     slots:[{key:'a',label:'litera lub odpowiedź'}], answers:{ a:['B','Beta'] } }];
   try{
-    const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===qKey);
+    const tk=catCard(window, qKey);
     ok(tk, 'jest tick kategorii quizu'); if(tk && !tk.classList.contains('on')) tk.click();   // quiz włącza się sam
     click(window,'matchStart');
     await settle(10);
@@ -147,7 +170,7 @@ await group('quiz ABC (solo): 3 opcje też renderują się jako przyciski', asyn
   cat.questions=[{ prompt:'Pytanie z trzema opcjami?\nA) Pierwsza\nB) Druga\nC) Trzecia',
     slots:[{key:'a',label:'litera lub odpowiedź'}], answers:{ a:['C','Trzecia'] } }];
   try{
-    const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===qKey);
+    const tk=catCard(window, qKey);
     if(tk && !tk.classList.contains('on')) tk.click();
     click(window,'matchStart');
     await settle(10);
@@ -170,7 +193,7 @@ await group('F3 solo: ABCD tasowane w runtime + ocena po wybranej opcji + statKe
   cat.questions=[{ prompt:'F3 ABCD?\nA) Alfa\nB) Beta\nC) Gamma\nD) Delta', slots:[{key:'a',label:'odp'}], answers:{ a:['B','Beta','b'] } }];
   try{
     Math.random=()=>0;   // deterministyczne tasowanie: [Alfa,Beta,Gamma,Delta] → [Beta,Gamma,Delta,Alfa]
-    const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===qKey);
+    const tk=catCard(window, qKey);
     if(tk && !tk.classList.contains('on')) tk.click();
     click(window,'matchStart'); await settle(10);
     Math.random=rnd;
@@ -256,8 +279,7 @@ const M8dom = await import('../core/match.js');   // EKSP. fortepian: modesFor n
 async function f2aStartMatch(catKey, modeRe){
   resetSelection(window);
   $(window,'sumAgain').click();   // zamknij ewentualne podsumowanie (match-over)
-  const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===catKey);
-  if(tk && !tk.classList.contains('on')) tk.click();
+  pickCat(window, catKey);
   const chip=modeRe && modeChip(window, modeRe); if(chip && !chip.classList.contains('on')) chip.click();
   click(window,'matchStart');
   await settle(10);
@@ -272,13 +294,18 @@ await group('Łamigłówki solo: chip „🧩 Łamigłówki" + rebus duży + ods
     display:'rebus', track:{ title:'Test Song', artist:'Rebus Artist' }, fun:'ciekawostka rebusu' };
   w.CATEGORIES.quiz['lam-test']={ kind:'quiz', label:'Rebusy test', group:'lamiglowki', questions:[REB] };
   w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(2);
-  const chip=$(w,'grpLam');
-  ok(chip && !chip.hidden && /Łamigłówki/.test(chip.textContent), 'chip „🧩 Łamigłówki" widoczny');
-  ok($(w,'lamTicks').querySelector('[data-era="lam-test"]'), 'kategoria w paśmie Łamigłówek');
-  ok(!$(w,'quizTicks').querySelector('[data-era="lam-test"]'), '… a nie w paśmie Wiedza');
+  const r=soloRoot(w); soloOpen(w);
+  const tab=(id)=>r.querySelector(`[data-ms-tab="${id}"]`);
+  ok(tab('lamiglowki') && /Łamigłówki/.test(tab('lamiglowki').textContent), 'zakładka „Łamigłówki" widoczna');
+  tab('lamiglowki').click();
+  ok(r.querySelector('[data-ms-cat="lam-test"]'), 'kategoria w zakładce Łamigłówki');
+  tab('wiedza').click();
+  ok(!r.querySelector('[data-ms-cat="lam-test"]'), '… a nie w zakładce Wiedza');
   resetSelection(w);
-  $(w,'lamTicks').querySelector('[data-era="lam-test"]').click();
-  ok(chip.classList.contains('on') && !$(w,'grpWiedza').classList.contains('on'), 'wybór → ✓ na chipie Łamigłówek (nie Wiedzy)');
+  pickCat(w, 'lam-test');
+  ok(/1/.test((tab('lamiglowki').querySelector('.ms-tab-n')||{}).textContent||'') && !tab('wiedza').querySelector('.ms-tab-n'), 'wybór → licznik na zakładce Łamigłówki (nie Wiedza)');
+  const quizPill=r.querySelector('.ms-pill.auto');
+  ok(quizPill && quizPill.classList.contains('on') && /wiedza i łamigłówki/.test(quizPill.textContent), 'tryb „wiedza i łamigłówki" włączony automatycznie (auto)');
   await f2aStartMatch('lam-test', null);
   const lb=$(w,'lyricBox'), big=lb && lb.querySelector('.rebus-big');
   ok(lb.classList.contains('rebus') && big && /🟣/.test(big.textContent), 'rebus: duża linia emoji (.rebus-big)');
@@ -456,12 +483,12 @@ await group('F2a #20: ABCD — aria-pressed + ✓/✗ tekstem; gałka z aria-lab
 await group('F2a UI: podsumowanie pickera (faktyczne kategorie, „pytań") + chipy o stałej szerokości + lektor-mode', async ()=>{
   const { audio, quiz, lyrics } = catsByKind(window);
   resetSelection(window); $(window,'sumAgain').click();
-  const tk=k=>[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===k);
+  const tk=k=>catCard(window, k);
   tk(audio).click(); const mu=modeChip(window,/muzyka/); if(!mu.classList.contains('on')) mu.click();
-  ok(/z 1 kategorii/.test(txt(window,'matchInfo')) && /utworów/.test(txt(window,'matchInfo')), '1 kategoria audio: „z 1 kategorii", „utworów" — '+txt(window,'matchInfo'));
+  ok(/1 kat\./.test(soloInfo(window)) && /utworów/.test(soloInfo(window)) && /z powtórkami/.test(soloInfo(window)), '1 kategoria audio: „1 kat.", „utworów", „z powtórkami" — '+soloInfo(window));
   if(quiz){ tk(quiz).click(); ok(/pytań$|pytań ·/.test(txt(window,'matchInfo').replace(/\s+/g,' ')) && !/utworów/.test(txt(window,'matchInfo')), 'z quizem: „pytań" — '+txt(window,'matchInfo')); tk(quiz).click(); }
   const css=[...window.document.querySelectorAll('style')].map(x=>x.textContent).join('\n');
-  ok(/\.grp-chip::after\{[^}]*visibility:hidden/.test(css) && /\.grp-chip\.on::after\{visibility:visible\}/.test(css), 'chip: ✓ ma zarezerwowane miejsce (visibility, nie content) — bez skoku szerokości');
+  ok(/\.ms-pill:disabled\{[^}]*dashed/.test(css) && /\.ms-pill\.on\{[^}]*background:var\(--sel\)/.test(css), 'pigułki trybów: wyszarzona = przerywana ramka, wybrana = wypełniona (token --sel)');
   ok(/body:not\(\.lektor-mode\) \.voice-toggle\{display:none\}/.test(css), '„lepszy głos" ukrywany poza lektorem (CSS)');
   if(lyrics){
     await f2aStartMatch(lyrics, /lektor/);
@@ -478,12 +505,12 @@ await group('F2a #11: boot z localStorage rzucającym SecurityError → aplikacj
     const { window } = await bootApp({ storageThrows:true });
     const d=window.document; const pt=d.getElementById('piperToggle');
     pt.click(); pt.click();   // zapis ustawienia (lsSet) też nie rzuca
-    console.log(JSON.stringify({ v:window.STACJA_VERSION, ticks:d.querySelectorAll('#ticks .tick').length,
+    console.log(JSON.stringify({ v:window.STACJA_VERSION, ticks:d.querySelectorAll('#msSolo [data-ms-cat]').length,
       piper:/lepszy głos/.test(pt.textContent), denied:window.__lsThrows }));
     process.exit(0);`;
   const out = execFileSync(process.execPath, ['--input-type=module','-e',code], { encoding:'utf8', timeout:90000, stdio:['ignore','pipe','pipe'] });
   const r = JSON.parse(out.trim().split('\n').pop());
-  ok(r.v && r.ticks>0 && r.piper, 'app.js zamontowany mimo SecurityError (wersja '+r.v+', ticki '+r.ticks+')');
+  ok(r.v && r.ticks>0 && r.piper, 'app.js zamontowany mimo SecurityError (wersja '+r.v+', karty kategorii '+r.ticks+')');
   ok(r.denied>0, 'storage faktycznie rzucał (odczyty: '+r.denied+')');
 });
 
@@ -512,9 +539,10 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   ok(typeof w.mpLobbyStart==='function', 'most do HTML: mpLobbyStart na window');
   w.mpLobbyStart(); await settle(4);
   const html=$(w,'mpRoom').innerHTML;
-  ok(/Kategorie/.test(html) && /Tryby pytań/.test(html) && /Długość meczu/.test(html), 'picker MP: sekcje Kategorie/Tryby/Długość meczu (F6a)');
-  ok(/Krótki/.test(html) && /Standard/.test(html) && /Długi/.test(html) && /um-len on[^>]*mpSetQuestions\(15\)/.test(html), 'F6a: segment długości (Krótki 5 · Standard 15 · Długi 30), domyślnie 15');
-  ok(/um-start/.test(html), 'picker MP: przycisk startu meczu');
+  ok(/Szybki start/.test(html) && /Kategorie/.test(html) && /Tryby pytań/.test(html) && /Ustawienia meczu/.test(html) && /Długość/.test(html), 'picker MP = wspólny komponent: Szybki start / Kategorie / Tryby / Ustawienia meczu (Długość)');
+  ok(/data-ms-ctx="mp"/.test(html) && $(w,'mpStage').querySelector('.ms[data-ms-ctx="mp"] .ms-bar'), 'picker MP: komponent „Nowy mecz" (ctx mp) + pasek startu');
+  ok(/Krótki/.test(html) && /Standard/.test(html) && /Długi/.test(html) && /ms-len on" data-ms-len="15"/.test(html), 'F6a: segment długości (Krótki 5 · Standard 15 · Długi 30), domyślnie 15');
+  ok($(w,'mpMatchStart') && $(w,'mpMatchRandom'), 'picker MP: ZACZNIJ + kostka');
   // FORMAT (Wspólna/Solo/Drużyny) — wybór trybu konkurencyjnego
   ok(/Format/.test(html) && /Wspólna/.test(html) && /Solo/.test(html), 'picker MP: sekcja Format (Wspólna/Solo)');
   ok(typeof w.mpSetFormat==='function', 'most do HTML: mpSetFormat na window');
@@ -551,7 +579,7 @@ await group('MP: pokój hosta → lobby → picker renderują (app/mp.js)', asyn
   w.mpSetQuestions(5); await settle(2);
   const { audio:mpAudio } = catsByKind(w);
   w.mpToggleCat(mpAudio); await settle(2);
-  ok(/um-len on[^>]*mpSetQuestions\(5\)/.test($(w,'mpRoom').innerHTML) && /= <b>5 utworów<\/b>/.test($(w,'mpRoom').innerHTML), 'F6a: Krótki → podsumowanie „= 5 utworów"');
+  ok(/ms-len on" data-ms-len="5"/.test($(w,'mpRoom').innerHTML) && /^5 utworów · 1 kat\./.test(txt(w,'mpMatchInfo')), 'F6a: Krótki → podsumowanie „5 utworów · 1 kat." — '+txt(w,'mpMatchInfo'));
   const wsP = wsInstances[wsInstances.length-1];
   w.mpStart(); await settle(4);
   const st = wsP.sent.filter(m=>m.t==='start').pop();
@@ -895,11 +923,14 @@ await group('CatEditor: search → koszyk → zapis tworzy kategorię w pickerze
   await settle(2);
   ok(!$(w,'catSave').disabled, 'po ≥10 utworach zapis aktywny');
   $(w,'catName').value='Impreza Ani';
-  const beforeTicks=$(w,'plTicks').innerHTML;
   $(w,'catSave').click(); await settle(3);
   ok(!$(w,'catPanel').classList.contains('show'), 'po zapisie panel zamknięty');
-  ok(/Impreza Ani/.test($(w,'plTicks').innerHTML), 'nowa kategoria widoczna w pickerze „Twoje"');
-  ok($(w,'plTicks').innerHTML!==beforeTicks, 'lista ticków odświeżona');
+  const r=soloRoot(w); soloOpen(w); r.querySelector('[data-ms-tab="twoje"]').click();
+  const card=[...r.querySelectorAll('[data-ms-cat]')].find(b=>/Impreza Ani/.test(b.textContent));
+  ok(card, 'nowa kategoria widoczna w zakładce „Twoje" (karta)');
+  ok(card && isOn(card) && [...r.querySelectorAll('[data-ms-unpick]')].some(b=>/Impreza Ani/.test(b.textContent)), '… i od razu w puli meczu (chip z ✕)');
+  ok(card && card.parentNode.querySelector('[data-ms-edit]') && card.parentNode.querySelector('[data-ms-remove]'), 'karta własnej kategorii: ✎ edytuj + × usuń (przyciski z etykietą)');
+  ok(r.querySelector('[data-ms-slot="twoje"] #catNew') && r.querySelector('[data-ms-slot="twoje"] #plImport'), '„+ nowa" i „+ ze Spotify" przeniesione do zakładki Twoje');
 });
 
 await group('CatEditor: import JSON — dedup, escape (XSS), błędny JSON nie wysypuje', async ()=>{
@@ -1000,11 +1031,13 @@ await group('F2a #8: kategoria quizu dociągnięta PO starcie (zdarzenie stacja:
   const w=window;
   w.CATEGORIES.quiz['f2a-late']={ kind:'quiz', label:'Spóźniona', questions:[{ prompt:'?', slots:[{key:'a',label:'a'}], answers:{a:['x']} }] };
   w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(2);
-  const t=[...w.document.querySelectorAll('#quizTicks .tick')].find(x=>x.dataset.era==='f2a-late');
-  ok(t && /Spóźniona/.test(t.textContent), 'tick spóźnionej kategorii w #quizTicks');
-  ok(!$(w,'grpWiedza').hidden, 'chip „Wiedza" widoczny');
+  const r=soloRoot(w); soloOpen(w);
+  ok(r.querySelector('[data-ms-tab="wiedza"]'), 'zakładka „Wiedza" widoczna');
+  r.querySelector('[data-ms-tab="wiedza"]').click();
+  const t=r.querySelector('[data-ms-cat="f2a-late"]');
+  ok(t && /Spóźniona/.test(t.textContent), 'karta spóźnionej kategorii w zakładce Wiedza');
   w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(1);
-  ok([...w.document.querySelectorAll('#quizTicks .tick')].filter(x=>x.dataset.era==='f2a-late').length===1, 'idempotentne (bez duplikatu ticka)');
+  ok(r.querySelectorAll('[data-ms-cat="f2a-late"]').length===1, 'idempotentne (bez duplikatu karty)');
 });
 
 
@@ -1119,7 +1152,7 @@ await group('F2b #12: ARMING bez nas w readyIds NIE przeładowuje zajawki (load 
   } finally { P.load=origLoad; }
 });
 
-await group('F2b picker MP: kategorie przez data-mp-cat + delegację (bez klucza w inline onclick)', async ()=>{
+await group('F2b picker MP: kategorie przez data-ms-cat + delegację (bez klucza w inline onclick)', async ()=>{
   const w=window;
   const cat=await import('../app/catalog.js');
   const evil="pl_x');window.__pk=1;('";
@@ -1127,18 +1160,19 @@ await group('F2b picker MP: kategorie przez data-mp-cat + delegację (bez klucza
   cat.plMerge();
   w.mpNewGame(); await settle(3);   // host → picker
   const html=()=>$(w,'mpRoom').innerHTML;
-  if(!/grp-chip[^"]*open[^>]*mpToggleGrp\('twoje'\)/.test(html())) w.mpToggleGrp('twoje');
-  if(!/grp-chip[^"]*open[^>]*mpToggleGrp\('dekady'\)/.test(html())) w.mpToggleGrp('dekady');
-  await settle(2);
+  w.mpToggleGrp('twoje'); await settle(2);   // zakładka „Twoje"
   ok(!/mpToggleCat\('/.test(html()), 'picker: klucz kategorii NIE trafia do inline onclick');
-  ok(!/class="tick[^"]*"[^>]*onclick=/.test(html()), 'ticki kategorii bez inline onclick');
-  const tick=[...w.document.querySelectorAll('#mpStage .tick')].find(t=>t.dataset.mpCat===evil);
-  ok(!!tick, 'tick z kluczem w data-mp-cat');
-  tick && tick.click(); await settle(2);
+  ok(!/class="ms-cat[^"]*"[^>]*onclick=/.test(html()), 'karty kategorii bez inline onclick');
+  const card=()=>[...w.document.querySelectorAll('#mpStage [data-ms-cat]')].find(t=>t.dataset.msCat===evil);
+  ok(!!card(), 'karta z kluczem w data-ms-cat');
+  card() && card().click(); await settle(2);
   ok(w.__pk===undefined, 'złośliwy klucz nie wykonał kodu');
-  const t2=[...w.document.querySelectorAll('#mpStage .tick')].find(t=>t.dataset.mpCat===evil);
-  ok(t2 && t2.classList.contains('on'), 'klik zaznacza kategorię (delegacja działa)');
-  t2 && t2.click(); await settle(1);
+  ok(card() && card().classList.contains('on') && card().getAttribute('aria-pressed')==='true', 'klik zaznacza kategorię (delegacja działa, aria-pressed)');
+  const chip=[...w.document.querySelectorAll('#mpStage [data-ms-unpick]')].find(b=>b.dataset.msUnpick===evil);
+  ok(chip && /Zła/.test(chip.getAttribute('aria-label')), 'wybrana kategoria jako chip z ✕ („Usuń: Zła")');
+  chip && chip.click(); await settle(1);
+  ok(card() && !card().classList.contains('on'), 'chip ✕ odznacza kategorię');
+  w.mpToggleGrp('dekady'); await settle(1);
 });
 
 await group('F2b #13: wyjście w trakcie pytania i wejście do nowego pokoju → 1. pytanie od fazy „słuchaj"', async ()=>{
@@ -1195,22 +1229,25 @@ await group('F6a (R-F1/F12/R2/R-U2): menu „Graj teraz" → 10 pytań; punkty +
 await group('F6a (R-F2/R-F1/R-F3): długość meczu 5/15/30, zapamiętana pula, kostka bez wiedzy', async ()=>{
   const { audio, quiz } = catsByKind(window);
   resetSelection(window); $(window,'sumAgain').click();
-  const lens=[...window.document.querySelectorAll('#lenPick button')].map(b=>b.dataset.q);
+  const R=()=>soloRoot(window);
+  const lens=[...R().querySelectorAll('[data-ms-len]')].map(b=>b.dataset.msLen);
   eq2(lens.join(','), '5,15,30', 'segment Krótki 5 · Standard 15 · Długi 30');
-  ok(window.document.querySelector('#lenPick button.on').dataset.q==='15', 'domyślnie Standard 15');
-  const tk=[...window.document.querySelectorAll('.tick')].find(t=>t.dataset.era===audio); tk.click();
+  ok(R().querySelector('[data-ms-len][aria-pressed="true"]').dataset.msLen==='15', 'domyślnie Standard 15');
+  pickCat(window, audio);
   const mu=modeChip(window,/muzyka/); if(!mu.classList.contains('on')) mu.click();
-  window.document.querySelector('#lenPick button[data-q="5"]').click();
-  ok(/= 5 utworów/.test(txt(window,'matchInfo').replace(/\s+/g,' ')) && /5 pytań/.test(txt(window,'lenVal')), 'Krótki → „… = 5 utworów" — '+txt(window,'matchInfo'));
+  R().querySelector('[data-ms-len="5"]').click();
+  const setSum=()=>(R().querySelector('[data-ms-toggle="settings"] small')||{}).textContent||'';
+  ok(/^5 utworów/.test(soloInfo(window)) && /^5 pytań · trener/.test(setSum()), 'Krótki → „5 utworów…" + podsumowanie ustawień „5 pytań · trener …" — '+soloInfo(window)+' | '+setSum());
   click(window,'matchStart'); await settle(10);
   ok(/^Pyt\. 1\/5$/.test(txt(window,'sessProg')) && !/blok/.test(txt(window,'sessCtx')), 'mecz 5 pytań (1 blok) — '+txt(window,'sessProg'));
   const saved=JSON.parse(window.localStorage.getItem('stacjaSoloPick')||'null');
   ok(saved && saved.questions===5 && saved.cats.includes(audio) && saved.modes.includes('music'), 'R-F1: picker zapamiętał pulę + długość — '+JSON.stringify(saved));
   click(window,'sessEnd'); await settle(4); $(window,'sumAgain').click();
-  window.document.querySelector('#lenPick button[data-q="15"]').click();
+  R().querySelector('[data-ms-len="15"]').click();
   // R-F3: kostka nigdy nie zaznacza wiedzy ogólnej
   let quizHit=0;
-  for(let i=0;i<40;i++){ click(window,'matchRandom'); if(window.document.querySelector('#quizTicks .tick.on')) quizHit++; }
+  const Q=window.CATEGORIES.quiz||{};
+  for(let i=0;i<40;i++){ click(window,'matchRandom'); if([...R().querySelectorAll('[data-ms-unpick]')].some(b=>Q[b.dataset.msUnpick])) quizHit++; }
   ok(quizHit===0 && (!quiz || true), 'R-F3: 40× kostka — 0 razy kategoria wiedzy');
   resetSelection(window);
 });
@@ -1255,7 +1292,7 @@ await group('F6a (R-U7/R-U1/U12): motyw 3-stanowy (systemowy), tokeny typografii
   ok(/--fs-xs:13px; --fs-sm:14px; --fs-md:15px/.test(css), 'R-U1: tokeny --fs-xs/sm/md w :root');
   const tiny=(css.match(/font-size: ?(8|9|10|11)(\.\d+)?px/g)||[]).length;
   ok(tiny<=3, 'R-U1: deklaracje 8–11 px zastąpione tokenami (zostały tylko glify ×/✎ w kółkach 16–18 px: '+tiny+')');
-  ok(/\.grp-chip\{[^}]*color:var\(--muted\)/.test(css), 'U6: nieaktywny .grp-chip w kolorze --muted (≥4.5:1)');
+  ok(/\.ms-cat small\{[^}]*color:var\(--muted\)/.test(css) && /\.ms-tab\{[^}]*color:var\(--ink\)/.test(css), 'U6: podpisy kart w --muted (≥4.5:1), nieaktywna zakładka w --ink');
   ok(/\.mini button,[^{]*\{min-height:44px;min-width:44px\}/.test(css), 'R-U1: mini-akcje min. 44×44 px');
   $(window,'goProfil').click(); await settle(8);
   ok(!/\/ 12/.test(txt(window,'profilStats')), 'U12: brak placeholdera „/ 12" odznak');
@@ -1510,12 +1547,14 @@ await group('F8a MP: picker wg capabilities serwera — stary serwer bez ABCD/ro
   w.mpLobbyStart(); await settle(4);
   let html=$(w,'mpRoom').innerHTML;
   ok(/Tryby pytań/.test(html) && /muzyka/.test(html), 'picker MP wyrenderowany');
-  ok(!/ABCD/.test(html) && !/📅 rok/.test(html) && !/⏱ intro/.test(html), 'stary serwer (presence bez modes) → bez nowych trybów');
+  ok(!mpModeOn(w,'abcd') && !mpModeOn(w,'year') && !mpModeOn(w,'intro') && mpModeOn(w,'music'), 'stary serwer (presence bez modes) → nowe tryby wyszarzone');
+  ok(/serwer/.test(mpModeWhy(w,'abcd')) && /solo/.test(mpModeWhy(w,'intro')), 'wyjaśnienie: ABCD „serwer pokoju…", intro „tylko w grze solo" — '+mpModeWhy(w,'abcd')+' | '+mpModeWhy(w,'intro'));
+  ok(/serwer pokoju jeszcze ich nie obsługuje/.test(txt(w,'ms-mp-mn')) && /tylko solo/.test(txt(w,'ms-mp-mn')), 'notka pod sekcją trybów — '+txt(w,'ms-mp-mn'));
   ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','quiz'] }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   html=$(w,'mpRoom').innerHTML;
-  ok(/mpToggleMode\('abcd'\)/.test(html) && /mpToggleMode\('year'\)/.test(html), 'nowy serwer → chipy ABCD i rok');
-  ok(!/mpToggleMode\('intro'\)/.test(html), 'intro tylko solo — brak w MP');
+  ok(mpModeOn(w,'abcd') && mpModeOn(w,'year'), 'nowy serwer → ABCD i rok aktywne');
+  ok(!mpModeOn(w,'intro') && /solo/.test(mpModeWhy(w,'intro')), 'intro tylko solo — wyszarzone w MP');
   // stan PLAY trybu „rok": pole liczbowe; ABCD: kafle w pudełku pytania
   ws.pushState(playState(ws, { playNonce:8101, mode:'year', answerSlots:[{key:'year',label:'rok'}] })); await settle(6);
   w.mpGoKombinuj(); await settle(3);
@@ -1792,12 +1831,12 @@ await group('EKSP. MP: picker — „od tyłu krótko" z nowym serwerem, składa
   ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   let html=$(w,'mpRoom').innerHTML;
-  ok(!/mpToggleMode\('revsnip'\)/.test(html), 'stary serwer → bez „od tyłu krótko"');
+  ok(!mpModeOn(w,'revsnip'), 'stary serwer → „od tyłu krótko" wyszarzone');
   ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','revsnip','quiz'] }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   html=$(w,'mpRoom').innerHTML;
-  ok(/mpToggleMode\('revsnip'\)/.test(html) && /od tyłu krótko/.test(html), 'nowy serwer → chip „od tyłu krótko"');
-  ok(!/mpToggleMode\('medley'\)/.test(html) && !/mpToggleMode\('cover'\)/.test(html), 'składanka/okładka tylko solo');
+  ok(mpModeOn(w,'revsnip') && /od tyłu krótko/.test(html), 'nowy serwer → „od tyłu krótko" aktywne');
+  ok(!mpModeOn(w,'medley') && !mpModeOn(w,'cover') && /solo/.test(mpModeWhy(w,'cover')), 'składanka/okładka tylko solo (wyszarzone)');
   w.mpLeaveConfirmed('room'); await settle(4);
 });
 /* ===================== lektor: język opisu kategorii (lyrics.js `lang`) → głos ===================== */
@@ -1926,7 +1965,7 @@ await group('EKSP. solo: „gitara" — gra zajawka coveru fingerstyle (nie woka
 await group('Kategoria „akustycznie / unplugged": w pickerze (Style), tryby, zajawka = wersja z albumu MTV Unplugged (nie studyjna)', async ()=>{
   const w=window, C=w.CATEGORIES, cat=C.styles && C.styles.unplugged;
   ok(cat && Array.isArray(cat.songs) && cat.songs.length>=40 && cat.songs.every(s=>s.match && s.title && s.artist && s.year && s.album), 'categories.js: songs[] {title, artist, year, album, match}');
-  const tk=[...w.document.querySelectorAll('.tick')].find(t=>t.dataset.era==='unplugged');
+  const tk=catCard(w, 'unplugged');
   ok(tk && /akustycznie \/ unplugged/.test(tk.textContent), 'picker solo: tick „akustycznie / unplugged" — '+(tk&&tk.textContent));
   const all={...(C.decades||{}),...(C.styles||{})};
   const ms=M8dom.modesFor('unplugged', all);
@@ -2079,12 +2118,12 @@ await group('EKSP. MP: obroty — chipy z nowym serwerem (oś czasu nigdy), PLAY
   ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   let html=$(w,'mpRoom').innerHTML;
-  ok(!/mpToggleMode\('slowmo'\)/.test(html), 'stary serwer → bez obrotów');
+  ok(!mpModeOn(w,'slowmo'), 'stary serwer → obroty wyszarzone');
   ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','revsnip','slowmo','fastmo','quiz'] }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   html=$(w,'mpRoom').innerHTML;
-  ok(/mpToggleMode\('slowmo'\)/.test(html) && /mpToggleMode\('fastmo'\)/.test(html) && /zwolnione obroty/.test(html), 'nowy serwer → chipy obrotów');
-  ok(!/mpToggleMode\('timeline'\)/.test(html), 'oś czasu tylko solo');
+  ok(mpModeOn(w,'slowmo') && mpModeOn(w,'fastmo') && /zwolnione obroty/.test(html), 'nowy serwer → obroty aktywne');
+  ok(!mpModeOn(w,'timeline'), 'oś czasu tylko solo (wyszarzona)');
   globalThis.fetch=eksFetch; eksWebAudio(true); eksSources.length=0;
   try{
     ws.pushState(playState(ws, { playNonce:9101, mode:'slowmo', preview:'https://x/tempo.m4a' })); await settle(8);
@@ -2099,7 +2138,7 @@ await group('EKSP. MP: obroty — chipy z nowym serwerem (oś czasu nigdy), PLAY
 });
 /* ===================== poprawki po testach: płyta wszędzie (solo), legenda punktacji, rzędy kategorii ===================== */
 await group('Płyta winylowa (solo, od tyłu): stany, odsłona z okładką → ▶ oryginał, pauza z klawiatury, błąd zajawki', async ()=>{
-  await eksSolo(/🔄 od tyłu/, async (w)=>{
+  await eksSolo(/^od tyłu$/, async (w)=>{
     const dbg=()=>soloAudioMod._soloAudioDebug(), v=$(w,'vinyl');
     ok(v && v.querySelector('svg .vn-disc') && v.querySelector('.vn-prog') && v.querySelector('.vn-ctl'), 'płyta: SVG z obracającą się płytą, łukiem postępu i środkiem-przyciskiem');
     ok(!w.document.body.classList.contains('tempo-mode') && w.getComputedStyle(w.document.querySelector('.vinyl-wrap')).display!=='none', 'płyta widoczna poza trybami obrotów');
@@ -2141,28 +2180,149 @@ await group('Legenda punktacji: przycisk „ℹ️ jak liczymy punkty" przy wyni
   ok(pop.hidden && btn.getAttribute('aria-expanded')==='false', '✕ zamyka');
   click(w,'sessEnd'); await settle(2);
 });
-await group('Rzędy kategorii: podpowiedź krawędzi (more-l/more-r) + kółko myszy przewija poziomo; CSS ≥600 px zawija', async ()=>{
-  const w=window, rs=await import('../app/rowScroll.js');
+/* ===================== „Nowy mecz" — wspólny komponent (app/matchSetup.js): gotowce, wyszukiwarka, tryby, pasek, dostępność ===================== */
+await group('Nowy mecz: gotowiec ustawia pulę (kategorie + tryby + długość), ręczna zmiana go odznacza', async ()=>{
+  const w=window, r=()=>soloRoot(w);
   $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
-  const row=$(w,'ticks'); let x=0;
-  Object.defineProperty(row,'scrollWidth',{ value:900, configurable:true }); Object.defineProperty(row,'clientWidth',{ value:300, configurable:true });
-  Object.defineProperty(row,'scrollLeft',{ get:()=>x, set:v=>{ x=v; }, configurable:true });
-  rs.syncRow(row);
-  ok(row.classList.contains('more-r') && !row.classList.contains('more-l'), 'początek rzędu: podpowiedź „›" po prawej');
-  const prevMM=w.matchMedia;
-  w.matchMedia=(q)=>({ matches:/pointer: fine|hover: hover/.test(String(q)), addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} });
-  try{
-    const tk=row.querySelector('.tick')||row;
-    const ev=new w.WheelEvent('wheel', { deltaY:120, bubbles:true, cancelable:true });
-    tk.dispatchEvent(ev);
-    ok(x===120 && ev.defaultPrevented, 'kółko (mysz) → rząd przewija się w prawo, strona nie — scrollLeft='+x);
-    ok(row.classList.contains('more-l') && row.classList.contains('more-r'), 'w środku: podpowiedzi po obu stronach');
-    x=600; const ev2=new w.WheelEvent('wheel', { deltaY:120, bubbles:true, cancelable:true }); tk.dispatchEvent(ev2);
-    ok(!ev2.defaultPrevented && x===600, 'na końcu rzędu kółko przewija stronę (bez przejęcia)');
-  } finally { w.matchMedia=prevMM; }
+  resetSelection(w); $(w,'sumAgain').click();
+  const hity=()=>r().querySelector('[data-ms-preset="hity"]');
+  ok(hity() && /Hity wszech czasów/.test(hity().textContent) && /15 pyt · muzyka, intro, ABCD/.test(hity().textContent), 'gotowiec „Hity wszech czasów" z podpisem „15 pyt · muzyka, intro, ABCD"');
+  ok(['pl','dek','hard'].every(id=>r().querySelector(`[data-ms-preset="${id}"]`)), 'gotowce: Polska klasyka, Lata 80 · 90 · 00, Hardcore');
+  const C=w.CATEGORIES||{}, allQ=C.quiz||{};
+  ok(!!r().querySelector('[data-ms-preset="lam"]') === !!(allQ.rebusy || allQ['jedna-litera']), 'gotowiec bez istniejących kategorii (Łamigłówki bez paczek) ukryty');
+  r().querySelector('[data-ms-len="5"]').click();      // długość przed gotowcem — gotowiec ją nadpisze
+  hity().click();
+  ok(isOn(hity()) && hity().classList.contains('on'), 'klik → gotowiec zaznaczony (aria-pressed)');
+  const sel=[...r().querySelectorAll('[data-ms-unpick]')].map(b=>b.dataset.msUnpick).sort();
+  eq2(sel.join(','), ['00s','80s','90s','pop-world'].sort().join(','), 'kategorie gotowca jako chipy');
+  const on=[...r().querySelectorAll('[data-ms-mode][aria-pressed="true"]')].map(b=>b.dataset.msMode).sort();
+  eq2(on.join(','), 'abcd,intro,music', 'tryby gotowca');
+  ok(r().querySelector('[data-ms-len="15"]').getAttribute('aria-pressed')==='true', 'długość gotowca: 15');
+  ok(/^15 utworów · 4 kat\. · 3 tryby$/.test(soloInfo(w)), 'pasek: „15 utworów · 4 kat. · 3 tryby" — '+soloInfo(w));
+  pickCat(w, '70s');
+  ok(!isOn(hity()) && !r().querySelector('.ms-preset.on'), 'ręczna zmiana (dodanie kategorii) → gotowiec odznaczony');
+  hity().click(); modeChip(w,/ABCD/).click();
+  ok(!isOn(hity()), 'zmiana trybu też odznacza');
+  hity().click(); click(w,'matchStart'); await settle(10);
+  ok(w.document.body.classList.contains('playing'), 'start meczu z gotowca');
+  const saved=JSON.parse(w.localStorage.getItem('stacjaSoloPick')||'null');
+  ok(saved && saved.preset==='hity' && saved.questions===15, 'zapamiętany gotowiec (stacjaSoloPick.preset) — '+JSON.stringify(saved&&saved.preset));
+  click(w,'sessEnd'); await settle(4); $(w,'sumAgain').click();
+  resetSelection(w);
+});
+
+await group('Nowy mecz: wyszukiwarka filtruje WSZYSTKIE grupy, fokus i kursor zostają w polu', async ()=>{
+  const w=window, r=()=>soloRoot(w);
+  soloOpen(w); r().querySelector('[data-ms-tab="dekady"]').click();
+  const inp=()=>w.document.getElementById('ms-solo-q');
+  const lab=w.document.querySelector('label[for="ms-solo-q"]');
+  ok(inp() && lab && /Szukaj kategorii/.test(lab.textContent) && inp().type==='search', 'pole wyszukiwania z etykietą (label for + tekst dla czytnika)');
+  inp().focus(); inp().value='disco'; inp().setSelectionRange(5,5);
+  inp().dispatchEvent(new w.Event('input', { bubbles:true })); await settle(1);
+  const keys=[...r().querySelectorAll('[data-ms-cat]')].map(b=>b.dataset.msCat);
+  ok(keys.includes('disco-polo') && !keys.includes('80s'), 'zakładka Dekady, a wynik z grupy Style: disco polo (bez dekad) — '+keys.join(','));
+  ok(/Style ·/.test((r().querySelector('[data-ms-cat="disco-polo"]')||{}).textContent||''), 'wynik podpisany nazwą grupy');
+  ok(w.document.activeElement===inp() && inp().selectionStart===5, 'fokus + kursor zostają w polu po re-renderze');
+  ok(!r().querySelector('.ms-tab.on'), 'w trakcie szukania żadna zakładka nie jest aktywna');
+  inp().value='lata 8'; inp().dispatchEvent(new w.Event('input', { bubbles:true })); await settle(1);
+  eq2([...r().querySelectorAll('[data-ms-cat]')].map(b=>b.dataset.msCat).join(','), '80s', '„lata 8" → tylko lata 80 (słowa zapytania AND)');
+  inp().value='zzzqqq'; inp().dispatchEvent(new w.Event('input', { bubbles:true })); await settle(1);
+  ok(/Brak kategorii/.test(r().textContent) && !r().querySelector('[data-ms-cat]'), 'brak wyników → komunikat');
+  inp().value='rock'; inp().dispatchEvent(new w.Event('input', { bubbles:true })); await settle(1);
+  r().querySelector('[data-ms-cat="rock-pl"]').click();
+  ok(isOn(r().querySelector('[data-ms-cat="rock-pl"]')) && inp().value==='rock', 'wybór z wyników — zapytanie zostaje');
+  inp().dispatchEvent(new w.KeyboardEvent('keydown', { key:'Escape', bubbles:true })); await settle(1);
+  ok(inp().value==='' && r().querySelector('.ms-tab.on'), 'Esc czyści wyszukiwanie, wraca zakładka');
+  resetSelection(w);
+});
+
+await group('Nowy mecz: tryby w rodzinach; niekompatybilne z kategoriami wyszarzone (disabled + wyjaśnienie)', async ()=>{
+  const w=window, r=()=>soloRoot(w);
+  const fams=[...r().querySelectorAll('.ms-fam-h b')].map(b=>b.textContent);
+  eq2(fams.join('|'), 'Słuchaj|Kombinuj|Covery|Bez dźwięku|Lektor', 'rodziny trybów w kolejności makiety');
+  ok(![...r().querySelectorAll('[data-ms-mode]')].some(b=>b.disabled), 'bez kategorii nic nie jest wyszarzone');
+  const { lyrics, quiz } = catsByKind(w);
+  pickCat(w, lyrics);
+  const m=(x)=>r().querySelector(`[data-ms-mode="${x}"]`);
+  ok(m('music').disabled && m('piano').disabled && !m('lektor').disabled, 'tylko kategoria tekstów: muzyka/fortepian wyszarzone, lektor aktywny');
+  ok(m('music').getAttribute('title')==='nie pasuje do wybranych kategorii' && m('music').getAttribute('aria-describedby')==='ms-solo-mn', 'wyszarzona pigułka: title + aria-describedby → notka');
+  ok(!$(w,'ms-solo-mn').hidden && /nie pasują do wybranych kategorii/.test(txt(w,'ms-solo-mn')), 'notka pod sekcją trybów');
+  m('music').click();
+  ok(!isOn(m('music')), 'klik w wyszarzony tryb nic nie robi');
+  m('lektor').click();
+  ok(isOn(m('lektor')) && /1 tryb/.test(soloInfo(w)), 'lektor wybrany → „1 tryb"');
+  if(quiz){ pickCat(w, quiz); const auto=r().querySelector('.ms-pill.auto');
+    ok(auto && auto.classList.contains('on') && /2 tryby/.test(soloInfo(w)), 'kategoria quizu → „wiedza i łamigłówki" auto + liczy się w trybach — '+soloInfo(w)); }
+  resetSelection(w);
+});
+
+await group('Nowy mecz: pasek startu przyklejony (sticky), desktop ≥900 px w dwóch kolumnach, zwijanie z aria-expanded', async ()=>{
+  const w=window, r=()=>soloRoot(w);
   const css=[...w.document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
-  ok(/@media \(min-width:600px\)\{[^}]*\.ticks,\.grp-band \.ticks\{flex-wrap:wrap;overflow-x:visible\}/.test(css), 'CSS: od 600 px rzędy kategorii zawijają się (siatka)');
-  delete row.scrollWidth; delete row.clientWidth; delete row.scrollLeft;
+  ok(/\.ms-bar\{position:sticky;bottom:0;/.test(css), 'telefon: pasek startu sticky na dole ekranu');
+  ok(r().querySelector('.ms').lastElementChild.classList.contains('ms-bar'), 'pasek = ostatni element komponentu (w przepływie — nie zasłania końca listy)');
+  const bar=r().querySelector('.ms-bar');
+  ok(bar.querySelector('#matchInfo[role="status"][aria-live="polite"]') && bar.querySelector('#matchRandom[aria-label]') && bar.querySelector('#matchStart'), 'pasek: podsumowanie (status) + 🎲 (aria-label) + ZACZNIJ');
+  ok(/\.ms-start\{[^}]*background:var\(--cta\)/.test(css) && /--cta:#4F9A00; --cta-d:#3F7D00;/.test(css), 'kolor CTA z makiety (#4F9A00 / #3F7D00)');
+  const desk=css.slice(css.indexOf('@media (min-width:900px){'));
+  ok(/body\.solo:not\(\.playing\), body\.mp\.ms-wide\{max-width:1200px/.test(desk), 'desktop: szerokość do 1200 px (solo i host MP)');
+  ok(/grid-template-areas:"presets presets" "cats side" "cats bar"/.test(desk) && /\.ms-body,\.ms-body\[hidden\]\{display:contents\}/.test(desk), 'desktop: dwie kolumny (kategorie | tryby + ustawienia + start)');
+  ok(/\.ms-bar\{grid-area:bar;position:static/.test(desk), 'desktop: pasek startu w prawej kolumnie (nie przyklejony)');
+  ok(/\.ms-preset-grid\{grid-template-columns:repeat\(auto-fill,minmax\(180px,1fr\)\)/.test(desk) && /\.ms-grid\{grid-template-columns:repeat\(auto-fill,minmax\(170px,1fr\)\)/.test(desk), 'desktop: gotowce i karty auto-fill');
+  ok(/\.ms-preset-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(css) && /\.ms-grid\{display:grid;grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(css), 'telefon: siatki 2-kolumnowe (minmax(0,…) — bez poziomego scrolla)');
+  ok(!/overflow-x:auto/.test(css.slice(css.indexOf('/* ===== „Nowy mecz"'))), 'komponent bez poziomego przewijania');
+  // zwijanie „Dostosuj mecz"
+  const tg=()=>r().querySelector('[data-ms-toggle="custom"]');
+  soloOpen(w);
+  ok(tg().getAttribute('aria-expanded')==='true' && $(w, tg().getAttribute('aria-controls')) && !$(w,'ms-solo-body').hidden, '„Dostosuj mecz": aria-expanded + aria-controls');
+  tg().click();
+  ok(tg().getAttribute('aria-expanded')==='false' && $(w,'ms-solo-body').hidden && /kategorie, tryby, długość/.test(tg().textContent), 'zwinięte: treść ukryta, podpowiedź co jest w środku');
+  ok(JSON.parse(w.localStorage.getItem('stacjaSetupUi_solo')||'{}').open===false, 'stan zwinięcia zapamiętany');
+  tg().click();
+  const st=()=>r().querySelector('[data-ms-toggle="settings"]');
+  const was=st().getAttribute('aria-expanded'); st().click();
+  ok(st().getAttribute('aria-expanded')!==was && $(w,'ms-solo-set').hidden===(st().getAttribute('aria-expanded')==='false'), '„Ustawienia meczu": aria-expanded steruje treścią');
+  if(st().getAttribute('aria-expanded')==='false') st().click();
+  const tr=()=>$(w,'quizRepeat');
+  const before=tr().getAttribute('aria-pressed'); tr().click();
+  ok(tr().getAttribute('aria-pressed')!==before && w.localStorage.getItem('stacjaQuizRepeat')===(before==='true'?'0':'1'), 'trener w ustawieniach: aria-pressed + zapis');
+  tr().click();
+  // dostępność: prawdziwe przyciski z aria-pressed na wyborach
+  const picks=[...r().querySelectorAll('[data-ms-cat],[data-ms-mode],[data-ms-preset],[data-ms-len],[data-ms-tab]')];
+  ok(picks.length>20 && picks.every(b=>b.tagName==='BUTTON' && b.type==='button' && /^(true|false)$/.test(b.getAttribute('aria-pressed'))), 'wybory = <button type=button> z aria-pressed ('+picks.length+')');
+  ok([...r().querySelectorAll('[data-ms-unpick]')].every(b=>/^Usuń: /.test(b.getAttribute('aria-label'))), 'chipy ✕ z etykietą „Usuń: …"');
+});
+
+await group('MP gość: „Mecz, który ustawia host" na żywo (szkic), bez szkicu stary komunikat; host rozsyła szkic', async ()=>{
+  const w=window; const ws=await f6bRoom();
+  ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
+  // host: picker → po zmianie (debounce) wysyła event „draft" z konfiguracją
+  w.mpLobbyStart(); await settle(2);
+  const n0=ws.sent.length;
+  w.mpSetQuestions(30); w.mpSetTimer(30); await new Promise(r=>setTimeout(r, 450));
+  const dr=ws.sent.slice(n0).filter(m=>m.t==='event' && m.event==='draft').pop();
+  ok(dr && dr.payload && dr.payload.questions===30 && dr.payload.timer===30 && Array.isArray(dr.payload.cats) && Array.isArray(dr.payload.modes), 'host: szkic {t:event, event:draft} z długością/timerem/kategoriami/trybami — '+JSON.stringify(dr&&dr.payload).slice(0,160));
+  w.mpSetQuestions(15); w.mpSetTimer(60);
+  // gość: presence z innym hostem → poczekalnia bez szkicu = dotychczasowy komunikat
+  ws._emit({ t:'presence', members:[{id:'HOST',name:'Kapitan'},{id:ws._id,name:'Ja'}], hostId:'HOST', modes:['music','lektor','reverse','snippet','abcd','year','quiz'] }); await settle(4);
+  const st=()=>$(w,'mpStage').innerHTML;
+  ok(/czekamy, aż host ułoży mecz/.test(st()) && !/Mecz, który ustawia host/.test(st()), 'gość bez szkicu (stary serwer) → „czekamy, aż host ułoży mecz…"');
+  // szkic od NIE-hosta ignorowany
+  ws._emit({ t:'event', event:'draft', from:'OBCY', payload:{ preset:'Podróbka', cats:[{k:'80s',l:'lata 80'}], modes:['music'], questions:5 } }); await settle(2);
+  ok(!/Podróbka/.test(st()), 'szkic od kogoś innego niż host — zignorowany');
+  // szkic od hosta (+ próba XSS w etykiecie i nieznany tryb)
+  ws._emit({ t:'event', event:'draft', from:'HOST', payload:{ preset:'Hity wszech czasów', cats:[{k:'80s',l:'lata 80'},{k:'pl:x',l:'<img src=x onerror="window.__dx=1">'}], modes:['music','abcd','hack'], questions:15, timer:30, format:'teams', audioHostOnly:true } }); await settle(2);
+  ok(/Mecz, który ustawia host/.test(st()) && /na żywo/.test(st()), 'gość: sekcja „Mecz, który ustawia host · na żywo"');
+  ok(/Hity wszech czasów/.test(st()) && /lata 80/.test(st()), 'gotowiec + chipy kategorii');
+  ok(!w.document.querySelector('#mpStage img') && w.__dx===undefined && /&lt;img/.test(st()), 'etykieta ze szkicu escapowana (XSS)');
+  ok(/muzyka · ABCD/.test(txt(w,'mpStage')) && !/hack/.test(st()), 'tryby szkicu (nieznany odrzucony)');
+  ok(/15 pytań/.test(st()) && /Drużyny/.test(st()) && /30 s/.test(st()) && /tylko u hosta/.test(st()), 'długość / format / czas / dźwięk');
+  ok(/host układa mecz/.test(st()), 'stopka gościa: host układa mecz — na żywo');
+  ws._emit({ t:'event', event:'draft', from:'HOST', payload:{ preset:'', cats:[], modes:['lektor'], questions:5, timer:0, salon:true } }); await settle(2);
+  ok(/host jeszcze nie wybrał/.test(st()) && /5 pytań/.test(st()) && /bez limitu/.test(st()) && /tylko na TV/.test(st()), 'aktualizacja na żywo (pusty wybór, salon → dźwięk tylko na TV)');
+  // powrót roli hosta (kolejne testy)
+  ws._emit({ t:'presence', members:[{id:ws._id,name:'Ja'}], hostId:ws._id }); await settle(4);
+  w.mpLeaveConfirmed('room'); await settle(4);
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

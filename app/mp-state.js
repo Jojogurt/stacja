@@ -15,6 +15,7 @@ export const S = {
   audioHostOnly: false,   // F6b (tryb #6): host-lokalny fallback „Dźwięk tylko u hosta" (stary serwer wycina flagę)
   tickSec: null,          // F6b (U4): ostatnia sekunda timera, dla której zagrał „tik"
   roomStage: 'wait',      // przed grą: 'wait' = poczekalnia, 'build' = picker „ułóż mecz" (host)
+  draft: null,            // gość: ostatni szkic meczu od hosta (core/matchSetup.sanitizeDraft) — „Mecz, który ustawia host"
   lastView: null,         // ostatni „duży" widok (wait/picker/game) — do one-shot przejść
   game: null,             // stan gry (host/DO = źródło prawdy)
   hostCurrent: null,      // pełny utwór znany tylko hostowi

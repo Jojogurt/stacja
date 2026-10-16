@@ -1823,24 +1823,107 @@ await (async ()=>{
     itunes:async(term,opts)=>{ const t=term.toLowerCase(); if(t==='madonna like a prayer') return net['a:Madonna']; return net['s:'+t]||[]; }, rnd:()=>0 });
   eq(pl.coverArtist,'Piano Tribute Players','playlista: oryginał z utworów + cover');
 })();
-/* ===== poprawki po testach: rzędy kategorii (core/picker.rowEdges / wheelScrollTarget) ===== */
-const PKR = await import('../core/picker.js');
-group('rzędy kategorii: podpowiedź krawędzi + kółko myszy → poziomy scroll', ()=>{
-  eq(PKR.rowEdges({ scrollLeft:0, scrollWidth:300, clientWidth:300 }),{left:false,right:false},'mieści się — bez podpowiedzi');
-  eq(PKR.rowEdges({ scrollLeft:0, scrollWidth:900, clientWidth:300 }),{left:false,right:true},'początek: strzałka w prawo');
-  eq(PKR.rowEdges({ scrollLeft:300, scrollWidth:900, clientWidth:300 }),{left:true,right:true},'środek: obie');
-  eq(PKR.rowEdges({ scrollLeft:599, scrollWidth:900, clientWidth:300 }),{left:true,right:false},'koniec (subpiksel) — bez prawej');
-  eq(PKR.rowEdges(),{left:false,right:false},'brak danych (ukryty rząd)');
-  eq(PKR.wheelScrollTarget({ deltaY:100, scrollLeft:0, scrollWidth:900, clientWidth:300 }),100,'kółko w dół → w prawo');
-  eq(PKR.wheelScrollTarget({ deltaY:-100, scrollLeft:50, scrollWidth:900, clientWidth:300 }),0,'kółko w górę → w lewo (do krawędzi)');
-  eq(PKR.wheelScrollTarget({ deltaY:3, deltaMode:1, scrollLeft:0, scrollWidth:900, clientWidth:300 }),120,'tryb linii: 3 × 40 px');
-  eq(PKR.wheelScrollTarget({ deltaY:1, deltaMode:2, scrollLeft:0, scrollWidth:900, clientWidth:300 }),300,'tryb strony: szerokość rzędu');
-  eq(PKR.wheelScrollTarget({ deltaY:5000, scrollLeft:0, scrollWidth:900, clientWidth:300 }),600,'przycięte do końca');
-  eq(PKR.wheelScrollTarget({ deltaY:100, scrollLeft:600, scrollWidth:900, clientWidth:300 }),null,'na prawej krawędzi → strona przewija się dalej');
-  eq(PKR.wheelScrollTarget({ deltaY:-100, scrollLeft:0, scrollWidth:900, clientWidth:300 }),null,'na lewej krawędzi → strona');
-  eq(PKR.wheelScrollTarget({ deltaY:100, scrollLeft:0, scrollWidth:300, clientWidth:300 }),null,'rząd się mieści (≥600 px zawija) → nie przejmuj');
-  eq(PKR.wheelScrollTarget({ deltaX:80, deltaY:10, scrollLeft:0, scrollWidth:900, clientWidth:300 }),null,'gest poziomy (trackpad) → natywnie');
-  eq(PKR.wheelScrollTarget({ deltaY:0, scrollLeft:0, scrollWidth:900, clientWidth:300 }),null,'bez ruchu');
+/* ===== „Nowy mecz" (core/matchSetup.js + rodziny trybów w core/match.js): gotowce, filtr, tryby, podsumowania, szkic MP ===== */
+const MS = await import('../core/matchSetup.js');
+const MM = await import('../core/match.js');
+const MS_CATS = {
+  '80s':{ label:'lata 80', range:'1980–89', artists:['A1','A2','A3'] },
+  '90s':{ label:'lata 90', range:'1990–99', artists:['B1','B2'] },
+  '00s':{ label:'lata 2000', range:'2000–09', artists:['C1','C2'] },
+  'pop-world':{ label:'pop świat', desc:'wielkie gwiazdy', artists:['Madonna','Prince'] },
+  'disco-polo':{ label:'disco polo', desc:'parkietowe', artists:['Weekend','Akcent'] },
+  'tlum':{ label:'światowe po polsku', kind:'lyrics', songs:[{ title:'T', artist:'A', lyric:'opis' }] },
+  'rebusy':{ label:'Rebusy emoji', kind:'quiz', group:'lamiglowki', questions:[{ prompt:'?' }] },
+};
+group('Nowy mecz: MODE_FAMILIES — każdy tryb dokładnie w jednej rodzinie, etykiety, kolejność makiety', ()=>{
+  const all=MM.MODE_FAMILIES.flatMap(f=>f.modes);
+  eq([...all].sort(), [...MM.ALL_MODES].sort(), 'rodziny pokrywają ALL_MODES');
+  eq(all.length, new Set(all).size, 'bez duplikatów');
+  eq(MM.MODE_FAMILIES.map(f=>f.name), ['Słuchaj','Kombinuj','Covery','Bez dźwięku','Lektor'], 'nazwy rodzin');
+  eq(MM.MODE_FAMILIES[0].modes, ['music','intro','snippet','reverse','revsnip','slowmo','fastmo'], 'Słuchaj: muzyka, intro, fragment, od tyłu, od tyłu krótko, obroty');
+  ok(MM.MODE_FAMILIES.every(f=>f.desc && f.id), 'każda rodzina ma opis');
+  ok(MM.ALL_MODES.every(m=>MM.MODE_PICK_LABEL[m]), 'każdy tryb ma etykietę pickera');
+});
+group('Nowy mecz: gotowce — klucze kategorii ISTNIEJĄ w danych (categories.js + data/quiz-*.json)', ()=>{
+  const ROOT=join(dirname(fileURLToPath(import.meta.url)),'..');
+  const win={}; new Function('window', readFileSync(join(ROOT,'categories.js'),'utf8'))(win);
+  const C=win.CATEGORIES||{};
+  const keys=new Set([...Object.keys(C.decades||{}), ...Object.keys(C.styles||{}), ...Object.keys(C.playlists||{})]);
+  const idx=JSON.parse(readFileSync(join(ROOT,'data/quiz-index.json'),'utf8'));
+  (Array.isArray(idx)?idx:idx.files).forEach(f=>keys.add(f.replace(/^quiz-|\.json$/g,'')));
+  eq(MS.PRESETS.map(p=>p.id), ['hity','pl','dek','lam','hard'], 'gotowce: hity, Polska klasyka, Lata 80·90·00, Łamigłówki, Hardcore');
+  MS.PRESETS.forEach(p=>{ const miss=p.cats.filter(k=>!keys.has(k)); eq(miss, [], `gotowiec ${p.id}: brakujące klucze`); });
+  ok(MS.PRESETS.every(p=>p.modes.every(m=>MM.ALL_MODES.includes(m))) && MS.PRESETS.every(p=>[5,15,30].includes(p.questions)), 'tryby i długości gotowców poprawne');
+});
+group('Nowy mecz: resolvePreset / presetsFor / presetMatches', ()=>{
+  const hity=MS.resolvePreset(MS.PRESETS[0], MS_CATS);
+  eq(hity.cats, ['80s','90s','00s','pop-world'], 'hity: kategorie');
+  eq(hity.modes, ['music','intro','abcd'], 'hity: tryby (solo)');
+  eq(hity.sub, '15 pyt · muzyka, intro, ABCD', 'podpis z trybów');
+  const mp=MS.resolvePreset(MS.PRESETS[0], MS_CATS, MM.MP_MODES);
+  eq(mp.modes, ['music','abcd'], 'MP: intro (solo-only) wycięte');
+  const legacy=MS.resolvePreset(MS.PRESETS[2], MS_CATS, MM.LEGACY_MP_MODES);
+  eq(legacy.modes, ['music'], 'stary serwer: oś czasu wycięta → zostaje muzyka');
+  const lam=MS.resolvePreset(MS.PRESETS[3], MS_CATS);
+  eq([lam.cats, lam.modes, lam.sub], [['rebusy'], ['quiz'], '15 pyt · rebusy i litery'], 'Łamigłówki: tylko istniejące klucze, tryb quiz, własny podpis');
+  eq(MS.resolvePreset(MS.PRESETS[1], MS_CATS).cats, ['disco-polo'], 'Polska klasyka: brakujące klucze pominięte');
+  eq(MS.resolvePreset({ id:'x', name:'X', cats:['nie-ma'], modes:['music'], questions:15 }, MS_CATS), null, 'gotowiec bez kategorii → null (ukryty)');
+  eq(MS.resolvePreset({ id:'f', name:'Z półki', cats:(c)=>Object.keys(c).filter(k=>/s$/.test(k)), modes:['music'], questions:5 }, MS_CATS).cats, ['80s','90s','00s'], 'cats jako funkcja (przyszły „Z mojej półki")');
+  eq(MS.presetsFor({ '80s':MS_CATS['80s'] }).map(p=>p.id), ['hity','dek','hard'], 'presetsFor: tylko gotowce z istniejącymi kategoriami');
+  ok(MS.presetMatches(hity, ['00s','80s','pop-world','90s'], new Set(['abcd','music','intro']), 15), 'presetMatches: ten sam wybór (inna kolejność)');
+  ok(!MS.presetMatches(hity, hity.cats, hity.modes, 5) && !MS.presetMatches(hity, ['80s'], hity.modes, 15), 'presetMatches: inna długość / pula → nie');
+});
+group('Nowy mecz: wyszukiwarka — normQuery + searchCats (wszystkie grupy, AND słów, bez diakrytyków)', ()=>{
+  eq(MS.normQuery('  Łamigłówki–Pop! '), 'lamiglowki pop', 'normQuery: ł/diakrytyki/znaki');
+  const groups=[{ id:'dekady', label:'Dekady', keys:['80s','90s','00s'] }, { id:'style', label:'Style', keys:['pop-world','disco-polo','80s'] },
+    { id:'teksty', label:'Teksty', keys:['tlum'] }, { id:'lamiglowki', label:'Łamigłówki', keys:['rebusy'] }];
+  eq(MS.searchCats(groups, 'disco', MS_CATS), [{ key:'disco-polo', group:'style' }], 'disco → style');
+  eq(MS.searchCats(groups, '80', MS_CATS), [{ key:'80s', group:'dekady' }], '„80" → lata 80 (bez duplikatu z drugiej grupy)');
+  eq(MS.searchCats(groups, 'lata 9', MS_CATS).map(h=>h.key), ['90s'], 'słowa AND');
+  eq(MS.searchCats(groups, 'swiatowe', MS_CATS).map(h=>h.key), ['tlum'], 'bez polskich znaków');
+  eq(MS.searchCats(groups, 'lamiglowki', MS_CATS).map(h=>h.key), ['rebusy'], 'po nazwie grupy');
+  eq(MS.searchCats(groups, 'gwiazdy', MS_CATS).map(h=>h.key), ['pop-world'], 'po opisie');
+  eq(MS.searchCats(groups, '   ', MS_CATS), [], 'puste zapytanie → []');
+});
+group('Nowy mecz: modeStates — wyszarzenie wg kategorii, MP solo-only/serwer, quiz auto', ()=>{
+  const flat=(st)=>Object.fromEntries(st.families.flatMap(f=>f.modes).map(m=>[m.mode,m]));
+  let st=MS.modeStates({ cats:new Set(), modes:new Set(['music','lektor']), allCats:MS_CATS });
+  ok(Object.values(flat(st)).every(m=>!m.disabled || m.auto), 'bez kategorii: nic wyszarzonego (poza auto-quizem)');
+  eq(st.active, ['music','lektor'], 'aktywne = wybrane');
+  st=MS.modeStates({ cats:new Set(['tlum']), modes:new Set(['music','lektor']), allCats:MS_CATS });
+  let f=flat(st);
+  ok(f.music.disabled && f.music.reason==='cats' && !f.lektor.disabled, 'tylko teksty: muzyka wyszarzona (cats), lektor aktywny');
+  eq(st.active, ['lektor'], 'wybrana-ale-wyszarzona muzyka się nie liczy'); eq(st.reasons, ['cats'], 'powody');
+  st=MS.modeStates({ cats:new Set(['80s','rebusy']), modes:new Set(['music','quiz']), allCats:MS_CATS, available:MM.mpAvailableModes(null, true) });
+  f=flat(st);
+  ok(f.intro.disabled && f.intro.reason==='solo' && f.abcd.reason==='server' && f.quiz.auto && f.quiz.on, 'MP stary serwer: intro=solo, ABCD=server, quiz auto włączony');
+  eq(st.active, ['music','quiz'], 'aktywne w MP');
+  ok(/tylko solo/.test(MS.modeNote(st.reasons)) && /serwer pokoju/.test(MS.modeNote(st.reasons)), 'modeNote: wyjaśnienie solo + serwer');
+  eq(MS.modeNote([]), '', 'bez powodów — bez notki');
+});
+group('Nowy mecz: setupSummary / settingsSummary', ()=>{
+  eq(MS.setupSummary({ cats:new Set(), active:['music'], questions:15, allCats:MS_CATS }), { ok:false, text:'Wybierz co najmniej jedną kategorię' }, 'brak kategorii');
+  eq(MS.setupSummary({ cats:new Set(['80s']), active:[], questions:15, allCats:MS_CATS }).ok, false, 'brak trybu');
+  const s=MS.setupSummary({ cats:new Set(['80s','90s','00s','pop-world']), active:['music','intro','abcd'], questions:15, allCats:MS_CATS });
+  eq([s.ok, s.text], [true, '15 utworów · 4 kat. · 3 tryby'], 'makieta: „15 … · 4 kat. · 3 tryby"');
+  eq(MS.setupSummary({ cats:new Set(['80s']), active:['music'], questions:30, allCats:MS_CATS }).text, '30 utworów · 1 kat. · 1 tryb · z powtórkami', 'mała pula → „z powtórkami"');
+  eq(MS.setupSummary({ cats:new Set(['80s','rebusy']), active:['music','quiz'], questions:5, allCats:MS_CATS }).text, '5 pytań · 2 kat. · 2 tryby', 'z quizem → „pytań"');
+  eq(MS.setupSummary({ cats:new Set(['tlum']), active:['music'], questions:15, allCats:MS_CATS }).ok, false, 'niekompatybilne → ok:false');
+  eq(MS.settingsSummary({ questions:15, trener:false }), '15 pytań · trener wył.', 'solo');
+  eq(MS.settingsSummary({ ctx:'mp', questions:30, format:'teams', timer:0, salon:true }), '30 pytań · Drużyny · bez limitu · TV', 'MP');
+});
+group('Nowy mecz: sanitizeDraft — szkic MP dla gości (te same reguły klient/serwer)', ()=>{
+  eq(MS.sanitizeDraft(null), null, 'null'); eq(MS.sanitizeDraft([1]), null, 'tablica'); eq(MS.sanitizeDraft('x'), null, 'string');
+  const d=MS.sanitizeDraft({ preset:'Hity '+'x'.repeat(100), cats:[{ k:'80s', l:'lata 80' }, { k:'80s', l:'dup' }, { k:'', l:'pusty' }, 7, { k:'pl:x', l:'' }],
+    modes:['music','music','hack','abcd'], questions:999, timer:-5, format:'evil', salon:'yes', audioHostOnly:true, extra:'<script>' });
+  eq(d.cats, [{ k:'80s', l:'lata 80' }, { k:'pl:x', l:'pl:x' }], 'kategorie: bez duplikatów/pustych, etykieta → klucz');
+  eq(d.modes, ['music','abcd'], 'tryby: tylko znane, bez duplikatów');
+  eq([d.questions, d.timer, d.format, d.salon, d.audioHostOnly], [MM.MAX_QUESTIONS, 0, 'coop', false, true], 'długość/timer/format/flagi przycięte');
+  ok(d.preset.length<=MS.DRAFT_LABEL_MAX && !('extra' in d), 'teksty przycięte, nieznane pola wycięte');
+  const many=MS.sanitizeDraft({ cats:Array.from({ length:40 }, (_,i)=>({ k:'k'+i, l:'L'+i })), salon:true });
+  eq([many.cats.length, many.more, many.audioHostOnly], [MS.DRAFT_MAX_CATS, 16, true], 'cap kategorii + „more"; salon ⇒ dźwięk tylko u hosta');
+  ok(JSON.stringify({ t:'event', event:'draft', payload:many }).length < MS.DRAFT_PAYLOAD_MAX, 'maksymalny szkic mieści się w capie serwera');
+  eq(MS.draftModesText(['music','intro','abcd']), 'muzyka · intro 1–16 s · ABCD', 'tryby szkicu do wyświetlenia');
 });
 /* ===== EKSPERYMENT „gitara": zaostrzona akceptacja coveru (core/guitarCovers.js) ===== */
 const GC = await import('../core/guitarCovers.js');

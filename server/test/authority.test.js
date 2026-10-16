@@ -957,5 +957,45 @@ await group('Łamigłówki: partial — częściowe punkty drużyny na serwerze,
   ok(rv.gained>=67 && rv.gained<=101, '2/3 słów → częściowe punkty (67 × szybkość ≤1.5): '+rv.gained);
   eq(rv.listen.map(x=>x.label), ['1','3'], 'listen: utwory slotów 1 i 3 (null pominięty)');
 });
+/* ==================== „Nowy mecz": szkic konfiguracji MP dla gości (event `draft`) ==================== */
+await group('draft (autorytet): tylko od hosta, sanityzowany, w lobby; dochodzący dostaje ostatni; rate-limit; po starcie znika', async ()=>{
+  const { room } = await makeRoom();
+  const h=room.join('H','Host'), p=room.join('P','Pola');
+  const drafts=(c)=>c.sent.filter(m=>m.t==='event' && m.event==='draft');
+  await room.msg(p, { t:'event', event:'draft', payload:{ preset:'Podróbka', cats:[{k:'80s',l:'lata 80'}], modes:['music'], questions:5 } });
+  eq(drafts(h).length+drafts(p).length, 0, 'szkic od gracza (nie hosta) odrzucony');
+  await room.msg(h, { t:'event', event:'draft', payload:{ preset:'Hity', cats:[{k:'80s',l:'<b>lata 80</b>'},{k:'80s',l:'dup'}], modes:['music','hack','abcd'], questions:999, timer:-3, format:'evil', evil:'x', by:'P' } });
+  const d=drafts(p).pop();
+  ok(d && d.from==='H' && d.payload.from==='H' && d.payload.by==='H', 'szkic hosta rozesłany, nadawca z tokenu (by=H mimo by:P)');
+  eq([d.payload.cats.length, d.payload.modes, d.payload.questions, d.payload.timer, d.payload.format, 'evil' in d.payload], [1, ['music','abcd'], 60, 0, 'coop', false], 'sanityzacja: duplikaty/nieznane tryby/capy/nieznane pola');
+  const late=await room.connect('L','Late');
+  await room.msg(late, { t:'hello' });
+  ok(drafts(late).length===1 && drafts(late)[0].payload.preset==='Hity', 'dochodzący gość (hello) dostaje ostatni szkic');
+  const n=drafts(p).length;
+  for(let i=0;i<20;i++) await room.msg(h, { t:'event', event:'draft', payload:{ preset:'S'+i, cats:[], modes:['music'], questions:15 } });
+  ok(drafts(p).length-n<=6, 'rate-limit szkicu (burst 6): '+(drafts(p).length-n));
+  await room.msg(h, { t:'start', config:CONFIG() });
+  ok(room.draft===null, 'start meczu czyści szkic');
+  const m=drafts(p).length;
+  await room.msg(h, { t:'event', event:'draft', payload:{ preset:'W grze', cats:[], modes:['music'], questions:15 } });
+  eq(drafts(p).length, m, 'w trakcie meczu szkic ignorowany');
+  const big={ preset:'x', cats:Array.from({length:200},(_,i)=>({k:'k'+i+'x'.repeat(50), l:'L'.repeat(60)})), modes:['music'], questions:15 };
+  const { room:r2 } = await makeRoom(); const h2=r2.join('H','Host'), p2=r2.join('P','P');
+  await r2.msg(h2, { t:'event', event:'draft', payload:big });
+  const bd=drafts(p2).pop();
+  ok(bd && bd.payload.cats.length===24 && bd.payload.more===176, 'duży szkic przycięty do 24 kategorii (+ more)');
+});
+
+await group('draft (relay): ROOM_EVENTS + tylko host relay, sanityzacja, kopertowy nadawca', async ()=>{
+  const room=await makeRelay('DRFT');
+  const h=await room.join('H','Host'), p=await room.join('P','Gracz');
+  await room.msg(p, { t:'b', event:'draft', payload:{ preset:'Podróbka', cats:[], modes:['music'], questions:5 } });
+  ok(!h.sent.some(m=>m.t==='b' && m.event==='draft'), 'szkic od gracza relay odrzucony');
+  await room.msg(h, { t:'b', event:'draft', payload:{ preset:'Hity', cats:[{k:'80s',l:'lata 80'}], modes:['music','evil'], questions:30, salon:true } });
+  const d=p.sent.filter(m=>m.t==='b' && m.event==='draft').pop();
+  ok(d && d.from==='H' && d.payload.by==='H', 'szkic hosta relay rozesłany (from=H)');
+  eq([d.payload.modes, d.payload.questions, d.payload.audioHostOnly], [['music'], 30, true], 'sanityzacja (nieznany tryb wycięty, salon ⇒ dźwięk u hosta)');
+});
+
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

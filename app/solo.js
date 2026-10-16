@@ -11,8 +11,9 @@ import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, m
 import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailyShareText, matchShareText, resultGrid, DAILY_QUESTIONS } from '../core/daily.js';
 import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
-import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
-  syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick, quizGroupKeys, isPuzzleCat } from '../core/picker.js';
+import { plPick, quickPool, restorePick } from '../core/picker.js';
+import { settingsSummary } from '../core/matchSetup.js';
+import { createMatchSetup, renderPreserving } from './matchSetup.js';   // wspólny komponent „Nowy mecz" (solo + host MP)
 import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolveInstrumental } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
@@ -26,7 +27,7 @@ import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
 import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio, loadMedley, tempoPosition } from './audio.js';
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
-import { ERAS, STYLES, READY, LYRICS, QUIZ, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
+import { ERA_KEYS,
   ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, catLabel, buildMatch, randomPools, modesFor,
   plLoad, plSave, plMerge, plFetch, addLateQuizCats, quizFreshPool, quizTake } from './catalog.js';
 
@@ -43,81 +44,46 @@ let roundDone = false;      // F2a #4: bieżące pytanie już ocenione („Spraw
 let soloGen = 0;            // 2.1: token rundy — inkrementowany przy newRound/finishMatch/zmianie trybu;
                            // async ścieżki (resolveTrack/„od tyłu"/lektor) porzucają wynik, gdy token się zmieni
 let session = null;         // {match, results:[]} podczas meczu solo
-let soloCats = new Set();    // pula kategorii (multi-select)
-let soloModes = new Set(['music']); // pula trybów (multi-select)
-let soloQuestions = DEFAULT_QUESTIONS;   // F6a (R-F2): długość meczu w pytaniach (Krótki 5 · Standard 15 · Długi 30)
+/* pula meczu (multi-select) — Sety mutowane W MIEJSCU (komponent app/matchSetup.js trzyma referencje) */
+const soloPick = { cats:new Set(), modes:new Set(['music']), questions:DEFAULT_QUESTIONS, preset:null };   // F6a: długość w pytaniach
+const soloCats = soloPick.cats, soloModes = soloPick.modes;
+/* #3: tryb trenera (solo quiz) — stan przełącznika (w „Ustawieniach meczu"); statystyki niżej */
+const QUIZ_STATS_KEY='stacjaQuizStats', QUIZ_REPEAT_KEY='stacjaQuizRepeat';
+let quizRepeat = (()=>{ try{ return localStorage.getItem(QUIZ_REPEAT_KEY)==='1'; }catch(_e){ return false; } })();
 let mode = 'music';         // bieżący tryb pytania (ustawiany ze slotu meczu)
 
 /* ============ lektor: synteza mowy (Piper / Web Speech) → app/lektor.js ============ */
 
-/* ============ tuner: render epok ============ */
-const ticksEl = document.getElementById('ticks');
-ERA_KEYS.forEach(k=>{
-  const b=document.createElement('button');
-  b.className='tick'; b.dataset.era=k;
-  b.innerHTML = ERAS[k].label.replace('lata ','') + '<small>'+ERAS[k].range+'</small>';
-  b.onclick=()=>toggleCat(k);
-  ticksEl.appendChild(b);
+/* ============ „Nowy mecz" — wspólny komponent ekranu ustawiania meczu (app/matchSetup.js) ============
+ * Solo dostarcza: tryby (wszystkie), trenera w „Ustawieniach meczu", narzędzia zakładki „Twoje"
+ * (+ nowa / + ze Spotify / edytor — STATYCZNY DOM przenoszony do slotu po każdym renderze, żeby nie gubić
+ * powiązań catEditor.js i wpisanego linku), edycję/usuwanie własnych kategorii i start meczu. */
+const pickRoot = document.getElementById('msSolo');
+const twojeTools = document.getElementById('soloTwojeTools');
+const twojeHold = document.getElementById('soloTwojeHold');
+const soloSetup = createMatchSetup({
+  ctx:'solo', pick:soloPick,
+  ids:{ start:'matchStart', dice:'matchRandom', info:'matchInfo' },
+  available:()=>ALL_MODES,
+  render:renderPicker,
+  onChange:()=>{},
+  onStart:startMatch,
+  onDice:randomPick,
+  settingsSummary:()=>settingsSummary({ ctx:'solo', questions:soloPick.questions, trener:quizRepeat }),
+  settingsHTML:()=>`<button type="button" class="ms-switch${quizRepeat?' on':''}" id="quizRepeat" data-ms-act="trener" aria-pressed="${quizRepeat}">
+      <span class="ms-switch-tx"><b>Trener</b><small>częściej pytania, które oblałeś (wiedza)</small></span><span class="ms-switch-st">${quizRepeat?'WŁ.':'WYŁ.'}</span></button>`,
+  ownActions:true,
+  onEdit:(k)=>{ openEditor(k); },
+  onRemove:(k)=>plRemove(k),
+  onAct:(act)=>{ if(act==='trener'){ quizRepeat=!quizRepeat; try{ localStorage.setItem(QUIZ_REPEAT_KEY, quizRepeat?'1':'0'); }catch(_e){} renderPicker(); } },
 });
-const rndBtn=document.createElement('button');
-rndBtn.className='tick rnd'; rndBtn.dataset.era='rnd';
-rndBtn.innerHTML='wszystkie<small>zaznacz/odznacz</small>';
-rndBtn.onclick=()=>selectAllCats();
-ticksEl.appendChild(rndBtn);
-
-const styleTicksEl = document.getElementById('styleTicks');
-STYLE_KEYS.forEach(k=>{
-  const b=document.createElement('button');
-  b.className='tick gen'; b.dataset.era=k;
-  b.innerHTML = STYLES[k].label + '<small>'+STYLES[k].desc+'</small>';
-  b.onclick=()=>toggleCat(k);
-  styleTicksEl.appendChild(b);
-});
-
-const readyTicksEl = document.getElementById('readyTicks');
-READY_KEYS.forEach(k=>{
-  const b=document.createElement('button');
-  b.className='tick pl'; b.dataset.era=k;
-  b.innerHTML = escapeHtml(READY[k].label) + '<small>'+escapeHtml(READY[k].desc||(READY[k].songs.length+' utw.'))+'</small>';
-  b.onclick=()=>toggleCat(k);
-  readyTicksEl.appendChild(b);
-});
-
-const lyricsTicksEl = document.getElementById('lyricsTicks');
-LYRICS_KEYS.forEach(k=>{
-  const b=document.createElement('button');
-  b.className='tick gen'; b.dataset.era=k;
-  b.innerHTML = escapeHtml(LYRICS[k].label) + '<small>'+escapeHtml(LYRICS[k].desc||(LYRICS[k].songs.length+' tekstów'))+'</small>';
-  b.onclick=()=>toggleCat(k);
-  lyricsTicksEl.appendChild(b);
-});
-
-const quizTicksEl = document.getElementById('quizTicks');
-const lamTicksEl = document.getElementById('lamTicks');   // Łamigłówki: kategorie quizu z group:'lamiglowki'
-// klucze grup pickera (Wiedza / 🧩 Łamigłówki) — liczone na żywo (kategorie quizu dochodzą też po starcie)
-const wiedzaKeys = ()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'wiedza');
-const lamKeys = ()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'lamiglowki');
-function syncQuizGroups(){
-  const nw=wiedzaKeys().length, nl=lamKeys().length;
-  const band=document.getElementById('quizBand'); if(band) band.hidden=!nw;
-  const gw=document.getElementById('grpWiedza'); if(gw) gw.hidden=!nw;   // F2a #8: nie usuwaj — kategorie quizu mogą dojść później
-  const gl=document.getElementById('grpLam'); if(gl) gl.hidden=!nl;
+function renderPicker(){
+  if(!pickRoot) return;
+  if(twojeTools && twojeHold && twojeTools.parentNode!==twojeHold) twojeHold.appendChild(twojeTools);   // nie niszcz statycznych narzędzi
+  renderPreserving(pickRoot, soloSetup.html());
+  const slot=pickRoot.querySelector('[data-ms-slot="twoje"]'); if(slot && twojeTools) slot.appendChild(twojeTools);
 }
-function renderQuizTicks(keys){
-  if(!QUIZ_KEYS.length) return;
-  syncQuizGroups();
-  keys.forEach(k=>{
-    const lam=isPuzzleCat(QUIZ[k]);
-    const host=(lam && lamTicksEl) ? lamTicksEl : quizTicksEl;
-    [quizTicksEl, lamTicksEl].forEach(el=>{ if(el) [...el.children].forEach(c=>{ if(c.dataset.era===k) c.remove(); }); });
-    const b=document.createElement('button');
-    b.className='tick gen'+(soloCats.has(k)?' on':''); b.dataset.era=k;
-    b.innerHTML = escapeHtml(QUIZ[k].label) + '<small>'+(QUIZ[k].questions||[]).length+' pytań</small>';
-    b.onclick=()=>toggleCat(k);
-    host.appendChild(b);
-  });
-}
-renderQuizTicks(QUIZ_KEYS);
+soloSetup.bind(pickRoot);
 // F2a #8: kategorie quizu dociągnięte w tle przez quiz-loader.js (wolna sieć) → dopnij do pickera
 window.addEventListener('stacja:quiz', ()=>{
   const added=addLateQuizCats();
@@ -125,36 +91,21 @@ window.addEventListener('stacja:quiz', ()=>{
   const late=pendingCats.filter(k=>ALL_CATS[k]);
   if(late.length){ late.forEach(k=>soloCats.add(k)); pendingCats=pendingCats.filter(k=>!ALL_CATS[k]); }
   if(!added.length && !late.length) return;
-  if(late.length) syncCatTicks();
-  renderQuizTicks(added); updateGrpChips(); updateMatchInfo();
+  renderPicker();
 });
 
 if(!CATS_OK){ setTimeout(()=>flash('Nie udało się wczytać kategorii. Sprawdź internet i odśwież stronę.'),0); }
 
-/* ===== playlisty ze Spotify (localStorage) ===== */
-// plLoad/plSave/plMerge/plFetch (dane playlist) → app/catalog.js; tu zostaje UI
-function plRenderTicks(){
-  const el=document.getElementById('plTicks'); el.innerHTML='';
-  const pls=plLoad(); const keys=Object.keys(pls);
-  if(!keys.length){ el.innerHTML='<span style="font-family:var(--mono);font-size:10px;color:var(--muted);padding:6px 2px">brak — kliknij „+ ze Spotify"</span>'; return; }
-  keys.forEach(k=>{
-    const b=document.createElement('button'); b.className='tick pl'; b.dataset.era=k;
-    b.innerHTML=escapeHtml(pls[k].label)+'<small>'+pls[k].songs.length+' utw.</small><span class="ed" title="edytuj">✎</span><span class="rm" title="usuń">×</span>';
-    b.querySelector('.rm').onclick=(e)=>{ e.stopPropagation(); plRemove(k); };
-    b.querySelector('.ed').onclick=(e)=>{ e.stopPropagation(); openEditor(k); };
-    b.onclick=()=>toggleCat(k);
-    el.appendChild(b);
-  });
-}
+/* ===== playlisty ze Spotify / własne kategorie (localStorage) ===== */
+// plLoad/plSave/plMerge/plFetch (dane playlist) → app/catalog.js; karty „Twoje" renderuje komponent
 function plRemove(k){
   const pls=plLoad(); delete pls[k]; plSave(pls);
   delete ALL_CATS[k]; const i=ALL_KEYS.indexOf(k); if(i>=0) ALL_KEYS.splice(i,1);
   soloCats.delete(k);   // 5.10: usuń też z puli meczu (inaczej martwy klucz w picker/buildMatch)
   if(selectedEra===k){ selectedEra=null; document.getElementById('dialNote').textContent='wybierz kategorię'; }
-  updateMatchInfo();
-  plRenderTicks();
+  renderPicker();
 }
-document.getElementById('plImport').onclick=()=>document.getElementById('plPanel').classList.toggle('show');
+document.getElementById('plImport').onclick=()=>{ const p=document.getElementById('plPanel'); p.classList.toggle('show'); document.getElementById('plImport').setAttribute('aria-expanded', p.classList.contains('show')); };
 document.getElementById('plGo').onclick=plImport;
 document.getElementById('plUrl').addEventListener('keydown',e=>{ if(e.key==='Enter') plImport(); });
 async function plImport(){
@@ -164,104 +115,37 @@ async function plImport(){
   st.className='pl-status'; st.textContent='importuję…';
   try{
     const res=await plFetch(url);
-    plRenderTicks(); soloCats.add(res.key); syncCatTicks(); updateMatchInfo();
+    soloSetup.setPick({ cats:[...soloCats, res.key] });
     st.className='pl-status ok'; st.textContent='✓ '+res.name+' — '+res.count+' utw. Dodana do puli.';
     document.getElementById('plUrl').value='';
   }catch(e){ st.className='pl-status err'; st.textContent='Nie udało się: '+(e.message||e); }
 }
-plMerge(); plRenderTicks();
-// edytor własnych kategorii (B-MVP): po zapisie odśwież ticki i dorzuć nową do puli meczu
-initCatEditor({ onSaved:(key)=>{ plRenderTicks(); soloCats.add(key); syncCatTicks(); updateMatchInfo(); } });
-renderModeChips();
-// F6a (R-F2): segment długości meczu (pytania)
-function syncLenPick(){
-  const lp=document.getElementById('lenPick'); if(!lp) return;
-  lp.querySelectorAll('button').forEach(b=>b.classList.toggle('on', +b.dataset.q===soloQuestions));
-  const lv=document.getElementById('lenVal'); if(lv) lv.textContent=soloQuestions+' '+plPick(soloQuestions,'pytanie','pytania','pytań');
-}
-(function wireLength(){
-  const lp=document.getElementById('lenPick'); if(!lp) return;
-  lp.querySelectorAll('button').forEach(btn=>{ btn.onclick=()=>{ soloQuestions=+btn.dataset.q; syncLenPick(); updateMatchInfo(); }; });
-  syncLenPick();
-})();
-document.getElementById('matchStart').onclick=startMatch;
-document.getElementById('matchRandom').onclick=randomPick;
-updateMatchInfo();
+plMerge();
+// edytor własnych kategorii (B-MVP): po zapisie odśwież karty i dorzuć nową do puli meczu
+initCatEditor({ onSaved:(key)=>{ soloSetup.setPick({ cats:[...soloCats, key] }); } });
 
-/* ====== wybór puli kategorii/trybów do meczu (multi-select) ====== */
-function toggleCat(k){ _togglePick(soloCats,k); syncCatTicks(); updateMatchInfo(); }
-function selectAllCats(){ _toggleAll(ALL_KEYS, soloCats); syncCatTicks(); updateMatchInfo(); }
-function syncCatTicks(){
-  document.querySelectorAll('.tick').forEach(t=>{ const k=t.dataset.era; if(k&&k!=='rnd') t.classList.toggle('on', soloCats.has(k)); });
-  const rb=document.querySelector('.tick.rnd'); if(rb) rb.classList.toggle('on', _allSelected(ALL_KEYS, soloCats));
-  syncQuizMode(); updateGrpChips();
-}
-/* tryb „quiz" wymagany przez buildMatch dla kategorii kind:'quiz' — trzymany automatycznie (core/picker.js) */
-function syncQuizMode(){ _syncQuizMode(soloCats, soloModes, ALL_CATS); }
-/* ---- chipy-grup (Ułóż mecz, kompakt): grupa = ✓ gdy choć jedna kategoria z grupy wybrana ---- */
-const GRP_KEYS={ dekady:()=>ERA_KEYS, style:()=>STYLE_KEYS, playlisty:()=>READY_KEYS,
-  teksty:()=>LYRICS_KEYS, wiedza:wiedzaKeys, lamiglowki:lamKeys, twoje:()=>Object.keys(plLoad()) };
-function grpActive(g){ const f=GRP_KEYS[g]; return !!f && _grpActive(f(), soloCats); }
-function updateGrpChips(){
-  let n=0;
-  document.querySelectorAll('.grp-chip[data-grp]').forEach(ch=>{
-    const on=grpActive(ch.dataset.grp); ch.classList.toggle('on',on); if(on)n++;
-  });
-  const cc=document.getElementById('catCount'); if(cc) cc.textContent=n+' '+plPick(n,'wybrana','wybrane','wybranych');
-}
-(function wireGrpChips(){
-  const wrap=document.getElementById('grpChips'); if(!wrap) return;
-  wrap.querySelectorAll('.grp-chip[data-grp]').forEach(ch=>{
-    ch.onclick=()=>{
-      const band=document.querySelector('.grp-band[data-band="'+ch.dataset.grp+'"]');
-      const open=!ch.classList.contains('open');
-      ch.classList.toggle('open',open);
-      if(band) band.classList.toggle('open',open);
-    };
-  });
-  syncQuizGroups();   // Wiedza / 🧩 Łamigłówki — widoczne, gdy mają kategorie (F2a #8: mogą dojść później)
-  updateGrpChips();
-})();
-function toggleMode(m){ _togglePick(soloModes,m); renderModeChips(); updateMatchInfo(); }
-function randomPick(){ const {cats,modes}=randomPools(); soloCats=new Set(cats); soloModes=new Set(modes); syncCatTicks(); renderModeChips(); updateMatchInfo(); }
-function renderModeChips(){
-  const el=document.getElementById('modeTicks'); if(!el) return; el.innerHTML='';
-  // tryb „quiz" nie jest osobnym chipem — włącza się automatycznie z kategorią Wiedza (patrz syncQuizMode)
-  ALL_MODES.filter(m=>m!=='quiz').forEach(m=>{
-    const b=document.createElement('button'); b.className='grp-chip mode'+(soloModes.has(m)?' on':''); b.dataset.mode=m;
-    b.textContent=MODE_LABEL[m];
-    b.onclick=()=>toggleMode(m); el.appendChild(b);
-  });
-}
-function updateMatchInfo(){
-  const el=document.getElementById('matchInfo'); if(!el) return;
-  const s=pickSummary(soloCats, soloModes, {questions:soloQuestions}, ALL_CATS);
-  if(s.error){ el.className= (!soloCats.size||!soloModes.size) ? 'um-summary' : 'um-summary err'; el.textContent=s.error; return; }
-  el.className='um-summary';
-  const t=pickSummaryText(s);   // F2a: faktyczna liczba kategorii + „pytań" przy quizie/lektorze
-  el.innerHTML=`${escapeHtml(t.head)}<b>${escapeHtml(t.total)}</b>${escapeHtml(t.from)}`;
-}
+/* ====== wybór puli kategorii/trybów do meczu: stan w soloPick (Sety mutowane w miejscu) ====== */
+function randomPick(){ const {cats,modes}=randomPools(); soloSetup.setPick({ cats, modes }); }
+function updateMatchInfo(){ renderPicker(); }
 
-/* ===== F6a (R-F1): picker pamięta ostatnią pulę (kategorie/tryby/długość) — zamiast pustej =====
+/* ===== F6a (R-F1): picker pamięta ostatnią pulę (kategorie/tryby/długość + gotowiec) — zamiast pustej =====
  * Pierwsze uruchomienie (brak zapisu) → pula „hitów" (quickPool). Kategorie, których jeszcze nie ma
  * (quiz dociągany w tle), czekają w pendingCats i dołączają przy zdarzeniu stacja:quiz. */
 const PICK_KEY='stacjaSoloPick';
 let pendingCats=[];
 function saveSoloPick(){
-  lsSet(PICK_KEY, JSON.stringify({ cats:[...soloCats], modes:[...soloModes].filter(m=>m!=='quiz'), questions:soloQuestions }));
+  lsSet(PICK_KEY, JSON.stringify({ cats:[...soloCats], modes:[...soloModes].filter(m=>m!=='quiz'), questions:soloPick.questions, preset:soloPick.preset||null }));
 }
 (function restoreSoloPick(){
   let saved=null; try{ saved=JSON.parse(lsGet(PICK_KEY,'null')); }catch(_e){ saved=null; }
   if(saved && typeof saved==='object'){
     const r=restorePick(saved, ALL_CATS, ALL_MODES);
     pendingCats=(Array.isArray(saved.cats)?saved.cats:[]).filter(k=>typeof k==='string' && !ALL_CATS[k]).slice(0,60);
-    if(r.cats.length) soloCats=new Set(r.cats);
-    if(r.modes.length) soloModes=new Set(r.modes);
-    if(r.questions) soloQuestions=r.questions;
+    soloSetup.setPick({ cats:r.cats.length?r.cats:null, modes:r.modes.length?r.modes:null, questions:r.questions||null,
+      preset:typeof saved.preset==='string'?saved.preset:null });
   } else {
-    soloCats=new Set(quickPool(ALL_CATS, undefined, ERA_KEYS));
+    soloSetup.setPick({ cats:quickPool(ALL_CATS, undefined, ERA_KEYS) });
   }
-  syncCatTicks(); renderModeChips(); syncLenPick(); updateMatchInfo();
 })();
 
 /* ============ losowanie rundy (źródło utworów → TrackRepository) ============ */
@@ -660,18 +544,17 @@ document.getElementById('skip').onclick=()=>{
 
 /* ============ MECZ solo: rundy × kategorie × pytania ============ */
 document.getElementById('sessEnd').onclick=()=>{ if(session && session.results.length) finishMatch(); else endMatch(); };
-document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over','daily'); soloHead('Ułóż mecz'); };
+document.getElementById('sumAgain').onclick=()=>{ hideSummary(); document.body.classList.remove('playing','match-over','daily'); soloHead('Nowy mecz'); };
 
 function startMatch(){
-  if(!soloCats.size){ updateMatchInfo(); return; }
-  if(!soloModes.size){ updateMatchInfo(); return; }
-  if(startSoloMatch([...soloCats],[...soloModes],soloQuestions)) saveSoloPick();   // F6a: zapamiętaj pulę
+  if(!soloSetup.summary().ok){ updateMatchInfo(); return; }
+  if(startSoloMatch([...soloCats],[...soloModes],soloPick.questions)) saveSoloPick();   // F6a: zapamiętaj pulę (+ gotowiec)
 }
 // F6a: wspólny start meczu solo — picker, „Graj teraz" (R-F1) i „Zagraj offline" (R-F10). true = wystartował.
 // F8b: `opts.plan` — gotowy plan (Stacja dnia: core/daily.dailyPlan, qpc 1), `opts.daily` — {key, n, trackSeed}
 function startSoloMatch(cats, modes, questions, opts={}){
   const r=opts.plan || buildMatch(cats, modes, {questions});
-  if(r.error){ const el=document.getElementById('matchInfo'); el.className='um-summary err'; el.textContent=r.error; return false; }
+  if(r.error){ soloSetup.flashError(r.error); return false; }
   if(session || busy) abandonRound();   // poprzedni mecz / losowanie w locie → porzuć (busy zwolnione, async unieważniony)
   hideOfflineOffer();
   const hasReverse=r.slots.some(x=>['reverse','revsnip','medley','slowmo','fastmo'].includes(x.mode));   // AudioContext (WebAudio): od tyłu, EKSP.: od tyłu krótko, składanka, tempo
@@ -763,7 +646,7 @@ function endMatch(){
   document.getElementById('session').classList.remove('live');
   document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','tempo-mode','slowmo-mode','timeline-mode','match-over','daily');
   hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
-  soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
+  soloHead('Nowy mecz');   // 5.7: powrót do tytułu pickera
 }
 function updateSessUI(){
   if(!session) return;
@@ -1287,9 +1170,7 @@ document.addEventListener('keydown',e=>{
   advance();
 });
 
-/* ===== #3: tryb trenera (solo quiz) — statystyki trafień + faworyzowanie oblanych ===== */
-const QUIZ_STATS_KEY='stacjaQuizStats', QUIZ_REPEAT_KEY='stacjaQuizRepeat';
-let quizRepeat = (()=>{ try{ return localStorage.getItem(QUIZ_REPEAT_KEY)==='1'; }catch(_e){ return false; } })();
+/* ===== #3: tryb trenera (solo quiz) — statystyki trafień + faworyzowanie oblanych (przełącznik: „Ustawienia meczu") ===== */
 // F3 #6: klucz = treść BEZ opcji ABCD (quizKey) → stabilny po tasowaniu; stary klucz (pełny prompt) czytany wstecznie
 function quizStatKey(cat, q){ return cat+'::'+quizKey(q); }
 function quizStatOf(stats, cat, q){ return stats[quizStatKey(cat,q)] || stats[cat+'::'+norm((q&&q.prompt)||'')]; }
@@ -1298,12 +1179,6 @@ function recordQuizStat(key, ok){
   try{ const s=loadQuizStats(); const e=s[key]||{r:0,w:0}; if(ok)e.r++; else e.w++; s[key]=e;
     localStorage.setItem(QUIZ_STATS_KEY, JSON.stringify(s)); }catch(_e){}
 }
-function syncRepeatBtn(){ const b=document.getElementById('quizRepeat'); if(b) b.classList.toggle('on', quizRepeat); }
-(function bindRepeatToggle(){
-  const b=document.getElementById('quizRepeat'); if(!b) return;
-  b.onclick=()=>{ quizRepeat=!quizRepeat; try{ localStorage.setItem(QUIZ_REPEAT_KEY, quizRepeat?'1':'0'); }catch(_e){} syncRepeatBtn(); };
-  syncRepeatBtn();
-})();
 
 // wiersz informacyjny odsłony (bez ✓/✗): „inne poprawne", „ciekawostka" — tekst ESCAPOWANY
 function noteLine(k,v){

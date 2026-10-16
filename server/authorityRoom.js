@@ -32,6 +32,7 @@ import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
 import { REACTIONS } from '../core/chatFeed.js';
+import { sanitizeDraft, DRAFT_PAYLOAD_MAX } from '../core/matchSetup.js';   // szkic meczu dla gości (lobby)
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm, quizKey, shuffleMC, parseYear, clampQuizTrack, quizListen } from '../core/scoring.js';
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
@@ -57,7 +58,9 @@ const EVENT_PAYLOAD_MAX = 500;       // 3.3: cap rozmiaru payloadu ulotnego even
 // 3.3: whitelist emotek — F6b: wspólna z klientem (core/chatFeed.js), 🖕 → 🍺
 // F1 (#1): JEDYNE ulotne eventy przekazywane między klientami (musi = adapters-web/roomTransport.js
 // RELAY_EVENTS). Stan gry NIGDY nie idzie eventem — tylko {t:'state'} od DO ('sync'/'act' odrzucane).
-export const RELAY_EVENTS = ['react','say','typing','advanced'];
+// 'draft' = szkic konfiguracji meczu od hosta (lobby, „Mecz, który ustawia host") — TYLKO od hosta, tylko poza grą,
+// sanityzowany (core/matchSetup.sanitizeDraft), z osobnym limitem; ostatni zapamiętany dla dochodzących (hello).
+export const RELAY_EVENTS = ['react','say','typing','advanced','draft'];
 // F1 (#14): token bucket per połączenie dla wszystkich typów wiadomości (rate/s, burst)
 const RATE = {
   event:  { rate:10, burst:10 },   // emotki/czat/typing/advanced (dawny allowEvent 10/s)
@@ -65,6 +68,7 @@ const RATE = {
   meta:   { rate:1,  burst:4  },   // hello/track — każda = pushPresence do wszystkich
   start:  { rate:0.2, burst:3 },   // start (host) — buildMatch + pełny broadcast; lock/next/retry są
                                    // strzeżone fazą (no-op poza PLAY/REVEAL/NETERR) → bez limitu
+  draft:  { rate:2,   burst:6 },   // szkic meczu (host w pickerze; klient i tak debounce'uje)
 };
 const SLOT_LABEL_MAX = 40;
 const CAT_TEXT_MAX = 80;             // label/range/kind kategorii
@@ -139,6 +143,8 @@ export class GameAuthority extends Server {
   current = null;         // pełny utwór — SEKRET, tylko serwer
   pools = null;           // wgrane pule kategorii (cats dla buildMatch/resolve)
   hostId = null;          // rola hosta (przenoszalna — promote)
+  draft = null;           // ostatni szkic meczu od hosta (ulotny, nie persystowany) — dla dochodzących w lobby
+  idle(){ return !this.game || this.game.phase==null || this.game.phase===MP.DONE; }
   starterId = null;       // kto wystartował mecz — odzyskuje hosta po reconnect (nie zostaje przy promote)
   ready = new Set();      // id graczy zgłaszających gotowość w bieżącym armNonce
   hostSeen = new Set();   // anty-powtórki tytułów
@@ -262,7 +268,7 @@ export class GameAuthority extends Server {
     if([...this.getConnections()].length > 0) return;          // ktoś wrócił — nie kasuj
     await this.ctx.storage.deleteAll();                        // kasuje też alarm
     this.game=null; this.current=null; this.pools=null; this.hostId=null; this.starterId=null;
-    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null;
+    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null; this.draft=null;
     this.clearAutoLock(); this.clearArmTimer();
   }
 
@@ -272,13 +278,14 @@ export class GameAuthority extends Server {
     const me = conn.state && conn.state.id;
     if(!me) return;                                   // połączenie bez tożsamości (odrzucone w onConnect)
     // F1 (#14): token bucket per połączenie — flood dowolnym typem nie wzmacnia broadcastów/persist
-    const kind = msg.t==='event' ? 'event' : msg.t==='action' ? 'action'
+    const kind = msg.t==='event' ? (msg.event==='draft' ? 'draft' : 'event') : msg.t==='action' ? 'action'
       : (msg.t==='hello' || msg.t==='track') ? 'meta' : msg.t==='start' ? 'start' : null;
     if(kind && !this.allowRate(conn, kind)) return;
 
     switch(msg.t){
       case 'hello':
         conn.send(JSON.stringify({ t:'state', game:this.viewFor(me) }));   // 3.1: okrojony widok
+        if(this.draft && this.idle() && me!==this.hostId) conn.send(JSON.stringify({ t:'event', event:'draft', payload:{ ...this.draft, from:this.hostId, by:this.hostId }, from:this.hostId }));
         this.pushPresence();
         return;
 
@@ -291,6 +298,15 @@ export class GameAuthority extends Server {
         // F1 (#1): TYLKO whitelista nazw. Dawniej dowolna nazwa (np. 'sync') szła do wszystkich i klient
         // brał ją za stan gry → podmiana stanu/XSS przez każdego gracza.
         if(!RELAY_EVENTS.includes(msg.event)) return;
+        if(msg.event==='draft'){                       // szkic meczu: tylko host, tylko w lobby (przed/po meczu)
+          if(me!==this.hostId || !this.idle()) return;
+          const d=sanitizeDraft(msg.payload); if(!d) return;
+          const out=JSON.stringify({ t:'event', event:'draft', payload:{ ...d, from:me, by:me }, from:me });
+          if(out.length>DRAFT_PAYLOAD_MAX+200) return;
+          this.draft=d;
+          this.broadcast(out);
+          return;
+        }
         const src=msg.payload;
         const p=(src && typeof src==='object' && !Array.isArray(src)) ? { ...src } : {};
         if(msg.event==='react' && !REACTIONS.includes(p.emoji)) return;   // 3.3: whitelist emotek
@@ -308,7 +324,7 @@ export class GameAuthority extends Server {
         // Dawniej dowolny gracz startował mecz i przejmował hosta. Starter = host (reclaim po reconnect).
         const idle = !this.game || this.game.phase==null || this.game.phase===MP.DONE;
         if(!idle || me!==this.hostId) return;
-        this.starterId=me; this.pushPresence();
+        this.starterId=me; this.draft=null; this.pushPresence();
         await this.startMatch((msg.config && typeof msg.config==='object') ? msg.config : {});
         return;
       }

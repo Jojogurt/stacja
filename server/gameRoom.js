@@ -26,6 +26,7 @@
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
 import { REACTIONS } from '../core/chatFeed.js';
+import { sanitizeDraft, DRAFT_PAYLOAD_MAX } from '../core/matchSetup.js';   // szkic meczu dla gości (lobby)
 
 const NAME_MAX = 40;
 const EVENT_PAYLOAD_MAX = 500;                 // cap ulotnych eventów (nie dotyczy `sync`/`act` hosta)
@@ -33,7 +34,8 @@ const SYNC_PAYLOAD_MAX = 512*1024;             // cap stanu gry od hosta relay (
 // F6b: whitelist emotek wspólna z klientem/autorytetem (core/chatFeed.js) — 🖕 → 🍺
 const HOST_RESET_MS = 2*60*1000;               // pusty pokój dłużej niż to → następny łączący zostaje hostem
 // dozwolone eventy per rodzaj kanału (musi = adapters-web/cfChannel.js)
-export const ROOM_EVENTS = ['sync','act','react','say','typing','advanced'];
+// 'draft' = szkic konfiguracji meczu od hosta relay (lobby) — tylko od hosta, sanityzowany, osobny limit
+export const ROOM_EVENTS = ['sync','act','react','say','typing','advanced','draft'];
 export const TEAM_EVENTS = ['gamestart'];
 export const USER_EVENTS = ['invite'];
 // token bucket per połączenie (rate/s, burst)
@@ -42,6 +44,7 @@ const RATE = {
   act:    { rate:8,    burst:20 },
   event:  { rate:10,   burst:10 },
   meta:   { rate:1,    burst:4  },
+  draft:  { rate:2,    burst:6  },             // szkic meczu (host w pickerze)
   invite: { rate:0.1,  burst:3  },             // max ~3 zaproszenia naraz, potem 1 / 10 s
 };
 
@@ -122,7 +125,7 @@ export class GameRoom extends Server {
       if(kind==='user'){ await this.onInvite(conn, ev, msg.payload); return; }
       const allowed = kind==='team' ? TEAM_EVENTS : ROOM_EVENTS;
       if(!allowed.includes(ev)) return;                       // F1: whitelista nazw eventów
-      if(!this.allowRate(conn, (ev==='sync'||ev==='act') ? ev : 'event')) return;
+      if(!this.allowRate(conn, (ev==='sync'||ev==='act'||ev==='draft') ? ev : 'event')) return;
       const src = msg.payload;
       if(!src || typeof src!=='object' || Array.isArray(src)) return;
       let payload;
@@ -130,13 +133,18 @@ export class GameRoom extends Server {
         // F1 (#1, relay): stan gry nadaje TYLKO host relay — gracz nie podmieni stanu u wszystkich
         if(s.id !== this.hostId) return;
         payload = src;                                        // stan 1:1 (nadawca w kopercie `from`)
+      } else if(ev==='draft'){
+        // szkic meczu (lobby): TYLKO host relay, tylko znane pola z capami (core/matchSetup.sanitizeDraft)
+        if(s.id !== this.hostId) return;
+        const d = sanitizeDraft(src); if(!d) return;
+        payload = { ...d, from: s.id, by: s.id };
       } else {
         // F1 (#4): nadawca wymuszony z tokenu (act: autor akcji, której host użyje do głosów/typów)
         payload = { ...src, from: s.id, by: s.id, byName: s.name || '' };
         if(ev==='react' && !REACTIONS.includes(payload.emoji)) return;
       }
       let out; try { out = JSON.stringify({ t: 'b', event: ev, payload, from: s.id }); } catch(_e) { return; }
-      const cap = ev==='sync' ? SYNC_PAYLOAD_MAX : (ev==='act' ? 4*EVENT_PAYLOAD_MAX : EVENT_PAYLOAD_MAX);
+      const cap = ev==='sync' ? SYNC_PAYLOAD_MAX : ev==='act' ? 4*EVENT_PAYLOAD_MAX : ev==='draft' ? DRAFT_PAYLOAD_MAX : EVENT_PAYLOAD_MAX;
       if(out.length > cap + 200) return;
       this.broadcast(out);
     }

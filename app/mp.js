@@ -29,12 +29,13 @@ import { playSfx, registerMusicProbe } from './sfx.js';
 import { mpVinyl } from './vinyl.js';   // płyta winylowa = kontrolka odtwarzania w fazie „słuchaj"
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft } from './mp-picker.js';
+import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla gości (ta sama sanityzacja co serwer)
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
 import { ic } from './icons.js';
 
-initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH));   // F8a: + tryby znane serwerowi   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
+initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH), ()=>mpDraftChanged());   // F8a: + tryby znane serwerowi   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
 
 // wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
@@ -191,7 +192,7 @@ async function mpLeave(){
   advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
   S.audioHostOnly=false; S.tickSec=null;
-  S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
+  S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.draft=null; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
   mpLeaveCancel(); mpSyncRoomBack();
 }
@@ -237,10 +238,30 @@ function mpShare(btn){
   navigator.clipboard?.writeText(url);
   if(btn){ const t=btn.textContent; btn.textContent='✓ skopiowano'; setTimeout(()=>btn.textContent=t,1500); }
 }
-function mpLobbyStart(){ S.roomStage='build'; mpRender(); }   // host: poczekalnia → „ułóż mecz"
+function mpLobbyStart(){ S.roomStage='build'; mpRender(); mpSendDraft(); }   // host: poczekalnia → „Nowy mecz" (+ szkic dla gości)
 function mpLobbyBack(){ S.roomStage='wait'; mpRender(); }     // picker → poczekalnia (wstecz)
 function mpRoomBack(){ mpLeave(); }                           // wyjdź z pokoju → ekran wejścia
 function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu'); }   // ☰ → menu
+
+/* ---- szkic konfiguracji dla gości („Mecz, który ustawia host" — na żywo) ----
+ * Host (w pickerze, przed meczem) rozsyła ulotny event `draft` po każdej zmianie (debounce) i gdy ktoś dochodzi
+ * do pokoju. Serwer przepuszcza go tylko od hosta, sanityzuje i limituje; stary serwer go odrzuca → goście widzą
+ * dotychczasowe „czekamy, aż host ułoży mecz". */
+let draftTimer=null;
+const mpInLobby=()=> !S.game || S.game.phase==null;
+function mpDraftChanged(){ if(!S.host || !S.ch) return; if(draftTimer) clearTimeout(draftTimer); draftTimer=setTimeout(mpSendDraft, 350); }
+function mpSendDraft(){
+  if(draftTimer){ clearTimeout(draftTimer); draftTimer=null; }
+  if(!S.host || !S.ch || S.roomStage!=='build' || !mpInLobby()) return;
+  const d=sanitizeDraft(mpDraft()); if(d) S.ch.send({type:'broadcast', event:'draft', payload:d});
+}
+function mpOnDraft(payload, from){
+  if(S.host) return;                                         // własny szkic (relay: self:true) — host ma picker
+  const hid=(S.ch && S.ch.hostId) || (S.game && S.game.hostId) || null;
+  if(hid && from && from!==hid) return;                      // tylko od hosta (serwer i tak to wymusza)
+  const d=sanitizeDraft(payload); if(!d) return;
+  S.draft=d; if(mpInLobby()) mpRender();
+}
 
 async function mpEnterRoom(code, asHost, groupId){
   mpErr('');
@@ -264,6 +285,7 @@ async function mpEnterRoom(code, asHost, groupId){
   S.ch.on('broadcast',{event:'react'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id) mpFloatEmoji(payload.emoji, payload.byName); });
   S.ch.on('broadcast',{event:'say'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id){ mpClearTypingFor(by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
   S.ch.on('broadcast',{event:'typing'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id) mpMarkTyping(by); });
+  S.ch.on('broadcast',{event:'draft'},({payload, from})=>mpOnDraft(payload, from || mpSender(payload)));   // szkic meczu od hosta (goście)
   S.ch.on('broadcast',{event:'advanced'},({payload})=>{ const by=mpSender(payload); if(by) mpOnPlayerAdvanced({ ...payload, by }); });   // SALON: gracz kliknął „dalej" na odsłonie
   S.ch.on('status',{},(s)=>mpNetStatus(s));   // 5.6: wskaźnik reconnectu
   S.ch.on('presence',{event:'sync'},()=>{
@@ -275,6 +297,7 @@ async function mpEnterRoom(code, asHost, groupId){
     // 1.5: zmiana S.host → ZAWSZE re-render (inaczej awansowany host nie zobaczy przycisków hosta;
     //      domyka 1.2 — przycisk „następne" po promocie w REVEAL). Dotąd re-render tylko w lobby.
     if(S.host!==prevHost || !S.game || S.game.phase==null) mpRender();
+    if(S.host && S.roomStage==='build') mpDraftChanged();           // ktoś doszedł → dośli mu szkic meczu
     if(S.host && !SERVER_AUTH){ mpBroadcast(); mpMaybeGo(); }        // relay: host pcha stan i liczy gotowość (DO robi to sam)
     if(S.host && S.game && S.game.salon && S.game.phase===MP.REVEAL) mpRecountAdvance();   // 1.8: rozłączenie w REVEAL → przelicz „dalej"
     // 1.8: relay nie ma promote — gdy host znika w trakcie meczu, chociaż powiedz to graczom
@@ -775,7 +798,7 @@ function mpFinish(){
 }
 function mpNewGame(){
   S.ack=S.revealNonce=S.revealSnap=null;
-  if(SERVER_AUTH){ S.game=null; S.roomStage='build'; mpRender(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
+  if(SERVER_AUTH){ S.game=null; S.roomStage='build'; mpRender(); mpSendDraft(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
   S.game={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender();
 }
 

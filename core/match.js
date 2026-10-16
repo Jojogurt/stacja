@@ -21,6 +21,19 @@ export const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', sn
 export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak', snippet:'2 s', quiz:'pytanie',
   intro:'1→16 s', abcd:'4 kafle', year:'rok wydania', revsnip:'3 s wspak', medley:'4 × 1,5 s', cover:'bez dźwięku', piano:'cover', guitar:'cover',
   timeline:'ułóż po roku', slowmo:'0.6× → 0.75×', fastmo:'1.5×'};
+/* Ekran „Nowy mecz" (app/matchSetup.js): tryby pogrupowane w RODZINY z krótkim opisem — czysta definicja,
+ * każdy tryb z ALL_MODES dokładnie w jednej rodzinie (test w test/run.js). Kolejność = kolejność w UI. */
+export const MODE_FAMILIES=[
+  { id:'listen',  name:'Słuchaj',     desc:'rozpoznaj utwór',        modes:['music','intro','snippet','reverse','revsnip','slowmo','fastmo'] },
+  { id:'combine', name:'Kombinuj',    desc:'inaczej niż wpisywanie', modes:['abcd','year','timeline','medley'] },
+  { id:'covers',  name:'Covery',      desc:'tylko hity światowe',    modes:['piano','guitar'] },
+  { id:'silent',  name:'Bez dźwięku', desc:'patrz i myśl',           modes:['cover','quiz'] },
+  { id:'lektor',  name:'Lektor',      desc:'opis czytany na głos',   modes:['lektor'] },
+];
+// etykiety trybów w pickerze (bez emoji; „quiz" włącza się sam z kategorią Wiedzy/Łamigłówek)
+export const MODE_PICK_LABEL={music:'muzyka', intro:'intro 1–16 s', snippet:'fragment 2 s', reverse:'od tyłu', revsnip:'od tyłu krótko',
+  slowmo:'zwolnione obroty', fastmo:'przyspieszone', abcd:'ABCD', year:'rok wydania', timeline:'oś czasu', medley:'składanka',
+  piano:'fortepian', guitar:'gitara', cover:'okładka', quiz:'wiedza i łamigłówki', lektor:'lektor'};
 /* F8a: tryby tylko solo. „intro" w MP wymagałby etapu odsłony sterowanego przez hosta/serwer + ponownego
  * startu audio u wszystkich i przebudowy lokalnej fazy „słuchaj → kombinuj" — poza zakresem; picker MP go nie pokazuje,
  * a sanitizeMpConfig odrzuca. */
