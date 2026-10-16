@@ -609,6 +609,15 @@ await group('lektor: język opisu kategorii (lang) → game.lyricLang w PLAY, sa
   }
 });
 
+await group('kategoria „akustycznie / unplugged": pole `match` utworu przechodzi przez clampPools (tekst z capem)', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  const ak={ label:'akustycznie / unplugged', songs:[{ title:'About a Girl', artist:'Nirvana', year:'1994', match:'unplugged' }, { title:'T', artist:'A', match:'x'.repeat(100) }, { title:'U', artist:'B' }] };
+  await room.msg(a, { t:'start', config:CONFIG({ pools:{ ...quizPools(), ak } }) });
+  const ps=room.pools && room.pools.ak && room.pools.ak.songs || [];
+  eq(ps.map(x=>x.match===undefined ? null : x.match.length), [9, 40, null], 'match: zachowany, przycięty do 40 znaków, brak → brak');
+});
+
 await group('F2b #12: duplikat ready nie powoduje broadcastu (bez kaskady re-arm)', async ()=>{
   const { room } = await makeRoom();
   const a=room.join('A','Ala'), b=room.join('B','Bo');

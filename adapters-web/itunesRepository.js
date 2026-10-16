@@ -3,7 +3,7 @@
  * (filtr coverów, anty-powtórki, normalizacja) trzyma `core/trackSelect.js`, wspólna
  * z serwerem; tu tylko wstrzykujemy webowy `itunes(term)`. */
 import { resolveTrack as coreResolveTrack, pickTrack, BAD, cachedFetcher, gatherDistractors, resolveMedley as coreResolveMedley,
-  resolveCover as coreResolveCover, resolvePiano as coreResolvePiano } from '../core/trackSelect.js';
+  resolveCover as coreResolveCover, resolveInstrumentalCover as coreResolveInstrumental } from '../core/trackSelect.js';
 
 /* ---- sieć (iTunes) ----
  * opts.song=true (F5 #5) → wyszukiwanie „artysta tytuł" BEZ attribute=artistTerm (utwór spoza
@@ -124,7 +124,10 @@ export function resolveCover({cat, seen, recent, cfg, rnd}){
 // EKSPERYMENT „fortepian": oryginał jak w „muzyce" + jego cover fortepianowy (wyszukiwanie utworu `opts.song` —
 // proxy Workera `/tracks?q=` → iTunes, a gdy pusto/zablokowane — Deezer (też ma piano covery); stary Worker bez `q`
 // zwraca pusto → bezpośredni iTunes/JSONP). Ten sam cache wyników co resolveTrack.
-export function resolvePiano({cat, seen, recent, cfg, rnd}){
+// EKSPERYMENT „gitara": to samo z coverem gitarowym (core/trackSelect.resolveInstrumentalCover, instrument:'guitar').
+export function resolveInstrumental({instrument, cat, seen, recent, cfg, rnd}){
   if(cfg) lastCfg=cfg;
-  return coreResolvePiano({ cat, seen, recent, itunes:cachedItunes, rnd });
+  return coreResolveInstrumental({ instrument, cat, seen, recent, itunes:cachedItunes, rnd });
 }
+export function resolvePiano(args){ return resolveInstrumental({ ...args, instrument:'piano' }); }
+export function resolveGuitar(args){ return resolveInstrumental({ ...args, instrument:'guitar' }); }

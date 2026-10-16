@@ -116,8 +116,8 @@ const CATS={
   gk:{label:'wiedza', kind:'quiz', questions:[{prompt:'q',slots:[{key:'a',label:'odp'}],answers:{a:['x']}}]},
 };
 group('match.modesFor', ()=>{
-  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip','piano','slowmo','fastmo'],'audio bez tekstu (EKSP.: + fortepian) (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
-  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','piano','slowmo','fastmo','lektor'],'audio + lektor (jest lyric)');
+  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip','piano','guitar','slowmo','fastmo'],'audio bez tekstu (EKSP.: + fortepian, gitara) (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
+  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','piano','guitar','slowmo','fastmo','lektor'],'audio + lektor (jest lyric)');
   eq(modesFor('lyr',CATS),['lektor'],'kind=lyrics → tylko lektor');
   eq(modesFor('gk',CATS),['quiz'],'kind=quiz → tylko quiz');
   ok(!modesFor('d80',CATS).includes('quiz'),'muzyka nigdy nie ma trybu quiz');
@@ -1356,14 +1356,14 @@ group('F8a trackSelect: wiarygodność roku', ()=>{
 group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
   ok(['intro','abcd','year'].every(m=>ALL_MODES.includes(m) && MODE_LABEL[m]), 'nowe tryby w ALL_MODES + etykiety');
   eq(MODE_LABEL.intro,'⏱ intro','etykieta intro');
-  eq(SOLO_ONLY_MODES,['intro','medley','cover','piano','timeline'],'intro (EKSP.: + składanka, okładka, fortepian) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
+  eq(SOLO_ONLY_MODES,['intro','medley','cover','piano','guitar','timeline'],'intro (EKSP.: + składanka, okładka, fortepian) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
   const C={ dek:{label:'80', range:'1980–89', artists:['A','B','C']}, pl:{label:'pl', songs:[1,2,3,4,5].map(i=>({title:'t'+i,artist:'a'+i,year:'199'+i}))},
     pl2:{label:'pl2', songs:[{title:'x',artist:'y'},{title:'z',artist:'w'}]}, lyr:{label:'l', kind:'lyrics', songs:[{title:'d'}]}, q:{label:'q', kind:'quiz', questions:[]},
     solo1:{label:'s', artists:['Only']} };
-  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','piano','timeline','slowmo','fastmo'],'dekada: wszystkie tryby audio');
+  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','piano','guitar','timeline','slowmo','fastmo'],'dekada: wszystkie tryby audio');
   eq(modesFor('pl',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','timeline','slowmo','fastmo'],'playlista z rokiem: + rok (EKSP.: 5 wykonawców → składanka/okładka)');
-  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip','piano','slowmo','fastmo'],'2 utwory bez roku: bez ABCD/roku');
-  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover','piano','slowmo','fastmo'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
+  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip','piano','guitar','slowmo','fastmo'],'2 utwory bez roku: bez ABCD/roku');
+  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover','piano','guitar','slowmo','fastmo'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
   eq(modesFor('lyr',C),['lektor'],'teksty bez audio — bez nowych trybów'); eq(modesFor('q',C),['quiz'],'quiz bez nowych trybów');
   const mi=buildMatch(['dek'],['intro'],{questions:5},C); ok(!mi.error && mi.slots[0].mode==='intro', 'buildMatch: mecz intro');
   eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','zzz'] }).modes,['music','abcd','year'],'MP config: intro odrzucone (tylko solo)');
@@ -1805,6 +1805,114 @@ await (async ()=>{
     itunes:async(term,opts)=>{ const t=term.toLowerCase(); if(t==='madonna like a prayer') return net['a:Madonna']; return net['s:'+t]||[]; }, rnd:()=>0 });
   eq(pl.coverArtist,'Piano Tribute Players','playlista: oryginał z utworów + cover');
 })();
+/* ===== EKSPERYMENT „gitara" (guitar): cover gitarowy — wspólna ścieżka z fortepianem (resolveInstrumentalCover) ===== */
+group('EKSP. gitara: tryb, modesFor (bez kategorii polskich), pickInstrumentalCover(guitar)', ()=>{
+  ok(M8.ALL_MODES.includes('guitar') && M8.MODE_LABEL.guitar==='🎸 gitara' && M8.MODE_SHORT.guitar && M8.MODE_SUB.guitar,'tryb + etykiety „🎸 gitara"');
+  ok(!M8.MP_MODES.includes('guitar') && M8.SOLO_ONLY_MODES.includes('guitar'),'tylko solo');
+  eq(M8.sanitizeMpConfig({ modes:['guitar','music'] }).modes,['music'],'MP config: gitara odrzucona');
+  const C={ '80s':{label:'lata 80', range:'1980–89', artists:['Maanam','Madonna']}, 'rock-pl':{label:'rock PL', desc:'polski rock', artists:['Dżem']},
+    'disco-polo':{label:'disco polo', artists:['Akcent']}, 'pl:abc':{label:'Polskie hity 2024', songs:[{title:'a',artist:'b'}]}, 'pl:def':{label:'Top 50 Global', songs:[{title:'a',artist:'b'}]},
+    ak:{label:'akustycznie / unplugged', noModes:['piano','guitar','cover','medley'], songs:[1,2,3,4].map(i=>({ title:'T'+i, artist:'A'+i, year:'199'+i, album:'MTV Unplugged', match:'unplugged' }))} };
+  ok(M8.modesFor('80s',C).includes('guitar') && M8.modesFor('pl:def',C).includes('guitar'),'dekada i playlista światowa → gitara');
+  ['rock-pl','disco-polo','pl:abc'].forEach(k=>ok(!M8.modesFor(k,C).includes('guitar') && !M8.modesFor(k,C).includes('piano'),'kategoria polska bez gitary i fortepianu: '+k));
+  eq(M8.modesFor('ak',C),['music','reverse','snippet','intro','revsnip','abcd','year','timeline','slowmo','fastmo'],'noModes: akustyczna bez fortepianu/gitary/okładki/składanki (reszta jak playlista z rokiem)');
+  ok(M8.pianoCapable===M8.instrumentalCapable,'pianoCapable = instrumentalCapable (zgodność)');
+  const it=(t,a,col='Album',extra={})=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+encodeURIComponent(a+t), ...extra });
+  const orig={ track:'Wonderwall', artist:'Oasis' }, O=it('Wonderwall','Oasis',"(What's the Story) Morning Glory?");
+  const res=[ O, it('Wonderwall (Guitar Cover)','Cover Kings','Cover Sessions Vol. 13'), it('Wonderwall (Acoustic)','Andie Case','Wonderwall - Single'),
+    it('How to Play Wonderwall - Guitar Lesson','Guitar Tutor','Guitar Lessons Vol. 2'), it('Wonderwall (Guitar Backing Track)','Backing Band','Guitar Backing Tracks'),
+    it('Wonderwall (In the Style of Oasis) [Instrumental]','Pop Workshop','Free Guitar Backing Tracks'), it('Wonderwall (Piano & Guitar)','Duo Keys'),
+    it('Wonderwall (Guitar Version) [Vocal]','Sing2Guitar','Acoustic Guitar Karaoke'), it('Wonderwall (Lullaby)','Rockabye Baby!','Lullaby Guitar'),
+    it('Wonderwall (guitar version sped up)','Guitar Girl'), it('Wonderwall (Fingerstyle)','Fingerstyle Duo','Acoustic Covers'), it('Wonderwall (Guitar Version)','Paco Nula','Spanish Guitar Hits') ];
+  eq(TS8.pickInstrumentalCover(res, orig, 'guitar').artistName,'Fingerstyle Duo','pierwszy poprawny: bez oryginału, wokalnych „cover sessions"/akustycznych bez słowa guitar, lekcji, podkładów, fortepianu, karaoke, kołysanek, sped up');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Guitar Cover)','Cover Kings','Cover Sessions Vol. 13')], orig, 'guitar'),null,'wokalny zespół coverowy („cover sessions") odrzucony');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Acoustic Cover)','Jane Singer','Acoustic Covers')], orig, 'guitar'),null,'cover bez słowa guitar/gitar/fingerstyle → odrzucony (zwykle wokal)');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall - Guitar Tutorial','Learn Guitar'), it('Wonderwall (Easy Guitar Tabs)','TabMaster')], orig, 'guitar'),null,'lekcja/tutorial/taby odrzucone');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Fingerstyle)','Fingerstyle Duo','Acoustic Covers')], orig, 'guitar').artistName,'Fingerstyle Duo','fingerstyle przyjęty');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall Guitar','Kim Yu Na','Peaceful Music Romantic Guitar')], orig, 'guitar').artistName,'Kim Yu Na','dopisek „Guitar" bez nawiasu na końcu tytułu');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall','Gitarowe Duo','Gitara akustyczna')], orig, 'guitar').artistName,'Gitarowe Duo','polskie „gitar…" w wykonawcy/albumie');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Guitar Version)','Oasis & Friends')], orig, 'guitar'),null,'człon kolaboracji = oryginał → odrzucony');
+  const aag={ track:'About a Girl', artist:'Nirvana' }, AO=it('About a Girl','Nirvana','Bleach');
+  eq(TS8.pickInstrumentalCover([AO, it('About a Girl','The Academy Is...','Guitar Underground')], aag, 'guitar'),null,'pomiar: „guitar" tylko w nazwie kompilacji rockowej (inna piosenka, wokal) → odrzucony');
+  eq(TS8.pickInstrumentalCover([AO, it('About a Girl','Andy Angel','Guitar Covers, Vol. 1')], aag, 'guitar').artistName,'Andy Angel','„guitar" tylko w albumie, ale album coverów → przyjęty');
+  eq(TS8.pickInstrumentalCover([AO, it('About a Girl (Guitar) [Remix]','Luke Muzzic','About a Girl (Guitar Remix) - EP'), it('About a Girl (Extended Version)','Luke Muzzic','About a Girl (Guitar Remix) - EP')], aag, 'guitar'),null,'pomiar: remiksy „Guitar Remix"/„Extended" odrzucone');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Piano Version)','Dreaming Piano')], orig, 'guitar'),null,'cover fortepianowy to nie gitara');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Guitar Version)','Paco Nula')], orig, 'piano'),null,'… i odwrotnie: gitara to nie fortepian');
+  const king={ track:'King', artist:'T.Love' };
+  eq(TS8.pickInstrumentalCover([it('King','Florence + the Machine','King - Single'), it('King (Guitar Version)','Paco Nula','Spanish Guitar Hits')], king, 'guitar'),null,'kolizja tytułów: cover bez dowodu odrzucony (jak fortepian)');
+  eq(TS8.pickInstrumentalCover([it('King','Florence + the Machine'), it('King (Guitar Version)','Guitar: Abraham Sevilla','Tribute to T.Love in Spanish Guitar')], king, 'guitar').artistName,'Guitar: Abraham Sevilla','dowód: wykonawca oryginału w albumie');
+  eq(TS8.coverTitleKey('Guitar Man','guitar'),'guitar man','„Guitar Man" — słowo na początku tytułu zostaje');
+  eq(TS8.coverTitleKey('Shape of You Acoustic Guitar Version','guitar'),'shape of you','dopisek „Acoustic Guitar Version" zdjęty');
+  eq(TS8.coverQueries({ track:'Wonderwall (Remastered)', artist:'Oasis' }, 'guitar'),['Wonderwall guitar','Wonderwall acoustic guitar','Wonderwall Oasis guitar'],'zapytania gitary');
+  eq(TS8.pianoQueries({ track:'Billie Jean', artist:'Michael Jackson' }),TS8.coverQueries({ track:'Billie Jean', artist:'Michael Jackson' }, 'piano'),'pianoQueries = coverQueries(piano)');
+  eq(TS8.INSTRUMENT_EMOJI.guitar,'🎸','emoji odsłony');
+});
+console.log('• EKSP. gitara: resolveGuitar — cover, polskie pomijane, fallback');
+await (async ()=>{
+  const it=(t,a,col='Album',extra={})=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+encodeURIComponent(a+'|'+t), releaseDate:'1985-01-01', artworkUrl100:'https://a/'+encodeURIComponent(a)+'/100x100bb.jpg', ...extra });
+  const net={ 'a:Madonna':[it('Like a Prayer (2012 Remaster)','Madonna')], 'a:Maanam':[it('Kocham cię, kochanie moje','Maanam')], 'a:Toto':[it('Africa','Toto')],
+    's:like a prayer guitar':[it('Like a Prayer','Madonna'), it('Like a Prayer (Guitar Lesson)','Guitar Tutor'), it('Like a Prayer (Fingerstyle Guitar)','Strings Duo','Acoustic Guitar Covers')],
+    's:africa guitar':[it('Africa','Toto','Toto IV'), it('Africa (Guitar Cover)','Cover Kings','Cover Sessions')], 's:africa acoustic guitar':[],
+    's:africa toto guitar':[it('Africa','Toto','Toto IV'), it('Africa (Acoustic Guitar)','Guitar Dreamers','Guitar Dreamers Play Toto')] };
+  const calls=[];
+  const itunes=async(term,opts)=>{ const k=(opts&&opts.song?'s:':'a:')+(opts&&opts.song?term.toLowerCase():term); calls.push(k); return net[k]||[]; };
+  const r=await TS8.resolveGuitar({ cat:{ artists:['Madonna'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq([r.track, r.artist, r.coverArtist, r.instrument],['Like a Prayer (2012 Remaster)','Madonna','Strings Duo','guitar'],'oryginał + cover gitarowy (lekcja pominięta)');
+  ok(r.preview===net['s:like a prayer guitar'][2].previewUrl && r.origPreview===net['a:Madonna'][0].previewUrl,'zajawka COVERU, zapamiętana zajawka oryginału');
+  const r2=await TS8.resolveGuitar({ cat:{ artists:['Toto'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq(r2.coverArtist,'Guitar Dreamers','wokalny „cover sessions" odrzucony → zapytania zapasowe aż do „tytuł wykonawca guitar"');
+  calls.length=0;
+  const r3=await TS8.resolveGuitar({ cat:{ artists:['Maanam','Madonna'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq(r3.artist,'Madonna','polski utwór pominięty → następna próba');
+  ok(!calls.some(k=>/kocham/.test(k)),'polski utwór bez zapytania o cover');
+  const r4=await TS8.resolveGuitar({ cat:{ artists:['Maanam'] }, seen:new Set(), recent:[], itunes, rnd:()=>0, tries:3 });
+  ok(r4.error && r4.reason==='empty','brak coveru po próbach → błąd (wołający gra zwykłą muzykę)');
+  const rp=await TS8.resolvePiano({ cat:{ artists:['Madonna'] }, seen:new Set(), recent:[], itunes, rnd:()=>0, tries:1 });
+  ok(rp.error,'fortepian nie bierze coveru gitarowego (wspólna ścieżka, osobne reguły)');
+})();
+/* ===== „akustycznie / unplugged": pole `match` utworu (wersja akustyczna zamiast studyjnej) ===== */
+group('songs[].match: matchSong wymaga słowa w tytule/albumie, songTerms najpierw z tym słowem', ()=>{
+  const it=(t,a,col,idx)=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+idx });
+  const res=[ it('About a Girl','Nirvana','Bleach',1), it('About a Girl (Live)','Nirvana','Live at Reading',2), it('About a Girl (Live Acoustic)','Nirvana','MTV Unplugged In New York (Live Acoustic)',3) ];
+  eq(TS8.matchSong(res, { title:'About a Girl', artist:'Nirvana' }).previewUrl,'https://p/1','bez match: studyjna (jak dotąd)');
+  eq(TS8.matchSong(res, { title:'About a Girl', artist:'Nirvana', match:'unplugged' }).previewUrl,'https://p/3','match:unplugged → wersja z albumu MTV Unplugged');
+  eq(TS8.matchSong(res.slice(0,2), { title:'About a Girl', artist:'Nirvana', match:'unplugged' }),null,'brak wersji unplugged → null (nie gramy studyjnej)');
+  eq(TS8.matchSong([it('Hotel California (Live On MTV, 1994)','Eagles','Hell Freezes Over',4)], { title:'Hotel California', artist:'Eagles', match:'mtv' }).previewUrl,'https://p/4','słowo w tytule wystarcza');
+  eq(TS8.matchSong([it('Czerwony Jak Cegla (1994 Remastered Version)','Dzem','Akustycznie',5)], { title:'Czerwony jak cegła', artist:'Dżem', match:'akustycz' }).previewUrl,'https://p/5','akustycz ~ „Akustycznie" (bez diakrytyków)');
+  ok(TS8.versionMatches({ trackName:'X', collectionName:'Żywo Akustycznie' }, 'unplugged|akustycz') && !TS8.versionMatches({ trackName:'X', collectionName:'Studio' }, 'unplugged|akustycz'),'alternatywy „|"');
+  eq(TS8.songTerms({ title:'About a Girl', artist:'Nirvana', match:'unplugged' }).map(x=>x[0]),['Nirvana About a Girl unplugged','Nirvana About a Girl','Nirvana'],'zapytania: z „unplugged", potem zwykłe, potem wykonawca');
+  eq(TS8.songTerms({ title:'X', artist:'Y' }).length,2,'bez match — jak dotąd (2 zapytania)');
+});
+console.log('• songs[].match: resolveTrack z playlisty gra wersję unplugged');
+await (async ()=>{
+  const res=[ { trackName:'Rooster', artistName:'Alice in Chains', collectionName:'Dirt', previewUrl:'https://p/studio' },
+    { trackName:'Rooster (Live)', artistName:'Alice In Chains', collectionName:'MTV Unplugged (Live)', previewUrl:'https://p/unplugged' } ];
+  const q=[];
+  const t=await TS8.resolveTrack({ cat:{ songs:[{ title:'Rooster', artist:'Alice in Chains', year:'1996', album:'MTV Unplugged', match:'unplugged' }] }, seen:new Set(),
+    itunes:async(term)=>{ q.push(term); return res; }, rnd:()=>0 });
+  eq([t.preview, t.track, t.year, t.album, t.yearSrc],['https://p/unplugged','Rooster','1996','MTV Unplugged','data'],'zajawka unplugged, tytuł/rok/album z danych');
+  eq(q[0],'Alice in Chains Rooster unplugged','pierwsze zapytanie ze słowem z match');
+  const none=await TS8.resolveTrack({ cat:{ songs:[{ title:'Rooster', artist:'Alice in Chains', match:'unplugged' }] }, seen:new Set(), itunes:async()=>res.slice(0,1), rnd:()=>0, capMs:2000 });
+  ok(none.error,'tylko studyjna w wynikach → brak (nie gramy wersji studyjnej)');
+})();
+/* ===== displayTitle: tytuł do wyświetlenia bez dopisków wydania ===== */
+group('displayTitle: bez „(2012 Remaster)", „- Remastered 2011", „(Single Version)"…, wersje zostają', ()=>{
+  const D=TS8.displayTitle;
+  eq(D('Speed Demon (2012 Remaster)'),'Speed Demon','„(2012 Remaster)" (karta osi czasu z gry)');
+  eq(D('Something - Remastered 2009'),'Something','„ - Remastered 2009"');
+  eq(D('Paint It Black (Remastered)'),'Paint It Black','„(Remastered)"');
+  eq(D('Wish You Were Here - 2011 Remaster'),'Wish You Were Here','„ - 2011 Remaster"');
+  eq(D('Smells Like Teen Spirit (Single Version)'),'Smells Like Teen Spirit','„(Single Version)"');
+  eq(D('Take On Me [2015 Remastered Version]'),'Take On Me','„[2015 Remastered Version]"');
+  eq(D('Song - Single Version - 2009 Remaster'),'Song','kilka sufiksów „ - …"');
+  eq(D("(I Can't Get No) Satisfaction - Mono Version"),"(I Can't Get No) Satisfaction",'nawias w tytule zostaje, „Mono Version" precz');
+  eq(D('Jump (Live)'),'Jump (Live)','live zostaje');
+  eq(D('Song (Live / Remastered 2011)'),'Song (Live / Remastered 2011)','remaster obok „live" — dopisek wersji zostaje');
+  eq(D('About a Girl (Live On MTV Unplugged)'),'About a Girl (Live On MTV Unplugged)','unplugged zostaje');
+  eq(D('Crazy - Gnarls Barkley Cover'),'Crazy - Gnarls Barkley Cover','zwykły sufiks zostaje');
+  eq(D('[Remastered]'),'[Remastered]','nic by nie zostało → oryginał');
+  eq(D(''),'','pusty');
+});
 /* ===== lektor: język opisu → głos ===== */
 const LV = await import('../core/lektorVoice.js');
 group('lektor: język kategorii i wybór głosu (core/lektorVoice)', ()=>{

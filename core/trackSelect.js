@@ -211,12 +211,30 @@ function songQuery(s){
   const strip=x=>String(x||'').replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(/\s+(?:feat\.?|ft\.?)\s.*$/i,' ').replace(/\s+/g,' ').trim();
   return (strip(s.artist)+' '+strip(s.title)).trim();
 }
+/* Pole `match` utworu (opcjonalne, np. kategoria „akustycznie / unplugged"): słowo/słowa (alternatywy przez „|"),
+ * z których co najmniej jedno MUSI wystąpić w trackName albo collectionName wyniku — inaczej zagrałaby wersja studyjna.
+ * Dopasowanie bez wielkości liter i bez diakrytyków („akustycz" łapie „Akustycznie"). */
+const foldDia = x => String(x||'').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/ł/g,'l');
+export function matchWords(m){ return String(m||'').split('|').map(w=>foldDia(w).trim()).filter(Boolean); }
+export function versionMatches(r, m){
+  const words=matchWords(m); if(!words.length) return true;
+  const hay=foldDia((r && r.trackName)+' \u0001 '+((r && r.collectionName)||''));
+  return words.some(w=>hay.includes(w));
+}
 export function matchSong(results, s){
   const hits=(results||[]).map((r,idx)=>({r,idx})).filter(({r})=>r && r.previewUrl &&
-    textMatch(r.trackName, s.title) && (sameArtist(r.artistName, s.artist) || textMatch(r.artistName, s.artist)));
+    textMatch(r.trackName, s.title) && (sameArtist(r.artistName, s.artist) || textMatch(r.artistName, s.artist)) &&
+    versionMatches(r, s.match));
   if(!hits.length) return null;
   hits.sort((a,b)=> (versionTier(a.r)-versionTier(b.r)) || (a.idx-b.idx));   // studyjna > remaster > live; potem popularność
   return hits[0].r;
+}
+/* zapytania o utwór playlisty: „artysta tytuł" (song), zapas po wykonawcy (artistTerm). Z `match` (wersja akustyczna/
+ * unplugged) najpierw „artysta tytuł <słowo>" — wersja z albumu MTV/Acoustic bywa poza top 25 zwykłego wyszukiwania.
+ * Wspólne z tools/verify-tracks.mjs (weryfikacja danych tą samą ścieżką co gra). */
+export function songTerms(s){
+  const first=matchWords(s && s.match)[0];
+  return [...(first ? [[songQuery(s)+' '+first, {song:true}]] : []), [songQuery(s), {song:true}], [s.artist, undefined]];
 }
 async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS, rnd=Math.random){
   let pool=(cat.songs||[]).filter(s=>!seen.has(norm(s.title)));
@@ -226,7 +244,7 @@ async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS, rnd=Mat
   for(const s of shuffle(pool, rnd)){
     let preview=s.preview||'', art='';
     if(!preview){
-      for(const [term, opts] of [[songQuery(s), {song:true}], [s.artist, undefined]]){
+      for(const [term, opts] of songTerms(s)){
         const remaining=deadline-Date.now(); if(remaining<=0) break;
         try{
           const res=await withTimeout(Promise.resolve(itunes(term, opts)), remaining); anyResponse=true;
@@ -289,14 +307,30 @@ export function yearReliable(year, range, yearSrc){
   return !!(rng && Number.isFinite(y) && y>=rng.from && y<=rng.to);
 }
 
-/* ---------- F8a: tryb „abcd" — dystraktory (szybkie ABCD dla muzyki) ----------
- * Tytuł do kafla: bez „ozdobników" wersji (remaster/feat./radio edit/„from …") — wszystkie kafle wyglądają
- * jednakowo (poprawna odpowiedź nie wyróżnia się „(2011 Remaster)"). */
+/* ---------- tytuł do WYŚWIETLENIA (odsłona, karty osi czasu, składanka, kafle ABCD, wyniki) ----------
+ * Bez „ozdobników" wydania: remaster („(2012 Remaster)", „ - Remastered 2011", „(Remastered)", „ - 2009 Remaster",
+ * „[2015 Remastered Version]"), „(Single Version)"/„ - Mono Version"/„(Radio Edit)", „(feat. …)", „(From …)" — wszystkie kafle
+ * wyglądają jednakowo (poprawna odpowiedź nie wyróżnia się „(2011 Remaster)"). Dopiski WERSJI zostają („(Live)", „(Acoustic)",
+ * „(MTV Unplugged)", „ - Live / Remastered" — to realna różnica nagrania), nawias będący częścią tytułu też
+ * („(I Can't Get No) Satisfaction"). Tylko wyświetlanie: ocena odpowiedzi używa surowego tytułu (scoring i tak normalizuje). */
+const DISPLAY_DROP = /^(?:(?:mono|stereo|single|album|radio|lp|original|7"|7-inch|45)\s+(?:version|edit|mix)|mono|stereo)$/i;
+const REMASTER_WORDS = /\b\d{4}\b|\bremaster(?:ed)?\b|\bre-?master(?:ed)?\b|\bremastering\b|\bversion\b|\bdigital(?:ly)?\b|\b(?:mono|stereo|single|album|edition)\b|[\/;,&+]/gi;
+function dropDecoration(d){
+  const x=String(d||'').trim();
+  if(!x) return true;
+  if(BENIGN.test(x) || DISPLAY_DROP.test(x)) return true;
+  return REMASTER.test(x) && !ALT.test(x.replace(REMASTER_WORDS,' '));   // sam remaster (bez „live"/„mix" obok)
+}
 export function displayTitle(title){
-  const t=String(title||'').trim();
-  const cleaned=t.replace(/\s*[(\[]([^)\]]*)[)\]]/g,(m,inner)=> (BENIGN.test(inner.trim()) || REMASTER.test(inner)) ? '' : m)
-    .replace(/\s[-–]\s(.+)$/,(m,suf)=> (BENIGN.test(suf.trim()) || REMASTER.test(suf)) ? '' : m)
-    .replace(/\s+/g,' ').trim();
+  const t=String(title||'').replace(/\s+/g,' ').trim();
+  let cleaned=t.replace(/\s*[(\[]([^)\]]*)[)\]]/g,(m,inner)=> dropDecoration(inner) ? '' : m);
+  // sufiksy „ - …" (też kilka: „Song - Single Version - 2009 Remaster") — od końca, dopóki są ozdobnikiem
+  for(let i=0;i<3;i++){
+    const m=cleaned.match(/\s[-–]\s([^-–]+)$/);
+    if(!m || !dropDecoration(m[1])) break;
+    cleaned=cleaned.slice(0, m.index);
+  }
+  cleaned=cleaned.replace(/\s+/g,' ').trim();
   return cleaned || t;
 }
 // kandydat → {track, artist, year, idx} (wynik iTunes {trackName,artistName,releaseDate} albo utwór playlisty {title,artist,year}).
@@ -582,83 +616,116 @@ export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random,
   return { error:true, reason: anyResponse ? 'empty' : 'offline' };
 }
 
-/* ======================= EKSPERYMENT: „fortepian" (piano) — fortepianowy COVER utworu =======================
- * Gracz słyszy zajawkę coveru fortepianowego i zgaduje TYTUŁ i ORYGINALNEGO wykonawcę (punkty jak „muzyka").
+/* ======================= EKSPERYMENT: „covery instrumentalne" — fortepian (piano) i gitara (guitar) =======================
+ * Gracz słyszy zajawkę coveru instrumentalnego i zgaduje TYTUŁ i ORYGINALNEGO wykonawcę (punkty jak „muzyka").
  * OSOBNA ścieżka: BAD (filtr coverów/tributów) dla zwykłych trybów zostaje nietknięty — tu covery są celem,
- * ale wybór ma własne, ostrzejsze reguły (słowo „piano", tytuł = oryginał, inny wykonawca, bez wokalu/kołysanek).
- * Badanie iTunes PL: światowe hity mają piano cover z zajawką ~11/12, polskie ~0/8 → modesFor nie oferuje
- * trybu w kategoriach polskich (pianoCapable w core/match.js), a resolvePiano pomija utwory z polskimi znakami. */
+ * ale wybór ma własne, ostrzejsze reguły (słowo instrumentu, tytuł = oryginał, inny wykonawca, bez wokalu/kołysanek).
+ * Wspólny rdzeń (resolveInstrumentalCover / pickInstrumentalCover) sparametryzowany instrumentem z COVER_INSTRUMENTS.
+ * Badanie iTunes PL: światowe hity mają piano cover z zajawką ~11/12, gitarowy ~11/12; polskie ~0/8 (piano) i 0/4
+ * (gitara) → modesFor nie oferuje tych trybów w kategoriach polskich (instrumentalCapable w core/match.js),
+ * a resolver pomija utwory z polskimi znakami. */
 export const PIANO_WORD = /\b(?:piano|pianoforte|klavier|fortepian\w*)\b/i;
 // odrzuć: wokal, karaoke, kołysanki (Rockabye Baby to nie fortepian), inne instrumenty, składanki/mashupy
 export const PIANO_REJECT = /\bvocals?\b|with vocals|karaoke|sing-?along|in the style of|backing track|lullab|rockabye|guitar|string quartet|\bstrings\b|quartet|\bviolins?\b|\bcellos?\b|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|medley|mash-?up|\bmegamix\b/i;
+/* gitara: guitar/gitar…/guitarra/Gitarre/fingerstyle/fingerpicking w tytule, wykonawcy albo albumie (wynik bez tego słowa —
+ * np. zespół coverowy z wokalem, „Acoustic" wokalisty — odpada). Odrzuć: wokal, karaoke, podkłady/„guitar base"/play-along,
+ * lekcje/tutoriale/taby/akordy, „cover sessions" (wokalne zespoły coverowe), fortepian (inny tryb), kołysanki, inne
+ * instrumenty (sax/skrzypce/wiolonczela/orkiestra/bas/perkusja/ukulele…), medleye, sped up/slowed/reverb/nightcore. */
+export const GUITAR_WORD = /\b(?:guitars?|gitar\w*|guitarra\w*|gitarre\w*|fingerstyle|finger-?style|fingerpick\w*)\b/i;
+export const GUITAR_REJECT = /\bvocals?\b|with vocals|\bsung by\b|karaoke|sing-?along|in the style of|backing tracks?|\bguitar base\b|play-?along|\blessons?\b|tutorial|how to play|\btabs?\b|tablature|\bchords\b|cover sessions|\bpiano\w*|klavier|fortepian|lullab|rockabye|\bsax\b|saxo\w*|\bviolins?\b|\bcellos?\b|string quartet|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|\bbass\b|\bdrums?\b|\bflute|medley|mash-?up|\bmegamix\b|sped up|slowed|reverb|nightcore|remix|\b8d\b|extended/i;
+/* pomiar na żywo: „About a Girl" The Academy Is… (INNA piosenka, wokal) z kompilacji „Guitar Underground", remiksy „Guitar Remix - EP".
+ * Gdy słowo gitary jest TYLKO w albumie, album musi też wyglądać na płytę coverów/instrumentalną („Guitar Covers, Vol. 1",
+ * „Acoustic Guitar Pearls", „Peaceful Music Romantic Guitar", „Spanish Guitar Hits"). */
+export const GUITAR_ALBUM_OK = /\bcovers?\b|tribute|instrumental|acoustic|\bplays?\b|arrang|fingerstyle|spanish|classical|relax\w*|chill\w*|lounge|romantic|peaceful|bossa|\bcafe\b|\bsolo\b/i;
+// parametry instrumentu: słowo-wymóg, odrzuty, dopisek do zdjęcia z końca tytułu, słowa zapytań
+export const COVER_INSTRUMENTS = {
+  piano: { word:PIANO_WORD, reject:PIANO_REJECT,
+    tail:/\b(?:piano|klavier)\s+(?:version|cover|arrangement|instrumental|solo|rendition)\b.*$/i,
+    queries:(t, a)=>[t+' piano', (t+' '+a).trim()+' piano cover'] },
+  guitar: { word:GUITAR_WORD, reject:GUITAR_REJECT, albumOk:GUITAR_ALBUM_OK,
+    // „Wonderwall Guitar", „Song Acoustic Guitar Version" (tylko NA KOŃCU — „Guitar Man" zostaje)
+    tail:/(\S)\s+(?:(?:acoustic|spanish|classical|fingerstyle|instrumental|solo)\s+)*(?:guitars?|gitar\w*)(?:\s+(?:version|cover|arrangement|instrumental|solo|rendition))?\s*$/i,
+    queries:(t, a)=>[t+' guitar', t+' acoustic guitar', (t+' '+a).trim()+' guitar'] },
+};
+export const INSTRUMENT_EMOJI = { piano:'🎹', guitar:'🎸' };
+function instrumentOf(name){ return COVER_INSTRUMENTS[name] ? name : 'piano'; }
 export const PIANO_TRIES = 6;
-// tytuł wyniku/oryginału do porównania: bez nawiasów, sufiksu „ - …" i dopisków „Piano Version/Cover"
-export function pianoTitleKey(title){
-  const t=String(title||'').replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(/\s[-–—]\s.*$/,' ')
-    .replace(/\b(?:piano|klavier)\s+(?:version|cover|arrangement|instrumental|solo|rendition)\b.*$/i,' ');
+export const COVER_TRIES = PIANO_TRIES;
+// tytuł wyniku/oryginału do porównania: bez nawiasów, sufiksu „ - …" i dopisków „Piano Version/Cover" („… Guitar")
+export function coverTitleKey(title, instrument='piano'){
+  const inst=COVER_INSTRUMENTS[instrumentOf(instrument)];
+  const t=String(title||'').replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(/\s[-–—]\s.*$/,' ').replace(/\s+$/,'')
+    .replace(inst.tail, (m, keep)=> typeof keep==='string' ? keep+' ' : ' ');
   return norm(t) || titleKey(title);
 }
-// polski utwór (iTunes nie ma dla nich piano coverów) — znaki typowo polskie w tytule/wykonawcy (bez „ó": hiszp./port.)
+export function pianoTitleKey(title){ return coverTitleKey(title, 'piano'); }
+// polski utwór (iTunes nie ma dla nich coverów instrumentalnych) — znaki typowo polskie w tytule/wykonawcy (bez „ó": hiszp./port.)
 export function looksPolish(t){ return /[ąćęłńśźżĄĆĘŁŃŚŹŻ]/.test(String((t && t.track)||'')+' '+String((t && t.artist)||'')); }
-/* Czysta: wybierz cover fortepianowy oryginału `orig` ({track, artist}) z wyników wyszukiwania. Pierwszy (najwyżej
- * w wynikach ≈ najpopularniejszy) spełniający: zajawka; tytuł = tytuł oryginału; wykonawca ≠ oryginał; słowo
- * piano/klavier/fortepian w tytule/wykonawcy/albumie; bez PIANO_REJECT (tytuł/wykonawca/album). → wynik albo null
+/* Czysta: wybierz cover instrumentalny oryginału `orig` ({track, artist}) z wyników wyszukiwania. Pierwszy (najwyżej
+ * w wynikach ≈ najpopularniejszy) spełniający: zajawka; tytuł = tytuł oryginału; wykonawca ≠ oryginał; słowo instrumentu
+ * (piano/klavier/fortepian | guitar/gitar…/fingerstyle) w tytule/wykonawcy/albumie; bez odrzutów instrumentu. → wynik albo null
  * KOLIZJA TYTUŁÓW (pomiar na żywo: „King" T.Love → cover „King" Florence + the Machine; „Freedom" Wham! → covery
  * „Freedom" Kygo): gdy wyniki NIE zawierają oryginału albo zawierają ten sam tytuł innego wykonawcy wyżej niż oryginał
  * (lub oryginał dopiero od pozycji PIANO_OWN_TOP, a innych wykonawców ≥2 — „Enjoy the Silence" z oryginałem na 3. miejscu
  * i coverami Carli Bruni/Anberlin to NIE kolizja), cover musi mieć DOWÓD — nazwę oryginalnego wykonawcy w tytule/albumie
- * („Piano Tribute to Madonna", „(Originally Performed by …)"). */
+ * („Piano Tribute to Madonna", „(Originally Performed by …)", „Tribute to Michael Jackson in Spanish Guitar"). */
 export const PIANO_OWN_TOP = 5;   // oryginał w top 5 wyników „<tytuł> piano" = tytuł zdominowany przez ten utwór
 const COVER_MARK = /\bcover\b|tribute|originally|made famous|in the style|karaoke|instrumental|version|arrang|rendition|lullab|reimagined/i;
-function pianoAmbiguous(results, want, who){
+function coverAmbiguous(results, want, who, inst, instrument){
   let own=-1; const others=new Set(); let otherFirst=-1;
   (results||[]).forEach((r, idx)=>{
     if(!r || !r.trackName || !r.artistName) return;
-    const key=pianoTitleKey(r.trackName);
+    const key=coverTitleKey(r.trackName, instrument);
     if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)){ if(own<0 && (key===want || textMatch(key, want))) own=idx; return; }
     if(key!==want) return;
     const text=r.trackName+' '+r.artistName+' '+(r.collectionName||'');
-    if(PIANO_WORD.test(text) || COVER_MARK.test(text)) return;          // inne covery/aranżacje nie świadczą o kolizji
+    if(inst.word.test(text) || COVER_MARK.test(text)) return;          // inne covery/aranżacje nie świadczą o kolizji
     others.add(artistKey(r.artistName)); if(otherFirst<0) otherFirst=idx;
   });
   return own<0 || (otherFirst>=0 && otherFirst<own) || (own>=PIANO_OWN_TOP && others.size>=2);
 }
-function pianoEvidence(r, who){
+function coverEvidence(r, who){
   const k=artistKey(who); if(!k) return false;
   // norm() obcina nawiasy i „feat." — dowód bywa właśnie w nawiasie („(Originally Performed by Wham!)"), więc najpierw spacje
   const flat=String(r.trackName+' '+(r.collectionName||'')).replace(/[()\[\]]/g,' ').replace(/\s[-–—]\s/g,' ').replace(/\b(?:feat|ft|featuring)\b\.?/gi,' ');
   return (' '+norm(flat)+' ').includes(' '+k+' ');
 }
-export function pickPianoCover(results, orig){
-  const want=pianoTitleKey(orig && orig.track), who=String((orig && orig.artist)||'');
+export function pickInstrumentalCover(results, orig, instrument='piano'){
+  const name=instrumentOf(instrument), inst=COVER_INSTRUMENTS[name];
+  const want=coverTitleKey(orig && orig.track, name), who=String((orig && orig.artist)||'');
   if(!want || !who) return null;
-  const ambiguous=pianoAmbiguous(results, want, who);
+  const ambiguous=coverAmbiguous(results, want, who, inst, name);
   for(const r of (results||[])){
     if(!r || !r.previewUrl || !r.trackName || !r.artistName) continue;
     const text=r.trackName+' \u0001 '+r.artistName+' \u0001 '+(r.collectionName||'');
-    if(!PIANO_WORD.test(text) || PIANO_REJECT.test(text)) continue;
+    if(!inst.word.test(text) || inst.reject.test(text)) continue;
+    if(inst.albumOk && !inst.word.test(r.trackName+' \u0001 '+r.artistName) && !inst.albumOk.test(r.collectionName||'')) continue;   // słowo tylko w albumie
     if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)) continue;   // oryginał (też „X & Y") — nie cover
-    const got=pianoTitleKey(r.trackName);
+    const got=coverTitleKey(r.trackName, name);
     if(!got || !(got===want || textMatch(got, want))) continue;
-    if(ambiguous && !pianoEvidence(r, who)) continue;
+    if(ambiguous && !coverEvidence(r, who)) continue;
     return r;
   }
   return null;
 }
-// zapytania o cover: „<tytuł> piano", zapas „<tytuł> <wykonawca> piano cover" (tryb song: bez attribute=artistTerm)
-export function pianoQueries(orig){
+export function pickPianoCover(results, orig){ return pickInstrumentalCover(results, orig, 'piano'); }
+// zapytania o cover (tryb song: bez attribute=artistTerm). Fortepian: „<tytuł> piano", zapas „<tytuł> <wykonawca> piano cover";
+// gitara: „<tytuł> guitar", „<tytuł> acoustic guitar", zapas „<tytuł> <wykonawca> guitar"
+export function coverQueries(orig, instrument='piano'){
   const strip=x=>String(x||'').replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(/\s[-–—]\s.*$/,' ').replace(/\s+(?:feat\.?|ft\.?)\s.*$/i,' ').replace(/\s+/g,' ').trim();
   const t=strip(orig && orig.track), a=strip(orig && orig.artist);
-  return t ? [t+' piano', (t+' '+a).trim()+' piano cover'] : [];
+  return t ? COVER_INSTRUMENTS[instrumentOf(instrument)].queries(t, a) : [];
 }
-/* Rozwiąż pytanie „fortepian": oryginał jak w „muzyce" (resolveTrack — popularny, z dekady), potem cover fortepianowy.
- * Brak coveru → kolejny oryginał (≤ tries; utwory z polskimi znakami pomijane bez zapytania o cover).
- * → { ...oryginał (track, artist, year, album, art), preview (zajawka COVERU), origPreview, coverArtist, coverTrack }
+export function pianoQueries(orig){ return coverQueries(orig, 'piano'); }
+/* Rozwiąż pytanie „cover instrumentalny": oryginał jak w „muzyce" (resolveTrack — popularny, z dekady), potem cover
+ * danego instrumentu. Brak coveru → kolejny oryginał (≤ tries; utwory z polskimi znakami pomijane bez zapytania o cover).
+ * → { ...oryginał (track, artist, year, album, art), preview (zajawka COVERU), origPreview, coverArtist, coverTrack, instrument }
  * albo { error, reason } (wołający gra wtedy zwykłą „muzykę"). */
-export async function resolvePiano({ cat, seen, recent, itunes, rnd=Math.random, capMs=RESOLVE_CAP_MS, tries=PIANO_TRIES }){
+export async function resolveInstrumentalCover({ instrument='piano', cat, seen, recent, itunes, rnd=Math.random, capMs=RESOLVE_CAP_MS, tries=COVER_TRIES }){
+  const name=instrumentOf(instrument);
   const deadline=Date.now()+capMs;
   let anyResponse=false;
-  // tani prefiltr: wykonawcy / utwory playlisty z polskimi znakami w nazwie nie mają piano coverów (oszczędza zapytania)
+  // tani prefiltr: wykonawcy / utwory playlisty z polskimi znakami w nazwie nie mają coverów (oszczędza zapytania)
   const pl=x=>/[ąćęłńśźżĄĆĘŁŃŚŹŻ]/.test(String(x||''));
   const arts=Array.isArray(cat.artists) ? cat.artists.filter(a=>!pl(a)) : [];
   const songs=Array.isArray(cat.songs) ? cat.songs.filter(x=>x && !looksPolish({ track:x.title, artist:x.artist })) : [];
@@ -672,16 +739,18 @@ export async function resolvePiano({ cat, seen, recent, itunes, rnd=Math.random,
     if(!t || t.error){ if(t && t.reason==='empty') anyResponse=true; break; }
     anyResponse=true;
     if(looksPolish(t)) continue;
-    for(const q of pianoQueries(t)){
+    for(const q of coverQueries(t, name)){
       remaining=deadline-Date.now(); if(remaining<=0) break;
       let res=null;
       try{ res=await withTimeout(Promise.resolve(itunes(q, { song:true })), remaining); }catch(_e){ res=null; }
-      const c=pickPianoCover(res, t);
-      if(c) return { ...t, origPreview:t.preview, preview:c.previewUrl, coverArtist:String(c.artistName||'').trim(), coverTrack:String(c.trackName||'').trim() };
+      const c=pickInstrumentalCover(res, t, name);
+      if(c) return { ...t, origPreview:t.preview, preview:c.previewUrl, coverArtist:String(c.artistName||'').trim(), coverTrack:String(c.trackName||'').trim(), instrument:name };
     }
   }
   return { error:true, reason: anyResponse ? 'empty' : 'offline' };
 }
+export function resolvePiano(args){ return resolveInstrumentalCover({ ...args, instrument:'piano' }); }
+export function resolveGuitar(args){ return resolveInstrumentalCover({ ...args, instrument:'guitar' }); }
 
 /* jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców).
  * `itunes(term, opts) → Promise<results[]>` wstrzyknięty przez warstwę sieci (web/serwer).

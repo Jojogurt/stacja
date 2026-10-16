@@ -6,14 +6,14 @@ import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, qui
 import { introStageSecs, introNextStage, revsnipStageSecs, revsnipNextStage, coverNextStage, coverStageBlocks, isTempoMode, tempoRate, tempoNextStage } from '../core/timing.js';
 import { pickTimelineTrack, gapOk, correctGaps, insertCard, gapLabel, cardsWord, timelineSummary } from '../core/timeline.js';   // EKSPERYMENT: oś czasu
 import { vinylPrepare, vinylRate, vinylReveal } from './vinyl.js';   // EKSPERYMENT: płyta winylowa (zwolnione / przyspieszone obroty)
-import { buildTrackMC, yearReliable, parseRange } from '../core/trackSelect.js';
+import { buildTrackMC, yearReliable, parseRange, displayTitle, INSTRUMENT_EMOJI } from '../core/trackSelect.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, matchTotal, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
 import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailyShareText, matchShareText, resultGrid, DAILY_QUESTIONS } from '../core/daily.js';
 import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
   syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick, quizGroupKeys, isPuzzleCat } from '../core/picker.js';
-import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolvePiano } from '../adapters-web/itunesRepository.js';
+import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolveInstrumental } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
@@ -294,11 +294,11 @@ async function newRound(){
     if(gen!==soloGen) return;
     if(r && !r.error) return startArtistQuestion(r, eraKey, gen);
   }
-  // EKSPERYMENT „fortepian": oryginał + jego cover fortepianowy; brak coveru (np. same polskie utwory) → zwykła „muzyka"
+  // EKSPERYMENT „fortepian"/„gitara": oryginał + jego cover instrumentalny; brak coveru (np. same polskie utwory) → zwykła „muzyka"
   let t=null;
-  if(mode==='piano'){
-    setState('szukam coveru fortepianowego…');
-    let p=null; try{ p=await resolvePiano({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd}); }catch(_e){ p=null; }
+  if(mode==='piano' || mode==='guitar'){
+    setState(mode==='guitar' ? 'szukam coveru gitarowego…' : 'szukam coveru fortepianowego…');
+    let p=null; try{ p=await resolveInstrumental({instrument:mode, cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd}); }catch(_e){ p=null; }
     if(gen!==soloGen) return;
     if(p && (!p.error || p.reason==='offline')) t=p;   // offline → od razu komunikat (bez drugiej kaskady)
   }
@@ -331,7 +331,7 @@ async function newRound(){
   if(mode==='intro') cur.introStage=0;
   if(mode==='revsnip') cur.revStage=0;                       // EKSPERYMENT: okno 3 s (koniec okna losowany po dekodowaniu)
   if(mode==='medley' || mode==='cover') cur.fallback=true;   // EKSPERYMENT: nie znaleziono wykonawcy/albumu → muzyka
-  if(mode==='piano' && !t.coverArtist) cur.fallback=true;    // EKSPERYMENT: brak coveru fortepianowego → muzyka
+  if((mode==='piano' || mode==='guitar') && !t.coverArtist) cur.fallback=true;    // EKSPERYMENT: brak coveru instrumentalnego → muzyka
   if(mode==='timeline'){ if(tlPick && tlPick.card && !tlPick.noAnchor) cur.tlCard=tlPick.card; else cur.fallback=true; }   // EKSPERYMENT
   if(isTempoMode(mode)){ cur.tempoStage=0; cur.tempoPos=0; vinylPrepare(tempoRate(mode, 0)); }   // EKSPERYMENT: płyta „?" w tempie etapu 0
   if(mode==='year'){
@@ -373,7 +373,7 @@ async function startArtistQuestion(r, eraKey, gen){
   let cur;
   if(mode==='medley'){
     const clips=r.clips.map(c=>({ ...c }));
-    cur={ track:clips.map(c=>c.track).join(' · '), artist:r.artist, artistAlt:r.artistAlt, clips, year:'', album:'',
+    cur={ track:clips.map(c=>displayTitle(c.track)).join(' · '), artist:r.artist, artistAlt:r.artistAlt, clips, year:'', album:'',
       preview:clips[0].preview, art:clips[0].art, era:eraKey, lyric:'' };
     setState('ładuję składankę 0/'+clips.length); setRing(0);
     await loadMedley(cur, { alive:()=>gen===soloGen, onProgress:(k,n)=>{ if(gen!==soloGen) return; setState('ładuję składankę '+k+'/'+n); setRing(k/n); } });
@@ -815,7 +815,7 @@ function finishMatch(){
       const d=document.createElement('div'); d.className='sum-row';
       const badge=r.skipped?'<span class="no">↷</span>':(ok?'<span class="ok">✓</span>':(r.okTitle||r.okArtist?'<span style="color:var(--amber)">±</span>':'<span class="no">✗</span>'));
       d.innerHTML='<span class="badge">'+badge+'</span>'+
-        '<span class="song"><b>'+escapeHtml(r.track)+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>'+
+        '<span class="song"><b>'+escapeHtml(r.mode==='quiz' ? r.track : displayTitle(r.track))+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>'+
         '<span class="n" style="opacity:.7;font-size:var(--fs-xs);text-transform:uppercase">'+escapeHtml(MODE_SHORT[r.mode]||'')+(r.points?' · +'+r.points:'')+'</span>';
       list.appendChild(d);
     });
@@ -894,7 +894,7 @@ function showDailyResult(info){
   const list=document.getElementById('sumList'); list.innerHTML='';
   (rec.results||[]).forEach(r=>{
     const d=document.createElement('div'); d.className='sum-row';
-    d.innerHTML='<span class="badge">'+escapeHtml(r.c||'')+'</span><span class="song"><b>'+escapeHtml(r.track)+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>'+
+    d.innerHTML='<span class="badge">'+escapeHtml(r.c||'')+'</span><span class="song"><b>'+escapeHtml(displayTitle(r.track))+'</b> <span>· '+escapeHtml(r.artist)+'</span></span>'+
       '<span class="n" style="opacity:.7;font-size:var(--fs-xs)">'+(r.points?'+'+(r.points|0):'')+'</span>';
     list.appendChild(d);
   });
@@ -959,7 +959,7 @@ function check(){
   const r=document.getElementById('rmeta');
   r.innerHTML='';
   const fix=(ok, guess, actual, match)=> ok && guess && norm(guess)!==norm(actual) ? (match(guess, actual) ? 'literówka OK' : 'jeden z wykonawców OK') : '';
-  r.appendChild(guessLine(okTitle,'Tytuł',current.track,g.title, fix(okTitle,g.title,current.track,textMatch), sc.parts.title));
+  r.appendChild(guessLine(okTitle,'Tytuł',displayTitle(current.track),g.title, fix(okTitle,g.title,current.track,textMatch), sc.parts.title));
   r.appendChild(guessLine(okArtist,'Wykonawca',current.artist,g.artist, fix(okArtist,g.artist,current.artist,textMatch), sc.parts.artist));
   if(current.year){
     const exact = okYear && Math.abs(+g.year - +current.year)===0;
@@ -967,7 +967,7 @@ function check(){
   }
   if(current.album) r.appendChild(guessLine(okAlbum,'Album',current.album,g.album, okAlbum && norm(g.album)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
   if(intro) r.appendChild(noteLine('intro', `${roundOk?'zgadłeś':'odpowiedź'} na etapie ${introStageSecs(iStage)} s · mnożnik ×${String(sc.mult).replace('.',',')}`));
-  if(qm==='piano' && current.coverArtist) r.appendChild(noteLine('cover', '🎹 '+current.coverArtist));   // EKSPERYMENT: kto grał cover
+  if((qm==='piano' || qm==='guitar') && current.coverArtist) r.appendChild(noteLine('cover', INSTRUMENT_EMOJI[qm]+' '+current.coverArtist));   // EKSPERYMENT: kto grał cover
   if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
   if(tStage!=null) r.appendChild(noteLine('tempo', `zgadywane przy ${fmtRate(tempoRate(qm, tStage))} · mnożnik ×${String(sc.mult).replace('.',',')} · teraz oryginał 1×`));
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
@@ -1076,7 +1076,7 @@ function checkQuiz(){
  * scroll w obrębie osi (.tl-scroll) i auto-scroll do ostatnio wstawionej / odpadłej karty. */
 function tlCardHTML(c, cls='', i=null){
   return `<div class="tl-card${c.anchor?' tl-anchor':''}${cls?' '+cls:''}"${i!=null?` data-i="${i}"`:''}><b class="tl-y">${c.year|0}</b>`+
-    `<span class="tl-t">${escapeHtml(c.track)}</span><span class="tl-a">${escapeHtml(c.artist)}</span></div>`;
+    `<span class="tl-t">${escapeHtml(displayTitle(c.track))}</span><span class="tl-a">${escapeHtml(c.artist)}</span></div>`;
 }
 // przewiń oś (tylko kontener osi — bez skoku strony) tak, by element był na środku
 function tlScrollTo(el){
@@ -1136,7 +1136,7 @@ function checkTimeline(){
   const r=document.getElementById('rmeta'); r.innerHTML='';
   r.appendChild(guessLine(placeOk, 'Miejsce', gapLabel(before, good[0]), gap!=null ? gapLabel(before, gap) : '', '', sc.parts.place));
   r.appendChild(noteLine('rok', String(card.year)));
-  r.appendChild(guessLine(okTitle, 'Tytuł', current.track, gt, okTitle && norm(gt)!==norm(current.track) ? 'literówka OK' : '', sc.parts.title));
+  r.appendChild(guessLine(okTitle, 'Tytuł', displayTitle(current.track), gt, okTitle && norm(gt)!==norm(current.track) ? 'literówka OK' : '', sc.parts.title));
   r.appendChild(guessLine(okArtist, 'Wykonawca', current.artist, ga, '', sc.parts.artist));
   r.appendChild(noteLine('oś czasu', timelineSummary(tl.cards)));
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
@@ -1182,7 +1182,7 @@ function checkArtistQ(){
     r.appendChild(noteLine('okładka', (bl ? `odpowiedź przy ${bl}×${bl} pikselach` : 'odpowiedź przy pełnej okładce')+` · mnożnik ×${String(sc.mult).replace('.',',')}`));
   } else {
     const played=(current.playedClips || current.clips.filter(c=>c.ok)).length ? (current.playedClips || current.clips.filter(c=>c.ok)) : current.clips;
-    r.appendChild(noteLine('zagrały', played.map((c,i)=>(i+1)+'. '+c.track).join(' · ')));
+    r.appendChild(noteLine('zagrały', played.map((c,i)=>(i+1)+'. '+displayTitle(c.track)).join(' · ')));
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');
@@ -1216,7 +1216,7 @@ function checkYear(){
   const r=document.getElementById('rmeta'); r.innerHTML='';
   const tag = ys.tier==='miss' ? '' : (ys.tier==='exact' ? 'dokładnie' : YEAR_TIER[ys.tier].toLowerCase());
   r.appendChild(guessLine(ys.points>0, 'Rok', String(parseYear(current.year)||current.year), parseYear(gy)!=null?String(parseYear(gy)):'', tag, sc.parts.year));
-  r.appendChild(noteLine('utwór', current.track+' — '+current.artist));
+  r.appendChild(noteLine('utwór', displayTitle(current.track)+' — '+current.artist));
   if(current.yearNote) r.appendChild(noteLine('uwaga', current.yearNote));
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');

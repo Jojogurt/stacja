@@ -183,7 +183,7 @@ function mpPickerHTML(){
     </div>`;
 }
 // AUTORYTET: złóż MINIMALNĄ pulę kategorii do wysłania (cap payloadu `start`).
-// DO potrzebuje: artists; songs {title,artist,preview,year,album}; lyric/tts TYLKO dla lektora.
+// DO potrzebuje: artists; songs {title,artist,preview,year,album,match}; lyric/tts TYLKO dla lektora.
 // Strip lyric/tts gdy lektor niewybrany (gros rozmiaru) + limit utworów/kategorię.
 const MP_POOL_SONG_CAP=80;
 function mpBuildPools(cats, modes){
@@ -198,6 +198,7 @@ function mpBuildPools(cats, modes){
       out.songs=c.songs.slice(0, MP_POOL_SONG_CAP).map(s=>{
         const o={ title:s.title, artist:s.artist };
         if(s.preview) o.preview=s.preview; if(s.year) o.year=s.year; if(s.album) o.album=s.album;
+        if(s.match) o.match=s.match;   // wersja akustyczna/unplugged: słowo wymagane w tytule/albumie wyniku (core/trackSelect.matchSong)
         if(wantLektor && s.lyric){ o.lyric=s.lyric; if(s.tts) o.tts=s.tts; }   // lyric/tts tylko gdy lektor w grze
         return o;
       });

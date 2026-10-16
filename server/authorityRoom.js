@@ -124,6 +124,7 @@ function clampPools(pools){
       const r={ title:clipText(s.title, SONG_TEXT_MAX), artist:clipText(s.artist, SONG_TEXT_MAX) };
       if(okPreview(s.preview)) r.preview=s.preview;
       if(s.year) r.year=clipText(s.year, 16); if(s.album) r.album=clipText(s.album, SONG_TEXT_MAX);
+      if(s.match) r.match=clipText(s.match, 40);   // wersja akustyczna/unplugged (słowo wymagane w tytule/albumie wyniku)
       if(s.lyric) r.lyric=String(s.lyric).slice(0, POOL_LYRIC_MAX); if(okTts(s.tts)) r.tts=s.tts;
       return r;
     });

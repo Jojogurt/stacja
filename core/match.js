@@ -9,17 +9,17 @@ export const QPC=5, CPR=3;   // pytań na kategorię, kategorii na rundę (jak p
 export const MAX_ROUNDS=4;   // F1 (#5): max rund meczu — serwer przycina `start` do tego (F6a: długość w pytaniach ≤ MAX_ROUNDS×CPR×QPC)
 // F8a: + 'intro' (Heardle 1→16 s), 'abcd' (4 kafle „Tytuł — Wykonawca"), 'year' (rok wydania, oś czasu lite)
 // EKSPERYMENT: + 'revsnip' (od tyłu krótko: 3 s wspak), 'medley' (składanka 4 × 1,5 s wykonawcy), 'cover' (okładka albumu)
-// EKSPERYMENT: + 'piano' (fortepianowy cover — zgadnij tytuł i ORYGINALNEGO wykonawcę)
+// EKSPERYMENT: + 'piano' (fortepianowy cover — zgadnij tytuł i ORYGINALNEGO wykonawcę), 'guitar' (to samo z coverem gitarowym)
 // EKSPERYMENT: + 'timeline' (oś czasu, Hitster), 'slowmo' (zwolnione obroty 0.6× → 0.75×), 'fastmo' (przyspieszone 1.5×)
-export const ALL_MODES=['music','lektor','reverse','snippet','intro','abcd','year','revsnip','medley','cover','piano','timeline','slowmo','fastmo','quiz'];
+export const ALL_MODES=['music','lektor','reverse','snippet','intro','abcd','year','revsnip','medley','cover','piano','guitar','timeline','slowmo','fastmo','quiz'];
 export const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment', quiz:'🧠 wiedza',
-  intro:'⏱ intro', abcd:'🔠 ABCD', year:'📅 rok', revsnip:'⏪ od tyłu krótko', medley:'🎛 składanka', cover:'🖼 okładka', piano:'🎹 fortepian',
+  intro:'⏱ intro', abcd:'🔠 ABCD', year:'📅 rok', revsnip:'⏪ od tyłu krótko', medley:'🎛 składanka', cover:'🖼 okładka', piano:'🎹 fortepian', guitar:'🎸 gitara',
   timeline:'🕰 oś czasu', slowmo:'🐢 zwolnione obroty', fastmo:'🐿 przyspieszone'};
 export const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment', quiz:'wiedza',
-  intro:'intro', abcd:'ABCD', year:'rok', revsnip:'od tyłu 3 s', medley:'składanka', cover:'okładka', piano:'fortepian',
+  intro:'intro', abcd:'ABCD', year:'rok', revsnip:'od tyłu 3 s', medley:'składanka', cover:'okładka', piano:'fortepian', guitar:'gitara',
   timeline:'oś czasu', slowmo:'zwolnione', fastmo:'przyspieszone'};
 export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak', snippet:'2 s', quiz:'pytanie',
-  intro:'1→16 s', abcd:'4 kafle', year:'rok wydania', revsnip:'3 s wspak', medley:'4 × 1,5 s', cover:'bez dźwięku', piano:'cover',
+  intro:'1→16 s', abcd:'4 kafle', year:'rok wydania', revsnip:'3 s wspak', medley:'4 × 1,5 s', cover:'bez dźwięku', piano:'cover', guitar:'cover',
   timeline:'ułóż po roku', slowmo:'0.6× → 0.75×', fastmo:'1.5×'};
 /* F8a: tryby tylko solo. „intro" w MP wymagałby etapu odsłony sterowanego przez hosta/serwer + ponownego
  * startu audio u wszystkich i przebudowy lokalnej fazy „słuchaj → kombinuj" — poza zakresem; picker MP go nie pokazuje,
@@ -27,14 +27,14 @@ export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak',
 /* EKSPERYMENT: „składanka" (4 zajawki buforowane i sklejane lokalnie) i „okładka" (etapy odsłony obrazu) — też tylko solo:
  * MP wymagałby rozwiązywania 4 utworów/albumu na serwerze i synchronizacji etapów odsłony. „od tyłu krótko" działa
  * w MP (offset okna od autorytetu jak „fragment", F2b). */
-/* EKSPERYMENT: „fortepian" też tylko solo — w MP wymagałby resolvera coveru na serwerze (Worker: iTunes często
+/* EKSPERYMENT: „fortepian"/„gitara" też tylko solo — w MP wymagałby resolvera coveru na serwerze (Worker: iTunes często
  * zablokowany → Deezer), ścieżki relay-hosta i odsłony „cover: …" w mp-render; na razie poza zakresem. */
 /* EKSPERYMENT: „oś czasu" tylko solo — MP (co-op: jedna oś drużyny, głos na szczelinę) wymagałby: kotwicy rozwiązywanej
  * przez autorytet przy starcie meczu (per drużyna), trwałej osi drużyn w stanie gry (game.timeline[teamId], karty
  * jawne), slotu 'gap' z walidacją indeksu w reducerze, oceny gapOk w evaluateTeam + wstawienia karty w applyEvaluation,
  * nowego UI głosowania na szczeliny i odsłony 'timeline' w mp-render oraz tej samej ścieżki w hoście relay (app/mp.js).
  * „zwolnione obroty"/„przyspieszone" działają w MP: tempo lokalne u klienta (stałe 0.6× / 1.5×), serwer jak „muzyka". */
-export const SOLO_ONLY_MODES=['intro','medley','cover','piano','timeline'];
+export const SOLO_ONLY_MODES=['intro','medley','cover','piano','guitar','timeline'];
 export const MP_MODES=ALL_MODES.filter(m=>!SOLO_ONLY_MODES.includes(m));
 // tryby, które zna serwer sprzed F8a (brak `modes` w presence → nowe tryby ukryte w MP pod autorytetem)
 export const LEGACY_MP_MODES=['music','lektor','reverse','snippet','quiz'];
@@ -66,12 +66,17 @@ export function polishDominant(catKey, c){
   if(typeof c.lang==='string' && c.lang) return c.lang==='pl';
   return /(?:^|[-_])pl$|polo/i.test(String(catKey||'')) || /\bPL\b|polsk|disco polo/i.test(String(c.label||'')+' '+String(c.desc||''));
 }
-// EKSPERYMENT „fortepian": kategoria audio (pula wykonawców albo utwory playlisty), bez przewagi polskich wykonawców
-export function pianoCapable(catKey, c){
+// EKSPERYMENT „covery instrumentalne" (fortepian, gitara): kategoria audio (pula wykonawców albo utwory playlisty),
+// bez przewagi polskich wykonawców (gitara: badanie 0/4 polskich hitów z coverem — ta sama reguła co fortepian)
+export function instrumentalCapable(catKey, c){
   if(!c || c.kind==='quiz' || c.kind==='lyrics') return false;
   const audio=(Array.isArray(c.artists) && c.artists.length) || (Array.isArray(c.songs) && c.songs.length);
   return !!audio && !polishDominant(catKey, c);
 }
+export const pianoCapable = instrumentalCapable;
+/* `noModes` kategorii (np. „akustycznie / unplugged": zajawka JEST już wersją akustyczną — cover instrumentalny, okładka
+ * albumu MTV czy składanka 4 utworów jednego wykonawcy nie mają tam sensu) → te tryby wyłączone. */
+function catNoModes(c){ return Array.isArray(c && c.noModes) ? c.noModes.filter(m=>typeof m==='string') : []; }
 // jakie tryby obsługuje kategoria (kompatybilność). F8a: intro/abcd/year — tylko kategorie z audio.
 // EKSPERYMENT: revsnip — każda kategoria audio; medley/cover — tylko z PULĄ WYKONAWCÓW (artists albo playlista ≥4 wykonawców)
 export function modesFor(catKey, cats){
@@ -82,11 +87,12 @@ export function modesFor(catKey, cats){
   if(abcdCapable(c)) m.push('abcd');
   if(yearCapable(c)) m.push('year');
   if(artistPool(c).length) m.push('medley','cover');
-  if(pianoCapable(catKey, c)) m.push('piano');   // EKSPERYMENT: fortepianowy cover — nie w kategoriach polskich
+  if(instrumentalCapable(catKey, c)) m.push('piano','guitar');   // EKSPERYMENT: cover fortepianowy/gitarowy — nie w kategoriach polskich
   if(timelineCapable(c)) m.push('timeline');     // EKSPERYMENT: oś czasu — tylko wiarygodny rok (dekady / playlisty z rokiem)
   m.push('slowmo','fastmo');                     // EKSPERYMENT: zwolnione / przyspieszone obroty — każda kategoria audio
   if((c.songs||[]).some(s=>s.lyric)) m.push('lektor'); // tekst do lektora (np. hits-now)
-  return m;
+  const off=catNoModes(c);
+  return off.length ? m.filter(x=>!off.includes(x)) : m;
 }
 
 export function catLabel(catKey, cats){ const c=cats[catKey]; return c?(c.range||c.label):catKey; }

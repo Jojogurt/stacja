@@ -1844,6 +1844,94 @@ await group('EKSP. solo: „fortepian" — gra zajawka COVERU, odpowiedź = tytu
     $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
   }
 });
+/* ===================== EKSPERYMENT: „gitara" (solo) — cover gitarowy (fingerstyle), wokalny/lekcja odrzucone; tytuł bez „(2012 Remaster)" ===================== */
+await group('EKSP. solo: „gitara" — gra zajawka coveru fingerstyle (nie wokalny, nie lekcja), odsłona „cover 🎸", tytuł bez dopisku remasteru', async ()=>{
+  const gQ=[];
+  const gFetch=(url)=>{
+    const u=String(url);
+    if(/^https:\/\/x\/.*\.m4a/.test(u)) return Promise.resolve({ ok:true, status:200, arrayBuffer:()=>Promise.resolve(new ArrayBuffer(16)) });
+    let q; try{ q=new URL(u).searchParams; }catch(_e){ q=new URLSearchParams(); }
+    const term=q.get('term')||'X';
+    if(q.get('attribute')==='artistTerm'){
+      const r=(t,y)=>({ trackName:t+' (2012 Remaster)', artistName:term, previewUrl:'https://x/orig-'+encodeURIComponent(t)+'.m4a', collectionName:'Album '+term, releaseDate:y+'-01-01', artworkUrl100:'https://x/orig/100x100bb.jpg' });
+      return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:['Raz','Dwa','Trzy'].map((t,i)=>r(t+' '+term, 1960+i)) }) });
+    }
+    gQ.push(term);
+    const m=term.match(/^(.*) guitar$/);
+    const who=m ? m[1].replace(/^(Raz|Dwa|Trzy) /,'') : '';
+    const results = m ? [ { trackName:m[1], artistName:who, collectionName:'Album '+who, previewUrl:'https://x/orig2.m4a' },
+      { trackName:m[1]+' (Guitar Cover)', artistName:'Cover Kings', collectionName:'Cover Sessions Vol. 3', previewUrl:'https://x/vocal.m4a' },
+      { trackName:'How to Play '+m[1]+' - Guitar Lesson', artistName:'Guitar Tutor', collectionName:'Guitar Lessons', previewUrl:'https://x/lesson.m4a' },
+      { trackName:m[1]+' (Fingerstyle)', artistName:'Fingerstyle Duo', collectionName:'Acoustic Guitar Covers', previewUrl:'https://x/guitar-'+encodeURIComponent(m[1])+'.m4a' } ] : [];
+    return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results }) });
+  };
+  const w=window, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  globalThis.fetch=gFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache();
+  try{
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    ok(modeChip(w, /gitara/), 'picker solo: chip „🎸 gitara"');
+    const C=w.CATEGORIES, all={...(C.decades||{}),...(C.styles||{})};
+    ok(!M8dom.modesFor('rock-pl', all).includes('guitar') && !M8dom.modesFor('evergreen-pl', all).includes('guitar') && M8dom.modesFor('pop-world', all).includes('guitar'), 'kategorie polskie bez gitary, pop świat z nią');
+    await f2aStartMatch('pop-world', /gitara/);
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    ok(!$(w,'check').disabled, 'pytanie gotowe — stan: '+txt(w,'state'));
+    const q=gQ.find(t=>/ guitar$/.test(t))||''; const title=q.replace(/ guitar$/,'');
+    ok(title && !/Remaster/.test(q), 'zapytanie o cover „<tytuł> guitar" (bez dopisku remasteru) — '+q);
+    for(let i=0;i<20 && !soloAudioMod._soloAudioDebug().round;i++) await settle(2);
+    const el=soloAudioMod._soloAudioDebug().el;
+    ok(el && /guitar-/.test(el.src||''), 'gra zajawka coveru fingerstyle (nie wokalny „Cover Sessions", nie lekcja, nie oryginał) — '+(el&&el.src));
+    const artist=title.replace(/^(Raz|Dwa|Trzy) /,'');
+    $(w,'fTitle').value=title; $(w,'fArtist').value=artist;
+    click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/Dobrze!/.test(txt(w,'revealHead')), 'tytuł + ORYGINALNY wykonawca → „Dobrze!" — '+txt(w,'revealHead'));
+    ok(/cover/.test(rm) && /🎸 Fingerstyle Duo/.test(rm), 'odsłona: „cover 🎸 Fingerstyle Duo" — '+rm.slice(0,240));
+    ok(rm.includes(title) && !/Remaster/.test(rm), 'odsłona: tytuł bez „(2012 Remaster)" — '+rm.slice(0,160));
+  } finally {
+    if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+    $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
+  }
+});
+/* ===================== „akustycznie / unplugged" — kategoria w pickerze, tryby bez coverów/okładki/składanki, gra wersja unplugged ===================== */
+await group('Kategoria „akustycznie / unplugged": w pickerze (Style), tryby, zajawka = wersja z albumu MTV Unplugged (nie studyjna)', async ()=>{
+  const w=window, C=w.CATEGORIES, cat=C.styles && C.styles.unplugged;
+  ok(cat && Array.isArray(cat.songs) && cat.songs.length>=40 && cat.songs.every(s=>s.match && s.title && s.artist && s.year && s.album), 'categories.js: songs[] {title, artist, year, album, match}');
+  const tk=[...w.document.querySelectorAll('.tick')].find(t=>t.dataset.era==='unplugged');
+  ok(tk && /akustycznie \/ unplugged/.test(tk.textContent), 'picker solo: tick „akustycznie / unplugged" — '+(tk&&tk.textContent));
+  const all={...(C.decades||{}),...(C.styles||{})};
+  const ms=M8dom.modesFor('unplugged', all);
+  ok(['music','intro','abcd','year','reverse','revsnip','slowmo','fastmo'].every(m=>ms.includes(m)), 'tryby: muzyka/intro/ABCD/rok/od tyłu/obroty — '+ms.join(','));
+  ok(!['piano','guitar','cover','medley'].some(m=>ms.includes(m)), 'bez fortepianu/gitary/okładki/składanki');
+  const songQ=[];
+  const uFetch=(url)=>{
+    const u=String(url);
+    if(/^https:\/\/x\/.*\.m4a/.test(u)) return Promise.resolve({ ok:true, status:200, arrayBuffer:()=>Promise.resolve(new ArrayBuffer(16)) });
+    let q; try{ q=new URL(u).searchParams; }catch(_e){ q=new URLSearchParams(); }
+    const term=(q.get('term')||'').toLowerCase(); songQ.push(term);
+    const s=cat.songs.find(x=>term.startsWith((x.artist+' '+x.title).toLowerCase()));
+    const results = s ? [ { trackName:s.title, artistName:s.artist, collectionName:'Studio Album', previewUrl:'https://x/studio.m4a', releaseDate:'1990-01-01' },
+      { trackName:s.title+' (Live)', artistName:s.artist, collectionName:'Big Live Show', previewUrl:'https://x/live.m4a', releaseDate:'1999-01-01' },
+      { trackName:s.title+' (Live Acoustic)', artistName:s.artist, collectionName:s.album+' (MTV Unplugged) Akustycznie', previewUrl:'https://x/unplugged-1.m4a', releaseDate:s.year+'-01-01' } ] : [];
+    return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results }) });
+  };
+  const prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  globalThis.fetch=uFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache();
+  try{
+    await f2aStartMatch('unplugged', /muzyka/);
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    ok(!$(w,'check').disabled, 'pytanie gotowe — stan: '+txt(w,'state'));
+    for(let i=0;i<20 && !soloAudioMod._soloAudioDebug().round;i++) await settle(2);
+    const el=soloAudioMod._soloAudioDebug().el;
+    ok(el && /unplugged-1/.test(el.src||''), 'gra wersja akustyczna/unplugged (nie studyjna, nie zwykłe live) — '+(el&&el.src));
+    ok(songQ.some(t=>/ (unplugged|akustycz|mtv)$/.test(t)), 'zapytanie „artysta tytuł <słowo z match>" — '+songQ[0]);
+    click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(cat.songs.some(s=>rm.includes(s.title) && rm.includes(s.album)), 'odsłona: tytuł i album wydania akustycznego z danych — '+rm.slice(0,200));
+  } finally {
+    if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+    $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
+  }
+});
 /* ===================== EKSPERYMENT: „oś czasu" (solo) — kotwica, szczeliny, wstawienie/odpadnięcie, podsumowanie ===================== */
 const soloMod = await import('../app/solo.js');   // ten sam singleton co w app.js
 const TLcore = await import('../core/timeline.js');
