@@ -8,11 +8,11 @@
  * (404) albo bez tabeli (500 „no such table") → cicho tylko lokalnie do końca sesji. */
 import { escapeHtml } from '../core/util.js';
 import { parseStore, rate, unrate, toggleHeart, ratingOf, tasteCounts, trackKey, mergeTaste, markSynced, dropTombs,
-  batches } from '../core/taste.js';
+  batches, isTasteVisibility } from '../core/taste.js';
 import { lsGet, lsSet } from './dom.js';
-import { ensureSession, hasSession, tasteFetch, tastePush, tasteDelete } from '../adapters-web/cf.js';
+import { ensureSession, hasSession, tasteFetchAll, tastePush, tasteDelete, tasteVisibilityPush } from '../adapters-web/cf.js';
 
-const LS_STORE='stacjaTaste', LS_QUEUE='stacjaTasteQ';
+const LS_STORE='stacjaTaste', LS_QUEUE='stacjaTasteQ', LS_VIS='stacjaTasteVis', LS_VIS_Q='stacjaTasteVisQ';
 export const SYNC_DEBOUNCE_MS = 2000;
 const RETRY_MAX_MS = 5*60*1000;
 
@@ -124,7 +124,10 @@ export async function tastePull({ create=false }={}){
   }
   setSync('syncing');
   try{
-    const items=await tasteFetch();
+    const d=await tasteFetchAll(), items=d.items;
+    // widoczność: lokalna zmiana czekająca na wysłanie wygrywa; inaczej przyjmij ustawienie z konta
+    if(lsGet(LS_VIS_Q)==='1') pushVisibility();
+    else if(isTasteVisibility(d.visibility)) lsSet(LS_VIS, d.visibility);
     const m=mergeTaste(store, items);
     store=m.store; save();
     m.push.forEach(it=>enqueue(it.trackKey, 'push', false));
@@ -133,6 +136,29 @@ export async function tastePull({ create=false }={}){
     if(queue.push.length || queue.del.length) scheduleFlush(300);
     return true;
   }catch(e){ failed(e); return false; }
+}
+
+/* ---- widoczność gustu (etap 2 → porównania w etapie 3): local-first + POST /api/taste/visibility ----
+ * Zapis lokalny od razu; flaga 'stacjaTasteVisQ' = zmiana jeszcze nie na serwerze (wyśle ją następny pull/zmiana).
+ * Stary Worker (404) / baza bez kolumny → zostaje lokalnie. */
+export const tasteVisibility = () => { const v=lsGet(LS_VIS); return isTasteVisibility(v) ? v : 'friends'; };
+export const tasteVisibilityPending = () => lsGet(LS_VIS_Q)==='1';
+export async function setTasteVisibility(v){
+  if(!isTasteVisibility(v)) return false;
+  lsSet(LS_VIS, v); lsSet(LS_VIS_Q, '1'); emit();
+  await pushVisibility({ create:true });
+  return true;
+}
+async function pushVisibility({ create=false }={}){
+  if(!base() || syncState==='off') return false;
+  try{
+    if(!hasSession() && !(create && await ensureSession())) return false;
+    const v=tasteVisibility();
+    await tasteVisibilityPush(v);
+    if(tasteVisibility()===v) lsSet(LS_VIS_Q, '0');   // w międzyczasie przestawione → zostaje do wysłania
+    emit();
+    return true;
+  }catch(_e){ return false; }
 }
 
 /* ---- etykiety (ekran „Twój gust", odsłona) ---- */
@@ -184,7 +210,7 @@ function syncHearts(){
   });
   document.querySelectorAll('[data-taste-shelfn]').forEach(e=>{ e.textContent=shelfText(); });
 }
-export const _tasteDebug = () => ({ store, queue, syncState, revealItems });
+export const _tasteDebug = () => ({ store, queue, syncState, revealItems, visibility:tasteVisibility(), visPending:tasteVisibilityPending() });
 
 if(typeof document!=='undefined'){
   document.addEventListener('click', (e)=>{

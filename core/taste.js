@@ -18,6 +18,9 @@ export const TASTE_BATCH = 50;          // max ocen w jednym POST /api/taste
 export const SESSION_N = 20;            // długość sesji „Oceń 20 utworów"
 export const SESSION_SPARE = 12;        // zapas planu (utwór bez zajawki / już oceniony → następny kandydat)
 export const KEY_MAX = 200;
+// etap 2→3: kto widzi mój gust (profiles.taste_visibility) — 'friends' = zaakceptowani znajomi, 'hidden' = nikt
+export const TASTE_VISIBILITY = ['friends', 'hidden'];
+export const isTasteVisibility = v => TASTE_VISIBILITY.includes(v);
 
 const clip = (v, n) => (typeof v==='string' ? v : (typeof v==='number' ? String(v) : '')).replace(/\s+/g,' ').trim().slice(0, n);
 

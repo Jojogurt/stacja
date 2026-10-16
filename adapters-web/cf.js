@@ -90,3 +90,6 @@ export const hasSession  = () => !!getToken();
 export const tasteFetch  = ()      => call('/api/taste').then(d => (d && Array.isArray(d.items)) ? d.items : []);
 export const tastePush   = (items) => call('/api/taste', { method: 'POST', body: { items } });
 export const tasteDelete = (key)   => call('/api/taste?key=' + encodeURIComponent(key), { method: 'DELETE' });
+// etap 2: GET z widocznością ({ items, visibility }) + zmiana widoczności własnego gustu ('friends' | 'hidden')
+export const tasteFetchAll = ()    => call('/api/taste').then(d => ({ items: (d && Array.isArray(d.items)) ? d.items : [], visibility: d && d.visibility }));
+export const tasteVisibilityPush = (v) => call('/api/taste/visibility', { method: 'POST', body: { visibility: v } });

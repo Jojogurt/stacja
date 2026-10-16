@@ -22,6 +22,7 @@ const SHELL = [
   './app/listen.js',  // Łamigłówki: „▶ posłuchaj" w odsłonie
   './app/vinyl.js',   // EKSPERYMENT: płyta winylowa (zwolnione / przyspieszone obroty)
   './app/taste.js', './app/gust.js', './core/taste.js',   // „Twój gust": oceny, półka, sesja oceniania
+  './core/tasteProfile.js', './app/tasteCard.js',        // „Twój gust" etap 2: profil, archetyp, karta PNG
   './click.wav', './clapping.wav',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',

@@ -18,6 +18,7 @@ async function group(name, fn){ console.log('• '+name); try{ await fn(); }catc
 /* ---- fake D1: tylko zapytania /api/taste (regex po SQL) ---- */
 function fakeD1(){
   const rows=new Map();   // `${pid}|${key}` → wiersz (updated_at = ms)
+  const vis=new Map();    // profile_id → taste_visibility (etap 2)
   const winMs=w=>/minute/.test(w) ? 60e3*Math.abs(parseInt(w,10)) : 86400e3*Math.abs(parseInt(w,10));
   const mine=pid=>[...rows.values()].filter(r=>r.profile_id===pid);
   const exec=(sql, a)=>{
@@ -29,6 +30,7 @@ function fakeD1(){
       return;
     }
     if(/^\s*DELETE FROM taste_ratings/.test(sql)){ rows.delete(a[0]+'|'+a[1]); return; }
+    if(/^\s*UPDATE profiles SET taste_visibility=\? WHERE id=\?/.test(sql)){ if(vis.has(a[1])) vis.set(a[1], a[0]); return; }
     throw new Error('fakeD1: nieznany run: '+sql);
   };
   const stmt=(sql)=>({ sql, args:[], bind(...a){ this.args=a; return this; },
@@ -37,6 +39,7 @@ function fakeD1(){
         const since=Date.now()-winMs(this.args[1]); return { n: mine(this.args[0]).filter(r=>r.updated_at>since).length };
       }
       if(/COUNT\(\*\) AS n FROM taste_ratings WHERE profile_id=\?/.test(sql)) return { n: mine(this.args[0]).length };
+      if(/SELECT taste_visibility FROM profiles WHERE id=\?/.test(sql)) return vis.has(this.args[0]) ? { taste_visibility:vis.get(this.args[0]) } : null;
       throw new Error('fakeD1: nieznany first: '+sql);
     },
     async all(){
@@ -51,6 +54,7 @@ function fakeD1(){
     async run(){ exec(sql, this.args); return {}; },
   });
   return { prepare:stmt, async batch(sts){ for(const s of sts) exec(s.sql, s.args); },
+    profile(pid){ vis.set(pid, 'friends'); },
     // seed: n ocen profilu „zapisanych dawno" (poza oknem rate-limitu)
     seed(pid, n){ for(let i=0;i<n;i++) rows.set(pid+'|seed '+i+'|x', { profile_id:pid, track_key:'seed '+i+'|x', title:'x', artist:'seed '+i, year:'', genre:'', art:'', cat:'', rating:1, source:'swipe', ts:1, updated_at:0 }); } };
 }
@@ -67,6 +71,7 @@ async function sqliteD1(){
     async run(){ db.prepare(sql).run(...this.args); return {}; },
   });
   return { prepare:stmt, raw:db,
+    profile(pid){ db.prepare(`INSERT INTO profiles (id, handle) VALUES (?, 'gracz')`).run(pid); },
     async batch(sts){ db.exec('BEGIN'); try{ for(const s of sts) db.prepare(s.sql).run(...s.args); db.exec('COMMIT'); }catch(e){ db.exec('ROLLBACK'); throw e; } },
     seed(pid, n){ const st=db.prepare(`INSERT INTO taste_ratings (profile_id, track_key, title, artist, rating, ts, updated_at) VALUES (?,?,?,?,1,1,'2000-01-01 00:00:00')`);
       for(let i=0;i<n;i++) st.run(pid, 'seed '+i+'|x', 'x', 'seed '+i); } };
@@ -149,6 +154,25 @@ for(const [label, makeDB] of [['fake D1', async()=>fakeD1()], ['SQLite (node:sql
     const u=await api(env, 'POST', '/api/taste', tC, { items:[R(1, { rating:2, ts:99999 })] });
     eq([u.status, u.body.saved], [200, 1], 'przy pełnym limicie aktualizacja istniejącej przechodzi');
     eq((await api(env, 'GET', '/api/taste', tC)).body.items.length, TASTE_MAX, `GET zwraca ≤ ${TASTE_MAX}`);
+  });
+
+  await group(`taste [${label}]: POST /api/taste/visibility — walidacja, tylko własny profil, GET zwraca ustawienie`, async ()=>{
+    const DB=await makeDB(), env={ TOKEN_SECRET:'x', DB };
+    DB.profile('A'); DB.profile('B');
+    const tA=await signToken('x', { sub:'A' }), tB=await signToken('x', { sub:'B' });
+    eq((await api(env, 'GET', '/api/taste', tA)).body.visibility, 'friends', 'domyślnie friends (DEFAULT kolumny)');
+    eq((await api(env, 'POST', '/api/taste/visibility', null, { visibility:'hidden' })).status, 401, 'bez tokenu → 401');
+    for(const bad of ['public', '', null, 'HIDDEN', ['hidden'], { v:1 }]){
+      eq((await api(env, 'POST', '/api/taste/visibility', tA, { visibility:bad })).status, 400, 'zła wartość → 400: '+JSON.stringify(bad));
+    }
+    eq((await api(env, 'POST', '/api/taste/visibility', tA, {})).status, 400, 'brak pola → 400');
+    const r=await api(env, 'POST', '/api/taste/visibility', tA, { visibility:'hidden', profile_id:'B', id:'B' });
+    eq([r.status, r.body.visibility], [200, 'hidden'], 'hidden → 200');
+    eq((await api(env, 'GET', '/api/taste', tA)).body.visibility, 'hidden', 'GET: moje ustawienie = hidden');
+    eq((await api(env, 'GET', '/api/taste', tB)).body.visibility, 'friends', 'id w body ignorowane — cudzy profil nietknięty');
+    await api(env, 'POST', '/api/taste/visibility', tA, { visibility:'friends' });
+    eq((await api(env, 'GET', '/api/taste', tA)).body.visibility, 'friends', 'powrót do friends');
+    eq((await api(env, 'GET', '/api/taste/visibility', tA)).status, 404, 'GET /api/taste/visibility — brak trasy (404)');
   });
 }
 

@@ -2208,5 +2208,114 @@ await group('Twój gust: kafelek → ekran (sync z serwerem) → sesja 👍/❤�
     w.mpLeaveConfirmed('room'); await settle(4);
   } finally { globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; }
 });
+/* ===== „Twój gust" (etap 2): zakładka „Mój profil" — niska pewność → CTA; profil z ocen → archetyp + wykresy;
+   „co znasz" z /api/profile; udostępnianie (navigator.share z plikiem PNG → fallback pobranie + schowek); widoczność ===== */
+await group('Twój gust etap 2: Mój profil (pewność/CTA → archetyp, wykresy SVG, PL, top 5, co znasz) + udostępnianie + widoczność', async ()=>{
+  const w=window, d=w.document, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  const gustMod=await import('../app/gust.js');
+  const until=async(fn, n=80)=>{ for(let i=0;i<n && !fn();i++) await settle(2); return fn(); };
+  const srv={ vis:[], prof:0 };
+  const J=(o, st=200)=>Promise.resolve({ ok:st<400, status:st, json:()=>Promise.resolve(o) });
+  const SRV_ITEMS=[
+    ...Array.from({ length:8 }, (_,i)=>({ title:'Hit '+i, artist:'Backstreet Boys', year:'1997', genre:'Pop', rating:2, ts:100+i })),
+    ...Array.from({ length:4 }, (_,i)=>({ title:'Song '+i, artist:'Spice Girls', year:'1996', genre:'Pop', rating:2, ts:200+i })),
+    ...Array.from({ length:3 }, (_,i)=>({ title:'Riff '+i, artist:'Nirvana', year:'1992', genre:'Alternative', rating:1, ts:300+i })),
+    ...Array.from({ length:2 }, (_,i)=>({ title:'Bass '+i, artist:'Skrillex', year:'2012', genre:'Dance', rating:-1, ts:400+i })),
+  ].map(x=>({ ...x, art:'', cat:'', source:'swipe' }));
+  const fakeFetch=(url, opts={})=>{
+    const u=new URL(String(url), 'https://stacja.test/');
+    if(u.pathname==='/api/session') return J({ id:'gust-user', token:'tok-gust' });
+    if(u.pathname==='/api/taste/visibility'){ srv.vis.push(JSON.parse(opts.body).visibility); return J({ ok:true, visibility:JSON.parse(opts.body).visibility }); }
+    if(u.pathname==='/api/taste'){ if(opts.method==='POST' || opts.method==='DELETE') return J({ ok:true }); return J({ items:SRV_ITEMS, visibility:'friends' }); }
+    if(u.pathname==='/api/profile'){ srv.prof++; return J({ id:'gust-user', handle:'Zbyszek', standing:{ matches:1, correct:5, points:50 }, byCat:{ '90s':{ n:10, ok:7 }, '80s':{ n:6, ok:3 }, 'rock-world':{ n:2, ok:1 } } }); }
+    return J({ results:[] });
+  };
+  // fałszywy canvas 2D (jsdom bez pakietu canvas): zapis fillText + toBlob → PNG
+  const P=w.HTMLCanvasElement.prototype, prevGC=P.getContext, prevTB=P.toBlob;
+  const texts=[]; let cvSize='';
+  P.getContext=function(){ cvSize=this.width+'x'+this.height; const noop=()=>{}; return { fillText:(t)=>texts.push(String(t)), measureText:(t)=>({ width:String(t).length*18 }),
+    fillRect:noop, beginPath:noop, moveTo:noop, arcTo:noop, arc:noop, closePath:noop, fill:noop, stroke:noop, set fillStyle(_v){}, set strokeStyle(_v){}, set font(_v){}, set textAlign(_v){}, set lineWidth(_v){}, set globalAlpha(_v){} }; };
+  P.toBlob=function(cb){ setTimeout(()=>cb(new Blob(['png'], { type:'image/png' })), 0); };
+  const navs=[...new Set([w.navigator, globalThis.navigator].filter(Boolean))];
+  const setNav=(k, v)=>navs.forEach(n=>{ try{ Object.defineProperty(n, k, { value:v, configurable:true, writable:true }); }catch(_e){} });
+  const A=w.HTMLAnchorElement.prototype, prevClick=A.click; const downloads=[];
+  try{
+    // 1) bez serwera, 2 oceny lokalne (z poprzedniej grupy) → niska pewność: „Jeszcze cię poznajemy" + CTA
+    globalThis.fetch=fakeFetch; w.STACJA_CONFIG.roomsBase='';
+    $(w,'toMenu') && $(w,'toMenu').click(); await settle(2);
+    d.body.className='menu'; $(w,'goGust').click(); await settle(2);
+    ok(d.querySelector('[data-gu-tab="shelf"]') && d.querySelector('[data-gu-tab="profile"]'), 'zakładki: Moja półka / Mój profil');
+    d.querySelector('[data-gu-tab="profile"]').click(); await settle(2);
+    eq2(d.querySelector('[data-gu-tab="profile"]').getAttribute('aria-selected'), 'true', 'zakładka profilu: aria-selected');
+    eq2(d.querySelector('[data-tp-arch]') && d.querySelector('[data-tp-arch]').dataset.tpArch, 'poznajemy', 'mało ocen → archetyp „Jeszcze cię poznajemy"');
+    ok(/Jeszcze cię poznajemy/.test(d.querySelector('[data-tp-name]').textContent), 'nazwa archetypu w karcie');
+    ok(d.querySelector('[data-tp-cta][data-gu-start]'), 'niska pewność → CTA „Oceń więcej utworów"');
+    eq2(d.querySelector('[data-tp-conf]').dataset.tpConf, 'low', 'pewność: niska');
+    ok(/Oceń jeszcze \d+/.test(d.querySelector('.tp-conf').textContent), 'zachęta: ile jeszcze ocen');
+    ok(!d.querySelector('[data-tp-compare]'), 'bez serwera → brak sekcji „co znasz"');
+
+    // 2) z serwerem: merge ocen z konta → profil średniej pewności z archetypem + „co znasz" z /api/profile
+    w.STACJA_CONFIG.roomsBase='https://w.test';
+    $(w,'toMenu').click(); await settle(2);
+    $(w,'goGust').click();
+    await until(()=>d.querySelector('[data-tp-arch]') && d.querySelector('[data-tp-arch]').dataset.tpArch!=='poznajemy');
+    eq2(d.querySelector('[data-tp-arch]').dataset.tpArch, 'dziecko90', 'profil z ocen (lata 90. ≥ 40%) → „Dziecko lat 90."');
+    eq2(d.querySelector('[data-tp-conf]').dataset.tpConf, 'mid', 'pewność: średnia (10–40 ocen)');
+    ok(!d.querySelector('[data-tp-cta]'), 'przy średniej pewności archetyp bez CTA w karcie');
+    const dec=d.querySelector('svg[data-tp-chart="decades"]'), gen=d.querySelector('svg[data-tp-chart="genres"]');
+    ok(dec && dec.getAttribute('role')==='img' && /lata 90\. \d+%/.test(dec.getAttribute('aria-label')), 'wykres dekad: SVG role=img + aria-label z wartościami');
+    eq2(dec.querySelectorAll('.tp-track').length, 7, 'wykres dekad: 7 słupków (60.–2020)');
+    ok(dec.querySelector('.tp-bar.top'), 'wykres dekad: wyróżniona dominująca dekada');
+    ok([...dec.querySelectorAll('.tp-val')].some(t=>/^\d+%$/.test(t.textContent)), 'wykres dekad: etykiety %');
+    ok(gen && /pop \d+%/.test(gen.getAttribute('aria-label')) && /alternatywa \/ indie/.test(gen.getAttribute('aria-label')), 'wykres gatunków: aria-label z gatunkami i %');
+    ok(/Polska \d+%, świat \d+%/.test(d.querySelector('.tp-split').getAttribute('aria-label')), 'udział PL / świat');
+    const arts=[...d.querySelectorAll('.tp-artists li .tp-an')].map(e=>e.textContent);
+    ok(arts.length>=2 && arts.length<=5 && arts[0]==='Backstreet Boys' && arts[1]==='Spice Girls', 'top 5 z półki: najwięcej ❤️ pierwsze — '+arts.join(', '));
+    ok(!arts.includes('Nirvana'), 'top z półki: tylko ❤️ (👍 nie)');
+    await until(()=>d.querySelector('[data-tp-compare]'));
+    ok(srv.prof>=1 && d.querySelector('[data-tp-compare]'), '„co znasz" vs „co lubisz" z /api/profile byCat');
+    ok(/lata 90\./.test(d.querySelector('[data-tp-compare]').textContent) && /70%/.test(d.querySelector('[data-tp-compare]').textContent), 'porównanie: lata 90. — znasz 70%');
+
+    // 3) udostępnianie: navigator.share z plikiem PNG (canShare files)
+    let shareArg=null; setNav('canShare', (o)=>!!(o && o.files && o.files.length)); setNav('share', (o)=>{ shareArg=o; return Promise.resolve(); });
+    d.querySelector('[data-gu-share]').click();
+    await until(()=>shareArg);
+    ok(shareArg && shareArg.files && shareArg.files.length===1, 'navigator.share z 1 plikiem');
+    const f=shareArg.files[0];
+    ok(f && f.name==='moj-gust-uszy-muzk.png' && f.type==='image/png', 'plik: moj-gust-uszy-muzk.png (image/png)');
+    eq2(cvSize, '1080x1350', 'canvas 1080×1350');
+    ok(texts.some(t=>/Dziecko lat 90/.test(t)) && texts.some(t=>/Muzk/.test(t)) && texts.some(t=>/TOP DEKADY/.test(t)), 'karta: archetyp, nazwa aplikacji, top dekady');
+    ok(/Dziecko lat 90\./.test(shareArg.text) && /Na mojej półce: Backstreet Boys, Spice Girls/.test(shareArg.text) && /https:\/\/stacja\.test\//.test(shareArg.text), 'tekst: archetyp, top 3 z półki, link');
+    ok(!/Zbyszek/.test(shareArg.text), 'bez ksywy domyślnie (brak danych osobowych)');
+    await until(()=>/Udostępniono/.test(d.querySelector('[data-gu-share-msg]').textContent));
+    ok(/Udostępniono/.test(d.querySelector('[data-gu-share-msg]').textContent), 'komunikat: udostępniono');
+
+    // 4) fallback: brak navigator.share → pobranie PNG + tekst do schowka
+    setNav('share', undefined); setNav('canShare', undefined);
+    const clip=[]; setNav('clipboard', { writeText:(t)=>{ clip.push(t); return Promise.resolve(); } });
+    A.click=function(){ downloads.push({ download:this.getAttribute('download'), href:this.getAttribute('href') }); };
+    d.querySelector('[data-gu-share]').click();
+    await until(()=>clip.length && /skopiowany/.test(d.querySelector('[data-gu-share-msg]').textContent));
+    ok(downloads.some(x=>x.download==='moj-gust-uszy-muzk.png' && /^blob:/.test(x.href)), 'fallback: pobranie PNG (a[download])');
+    ok(clip.length===1 && /Uszy & Muzk/.test(clip[0]), 'fallback: tekst w schowku');
+    ok(/PNG pobrany/.test(d.querySelector('[data-gu-share-msg]').textContent), 'komunikat fallbacku');
+
+    // 5) widoczność gustu: „nikt" → lokalnie + POST /api/taste/visibility
+    eq2(d.querySelector('[data-gu-vis="friends"]').getAttribute('aria-checked'), 'true', 'widoczność domyślnie: znajomi');
+    d.querySelector('[data-gu-vis="hidden"]').click();
+    await until(()=>srv.vis.length>0);
+    eq2(srv.vis.join(','), 'hidden', 'POST /api/taste/visibility {visibility:hidden}');
+    eq2(w.localStorage.getItem('stacjaTasteVis'), 'hidden', 'zapis lokalny');
+    await settle(4);
+    eq2(d.querySelector('[data-gu-vis="hidden"]').getAttribute('aria-checked'), 'true', 'przełącznik: aria-checked');
+    ok(/Ukryty/.test(d.querySelector('[data-gu-vis-hint]').textContent), 'opis: ukryty');
+    // powrót do półki (zakładka zapamiętana)
+    d.querySelector('[data-gu-tab="shelf"]').click(); await settle(2);
+    ok(d.querySelector('.gu-shelf, .gu-empty') && !d.querySelector('[data-tp-arch]'), 'zakładka półki');
+  } finally {
+    globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; P.getContext=prevGC; P.toBlob=prevTB; A.click=prevClick;
+    setNav('share', undefined); setNav('canShare', undefined);
+  }
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

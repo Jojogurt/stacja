@@ -35,7 +35,8 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   wspólny solo+MP), `chatFeed.js` (feed czatu MP + whitelist REACTIONS), `timing.js` (stałe/obliczenia
   czasowe, etapy intro), `trackSelect.js` (wybór utworu iTunes: dekada, wersje, popularność, dystraktory ABCD),
   `daily.js` (Stacja dnia: seed daty, plan, seria, siatka do udostępnienia), `taste.js` („Twój gust": trackKey,
-  oceny ❤️/👍/👎, merge LWW z serwerem, limity, dobór sesji „Oceń 20" — dekady × gatunki), `lektorVoice.js` (język lektora
+  oceny ❤️/👍/👎, merge LWW z serwerem, limity, dobór sesji „Oceń 20" — dekady × gatunki), `tasteProfile.js` (profil gustu: wektory dekad/9 grup gatunków, PL/świat,
+  „co znasz" z byCat, pewność, archetypy, tekst karty), `lektorVoice.js` (język lektora
   pl|en z `lang` kategorii lyrics.js + wybór głosu systemowego/Pipera), `handles.js` (pule ksyw),
   `teams.js`, `matchRecord.js` (rekord meczu do ligi), `util.js` (+ walidatory safeColor/isSlotKey/num/clipText).
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
@@ -46,7 +47,7 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   przez solo i mp), `dom.js` (prymitywy DOM/FX), `lektor.js` (synteza mowy), `audioCtx.js`+`audio.js`
   (audio solo), `solo.js` (tryb solo: tuner/picker/rundy/mecz/sprawdzanie), `daily.js` (Stacja dnia:
   zapis, udostępnianie), `sfx.js` (dźwięki WebAudio), `catEditor.js` (własne kategorie), `taste.js` (magazyn ocen local-first + sync `/api/taste` + ❤️ w odsłonie solo/MP),
-  `gust.js` (ekran „Twój gust": sesja oceniania z gestami, „Moja półka"), `social.js` (router ekranów
+  `gust.js` (ekran „Twój gust": sesja oceniania z gestami, „Moja półka", „Mój profil"), `tasteCard.js` (karta PNG 1080×1350 na canvas + share/fallback), `social.js` (router ekranów
   `showScreen` + Drużyna/Znajomi/Profil/OAuth). **Multiplayer w 4 plikach**: `mp-state.js` (współdzielony
   obiekt stanu `S` + tożsamość `mpMe`), `mp-render.js` (widok: dyspozytor `mpRender` + buildery HTML),
   `mp-picker.js` (host-picker „ułóż mecz"), `mp.js` (transport/host/audio/czat; logika gry w `core/mpReducer`).

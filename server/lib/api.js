@@ -5,7 +5,7 @@ import { insertMatch } from './recordMatch.js';
 import { verifyIdToken } from './oauth.js';
 import { MAX_QUESTIONS } from '../../core/match.js';
 import { SCORE_MAX_PER_Q } from '../../core/scoring.js';
-import { sanitizeRating, isTrackKey, TASTE_MAX, TASTE_BATCH } from '../../core/taste.js';
+import { sanitizeRating, isTrackKey, isTasteVisibility, TASTE_MAX, TASTE_BATCH } from '../../core/taste.js';
 
 // 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
 // F1: limit pytań z core/match.js (to samo źródło co picker i clamp `start` w DO).
@@ -238,7 +238,11 @@ export async function handleApi(req, env, url){
     const { results } = await env.DB.prepare(
       `SELECT track_key, title, artist, year, genre, art, cat, rating, source, ts FROM taste_ratings
        WHERE profile_id=? ORDER BY ts DESC LIMIT ?`).bind(me, TASTE_MAX).all();
-    return json({ items: (results||[]).map(tasteRow) });
+    // etap 2: widoczność gustu (sync ustawienia między urządzeniami); stara baza bez kolumny → domyślnie 'friends'
+    let visibility='friends';
+    try{ const r=await env.DB.prepare(`SELECT taste_visibility FROM profiles WHERE id=?`).bind(me).first();
+      if(r && isTasteVisibility(r.taste_visibility)) visibility=r.taste_visibility; }catch(_e){}
+    return json({ items: (results||[]).map(tasteRow), visibility });
   }
   if(path==='/api/taste' && m==='POST'){
     return tasteUpsert(env, me, await body(req));
@@ -249,6 +253,13 @@ export async function handleApi(req, env, url){
     if(await tasteRateLimited(env, me)) return err('rate_limited', 429);
     await env.DB.prepare(`DELETE FROM taste_ratings WHERE profile_id=? AND track_key=?`).bind(me, key).run();
     return json({ ok:true });
+  }
+  // etap 2 (pod etap 3): „Mój gust widzą znajomi / ukryty" — WYŁĄCZNIE własny profil (id z tokena, nie z body)
+  if(path==='/api/taste/visibility' && m==='POST'){
+    const p=await body(req), v=p && p.visibility;
+    if(!isTasteVisibility(v)) return err('bad_visibility');
+    await env.DB.prepare(`UPDATE profiles SET taste_visibility=? WHERE id=?`).bind(v, me).run();
+    return json({ ok:true, visibility:v });
   }
 
   return err('not_found', 404);
