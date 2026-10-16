@@ -2,7 +2,7 @@
  * mecz solo (rundy × kategorie × pytania), sprawdzanie odpowiedzi. Self-wiring przy imporcie
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
-import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend, revsnipMult, coverMult } from '../core/scoring.js';
+import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, quizPartialFrac, quizListen, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend, revsnipMult, coverMult } from '../core/scoring.js';
 import { introStageSecs, introNextStage, revsnipStageSecs, revsnipNextStage, coverNextStage, coverStageBlocks } from '../core/timing.js';
 import { buildTrackMC, yearReliable, parseRange } from '../core/trackSelect.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, matchTotal, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
@@ -10,11 +10,12 @@ import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailySh
 import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
-  syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick } from '../core/picker.js';
+  syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick, quizGroupKeys, isPuzzleCat } from '../core/picker.js';
 import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolvePiano } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
-import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet } from './dom.js';
+import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
+import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
 import { catLektorLang } from '../core/lektorVoice.js';
@@ -90,17 +91,28 @@ LYRICS_KEYS.forEach(k=>{
 });
 
 const quizTicksEl = document.getElementById('quizTicks');
+const lamTicksEl = document.getElementById('lamTicks');   // Łamigłówki: kategorie quizu z group:'lamiglowki'
+// klucze grup pickera (Wiedza / 🧩 Łamigłówki) — liczone na żywo (kategorie quizu dochodzą też po starcie)
+const wiedzaKeys = ()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'wiedza');
+const lamKeys = ()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'lamiglowki');
+function syncQuizGroups(){
+  const nw=wiedzaKeys().length, nl=lamKeys().length;
+  const band=document.getElementById('quizBand'); if(band) band.hidden=!nw;
+  const gw=document.getElementById('grpWiedza'); if(gw) gw.hidden=!nw;   // F2a #8: nie usuwaj — kategorie quizu mogą dojść później
+  const gl=document.getElementById('grpLam'); if(gl) gl.hidden=!nl;
+}
 function renderQuizTicks(keys){
   if(!QUIZ_KEYS.length) return;
-  const band=document.getElementById('quizBand'); if(band) band.hidden=false;
-  const gw=document.getElementById('grpWiedza'); if(gw) gw.hidden=false;
+  syncQuizGroups();
   keys.forEach(k=>{
-    [...quizTicksEl.children].forEach(c=>{ if(c.dataset.era===k) c.remove(); });
+    const lam=isPuzzleCat(QUIZ[k]);
+    const host=(lam && lamTicksEl) ? lamTicksEl : quizTicksEl;
+    [quizTicksEl, lamTicksEl].forEach(el=>{ if(el) [...el.children].forEach(c=>{ if(c.dataset.era===k) c.remove(); }); });
     const b=document.createElement('button');
     b.className='tick gen'+(soloCats.has(k)?' on':''); b.dataset.era=k;
     b.innerHTML = escapeHtml(QUIZ[k].label) + '<small>'+(QUIZ[k].questions||[]).length+' pytań</small>';
     b.onclick=()=>toggleCat(k);
-    quizTicksEl.appendChild(b);
+    host.appendChild(b);
   });
 }
 renderQuizTicks(QUIZ_KEYS);
@@ -186,7 +198,7 @@ function syncCatTicks(){
 function syncQuizMode(){ _syncQuizMode(soloCats, soloModes, ALL_CATS); }
 /* ---- chipy-grup (Ułóż mecz, kompakt): grupa = ✓ gdy choć jedna kategoria z grupy wybrana ---- */
 const GRP_KEYS={ dekady:()=>ERA_KEYS, style:()=>STYLE_KEYS, playlisty:()=>READY_KEYS,
-  teksty:()=>LYRICS_KEYS, wiedza:()=>QUIZ_KEYS, twoje:()=>Object.keys(plLoad()) };
+  teksty:()=>LYRICS_KEYS, wiedza:wiedzaKeys, lamiglowki:lamKeys, twoje:()=>Object.keys(plLoad()) };
 function grpActive(g){ const f=GRP_KEYS[g]; return !!f && _grpActive(f(), soloCats); }
 function updateGrpChips(){
   let n=0;
@@ -205,8 +217,7 @@ function updateGrpChips(){
       if(band) band.classList.toggle('open',open);
     };
   });
-  const gw=document.getElementById('grpWiedza');
-  if(gw) gw.hidden=!QUIZ_KEYS.length;   // F2a #8: nie usuwaj — kategorie quizu mogą dojść później
+  syncQuizGroups();   // Wiedza / 🧩 Łamigłówki — widoczne, gdy mają kategorie (F2a #8: mogą dojść później)
   updateGrpChips();
 })();
 function toggleMode(m){ _togglePick(soloModes,m); renderModeChips(); updateMatchInfo(); }
@@ -506,10 +517,11 @@ function newQuizRound(){
   // F3 #3: ABCD tasowane w runtime (litera poprawnej przemapowana); statKey liczony z treści BEZ opcji (#6 trenera)
   const sq=quizTake(eraKey, q);
   const mc=sq.mc || null;
-  current={prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', era:eraKey, track:sq.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:'', mc, statKey:quizStatKey(eraKey,q)};
+  current={prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', era:eraKey, track:sq.prompt, artist:'', year:'', album:'', preview:'', art:'', lyric:'', mc, statKey:quizStatKey(eraKey,q),
+    partial:sq.partial===true, display:sq.display==='rebus'?'rebus':'', listen:quizListen(sq)};   // Łamigłówki: częściowe pkt / duży rebus / „▶ posłuchaj"
   busy=false; qStartAt=Date.now();
   renderSoloForm();
-  showPrompt(mc?mc.question:q.prompt);
+  showPrompt(mc?mc.question:q.prompt, current.display);
   setIcon('play'); setState(mc?'wybierz odpowiedź (A–D)':'odpowiedz na pytanie');
   document.getElementById('check').disabled=false;
   document.getElementById('skip').disabled=false;
@@ -575,8 +587,8 @@ function renderYearForm(qf){
     inp.value=String(y); rng.value=String(y);
   }; });
 }
-function showPrompt(text){ const b=document.getElementById('lyricBox'); if(!b) return;
-  b.innerHTML='<span class="lyric-cap">pytanie</span>'+escapeHtml(text||''); b.classList.add('quiz'); b.hidden=false; }
+function showPrompt(text, style){ const b=document.getElementById('lyricBox'); if(!b) return;
+  b.innerHTML='<span class="lyric-cap">pytanie</span>'+promptBodyHTML(text, style); b.classList.add('quiz'); b.classList.toggle('rebus', style==='rebus'); b.hidden=false; }
 document.getElementById('skip').onclick=()=>{
   if(roundDone) return;   // F2a #4: pytanie już ocenione („Sprawdź") — drugi wpis tego samego pytania zablokowany
   roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true; syncIntroBtn(); coverStop(false);
@@ -928,6 +940,7 @@ function check(){
 function checkQuiz(){
   const abcd = mode!=='quiz';   // F8a: ABCD muzyki (zajawka + kafle „Tytuł — Wykonawca")
   if(abcd) stopAudio();
+  else unlockListen();          // Łamigłówki: gest „Sprawdź" odblokowuje element odsłuchu (iOS) — zajawka gra po wyszukaniu
   setIcon('play');
   const mc=current.mc;
   const slots=current.slots||[];
@@ -944,8 +957,10 @@ function checkQuiz(){
   }
   const ev=evaluateQuiz(current, guesses);
   const okBySlot=ev.bySlot, roundOk=ev.ok;
+  const quizFrac=quizPartialFrac(current, ev);   // Łamigłówki (`partial:true`): częściowe punkty za trafione słowa
+  const partHit=!roundOk && quizFrac>0;
   total++; if(roundOk){score++;streak++;} else streak=0;
-  const sc=scoreRound({ quizOk:roundOk, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });   // F6a: 100 pkt + szybkość/seria
+  const sc=scoreRound({ quizOk:roundOk, quizFrac, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });   // F6a: 100 pkt + szybkość/seria
   points+=sc.points;
   updateScore();
   if(mode==='quiz' && current.statKey) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł
@@ -975,16 +990,21 @@ function checkQuiz(){
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(current.fun) r.appendChild(noteLine('ciekawostka', '💡 '+current.fun));
+  // Łamigłówki: utwór-rozwiązanie — ~10 s zajawki z iTunes od razu + przycisk „▶ posłuchaj" (powtórka/stop)
+  if(!abcd && current.listen && current.listen.length){
+    listenStart(current.listen, { auto:true });
+    r.insertAdjacentHTML('beforeend', listenHTML(current.listen));
+  }
   if(abcd){ const meta=[current.album, current.year].filter(Boolean).join(' · '); if(meta) r.appendChild(noteLine('album', meta)); }
   const img=document.getElementById('art');
   if(img){ if(abcd && current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
   const rh=document.getElementById('revealHead');
   if(rh){ const cls=roundOk?'win':'fail'; const ic=roundOk?'✓':'✗';
     rh.className='rv-shead '+cls;
-    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':'Pudło'}</b><small>${roundOk?(mc?'dobra odpowiedź':'wszystkie pola trafione'):'sprawdź poprawne odpowiedzi'}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':(partHit?'Częściowo':'Pudło')}</b><small>${roundOk?(mc?'dobra odpowiedź':'wszystkie pola trafione'):(partHit?`trafione ${Object.values(okBySlot).filter(Boolean).length} z ${slots.length}`:'sprawdź poprawne odpowiedzi')}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
   document.getElementById('reveal').classList.add('show');
-  if(roundOk){ confetti(); playClap(); } else playSfx('buzz');   // F6b (U4): pudło → „bzzt"
+  if(roundOk){ confetti(); playClap(); } else playSfx(partHit ? 'ding' : 'buzz');   // Łamigłówki: częściowe → „ding"   // F6b (U4): pudło → „bzzt"
   document.getElementById('check').disabled=true;
   if(abcd) document.getElementById('replay').disabled=false;   // można dosłuchać
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});

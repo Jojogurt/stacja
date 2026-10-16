@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v62';   // eksperyment: tryb fortepian (piano covery z iTunes) + lektor czyta w języku opisu (EN dla tlum-pl)
+const APP_VERSION = 'v63';   // eksperyment: Łamigłówki — rebusy emoji, jedna litera różnicy; odsłuch rozwiązania w odsłonie, częściowe punkty
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).

@@ -5,10 +5,11 @@
  * Sprawdza per plik: poprawny kształt (kind:'quiz', label, questions[]), każdy slot ma niepustą
  * listę wariantów, klucze answers ⊆ slotów, brak duplikatów promptów. Dla pytań ABCD: dokładnie
  * 4 opcje A–D, answers.a[0] to litera, a opcja tej litery == answers.a[1] (spójność litera↔opcja).
- * Pola opcjonalne (SPEC-paczki-v2): pool, difficulty, fun, fact. Reguły jakościowe: `npm run lint:data`. */
+ * Pola opcjonalne (SPEC-paczki-v2): pool, difficulty, fun, fact; łamigłówki: display, partial, track, tracks. Reguły jakościowe: `npm run lint:data`. */
 import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
+import { puzzleFieldErrors } from './lintRules.js';
 
 const DATA = join(dirname(fileURLToPath(import.meta.url)), '..', 'data');
 const read = (f) => readFileSync(join(DATA, f), 'utf8');
@@ -38,7 +39,9 @@ for (const f of files) {
     totalQ++;
     ok(q && typeof q.prompt === 'string' && q.prompt.trim(), `${at}: niepusty prompt`);
     ok(Array.isArray(q.slots) && q.slots.length > 0, `${at}: ma sloty`);
-    const key = norm((q.prompt || '').split('\n')[0]);
+    // treść bez linii opcji ABCD; rebus (display:'rebus') = emoji, które norm wycina → surowa treść
+    const stemTxt = (q.prompt || '').split('\n').filter(l => !/^[ABCD]\)/.test(l.trim())).join('\n');
+    const key = q.display === 'rebus' ? 'rebus:' + stemTxt.replace(/\s+/g, ' ').trim() : norm(stemTxt);
     ok(!seen.has(key), `${at}: duplikat pytania`); seen.add(key);
     if (!Array.isArray(q.slots)) return;
 
@@ -68,6 +71,8 @@ for (const f of files) {
     }
     if (q.difficulty !== undefined) ok([1, 2, 3].includes(q.difficulty), `${at}: difficulty ∈ {1,2,3} (jest: ${JSON.stringify(q.difficulty)})`);
     for (const f2 of ['fun', 'fact']) if (q[f2] !== undefined) ok(typeof q[f2] === 'string' && q[f2].trim(), `${at}: ${f2} to niepusty string`);
+    // Łamigłówki: display/partial/track/tracks (test/lintRules.js)
+    for (const m of puzzleFieldErrors(q)) ok(false, `${at}: ${m}`);
 
     // ABCD (multiple-choice): prompt zawiera linie "A) ... D) ..."
     if (/\nA\)/.test(q.prompt)) {

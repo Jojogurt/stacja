@@ -1823,5 +1823,106 @@ group('lektor: język kategorii i wybór głosu (core/lektorVoice)', ()=>{
   eq(LV.pickVoice(null,'en'),null,'brak listy');
   eq(LV.LEKTOR_BCP47,{pl:'pl-PL', en:'en-US'},'znaczniki BCP-47');
 });
+
+/* ===== Łamigłówki: częściowe punkty, odsłuch utworu, grupa pickera, lint drabinki ===== */
+const SC9 = await import('../core/scoring.js');
+const PK9 = await import('../core/picker.js');
+const LR9 = await import('./lintRules.js');
+group('Łamigłówki: scoreRound — częściowe punkty (quizFrac) tylko przy nie-pełnym trafieniu', ()=>{
+  eq(scoreRound({ quizOk:false, quizFrac:1/3 }).points, 33, '1/3 słów → 33 pkt');
+  eq(scoreRound({ quizOk:false, quizFrac:2/3 }).points, 67, '2/3 słów → 67 pkt');
+  eq(scoreRound({ quizOk:true, quizFrac:1 }).points, 100, 'komplet → 100 (jak quiz)');
+  eq(scoreRound({ quizOk:false }).points, 0, 'bez quizFrac → stare „wszystko albo nic"');
+  eq(scoreRound({ quizOk:false, quizFrac:0 }).points, 0, 'nic trafione → 0');
+  eq(scoreRound({ quizOk:false, quizFrac:2/3, streak:5 }).streakMult, 1, 'seria tylko przy pełnym trafieniu');
+  eq(scoreRound({ quizOk:false, quizFrac:2/3, sure:true }).points, 0, 'pewniak przy częściowym = zakład przegrany (0)');
+  eq(scoreRound({ quizOk:false, quizFrac:1/3, elapsedMs:0, limitMs:30000 }).points, 50, 'szybkość działa na częściowe (33×1.5≈50)');
+  eq(scoreRound({ quizOk:false, quizFrac:'x' }).points, 0, 'śmieci → 0');
+});
+group('Łamigłówki: quizKey rebusu zachowuje emoji (seen-set/statystyki nie sklejają rebusów)', ()=>{
+  const a={ prompt:'🟣 🌧️\n🎵 tytuł · hit lat 80.', display:'rebus' }, b={ prompt:'💃 👑\n🎵 tytuł · hit lat 80.', display:'rebus' };
+  ok(quizKey(a)!==quizKey(b), 'różne rebusy z tą samą podpowiedzią → różne klucze');
+  eq(quizKey({ ...a, prompt:a.prompt+'\nA) Purple Rain\nB) X\nC) Y\nD) Z' }), quizKey(a), 'ABCD: klucz bez opcji (stabilny po tasowaniu)');
+  eq(quizKey({ prompt:'Stolica Polski?' }), 'stolica polski', 'zwykłe pytanie — klucz bez zmian');
+});
+group('Łamigłówki: quizPartialFrac — tylko pytania z partial:true', ()=>{
+  const q={ prompt:'Jedna litera', slots:[{key:'a'},{key:'b'},{key:'c'}], answers:{a:['Creep'],b:['Creed'],c:['Cream']}, partial:true };
+  const ev=evaluateQuiz(q, { a:'creep', b:'zle', c:'Cream' });
+  ok(!ev.ok, 'nie komplet');
+  eq(SC9.quizPartialFrac(q, ev), 2/3, '2 z 3 słów');
+  eq(SC9.quizPartialFrac({ ...q, partial:undefined }, ev), null, 'bez partial → null (wszystko albo nic)');
+  eq(SC9.quizPartialFrac({ ...q, partial:'true' }, ev), null, 'partial musi być true (bool)');
+  eq(SC9.quizPartialFrac(q, null), null, 'brak oceny → null');
+});
+group('Łamigłówki: clampQuizTrack / quizListen / listenList — sanityzacja utworu do odsłuchu', ()=>{
+  eq(SC9.clampQuizTrack({ track:{ title:'  Purple Rain ', artist:'Prince', x:1 } }), { track:{ title:'Purple Rain', artist:'Prince' } }, 'track przycięty, obce pola precz');
+  eq(SC9.clampQuizTrack({ track:{ title:'X' } }), {}, 'track bez wykonawcy odrzucony');
+  eq(SC9.clampQuizTrack({ track:'Purple Rain' }), {}, 'track-string odrzucony');
+  const big='y'.repeat(500);
+  eq(SC9.clampQuizTrack({ track:{ title:big, artist:'A' } }).track.title.length, SC9.LISTEN_TEXT_MAX, 'długi tytuł przycięty');
+  const tr=SC9.clampQuizTrack({ tracks:[{title:'Creep',artist:'Radiohead'}, null, {title:'Sunshine of Your Love',artist:'Cream'}, {title:'x',artist:'y'}] });
+  eq(tr.tracks.length, 3, 'tracks ≤ 3 elementy');
+  eq(tr.tracks[1], null, 'null per slot zachowany');
+  eq(SC9.clampQuizTrack({ tracks:[null, {title:''}] }), {}, 'tracks bez żadnego utworu → brak pola');
+  eq(SC9.clampQuizTrack({ tracks:'zle' }), {}, 'tracks nie-lista → brak');
+  const q={ slots:[{key:'a',label:'1'},{key:'b',label:'2'},{key:'c',label:'3'}], tracks:[{title:'Creep',artist:'Radiohead'}, null, {title:'Sunshine of Your Love',artist:'Cream'}] };
+  eq(SC9.quizListen(q), [{title:'Creep',artist:'Radiohead',label:'1'},{title:'Sunshine of Your Love',artist:'Cream',label:'3'}], 'quizListen: etykiety slotów, null pominięty');
+  eq(SC9.quizListen({ track:{title:'Purple Rain',artist:'Prince'} }), [{title:'Purple Rain',artist:'Prince',label:''}], 'quizListen: pojedynczy track');
+  eq(SC9.quizListen({ prompt:'x' }), [], 'bez utworu → []');
+  eq(SC9.listenList([{title:'A',artist:'B',label:'<b>1</b>'.repeat(20)}, {title:'',artist:'B'}, 'x']).length, 1, 'listenList: tylko poprawne, label przycięty');
+  eq(SC9.listenList('zle'), [], 'listenList: nie-lista → []');
+});
+group('Łamigłówki: mpReducer — częściowe punkty drużyny + listen/promptStyle TYLKO w reveal', ()=>{
+  const slots=[{key:'a',label:'1'},{key:'b',label:'2'},{key:'c',label:'3'}];
+  const g=coopG({ answerSlots:slots, members:['u1'],
+    proposals:[{by:'u1',byName:'Ala',values:{a:'Creep',b:'Greed',c:'Cream'}}],
+    votes:{ a:{u1:'Creep'}, b:{u1:'Greed'}, c:{u1:'Cream'} } });
+  const cur={ prompt:'Jedna litera różnicy', slots, answers:{a:['Creep'],b:['Creed'],c:['Cream']}, partial:true,
+    listen:[{title:'Creep',artist:'Radiohead',label:'1'}], display:'', track:'', artist:'' };
+  const ev=evaluateAnswer(g, cur);
+  ok(!ev.reveal.teamOk, 'nie komplet');
+  eq(ev.reveal.gained, 67, '2/3 słów → 67 pkt');
+  eq(ev.reveal.listen, [{title:'Creep',artist:'Radiohead',label:'1'}], 'reveal.listen = utwory do odsłuchu');
+  const ev2=evaluateAnswer(g, { ...cur, partial:false });
+  eq(ev2.reveal.gained, 0, 'bez partial → 0 (wszystko albo nic)');
+  const ev3=evaluateAnswer(g, { ...cur, display:'rebus' });
+  eq(ev3.reveal.promptStyle, 'rebus', 'reveal.promptStyle = rebus');
+  const mus=evaluateAnswer(coopG({}), { track:'Hey Jude', artist:'Beatles' });
+  eq(mus.reveal.listen, [], 'muzyka: listen puste');
+});
+group('Łamigłówki: picker — grupa „lamiglowki" osobno od Wiedzy, kostka jej nie losuje', ()=>{
+  const cats={ wq:{ kind:'quiz', label:'Wiedza', questions:[{prompt:'?',slots:[{key:'a'}],answers:{a:['x']}}] },
+    rb:{ kind:'quiz', label:'Rebusy', group:'lamiglowki', questions:[{prompt:'?',slots:[{key:'a'}],answers:{a:['x']}}] },
+    d80:{ label:'80s', artists:['A','B'] } };
+  eq(PK9.quizGroupKeys(['wq','rb'], cats, 'wiedza'), ['wq'], 'Wiedza bez łamigłówek');
+  eq(PK9.quizGroupKeys(['wq','rb'], cats, 'lamiglowki'), ['rb'], 'Łamigłówki = group:lamiglowki');
+  ok(PK9.isPuzzleCat(cats.rb) && !PK9.isPuzzleCat(cats.wq) && !PK9.isPuzzleCat(null), 'isPuzzleCat');
+  for(let i=0;i<20;i++){ const r=randomPools(Object.keys(cats), cats); ok(!r.cats.includes('rb') && !r.cats.includes('wq'), 'kostka: bez quizu/łamigłówek'); }
+  const m=buildMatch(['rb'], ['quiz'], {questions:5}, cats);
+  ok(!m.error && m.slots.every(s=>s.cat==='rb' && s.mode==='quiz'), 'łamigłówki grają jak quiz (tryb quiz)');
+});
+group('Łamigłówki: lint — oneLetterApart / ladderErrors / puzzleFieldErrors', ()=>{
+  ok(LR9.oneLetterApart('Creep','Creed'), 'Creep→Creed');
+  ok(!LR9.oneLetterApart('Creed','Cream'), 'Creed→Cream to DWIE litery (e→a, d→m) → nie');
+  ok(!LR9.oneLetterApart('Kult','Kola'), 'dwie różnice → nie');
+  ok(LR9.oneLetterApart('Kult','Kalt'), 'wielkość liter bez znaczenia');
+  ok(!LR9.oneLetterApart('Lato','Łato') === false, 'ł≠l — polska litera to inna litera (różnica 1)');
+  ok(!LR9.oneLetterApart('Abba','Abbaa'), 'inna długość → nie');
+  ok(!LR9.oneLetterApart('Abba','Abba'), 'identyczne → nie (0 różnic)');
+  ok(LR9.oneLetterApart('Bon Jovi','Bon Jove'), 'spacje liczone jak znaki');
+  ok(!LR9.oneLetterApart('Hey Jude','HeyXJude') === false, 'spacja→litera to też 1 podmiana');
+  const good={ slots:[{key:'a'},{key:'b'},{key:'c'}], answers:{a:['Creep','x'],b:['Creed'],c:['Greed']} };
+  eq(LR9.ladderErrors(good), [], 'poprawna drabinka');
+  eq(LR9.ladderErrors({ ...good, answers:{a:['Creep'],b:['Creed'],c:['Cream']} }).length, 1, 'złamany krok 2→3 (Creed→Cream)');
+  eq(LR9.ladderErrors({ slots:[{key:'a'}], answers:{a:['X']} }).length, 1, '1 slot → błąd');
+  ok(LR9.ladderErrors({ slots:[{key:'a'},{key:'b'}], answers:{a:['Sylwia'],b:['Sylvia']} }).some(m=>/tolerancja/.test(m)), '≥6 znaków: sąsiad zaliczany jako literówka → błąd');
+  eq(LR9.puzzleFieldErrors({ display:'rebus', track:{title:'Purple Rain',artist:'Prince'} }), [], 'rebus z trackiem OK');
+  ok(LR9.puzzleFieldErrors({ display:'rebus' }).length===1, 'rebus bez tracka → błąd');
+  ok(LR9.puzzleFieldErrors({ display:'big' }).length===1, 'display spoza „rebus" → błąd');
+  ok(LR9.puzzleFieldErrors({ partial:'yes' }).length===1, 'partial nie-bool → błąd');
+  ok(LR9.puzzleFieldErrors({ slots:[{key:'a'},{key:'b'}], tracks:[{title:'A',artist:'B'}, null, null] }).length>=1, 'tracks dłuższe niż sloty → błąd');
+  ok(LR9.puzzleFieldErrors({ slots:[{key:'a'}], tracks:[null] }).length>=1, 'same null → błąd');
+  eq(LR9.puzzleFieldErrors({ slots:[{key:'a'},{key:'b'}], tracks:[{title:'A',artist:'B'}, null] }), [], 'tracks z null OK');
+});
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

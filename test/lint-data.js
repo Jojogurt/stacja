@@ -17,7 +17,11 @@
  *   6  warianty zbędne (ten sam norm) / zduplikowane w liście               OSTRZ
  *   7  warianty/opcje różniące się tylko liczbą lub cyfrą rzymską           OSTRZ
  *   8  desc zawiera „poziom" lub liczba w desc ≠ liczba pytań               BŁĄD
- *   9  ten sam początek treści (3 słowa) w >10% paczki                      OSTRZ
+ *   9  ten sam początek treści (3 słowa) w >10% paczki                      OSTRZ  (bez łamigłówek — stały format)
+ *   J1 „Jedna litera różnicy" (quiz-jedna-litera.json / id): kanoniczne odpowiedzi kolejnych slotów
+ *      różnią się DOKŁADNIE jedną literą (podmiana, ta sama długość; bez wielkości liter, ze spacjami
+ *      i polskimi znakami)                                                  BŁĄD
+ *   R1 łamigłówki: display (tylko 'rebus' i wtedy wymagany track), partial bool, kształt track/tracks  BŁĄD
  *   L1 lyrics: tytuł/wykonawca w polu `lyric` (całość/wykonawca BŁĄD, pojedyncze słowo tytułu OSTRZ)
  *   L2 lyrics: duplikat tytuł+wykonawca (w kategorii BŁĄD, między kategoriami OSTRZ) */
 import { readFileSync, readdirSync } from 'node:fs';
@@ -25,6 +29,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join, basename } from 'node:path';
 import vm from 'node:vm';
 import { norm, deLatin } from '../core/scoring.js';
+import { ladderErrors, puzzleFieldErrors } from './lintRules.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const DATA = join(ROOT, 'data');
@@ -46,7 +51,7 @@ if (fi >= 0) {
 const RULE_NAMES = {
   '1': 'wyciek odpowiedzi w treści', '2': 'wyciek krzyżowy', '3': 'ABCD (opcje/aliasy/litera/długość)',
   '4': 'sloty bez pool / „Wymień N"', '5': 'duplikaty', '6': 'warianty zbędne', '7': 'warianty liczbowe/rzymskie',
-  '8': 'desc paczki', '9': 'szablon początku treści', 'L1': 'lyrics: wyciek tytułu/wykonawcy', 'L2': 'lyrics: duplikaty',
+  '8': 'desc paczki', '9': 'szablon początku treści', 'J1': 'jedna litera różnicy (drabinka)', 'R1': 'łamigłówki: rebus/track/partial', 'L1': 'lyrics: wyciek tytułu/wykonawcy', 'L2': 'lyrics: duplikaty',
 };
 const findings = []; // {sev:'BŁĄD'|'OSTRZ', rule, id, file, msg}
 const add = (sev, rule, file, id, msg) => findings.push({ sev, rule, file, id, msg });
@@ -179,6 +184,8 @@ for (const pack of packs) {
   }
 
   const P = qs.map(q => parseQ(q || {}));
+  const isLadder = file === 'quiz-jedna-litera.json' || j.id === 'jedna-litera';   // J1
+  const isPuzzle = j.group === 'lamiglowki';   // 9: stały format treści łamigłówek — bez ostrzeżenia o szablonie
   const H = P.map(p => toks(p.prompt));       // pełna treść (z opcjami) — do wycieku krzyżowego
   const S = P.map(p => toks(p.stem));          // sama treść — do wycieku bezpośredniego
   const prefixCount = new Map();
@@ -191,7 +198,8 @@ for (const pack of packs) {
     const pool = Array.isArray(q.pool);
 
     // 5: duplikaty (indeks liczony dla wszystkich paczek, raport tylko dla wybranych)
-    const exactKey = fold(p.stem);
+    // Łamigłówki: rebus = emoji (fold je wycina) → duplikat liczony po surowej treści
+    const exactKey = q.display === 'rebus' ? 'rebus:' + p.stem.replace(/\s+/g, ' ').trim() : fold(p.stem);
     let exactDup = false;
     if (exactKey) {
       if (exactSeen.has(exactKey)) {
@@ -209,6 +217,10 @@ for (const pack of packs) {
     }
 
     if (!rep) return;
+
+    // J1 / R1: łamigłówki
+    if (isLadder) for (const m of ladderErrors(q)) err('J1', file, id, m);
+    for (const m of puzzleFieldErrors(q)) err('R1', file, id, m);
 
     // 9: początek treści
     const pre = S[i].slice(0, 3).join(' ');
@@ -293,7 +305,7 @@ for (const pack of packs) {
   });
 
   // 9: szablon
-  if (rep) {
+  if (rep && !isPuzzle) {
     const lim = qs.length * 0.1;
     for (const [pre, n] of [...prefixCount].sort((a, b) => b[1] - a[1])) {
       if (n > lim && n >= 3) warn('9', file, slug, `${n}/${qs.length} pytań (${Math.round(100 * n / qs.length)}%) zaczyna się od „${pre}…"`);

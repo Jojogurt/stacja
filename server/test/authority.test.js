@@ -865,5 +865,61 @@ await group('EKSP.: „od tyłu krótko" — offset okna od autorytetu, ukryty d
   const r=a.last('state').game.reveal;
   eq(r.kind, 'music', 'odsłona jak muzyka'); ok(r.teamOk && r.gained>=100, 'trafienie tytuł+wykonawca punktuje jak muzyka');
 });
+
+/* ==================== Łamigłówki: track/tracks/display/partial ==================== */
+const REBUS={ prompt:'🟣 🌧️\n🎵 tytuł · hit lat 80.', slots:[{key:'a',label:'tytuł'}], answers:{ a:['Purple Rain'] },
+  display:'rebus', track:{ title:'Purple Rain', artist:'Prince' } };
+const LADDER={ prompt:'Jedna litera różnicy:\n1) Radiohead 1992\n2) post-grunge\n3) Nirvana', partial:true,
+  slots:[{key:'a',label:'1'},{key:'b',label:'2'},{key:'c',label:'3'}], answers:{ a:['Creep'], b:['Creed'], c:['Breed'] },
+  tracks:[{ title:'Creep', artist:'Radiohead' }, null, { title:'Breed', artist:'Nirvana' }] };
+
+await group('Łamigłówki: clampQuestion — track/tracks sanityzowane (stringi przycięte, ≤3), display tylko rebus, partial bool', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  const evil={ ...LADDER, prompt:'Q-evil', display:'<script>', partial:'tak',
+    track:{ title:'  '+'t'.repeat(500)+' ', artist:'A', extra:'x' },
+    tracks:[{ title:'X', artist:'Y' }, { title:5, artist:{} }, null, { title:'Z', artist:'W' }, { title:'Q', artist:'R' }] };
+  await room.msg(a, { t:'start', config:CONFIG({ pools:{ q1:{ label:'Łamigłówki', kind:'quiz', questions:[REBUS, LADDER, evil] } } }) });
+  const [qr, ql, qe]=room.pools.q1.questions;
+  eq([qr.display, qr.track], ['rebus', { title:'Purple Rain', artist:'Prince' }], 'rebus: display + track przepuszczone');
+  eq([ql.partial, ql.tracks], [true, LADDER.tracks], 'drabinka: partial + tracks (z null per slot)');
+  ok(!('display' in qe) && !('partial' in qe), 'display spoza „rebus" / partial nie-bool → pominięte');
+  eq(qe.track.title.length, 120, 'tytuł tracka przycięty do 120');
+  ok(!('extra' in qe.track), 'obce pola tracka wycięte');
+  eq(qe.tracks.length, 3, 'tracks ≤ 3 elementy');
+  eq(qe.tracks[1], null, 'zły element → null');
+});
+
+await group('Łamigłówki: track TYLKO w REVEAL (nie w ARMING/PLAY) + promptStyle rebus + reveal.listen', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ pools:onePool(REBUS) }) });
+  eq(a.last('state').game.promptStyle, 'rebus', 'ARMING: promptStyle = rebus (render, bez odpowiedzi)');
+  await readyAll(room, a, b);
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  const pre=JSON.stringify(b.sent.filter(m=>m.t==='state'));
+  ok(!/Prince|"listen"|"track":\{/.test(pre), 'utwór-rozwiązanie NIE wycieka w stanie przed REVEAL');
+  ok(/🟣/.test(b.last('state').game.prompt), 'PLAY: rebus w prompt');
+  ok(room.current.listen && room.current.listen.length===1, 'sekret w this.current.listen');
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:'purple rain' } } });
+  await room.msg(a, { t:'lock' });
+  const rv=b.last('state').game.reveal;
+  eq(rv.listen, [{ title:'Purple Rain', artist:'Prince', label:'' }], 'REVEAL: reveal.listen = utwór do odsłuchu');
+  eq(rv.promptStyle, 'rebus', 'REVEAL: promptStyle');
+  ok(rv.teamOk, 'trafienie');
+});
+
+await group('Łamigłówki: partial — częściowe punkty drużyny na serwerze, listen per slot', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala');
+  await room.msg(a, { t:'start', config:CONFIG({ pools:onePool(LADDER) }) });
+  await readyAll(room, a);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'Creep', b:'Greed', c:'Breed' } } });
+  await room.msg(a, { t:'lock' });
+  const rv=a.last('state').game.reveal;
+  ok(!rv.teamOk, 'nie komplet');
+  ok(rv.gained>=67 && rv.gained<=101, '2/3 słów → częściowe punkty (67 × szybkość ≤1.5): '+rv.gained);
+  eq(rv.listen.map(x=>x.label), ['1','3'], 'listen: utwory slotów 1 i 3 (null pominięty)');
+});
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

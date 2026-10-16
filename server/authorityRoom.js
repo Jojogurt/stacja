@@ -33,7 +33,7 @@ import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES } from '../core/ma
 import { isSlotKey, clipText } from '../core/util.js';
 import { REACTIONS } from '../core/chatFeed.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { norm, quizKey, shuffleMC, parseYear } from '../core/scoring.js';
+import { norm, quizKey, shuffleMC, parseYear, clampQuizTrack, quizListen } from '../core/scoring.js';
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
 import { lektorLang, catLektorLang } from '../core/lektorVoice.js';   // język lektora (pl|en) z puli
 import { mpSnipOffset, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
@@ -102,6 +102,11 @@ function clampQuestion(q){
   }
   const d=Number(q.difficulty); if(d===1 || d===2 || d===3) out.difficulty=d;
   const fun=clipText(q.fun, FUN_MAX); if(fun) out.fun=fun;
+  // Łamigłówki: duży rebus (display), częściowe punkty (partial), utwór-rozwiązanie do odsłuchu (track/tracks:
+  // stringi przycięte, ≤3 el.). Pola zostają w puli/this.current (SEKRET) — do stanu trafiają dopiero w game.reveal.
+  if(q.display==='rebus') out.display='rebus';
+  if(q.partial===true) out.partial=true;
+  Object.assign(out, clampQuizTrack(q));
   return out;
 }
 
@@ -433,6 +438,7 @@ export class GameAuthority extends Server {
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
     const hidden={ prompt:'', lyric:'', ttsUrl:'', lyricLang:'', snipStart:0 };   // F2b #11: odsłaniane w go()
+    this.game.promptStyle='';   // Łamigłówki: ustawiane tylko dla pytania-rebusu
     this.armHidden=null; this.armDeadline=null; this.clearArmTimer();
     if(!cat){ this.game.phase=MP.NETERR; this.game.netReason='nocat'; this.broadcastState(); await this.persist(); return; }
 
@@ -445,10 +451,13 @@ export class GameAuthority extends Server {
       // F3 #3: tasowanie ABCD TU (strona autorytatywna) — wspólne dla wszystkich; litera/answers/pool/fun = SEKRET
       // w this.current (do game.reveal dopiero przy lock); klient widzi tylko potasowany prompt (od PLAY)
       const sq=shuffleMC(q);
+      // Łamigłówki: listen (utwór-rozwiązanie) = SEKRET jak answers — do stanu dopiero w game.reveal (evaluateAnswer)
       this.current={ prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', mc:sq.mc||null,
+        partial:sq.partial===true, display:sq.display==='rebus'?'rebus':'', listen:quizListen(sq),
         track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:'' };
       this.hostSeen.add(quizKey(q));
       this.game.answerSlots=sq.slots; this.game.prompt=''; this.game.preview=''; this.game.lyric=''; this.game.ttsUrl='';
+      this.game.promptStyle = sq.display==='rebus' ? 'rebus' : '';   // sposób renderu treści (nie zdradza odpowiedzi)
       hidden.prompt=sq.prompt;                      // F2b #11: treść pytania dopiero w PLAY
     } else if(this.game.mode==='lektor'){
       const songs=(cat.songs||[]).filter(x=>x.lyric && !this.hostSeen.has(norm(x.title)));

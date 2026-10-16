@@ -2,6 +2,7 @@
  * Zależą tylko od DOM + core/util; NIE znają stanu aplikacji ani siebie nawzajem
  * (poza flash→setIcon). Dzięki temu można je importować bez ryzyka cykli. */
 import { escapeHtml } from '../core/util.js';
+import { listenStop } from './listen.js';   // Łamigłówki: zamknięcie odsłony ucisza „▶ posłuchaj" (listen.js to też liść)
 
 /* F2a #11: bezpieczny dostęp do localStorage. Safari/Firefox z zablokowanymi danymi witryn (i iframe
    sandbox) RZUCA SecurityError już przy odczycie `localStorage` — moduł, który dotknie go przy imporcie
@@ -55,10 +56,20 @@ export function confetti(n=90){
 
 export function val(id){ return document.getElementById(id).value.trim(); }
 export function resetForm(){ ['fTitle','fArtist','fYear','fAlbum'].forEach(id=>document.getElementById(id).value=''); }
-export function hideReveal(){ document.getElementById('reveal').classList.remove('show'); }
+export function hideReveal(){ listenStop(); document.getElementById('reveal').classList.remove('show'); }
+
+/* Łamigłówki: treść pytania jako HTML (escapowana). style 'rebus' → pierwsza linia (emoji) DUŻA i wyśrodkowana,
+   reszta (podpowiedź kategorii „🎵 tytuł…") zwykłym krojem. Wspólne dla solo (#lyricBox) i MP (mpPromptHTML). */
+export function promptBodyHTML(text, style){
+  const t=String(text||'');
+  if(style!=='rebus') return escapeHtml(t);
+  const lines=t.split('\n'); const big=lines.shift()||'';
+  const rest=lines.join('\n').trim();
+  return `<span class="rebus-big">${escapeHtml(big)}</span>`+(rest?`<span class="rebus-hint">${escapeHtml(rest)}</span>`:'');
+}
 
 // #14: tekst piosenki na ekranie (tryb lektor) — czytany ORAZ widoczny
 export function showLyric(text){ const b=document.getElementById('lyricBox'); if(!b) return;
-  b.classList.remove('quiz');
+  b.classList.remove('quiz','rebus');
   b.innerHTML='<span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>'+escapeHtml(text||''); b.hidden=false; }
-export function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; b.classList.remove('quiz'); } }
+export function hideLyric(){ const b=document.getElementById('lyricBox'); if(b){ b.hidden=true; b.innerHTML=''; b.classList.remove('quiz','rebus'); } }

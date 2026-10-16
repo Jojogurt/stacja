@@ -263,6 +263,60 @@ async function f2aStartMatch(catKey, modeRe){
 }
 const sessQ = () => (txt(window,'sessProg')||'').match(/pyt\. (\d+)/i)?.[1];
 
+/* ======== Łamigłówki (solo): chip 🧩, rebus duży, odsłona „▶ posłuchaj", jedna litera — częściowe punkty ======== */
+const listenMod = await import('../app/listen.js');   // singleton odsłuchu (ten sam co w app/solo.js)
+await group('Łamigłówki solo: chip „🧩 Łamigłówki" + rebus duży + odsłona z „▶ posłuchaj" (auto ~10 s z iTunes)', async ()=>{
+  const w=window;
+  const REB={ prompt:'🟣 🌧️\n🎵 tytuł · hit lat 80.', slots:[{key:'a',label:'tytuł'}], answers:{a:['Test Song']},
+    display:'rebus', track:{ title:'Test Song', artist:'Rebus Artist' }, fun:'ciekawostka rebusu' };
+  w.CATEGORIES.quiz['lam-test']={ kind:'quiz', label:'Rebusy test', group:'lamiglowki', questions:[REB] };
+  w.dispatchEvent(new w.CustomEvent('stacja:quiz')); await settle(2);
+  const chip=$(w,'grpLam');
+  ok(chip && !chip.hidden && /Łamigłówki/.test(chip.textContent), 'chip „🧩 Łamigłówki" widoczny');
+  ok($(w,'lamTicks').querySelector('[data-era="lam-test"]'), 'kategoria w paśmie Łamigłówek');
+  ok(!$(w,'quizTicks').querySelector('[data-era="lam-test"]'), '… a nie w paśmie Wiedza');
+  resetSelection(w);
+  $(w,'lamTicks').querySelector('[data-era="lam-test"]').click();
+  ok(chip.classList.contains('on') && !$(w,'grpWiedza').classList.contains('on'), 'wybór → ✓ na chipie Łamigłówek (nie Wiedzy)');
+  await f2aStartMatch('lam-test', null);
+  const lb=$(w,'lyricBox'), big=lb && lb.querySelector('.rebus-big');
+  ok(lb.classList.contains('rebus') && big && /🟣/.test(big.textContent), 'rebus: duża linia emoji (.rebus-big)');
+  ok(/hit lat 80/.test((lb.querySelector('.rebus-hint')||{}).textContent||''), 'podpowiedź kategorii pod rebusem');
+  $(w,'qf_a').value='test song'; click(w,'check'); await settle(6);
+  ok($(w,'revealHead').className.includes('win'), 'trafienie');
+  const btn=$(w,'rmeta').querySelector('.listen-btn');
+  ok(btn && /Test Song/.test(btn.textContent), 'odsłona: przycisk „▶ posłuchaj" z tytułem');
+  for(let i=0;i<40 && listenMod._listenDebug().playing!==0;i++) await settle(2);
+  const d=listenMod._listenDebug();
+  eq2(d.playing, 0, 'auto-odtworzenie utworu-rozwiązania');
+  ok(d.el && /preview\.m4a/.test(d.el.src) && !d.el.paused, 'zajawka iTunes gra na elemencie odsłuchu — '+(d.el&&d.el.src));
+  ok(/■ stop/.test($(w,'rmeta').querySelector('.listen-btn').textContent), 'przycisk pokazuje „■ stop" w trakcie');
+  $(w,'rmeta').querySelector('.listen-btn').click(); await settle(2);
+  ok(listenMod._listenDebug().playing===-1 && d.el.paused, 'klik = stop');
+  click(w,'sessEnd'); await settle(4);
+  ok(listenMod._listenDebug().playing===-1, 'koniec meczu — cisza');
+});
+await group('Łamigłówki solo: „Jedna litera różnicy" — częściowe punkty (partial) + odsłuch per slot', async ()=>{
+  const w=window;
+  const cat=w.CATEGORIES.quiz['lam-test']; const orig=cat.questions;
+  cat.questions=[{ prompt:'Jedna litera różnicy:\n1) debiut Radiohead\n2) post-grunge\n3) Nirvana', partial:true,
+    slots:[{key:'a',label:'1'},{key:'b',label:'2'},{key:'c',label:'3'}], answers:{ a:['Creep'], b:['Creed'], c:['Breed'] },
+    tracks:[{ title:'Test Song', artist:'Lit One' }, null, { title:'Test Song', artist:'Lit Three' }] }];
+  try{
+    await f2aStartMatch('lam-test', null);
+    ok(!$(w,'lyricBox').classList.contains('rebus'), 'drabinka: zwykły (nie-rebusowy) prompt');
+    $(w,'qf_a').value='Creep'; $(w,'qf_b').value='Greed'; $(w,'qf_c').value='Breed';
+    click(w,'check'); await settle(6);
+    const head=txt(w,'revealHead'), pts=+((head.match(/\+(\d+)/)||[])[1]||0);
+    ok(/Częściowo/.test(head) && /trafione 2 z 3/.test(head), 'nagłówek: „Częściowo · trafione 2 z 3" — '+head);
+    ok(pts>=67 && pts<=101, 'częściowe punkty 2/3 (67 × szybkość) — '+pts);
+    const btns=[...$(w,'rmeta').querySelectorAll('.listen-btn')];
+    eq2(btns.length, 2, 'dwa przyciski odsłuchu (slot 2 bez utworu)');
+    ok(/1: Test Song/.test(btns[0].textContent) && /3: Test Song/.test(btns[1].textContent), 'etykiety slotów na przyciskach');
+  } finally { cat.questions=orig; }
+  click(w,'sessEnd'); await settle(4);
+});
+
 await group('F2a #4: „pomiń" po „Sprawdź" zablokowane (bez podwójnego wpisu) + Enter → następne pytanie', async ()=>{
   const { audio } = catsByKind(window);
   await f2aStartMatch(audio, /muzyka/);
@@ -646,6 +700,31 @@ await group('F3 MP: odsłona quizu — forma kanoniczna (display), „inne popra
   ok(/inne poprawne: Daniel Craig, &lt;b&gt;X&lt;\/b&gt;/.test(rv), '„inne poprawne" escapowane');
   ok(/💡 &lt;img/.test(rv) && !$(w,'mpRoom').querySelector('.rv-card img') && !w.__f3mp, 'ciekawostka 💡 escapowana');
   ok(/drużyna: „moore"/.test(rv), 'odpowiedź drużyny przy polu');
+  w.mpAdvance && w.mpAdvance();
+});
+
+await group('Łamigłówki MP: odsłona — rebus duży + „▶ posłuchaj" (lokalnie) / „🔈 dźwięk tylko u hosta" → notka u pilota', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const reveal={ kind:'quiz', prompt:'🟣 🌧️\n🎵 tytuł · hit lat 80.', promptStyle:'rebus', listen:[{ title:'Test Song', artist:'Test Artist', label:'' }],
+    slots:[{key:'a',label:'tytuł'}], answers:{ a:['Test Song'] }, display:{ a:'Test Song' }, okBySlot:{a:true}, locked:{a:'test song'}, teamOk:true };
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'q',mode:'quiz'}], mode:'quiz', catKey:'q', catLabel:'Rebusy',
+    reveal, proposals:[], votes:{}, passed:[], playNonce:91, timer:0, hostId:ws._id });
+  await settle(6);
+  let rv=$(w,'mpRoom').innerHTML;
+  ok(/rebus-big/.test(rv) && /🟣/.test(rv), 'MP odsłona: rebus duży');
+  ok(/listen-btn/.test(rv) && /Test Song/.test(rv), 'MP odsłona: przycisk „▶ posłuchaj"');
+  for(let i=0;i<40 && listenMod._listenDebug().playing!==0;i++) await settle(2);
+  eq2(listenMod._listenDebug().playing, 0, 'MP: zajawka rozwiązania gra lokalnie u gracza');
+  w.mpAdvance && w.mpAdvance(); await settle(2);
+  ok(listenMod._listenDebug().playing===-1, '„dalej" ucisza odsłuch');
+  // pilot przy „🔈 dźwięk tylko u hosta" (host = ktoś inny): bez odtwarzania, notka
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:1, slots:[{round:1,cat:'q',mode:'quiz'}], mode:'quiz', catKey:'q', catLabel:'Rebusy',
+    reveal, proposals:[], votes:{}, passed:[], playNonce:92, timer:0, audioHostOnly:true, hostId:'ktos-inny' });
+  await settle(6);
+  rv=$(w,'mpRoom').innerHTML;
+  ok(/utwór gra u hosta/.test(rv) && !/listen-btn/.test(rv), 'pilot: notka „🔈 utwór gra u hosta", bez przycisku');
+  ok(listenMod._listenDebug().playing===-1 && listenMod._listenDebug().loading===-1, 'pilot: nic nie gra');
   w.mpAdvance && w.mpAdvance();
 });
 

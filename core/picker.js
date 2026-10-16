@@ -35,6 +35,16 @@ export function syncQuizMode(cats, modes, allCats){
   return modes;
 }
 
+/* Łamigłówki: kategorie quizu z polem `group:'lamiglowki'` mają w pickerze (solo i MP) własny chip „🧩 Łamigłówki"
+ * zamiast „Wiedza". Kostka 🎲 ich nie losuje — core/match.randomPools pomija całe kind:'quiz' (świadomy wybór). */
+export const PUZZLE_GROUP = 'lamiglowki';
+export const isPuzzleCat = (cat) => !!(cat && cat.group === PUZZLE_GROUP);
+// klucze quizu podzielone na grupy pickera: 'lamiglowki' → łamigłówki, inaczej (wiedza) → reszta
+export function quizGroupKeys(keys, allCats, group){
+  const puzzle = group === PUZZLE_GROUP;
+  return (keys || []).filter(k => isPuzzleCat(allCats && allCats[k]) === puzzle);
+}
+
 // grupa aktywna, gdy choć jeden jej klucz jest wybrany
 export function grpActive(keys, picked){
   return keys.some(k => picked.has(k));

@@ -11,7 +11,8 @@ import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS, MP_INTRO_MS } f
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, answerCredits, playsAudioLocally, audioHostOnly } from '../core/mpReducer.js';
 import { REACTIONS } from '../core/chatFeed.js';   // F6b: whitelist emotek wspólna z serwerem (🖕 → 🍺)
 import { ALL_CATS } from './catalog.js';
-import { confetti, animIn } from './dom.js';
+import { confetti, animIn, promptBodyHTML } from './dom.js';
+import { listenStart, listenHTML } from './listen.js';   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
 import { playClap, playSfx } from './sfx.js';
 import { ic } from './icons.js';
 import { mpPickerHTML } from './mp-picker.js';
@@ -86,6 +87,8 @@ function mpOnEnter(g, head, st){
     // stary serwer ich nie ma → policz z bucketu drużyny, który w stanie REVEAL jeszcze jest (czyszczony w nowej rundzie)
     const credits = Array.isArray(rvm.credits) ? rvm.credits : (tid && !mpIsCompTV() ? answerCredits(g, tid, rvm.locked||{}) : []);
     S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1), credits };
+    // Łamigłówki: ~10 s zajawki rozwiązania — LOKALNIE u gracza; „🔈 dźwięk tylko u hosta" → gra tylko host/TV
+    listenStart(g.reveal.listen, { auto:true, allowed:mpPlaysHere(g) });
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
     // F2b #6: auto-„dalej" po bezczynności. TV w salonie nie — przechodzi po „dalej" telefonów.
     // F6b (F9): odsłona BEZ intra (intro tylko przed „słuchaj") → licznik od razu.
@@ -297,7 +300,8 @@ const MP_REMOTE_STATUS = '🔈 słuchaj z głośnika hosta';
 const mpLyricHTML = (g)=> g.mode==='lektor'&&g.lyric ? `<div class="lyric-box"><span class="lyric-cap">tekst — zgadnij tytuł i wykonawcę</span>${escapeHtml(g.lyric)}</div>` : '';
 // wiedza ogólna: treść pytania w tym samym pudełku co tekst lektora
 // F8a: „abcd" (muzyka) — kafle „Tytuł — Wykonawca" w tym samym pudełku; odpowiedź = litera (jak ABCD quizu)
-const mpPromptHTML = (g)=> (g.mode==='quiz'||g.mode==='abcd')&&g.prompt ? `<div class="lyric-box quiz"><span class="lyric-cap">${g.mode==='abcd'?'który utwór? — wpisz literę A–D':'pytanie'}</span>${escapeHtml(g.prompt)}</div>` : '';
+// Łamigłówki: g.promptStyle==='rebus' → emoji duże i wyśrodkowane (stary serwer bez pola → zwykły tekst)
+const mpPromptHTML = (g)=> (g.mode==='quiz'||g.mode==='abcd')&&g.prompt ? `<div class="lyric-box quiz${g.promptStyle==='rebus'?' rebus':''}"><span class="lyric-cap">${g.mode==='abcd'?'który utwór? — wpisz literę A–D':'pytanie'}</span>${promptBodyHTML(g.prompt, g.mode==='quiz'?g.promptStyle:'')}</div>` : '';
 // F8a: atrybuty pola slotu — rok = liczba (klawiatura numeryczna, zakres suwaka solo)
 const slotInputAttrs = (s)=> s.key==='year' ? ` type="number" inputmode="numeric" min="${YEAR_MIN}" max="${YEAR_MAX}"` : '';
 function mpAvatarColor(name){ let h=0; for(const ch of (name||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return VOTE_COLORS[h%VOTE_COLORS.length]; }
@@ -661,10 +665,14 @@ function mpRenderQuizReveal(snap){
   const others=Array.isArray(rv.others)&&rv.others.length
     ? `<div class="rv-team rv-others">inne poprawne: ${rv.others.map(x=>escapeHtml(x)).join(', ')}</div>` : '';
   const fun=r.fun ? `<div class="rv-team rv-fun">💡 ${escapeHtml(r.fun)}</div>` : '';
+  // Łamigłówki: rebus duży także w odsłonie (opcje ABCD pod nim, w linii podpowiedzi) + „▶ posłuchaj"
+  const rebus = r.promptStyle==='rebus';
+  const promptHtml = rebus ? promptBodyHTML(r.prompt, 'rebus') : escapeHtml(r.prompt||'');
+  const listen = listenHTML(r.listen, { allowed:mpPlaysHere(S.game||{}) });
   return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}${mpHr()}
     <div class="rv-card quiz">
-      <div class="rv-prompt">${escapeHtml(r.prompt||'')}</div>
-      ${rows}${others}${fun}
+      <div class="rv-prompt">${promptHtml}</div>
+      ${rows}${others}${fun}${listen}
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits, isMC)}

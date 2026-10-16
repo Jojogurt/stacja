@@ -3,7 +3,8 @@
  * Dane kategorii i wrappery związane z ALL_CATS wstrzykiwane przez initMp (app/ nie zależy od app.js).
  * Powiązania zwrotne MP↔social: initMp woła initSocial; mp importuje showScreen/render* z social. */
 import { shuffle, escapeHtml } from '../core/util.js';
-import { norm, quizKey, parseYear } from '../core/scoring.js';
+import { norm, quizKey, parseYear, quizListen } from '../core/scoring.js';
+import { listenStop, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie (start w mp-render: mpOnEnter)
 import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions, mpAvailableModes } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally } from '../core/mpReducer.js';
@@ -171,7 +172,7 @@ async function mpLeave(){
   if(S.ch){ try{ await S.ch.unsubscribe(); }catch(e){} S.ch=null; }
   if(S.audio){ try{S.audio.pause();}catch(e){} }   // element trwały — pauza, nie zeruj
   audioSession('ambient');                          // wyjście z pokoju → oddaj dźwięk muzyce w tle
-  stopSpeech(); mpStopRev();
+  stopSpeech(); mpStopRev(); listenStop();
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
   mpNetStatus('ok');   // 5.6: schowaj pasek reconnectu przy wyjściu
   if(S.timerInt){ clearInterval(S.timerInt); S.timerInt=null; }   // 1.8: bez tego tick zostaje po wyjściu (re-enter nie tworzy nowego)
@@ -426,6 +427,7 @@ function mpRecountAdvance(){
 // „dalej" na ekranie wyniku — KAŻDY klika sam, we własnym tempie
 function mpAdvance(){
   if(!S.game) return;
+  listenStop();   // Łamigłówki: zamknięcie odsłony ucisza odsłuch utworu-rozwiązania
   S.ack=S.revealNonce; S.revealAutoAt=0;                // zamknij u siebie odsłonę (+ wyłącz auto-„dalej")
   if(S.host && S.game.phase===MP.REVEAL){
     // F2b #6: SALON — klik na TV = „pomiń czekanie" → pomiń też fazę gotowości następnego pytania
@@ -484,7 +486,7 @@ function mpEnsureAudio(){
 }
 // odblokuj audio w geście (tworzenie/dołączanie/start/stuknięcie gałki) — bez tego
 // host nie usłyszy muzyki, bo play() leci poza gestem (po fazie gotowości)
-function mpUnlockAudio(){ unlockCtx(); unlockAudioElement(mpEnsureAudio()); }
+function mpUnlockAudio(){ unlockCtx(); unlockAudioElement(mpEnsureAudio()); unlockListen(); }
 // usuń ewentualny watchdog fragmentu z poprzedniej rundy (element jest trwały)
 function mpClearSnip(a){ if(a._snipStop){ a.removeEventListener('timeupdate', a._snipStop); a._snipStop=null; } }
 
@@ -497,6 +499,7 @@ function mpClearArmWait(a){
 }
 function mpArm(){
   mpSetKnob(false);
+  listenStop();   // nowe pytanie — odsłuch poprzedniej odsłony (np. host poszedł dalej) milknie
   const armNonce=S.game.armNonce;
   S.lastArmNonce=armNonce;   // ta runda już zbrojona przez tego klienta (anty-dublowanie)
   const report=()=>{ S.armPending=null; S.armReported=armNonce; mpSend({type:'ready', armNonce}); mpMaybeSkipArm(armNonce); };
@@ -656,7 +659,7 @@ async function mpHostNewRound(){
   S.seenActs.clear();   // nowa runda → świeży zbiór zastosowanych akcji (nie rośnie w nieskończoność)
   reconcileTeams(S.game, mpPlayers());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
   S.game.phase=MP.LOADING; S.game.byTeam=emptyByTeam(S.game.teams);   // czyste buckety; scores KUMULUJĄ się przez mecz
-  S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.game.playAt=null; S.autoLocked=false;
+  S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.game.playAt=null; S.autoLocked=false; S.game.promptStyle='';
   mpBroadcast(); mpRender();
   const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
   if(S.game.mode==='quiz'){
@@ -668,9 +671,12 @@ async function mpHostNewRound(){
     // F3 #3: tasowanie ABCD po stronie AUTORYTATYWNEJ (host) — wszyscy widzą ten sam prompt; litera/answers
     // zostają w S.hostCurrent (sekret hosta) i trafiają do stanu dopiero w reveal
     const sq=quizTake(catKey, q);
-    S.hostCurrent={prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', mc:sq.mc||null, track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
+    // Łamigłówki: listen (utwór-rozwiązanie) = sekret hosta jak answers — do stanu dopiero w reveal (evaluateAnswer)
+    S.hostCurrent={prompt:sq.prompt, slots:sq.slots, answers:sq.answers, pool:sq.pool, fun:sq.fun||'', mc:sq.mc||null,
+      partial:sq.partial===true, display:sq.display==='rebus'?'rebus':'', listen:quizListen(sq), track:'', artist:'', year:'', album:'', art:'', preview:'', lyric:''};
     S.hostSeen.add(quizKey(q));
     S.game.answerSlots=sq.slots; S.game.prompt=sq.prompt; S.game.preview=''; S.game.lyric=''; S.game.ttsUrl='';
+    S.game.promptStyle = sq.display==='rebus' ? 'rebus' : '';
   } else if(S.game.mode==='lektor'){
     const songs=((ALL_CATS[catKey]&&ALL_CATS[catKey].songs)||[]).filter(s=>s.lyric&&!S.hostSeen.has(norm(s.title)));
     if(!songs.length){ S.game.phase=MP.NOLYRIC; mpBroadcast(); mpRender(); return; }

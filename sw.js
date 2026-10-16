@@ -8,7 +8,7 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v62';
+const CACHE = 'stacja-v63';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -19,6 +19,7 @@ const SHELL = [
   './app/catalog.js', './app/solo.js', './app/social.js', './app/catEditor.js',
   './app/mp-state.js', './app/mp-picker.js', './app/mp-render.js', './app/mp.js', './app/sfx.js', './app/icons.js', './app/daily.js',
   './app/cover.js',   // EKSPERYMENT: tryb „okładka"
+  './app/listen.js',  // Łamigłówki: „▶ posłuchaj" w odsłonie
   './click.wav', './clapping.wav',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',
@@ -35,6 +36,7 @@ const SHELL = [
   './data/quiz-wladca-pierscieni.json', './data/quiz-zwierzeta.json',
   './data/quiz-krolowie-polscy.json', './data/quiz-informatyka.json', './data/quiz-lotnictwo.json',
   './data/quiz-medycyna.json', './data/quiz-wiedzmin.json', './data/quiz-muzyka.json',
+  './data/quiz-rebusy.json', './data/quiz-jedna-litera.json',   // Łamigłówki
 ];
 
 self.addEventListener('install', (e) => {

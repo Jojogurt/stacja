@@ -5,7 +5,7 @@ import { ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS, ALL_CATS, ran
 import { MP_MODES, MODE_LABEL, MATCH_LENGTHS, DEFAULT_QUESTIONS } from '../core/match.js';
 import { MP_TIMER_OPTIONS } from '../core/timing.js';
 import { escapeHtml } from '../core/util.js';
-import { pickSummary, pickSummaryText, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive } from '../core/picker.js';
+import { pickSummary, pickSummaryText, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, quizGroupKeys } from '../core/picker.js';
 import { teamColor } from '../core/teams.js';
 import { ic } from './icons.js';
 
@@ -85,10 +85,11 @@ const MP_GRP=[
   {g:'style', lab:ic('guitar')+' Style', keys:()=>STYLE_KEYS, cls:'gen'},
   {g:'playlisty', lab:ic('playlist')+' Playlisty', keys:()=>READY_KEYS, cls:'pl'},
   {g:'teksty', lab:ic('quotes')+' Teksty', keys:()=>LYRICS_KEYS, cls:'gen'},
-  {g:'wiedza', lab:ic('brain')+' Wiedza', keys:()=>QUIZ_KEYS, cls:'gen'},
+  {g:'wiedza', lab:ic('brain')+' Wiedza', keys:()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'wiedza'), cls:'gen'},
+  {g:'lamiglowki', lab:'🧩 Łamigłówki', keys:()=>quizGroupKeys(QUIZ_KEYS, ALL_CATS, 'lamiglowki'), cls:'gen'},   // kategorie z group:'lamiglowki' 
   {g:'twoje', lab:ic('star')+' Twoje', keys:()=>Object.keys(plLoad()), cls:'pl'},
 ];
-const MP_GRP_SUB={teksty:'tłumaczenia 🌐 (tryb lektor)', wiedza:'wiedza ogólna 🧠 (tryb quiz)'};
+const MP_GRP_SUB={teksty:'tłumaczenia 🌐 (tryb lektor)', wiedza:'wiedza ogólna 🧠 (tryb quiz)', lamiglowki:'muzyczne łamigłówki słowne 🧩 (tryb quiz)'};
 function mpToggleGrp(g){ if(mpPickOpenGrp.has(g)) mpPickOpenGrp.delete(g); else mpPickOpenGrp.add(g); mpRender(); }
 function mpSyncQuizMode(){ _syncQuizMode(mpPickCats, mpPickModes, ALL_CATS); }
 function mpPickerHTML(){
@@ -206,6 +207,9 @@ function mpBuildPools(cats, modes){
       out.questions=c.questions.map(q=>{
         const o={ prompt:q.prompt, slots:q.slots, answers:q.answers };
         if(Array.isArray(q.pool)) o.pool=q.pool; if(q.difficulty) o.difficulty=q.difficulty; if(q.fun) o.fun=q.fun;
+        // Łamigłówki: duży rebus / częściowe punkty / utwór-rozwiązanie (DO trzyma je w sekrecie do REVEAL; stary serwer wytnie)
+        if(q.display) o.display=q.display; if(q.partial===true) o.partial=true;
+        if(q.track) o.track=q.track; if(Array.isArray(q.tracks)) o.tracks=q.tracks;
         return o;
       });
     }

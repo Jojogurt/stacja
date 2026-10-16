@@ -22,7 +22,7 @@
  *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS } from './scoring.js';
+import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList } from './scoring.js';
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -229,8 +229,10 @@ function evaluateTeam(game, teamId, current, match, timing){
   // szybkość = czas od startu PLAY do zatwierdzenia (wspólny dla drużyn — reducer nie zna czasu zgłoszenia per drużyna).
   const prevStreak = (game.streaks && game.streaks[teamId]) || 0;
   const streak = teamOk ? prevStreak+1 : 0;
+  // Łamigłówki (`partial:true`, „Jedna litera"): nie-pełne trafienie = ułamek trafionych słów (core/scoring.quizPartialFrac)
+  const quizFrac = hasAnswers ? quizPartialFrac(current, ev) : null;
   const sc = hasAnswers
-    ? scoreRound({ quizOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
+    ? scoreRound({ quizOk:teamOk, quizFrac, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
     : yearQ ? scoreRound({ yearPts:ev.year.points, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })   // F8a: rok
     : scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure });
   const gained = sc.points;
@@ -280,6 +282,10 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
     yearNote: yearQ && current.yearNote ? String(current.yearNote) : '',   // F8a: „rok wg wydania w iTunes"
     slots, answers: hasAnswers ? current.answers : null,
     fun: hasAnswers ? String(current.fun||'') : '',          // F3 #4: ciekawostka (💡) — dopiero w odsłonie
+    // Łamigłówki: utwór(y)-rozwiązanie do odsłuchu (▶ posłuchaj) i duży rebus — TYLKO tu (reveal = po lock),
+    // nigdy w stanie PLAY (zdradza odpowiedź). Stary klient ignoruje pola.
+    listen: hasAnswers ? listenList(current.listen) : [],
+    promptStyle: hasAnswers && current.display==='rebus' ? 'rebus' : '',
     byTeam: perTeam, ranking,
     ...flat,   // coop → okTitle/okArtist/okBySlot/teamOk/locked/firstBy/pewniacy/gained/pewniakWin/pewniakLose
   };

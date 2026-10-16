@@ -203,7 +203,8 @@ export function evaluateGuess(guess, track){
 /* ======================= PUNKTACJA (F6a: R2 / R-U3, propozycja #4) — wspólna solo + MP + serwer =======================
  * Czysta funkcja: punkty za JEDNO pytanie.
  *  • muzyka/lektor/od tyłu/fragment: tytuł 50 + wykonawca 50 (częściowe trafienie też punktuje), rok ±2 +20, album +20;
- *  • quiz (wiedza): 100 za trafienie (wszystkie pola), inaczej 0;
+ *  • quiz (wiedza): 100 za trafienie (wszystkie pola), inaczej 0; łamigłówki z `partial:true` — `quizFrac` (ułamek
+ *    trafionych slotów, quizPartialFrac) daje częściowe punkty (1/3 → 33), seria/pewniak tylko przy pełnym;
  *  • szybkość: do +50% bazy — liniowo od czasu odpowiedzi względem limitu (timer pytania; bez timera SPEED_CAP_MS = 30 s
  *    zajawki). elapsedMs nieznany (null) → bez bonusu;
  *  • seria (tylko przy PEŁNYM trafieniu; `streak` = seria pełnych trafień WŁĄCZNIE z tym pytaniem): ×1.5 od 3, ×2 od 5;
@@ -260,15 +261,21 @@ export const coverMult = stage => introMult(stage);
  * okładka: + album (bonus PTS.album, niezależny od wykonawcy). Pełne trafienie (seria/statystyki) = wykonawca. */
 export const ARTIST_ONLY_PTS = 100;
 
+// Łamigłówki („Jedna litera różnicy", pytanie z `partial:true`): nie-pełne trafienie = ułamek trafionych slotów
+// × PTS.quiz (np. 1/3 → 33). Pełne trafienie zawsze PTS.quiz; seria/pewniak liczą się tylko przy pełnym.
+function quizPartPts(frac){
+  const f=Number(frac);
+  return Number.isFinite(f) && f>0 ? Math.round(PTS.quiz*Math.min(1, f)) : 0;
+}
 // rdzeń punktacji (bez mnożnika trybu) — z niego też limit SCORE_MAX_PER_Q
-function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, yearPts, artistOnly=false,
+function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, quizFrac, yearPts, artistOnly=false,
   elapsedMs=null, limitMs=0, streak=0, sure=false } = {}){
   const isQuiz = quizOk!==undefined && quizOk!==null;
   const isYear = !isQuiz && yearPts!==undefined && yearPts!==null;   // F8a: tryb „rok" — punkty z yearScore
   const isArtist = !isQuiz && !isYear && artistOnly===true;           // EKSPERYMENT: składanka / okładka
   const yp = isYear ? Math.max(0, Math.min(YEAR_PTS.exact, Math.round(+yearPts)||0)) : 0;
   const parts = isQuiz
-    ? { title:0, artist:0, year:0, album:0, quiz: quizOk ? PTS.quiz : 0 }
+    ? { title:0, artist:0, year:0, album:0, quiz: quizOk ? PTS.quiz : quizPartPts(quizFrac) }
     : isYear ? { title:0, artist:0, year:yp, album:0, quiz:0 }
     : isArtist ? { title:0, artist: okArtist?ARTIST_ONLY_PTS:0, year:0, album: okAlbum?PTS.album:0, quiz:0 }
     : { title: okTitle?PTS.title:0, artist: okArtist?PTS.artist:0, year: okYear?PTS.year:0, album: okAlbum?PTS.album:0, quiz:0 };
@@ -331,9 +338,16 @@ function mcCorrectIndex(options, ans){
   return i;
 }
 // klucz pytania (seen-set, statystyki trenera): znormalizowana TREŚĆ bez opcji ABCD → stabilny po tasowaniu
+// Łamigłówki: rebus (display:'rebus') to głównie emoji, które norm() wycina — klucz zachowuje surową linię
+// rebusu (inaczej wszystkie rebusy z tą samą podpowiedzią „🎵 tytuł · hit lat 80." byłyby „tym samym pytaniem").
 export function quizKey(q){
   const p=(q&&q.prompt)||''; const mc=parseMC(p);
-  return norm(mc ? mc.question : p);
+  const text = mc ? mc.question : p;
+  if(q && q.display==='rebus'){
+    const lines=String(text).split('\n');
+    return 'rebus:'+lines[0].replace(/\s+/g,' ').trim()+'|'+norm(lines.slice(1).join(' '));
+  }
+  return norm(text);
 }
 /* F3 #3: tasowanie ABCD w runtime. Zwraca KOPIĘ pytania: prompt z opcjami w nowej kolejności (litery A..),
  * answers[slot0] = [nowa litera, tekst poprawnej opcji, ...aliasy bez jednoliterowych a–d] oraz
@@ -439,6 +453,51 @@ export function evaluateQuiz(q, guesses, match=textMatch, slotsIn){
   }
   const ok = slots.length>0 && slots.every(s=>bySlot[s.key]);
   return { ok, bySlot, matched, display, others, chosen };
+}
+
+/* Łamigłówki: częściowe punkty (pytanie z `partial:true`) — ułamek trafionych slotów (0..1); null = zwykły quiz
+ * („wszystko albo nic"). `ev` = wynik evaluateQuiz. ABCD/pula nie są częściowe (jeden wybór / wymienne sloty). */
+export function quizPartialFrac(q, ev){
+  if(!q || q.partial!==true || !ev || !ev.bySlot) return null;
+  const keys=Object.keys(ev.bySlot);
+  if(!keys.length) return null;
+  return keys.filter(k=>ev.bySlot[k]).length/keys.length;
+}
+
+/* Łamigłówki: utwór-rozwiązanie do odsłuchu w ODSŁONIE (solo + MP). Pytanie niesie `track:{title,artist}`
+ * albo `tracks:[{title,artist}|null, …]` (per slot, „Jedna litera"). To zdradza odpowiedź → w MP jedzie
+ * wyłącznie w game.reveal (sekret do REVEAL). Sanityzacja wspólna z serwerem: stringi przycięte, ≤3 elementy. */
+export const LISTEN_MAX = 3;
+export const LISTEN_TEXT_MAX = 120;
+function cleanListenTrack(t){
+  if(!t || typeof t!=='object' || Array.isArray(t)) return null;
+  const clip=v=> typeof v==='string' ? v.trim().slice(0, LISTEN_TEXT_MAX) : '';
+  const title=clip(t.title), artist=clip(t.artist);
+  return title && artist ? { title, artist } : null;
+}
+// {track?, tracks?} — tylko poprawne pola (serwer: clampQuestion); tracks z co najmniej jednym utworem
+export function clampQuizTrack(q){
+  const out={};
+  const t=cleanListenTrack(q && q.track); if(t) out.track=t;
+  if(q && Array.isArray(q.tracks)){
+    const ts=q.tracks.slice(0, LISTEN_MAX).map(cleanListenTrack);
+    if(ts.some(Boolean)) out.tracks=ts;
+  }
+  return out;
+}
+// płaska lista do odtworzenia: [{title, artist, label}] (label = etykieta slotu dla `tracks`), ≤ LISTEN_MAX
+export function quizListen(q){
+  const c=clampQuizTrack(q);
+  if(c.tracks){
+    const slots=(q && Array.isArray(q.slots)) ? q.slots : [];
+    return c.tracks.map((t,i)=> t ? { ...t, label:String((slots[i] && (slots[i].label||slots[i].key)) || (i+1)).slice(0, 40) } : null).filter(Boolean);
+  }
+  return c.track ? [{ ...c.track, label:'' }] : [];
+}
+// lista z odsłony (MP: reveal.listen z sieci) → bezpieczna kopia (ten sam kształt co quizListen)
+export function listenList(v){
+  if(!Array.isArray(v)) return [];
+  return v.slice(0, LISTEN_MAX).map(x=>{ const t=cleanListenTrack(x); return t ? { ...t, label:typeof x.label==='string' ? x.label.slice(0,40) : '' } : null; }).filter(Boolean);
 }
 
 /* F3 #5: trwały seen-set quizu (czyste helpery; storage robi warstwa app/). */
