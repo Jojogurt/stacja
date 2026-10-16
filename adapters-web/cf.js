@@ -93,3 +93,6 @@ export const tasteDelete = (key)   => call('/api/taste?key=' + encodeURIComponen
 // etap 2: GET z widocznością ({ items, visibility }) + zmiana widoczności własnego gustu ('friends' | 'hidden')
 export const tasteFetchAll = ()    => call('/api/taste').then(d => ({ items: (d && Array.isArray(d.items)) ? d.items : [], visibility: d && d.visibility }));
 export const tasteVisibilityPush = (v) => call('/api/taste/visibility', { method: 'POST', body: { visibility: v } });
+// etap 3: oceny znajomego do porównania (403 not_friends | hidden; 404 = stary Worker bez trasy). Rzuca z `status`.
+export const tasteCompareFetch = (friendId) => call('/api/taste/compare?friend=' + encodeURIComponent(friendId))
+  .then(d => ({ friend: (d && d.friend) || null, items: (d && Array.isArray(d.items)) ? d.items : [] }));

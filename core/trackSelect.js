@@ -257,6 +257,7 @@ async function resolveFromSongs(cat, seen, itunes, capMs=RESOLVE_CAP_MS, rnd=Mat
     if(preview){ seen.add(norm(s.title));
       const t={ track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', preview, art, genre };
       if(s.year) t.yearSrc='data';   // F8a: rok z danych playlisty (kuratorowany), nie z iTunes
+      if(typeof s.from==='string' && s.from) t.from=s.from.slice(0, 80);   // gust etap 3: „Gust stołu" — z czyjej półki
       else if(itYear) t.itYear=itYear;   // gust: rok wydania z iTunes TYLKO informacyjnie (tryby gry dalej używają `year`)
       return t; }
     seen.add(norm(s.title));

@@ -617,6 +617,7 @@ function mpRenderRevealCard(snap){
     <div class="rv-card">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
       ${slot(rv.okTitle,'TYTUŁ',displayTitle(r.track))}${slot(rv.okArtist,'WYK.',r.artist)}
+      ${mpFromHTML(r)}
       ${tv?'':mpTasteHTML([r])}
     </div>
     ${tv?'':mpRevealBanner(rv)}
@@ -626,6 +627,8 @@ function mpRenderRevealCard(snap){
     ${mpReactsBarHTML()}
     ${mpRevealNextHTML(last)}`;
 }
+// gust etap 3: „🎧 Gust stołu" — czyja półka (tekst z serwera → escapeHtml)
+function mpFromHTML(r){ return r && typeof r.from==='string' && r.from ? `<div class="rv-team rv-from" data-rv-from>🎧 z półki: <b>${escapeHtml(r.from.slice(0, 80))}</b></div>` : ''; }
 // F8a: odsłona trybu „rok" — karta utworu + rok wydania vs typ drużyny (dokładnie / ±1 / ±2 / dekada)
 const YEAR_TIER_TX = { exact:'dokładnie!', off1:'±1 rok', off2:'±2 lata', decade:'właściwa dekada', miss:'pudło' };
 function mpRenderYearReveal(snap){
@@ -643,6 +646,7 @@ function mpRenderYearReveal(snap){
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${r.album?`<span class="m">${escapeHtml(r.album)}</span>`:''}</div></div>
       <div class="rv-slot"><span class="k">ROK</span><span class="v">${escapeHtml(String(r.year||'—'))}${tier}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>
       ${note}
+      ${mpFromHTML(r)}
       ${tv?'':mpTasteHTML([r])}
     </div>
     ${tv?'':mpRevealBanner(rv)}

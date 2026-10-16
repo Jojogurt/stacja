@@ -7,7 +7,8 @@
 --   node_modules/.bin/wrangler d1 execute stacja-db --remote --file=migrations/0005_taste.sql
 -- Najpierw lokalnie: ... d1 execute stacja-db --local --file=migrations/0005_taste.sql
 -- UWAGA: ALTER TABLE … ADD COLUMN w SQLite NIE ma „IF NOT EXISTS" — ponowne uruchomienie pliku kończy się błędem
--- „duplicate column name: taste_visibility" (tabela/indeks wyżej są idempotentne, więc to błąd nieszkodliwy).
+-- „duplicate column name: taste_visibility" (tabele/indeksy wyżej są idempotentne, więc to błąd nieszkodliwy).
+-- Dlatego ALTER jest OSTATNI — tabela etapu 3 (taste_compare_log) powstaje też przy ponownym uruchomieniu pliku.
 
 CREATE TABLE IF NOT EXISTS taste_ratings (
   profile_id TEXT NOT NULL,
@@ -26,5 +27,14 @@ CREATE TABLE IF NOT EXISTS taste_ratings (
 );
 CREATE INDEX IF NOT EXISTS idx_taste_profile_upd ON taste_ratings(profile_id, updated_at);
 
+-- etap 3: log zapytań GET /api/taste/compare (rate-limit per profil; liczniki w pamięci isolate'u nie działają na Workers).
+-- Wpisy starsze niż doba kasowane przy kolejnym zapytaniu profilu. Brak danych o tym, KOGO porównywano.
+CREATE TABLE IF NOT EXISTS taste_compare_log (
+  profile_id TEXT NOT NULL,
+  at         TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_taste_cmp_profile_at ON taste_compare_log(profile_id, at);
+
 -- etap 3 (porównanie ze znajomymi): 'friends' = gust widzą zaakceptowani znajomi, 'hidden' = nikt
 ALTER TABLE profiles ADD COLUMN taste_visibility TEXT NOT NULL DEFAULT 'friends' CHECK (taste_visibility IN ('friends', 'hidden'));
+

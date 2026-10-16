@@ -5,7 +5,10 @@
  * utworu: istniejące resolveTrack (iTunes). Odtwarzanie: trwały element audio z app/listen.js (snippetPlay).
  * Etap 2: zakładki „Moja półka" / „Mój profil" — profil gustu z core/tasteProfile (archetyp, wykresy SVG dekad i
  * gatunków, PL/świat, top 5 z półki, pewność + CTA, „co znasz" vs „co lubisz" z /api/profile byCat), karta PNG do
- * udostępnienia (app/tasteCard.js) i przełącznik widoczności gustu (local-first + POST /api/taste/visibility). */
+ * udostępnienia (app/tasteCard.js) i przełącznik widoczności gustu (local-first + POST /api/taste/visibility).
+ * Etap 3: zakładka „👥 Znajomi" — lista znajomych z % zgodności (leniwie: GET /api/taste/compare po kolei, wynik w pamięci),
+ * karta porównania (core/tasteCompare: %, werdykt, składowe, wspólne ulubione z ▶, rekomendacje z szybką oceną 👎/👍/❤️,
+ * różnice), „Zagraj z półki <ksywa>" (mecz solo z songs[] — app/solo.startShelfMatch) i „Zagraj z mojej półki" na półce. */
 import { escapeHtml } from '../core/util.js';
 import { tasteCandidates, pickTasteSession, planCat, seenForArtist, shelfItems, trackKey, ratingOf, SESSION_N,
   SHELF_SORTS } from '../core/taste.js';
@@ -14,12 +17,14 @@ import { tasteStore, tasteStats, tasteRate, tasteUnrate, tastePull, syncLabel, o
 import { buildTasteProfile, DECADE_LABEL, DECADE_LONG, GENRE_SHORT, GENRE_LONG, CONF_LABEL, CONF_HIGH } from '../core/tasteProfile.js';
 import { shareTasteCard } from './tasteCard.js';
 import { shareUrl } from './daily.js';
-import { fetchProfile, hasSession } from '../adapters-web/cf.js';
+import { fetchProfile, hasSession, ensureSession, friendsList, tasteCompareFetch } from '../adapters-web/cf.js';
+import { compareTaste, sanitizeFriendRatings, shelfSongs, SHELF_PLAY_MIN } from '../core/tasteCompare.js';
+import { startShelfMatch } from './solo.js';
 import { snippetPlay, listenStop, unlockListen } from './listen.js';
 import { resolveTrack } from '../adapters-web/itunesRepository.js';
 import { coverArtUrl } from '../core/trackSelect.js';
 import { ERAS, STYLES, READY } from './catalog.js';
-import { showScreen, knownHandle } from './social.js';
+import { showScreen, knownHandle, renderDruzyna } from './social.js';
 import { lsGet, lsSet } from './dom.js';
 
 export const SNIP_SECS = 12;          // zajawka w sesji (~10–15 s)
@@ -27,7 +32,7 @@ export const SHELF_SNIP_SECS = 15;
 const SWIPE_PX = 90;                  // próg gestu (px)
 const FLY_MS = 260;                   // animacja wylotu karty
 const SORT_KEY = 'stacjaShelfSort', TAB_KEY = 'stacjaGustTab', NICK_KEY = 'stacjaGustNick';
-const TABS = ['shelf', 'profile'];
+const TABS = ['shelf', 'profile', 'friends'];
 const $ = id => document.getElementById(id);
 const body = () => $('gustBody');
 const reduceMotion = () => { try{ return matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(_e){ return false; } };
@@ -40,6 +45,13 @@ let shelfState = '';         // 'load' | 'play' | 'brak'
 let tab = TABS.includes(lsGet(TAB_KEY)) ? lsGet(TAB_KEY) : 'shelf';   // zakładka ekranu domowego
 let known = { state:'idle', byCat:null };   // „co znasz": trafienia z gry (/api/profile byCat) — 'idle'|'load'|'ok'|'none'
 let shareMsg = '';           // komunikat po „Udostępnij mój gust"
+// etap 3: znajomi + porównania (pamięć sesji ekranu; odświeżane przy każdym wejściu na ekran)
+let fr = { state:'idle', list:[] };   // 'idle'|'load'|'ok'|'offline'|'nobackend'
+const cmpCache = new Map();           // profileId → { state:'load'|'ok'|'hidden'|'not_friends'|'old'|'offline'|'limit', friend, items, res, resStore }
+let cmpQueue = [], cmpActive = 0, serverOld = false;
+let cmpOpen = '';                     // profileId otwartej karty porównania ('' = lista)
+let gfMsg = '';                       // komunikat po szybkiej ocenie rekomendacji
+const CMP_CONCURRENCY = 2;
 
 const CATS = () => ({ ...ERAS, ...STYLES, ...READY });
 const metaLine = t => [t.year, t.genre].filter(Boolean).join(' · ');
@@ -66,13 +78,13 @@ function statsHTML(){
 }
 const startBtn = (label='Oceń 20 utworów', sub='~12 s zajawki · 👎 👍 ❤️') =>
   `<button class="mh-card gust" data-gu-start><span class="ic" aria-hidden="true">🎧</span><span class="tx"><b>${escapeHtml(label)}</b><small>${escapeHtml(sub)}</small></span><span class="ar" aria-hidden="true">›</span></button>`;
-const tabsHTML = () => `<div class="gu-tabs" role="tablist" aria-label="Twój gust">${[['shelf','❤️ Moja półka'],['profile','📊 Mój profil']].map(([k,l])=>
+const tabsHTML = () => `<div class="gu-tabs" role="tablist" aria-label="Twój gust">${[['shelf','❤️ <span class="gu-tl">Moja </span>półka'],['profile','📊 <span class="gu-tl">Mój </span>profil'],['friends','👥 Znajomi']].map(([k,l])=>
   `<button type="button" role="tab" id="guTab-${k}" data-gu-tab="${k}" aria-selected="${tab===k?'true':'false'}" aria-controls="guPanel" class="${tab===k?'on':''}">${l}</button>`).join('')}</div>`;
 function homeHTML(){
   return `${statsHTML()}
     ${startBtn()}
     ${tabsHTML()}
-    <div id="guPanel" role="tabpanel" aria-labelledby="guTab-${tab}">${tab==='profile' ? profileHTML() : shelfHTML()}</div>`;
+    <div id="guPanel" role="tabpanel" aria-labelledby="guTab-${tab}">${tab==='profile' ? profileHTML() : (tab==='friends' ? friendsHTML() : shelfHTML())}</div>`;
 }
 function shelfHTML(){
   const items=shelfItems(tasteStore(), sortBy);
@@ -84,6 +96,7 @@ function shelfHTML(){
         <span>Dawaj ❤️ utworom, które chcesz zapamiętać — w sesji oceniania albo w odsłonie pytania w grze.</span>
         <button type="button" class="dz-go gu-empty-cta" data-gu-start>Oceń 20 utworów</button></div>`;
   return `<div class="gu-shelf-head"><span class="pf-lbl">Moja półka <span class="gu-n">${items.length}</span></span>${items.length>1?sortSeg:''}</div>
+    ${playShelfHTML(shelfSongs(tasteStore()).length, 'mine')}
     ${shelf}`;
 }
 
@@ -160,7 +173,7 @@ function visHTML(){
       <div class="tp-vis-row"><span id="guVisLbl">Mój gust widzą</span>
         <div class="seg" role="radiogroup" aria-labelledby="guVisLbl">${[['friends','znajomi'],['hidden','nikt']].map(([k,l])=>
           `<button type="button" role="radio" data-gu-vis="${k}" aria-checked="${v===k?'true':'false'}" class="${v===k?'on':''}">${l}</button>`).join('')}</div></div>
-      <small class="tp-vis-hint" data-gu-vis-hint>${v==='hidden' ? 'Ukryty — znajomi nie zobaczą Twojego profilu ani półki.' : 'Znajomi będą mogli porównać z Tobą gust (wkrótce).'}${pend ? ' · 📱 zapisane na tym urządzeniu' : ''}</small>
+      <small class="tp-vis-hint" data-gu-vis-hint>${v==='hidden' ? 'Ukryty — znajomi nie zobaczą Twojego profilu ani półki.' : 'Znajomi mogą porównać z Tobą gust (zakładka „Znajomi") i zagrać z Twojej półki.'}${pend ? ' · 📱 zapisane na tym urządzeniu' : ''}</small>
     </div>`;
 }
 function profileHTML(){
@@ -203,6 +216,213 @@ function profileHTML(){
     ${compareHTML(p)}
     ${visHTML()}`;
 }
+/* ================= „Znajomi" (etap 3): lista z % zgodności + karta porównania ================= */
+const hasBackend = () => !!(window.STACJA_CONFIG && window.STACJA_CONFIG.roomsBase);
+const onFriendsTab = () => view==='home' && tab==='friends' && document.body.classList.contains('gust');
+const RATE_IC = { '2':'❤️', '1':'👍', '-1':'👎' };
+const AV_COLORS = ['var(--blue)', 'var(--purple)', 'var(--green)', 'var(--red)', 'var(--gold)'];
+const avColor = n => { let h=0; for(const ch of String(n||'?')) h=(h*31+ch.charCodeAt(0))>>>0; return AV_COLORS[h%AV_COLORS.length]; };
+const friendOf = id => fr.list.find(f=>f.id===id) || null;
+// element po wartości atrybutu data-* (id z sieci nie trafia do selektora CSS)
+const byData = (attr, v) => [...document.querySelectorAll('['+attr+']')].find(e=>e.getAttribute(attr)===v) || null;
+const handleOf = id => { const c=cmpCache.get(id), f=friendOf(id); return (c && c.friend && c.friend.handle) || (f && f.handle) || 'znajomy'; };
+
+async function loadFriends(){
+  if(fr.state!=='idle') return;
+  if(!hasBackend()){ fr={ state:'nobackend', list:[] }; return; }
+  fr={ state:'load', list:[] };
+  try{
+    if(!hasSession()) await ensureSession();
+    const r=await friendsList();
+    if(r && r.error) fr={ state:'offline', list:[] };
+    else fr={ state:'ok', list:(Array.isArray(r && r.data) ? r.data : []).filter(f=>f && f.profile_id)
+      .map(f=>({ id:String(f.profile_id), handle:String(f.handle||'gracz').slice(0, 32) })) };
+  }catch(_e){ fr={ state:'offline', list:[] }; }
+  fr.list.forEach(f=>queueCompare(f.id));
+  if(onFriendsTab()) render();
+}
+// porównania ładowane leniwie: po CMP_CONCURRENCY naraz; wynik w pamięci (cmpCache) do ponownego wejścia na ekran
+function queueCompare(id, force=false){
+  const c=cmpCache.get(id);
+  if(c && !force && c.state!=='offline') return;
+  if(cmpQueue.includes(id)) return;
+  cmpCache.set(id, { state:'load' });
+  cmpQueue.push(id); pumpCompare();
+}
+function compareErrState(e){
+  const st=e && e.status, code=String(e && e.message || '');
+  if(st===403) return code==='hidden' ? 'hidden' : 'not_friends';
+  if(st===429) return 'limit';
+  if(st===404 || (st>=500 && /no such table|taste_/i.test(code))) return 'old';   // stary Worker / baza bez migracji 0005
+  return 'offline';
+}
+function pumpCompare(){
+  while(cmpActive<CMP_CONCURRENCY && cmpQueue.length){
+    const id=cmpQueue.shift();
+    if(serverOld){ cmpCache.set(id, { state:'old' }); syncFriend(id); continue; }
+    cmpActive++;
+    tasteCompareFetch(id).then(d=>{
+      cmpCache.set(id, { state:'ok', friend:d.friend, items:sanitizeFriendRatings(d.items) });
+    }).catch(e=>{
+      const state=compareErrState(e);
+      if(state==='old') serverOld=true;
+      cmpCache.set(id, { state });
+    }).finally(()=>{ cmpActive--; syncFriend(id); pumpCompare(); });
+  }
+}
+// wynik porównania (memo do zmiany magazynu ocen — szybka ocena rekomendacji przelicza)
+function resultOf(id){
+  const c=cmpCache.get(id); if(!c || c.state!=='ok') return null;
+  const st=tasteStore();
+  if(c.res && c.resStore===st) return c.res;
+  c.res=compareTaste(st, c.items, { cats:CATS() }); c.resStore=st;
+  return c.res;
+}
+function syncFriend(id){
+  if(!onFriendsTab()) return;
+  if(cmpOpen){ if(cmpOpen===id) render(); return; }
+  const el=byData('data-gf-st', id);
+  if(el) el.innerHTML=friendBadgeHTML(id);
+  const ob=document.querySelector('[data-gf-old]'); if(ob) ob.hidden=!serverOld;
+}
+function friendBadgeHTML(id){
+  const c=cmpCache.get(id);
+  if(!c || c.state==='load') return `<span class="gf-b load" aria-label="wczytuję">…</span>`;
+  if(c.state==='ok'){
+    const r=resultOf(id);
+    return r.enough ? `<b class="gf-pct">${r.score}%</b>` : `<span class="gf-b">za mało danych</span>`;
+  }
+  return `<span class="gf-b">${({ hidden:'🔒 ukryty', old:'—', limit:'⏳ za chwilę', not_friends:'—', offline:'📡 offline' })[c.state]||'—'}</span>`;
+}
+function friendsHTML(){
+  loadFriends();
+  if(cmpOpen) return compareCardHTML(cmpOpen);
+  const old=`<div class="gf-note warn" data-gf-old role="status"${serverOld?'':' hidden'}>🛠 Porównania wymagają aktualizacji serwera — lista znajomych działa, % pojawią się po aktualizacji.</div>`;
+  if(fr.state==='load' || fr.state==='idle') return `<div class="gu-empty" aria-live="polite"><div class="bb-loader"><i></i><i></i><i></i></div><span>Wczytuję znajomych…</span></div>`;
+  if(fr.state==='nobackend' || fr.state==='offline'){
+    return `<div class="gu-empty" data-gf-offline><div class="gu-empty-ic" aria-hidden="true">📡</div><b>Brak połączenia z serwerem</b>
+      <span>Porównania gustu ze znajomymi działają online.</span>
+      ${fr.state==='offline' ? `<button type="button" class="dz-go gu-empty-cta" data-gf-retry>Spróbuj ponownie</button>` : ''}</div>`;
+  }
+  if(!fr.list.length){
+    return `<div class="gu-empty" data-gf-none><div class="gu-empty-ic" aria-hidden="true">👥</div><b>Nie masz jeszcze znajomych</b>
+      <span>Dodaj znajomego po kodzie, a porównacie gusty i zagracie ze swoich półek.</span>
+      <button type="button" class="dz-go gu-empty-cta" data-gf-add>Dodaj znajomego</button></div>`;
+  }
+  const rows=fr.list.map(f=>`<button type="button" class="gf-row" data-gf-open="${escapeHtml(f.id)}" aria-label="${escapeHtml('Porównaj gust: '+f.handle)}">
+      <span class="gf-av" style="background:${avColor(f.handle)}" aria-hidden="true">${escapeHtml(f.handle.slice(0,1).toUpperCase())}</span>
+      <span class="gf-name">${escapeHtml(f.handle)}</span>
+      <span class="gf-st" data-gf-st="${escapeHtml(f.id)}">${friendBadgeHTML(f.id)}</span>
+      <span class="gf-ar" aria-hidden="true">›</span></button>`).join('');
+  const vis=tasteVisibility()==='hidden'
+    ? '🔒 Twój gust jest ukryty — znajomi nie zobaczą porównania z Tobą (zmień w „Mój profil").'
+    : 'Widzisz % zgodności ze znajomymi, którzy nie ukryli gustu.';
+  return `${old}<div class="pf-lbl">Zgodność gustu <span class="gu-n">${fr.list.length}</span></div>
+    <div class="gf-list">${rows}</div>
+    <div class="gf-note">${escapeHtml(vis)}</div>`;
+}
+function playShelfHTML(n, who, handle=''){
+  const okN=n>=SHELF_PLAY_MIN;
+  const label = who==='mine' ? '🎲 Zagraj z mojej półki' : `🎲 Zagraj z półki: ${handle}`;
+  const hint = okN ? `${SHELF_QUESTIONS_TXT} z ${n} ${plural(n,'polubionego utworu','polubionych utworów','polubionych utworów')}`
+    : (who==='mine' ? `Potrzeba min. ${SHELF_PLAY_MIN} polubionych utworów (❤️/👍) — masz ${n}.` : `${handle} ma ${n} ${plural(n,'polubiony utwór','polubione utwory','polubionych utworów')} — potrzeba min. ${SHELF_PLAY_MIN}.`);
+  return `<div class="gf-play">
+    <button type="button" class="dz-go blue gu-wide" data-gf-playshelf="${who}"${okN?'':' disabled aria-disabled="true"'} aria-describedby="gfPlayHint-${who}">${escapeHtml(label)}</button>
+    <small id="gfPlayHint-${who}">${escapeHtml(hint)}</small></div>`;
+}
+const SHELF_QUESTIONS_TXT = '10 pytań, tryb muzyka';
+function itemHTML(t, kind){
+  const art=safeArt(t.art), k=t.trackKey;
+  const st = shelfPlaying===k ? shelfState : '';
+  const playIc = st==='play' ? '■' : (st==='load' ? '…' : (st==='brak' ? '✕' : '▶'));
+  const meta=[t.year, t.genre].filter(Boolean).join(' · ');
+  const who = kind==='shared' ? `ty ${RATE_IC[t.mine]} · ${handleOf(cmpOpen)} ${RATE_IC[t.theirs]}` : `${handleOf(cmpOpen)} ${RATE_IC[t.theirs]}${t.knownArtist?' · lubisz tego wykonawcę':''}`;
+  const rateBtns = kind==='rec' ? [['-1','👎','Nie lubię'],['1','👍','Lubię'],['2','❤️','Uwielbiam — na półkę']].map(([r,ic,l])=>
+    `<button type="button" class="gf-rate" data-gf-rate="${r}" data-gf-key="${escapeHtml(k)}" aria-label="${escapeHtml(l+': '+t.title+' — '+t.artist)}">${ic}</button>`).join('') : '';
+  return `<div class="gu-item gf-item" data-gf-item="${escapeHtml(k)}">
+    ${art ? `<img class="gu-art" src="${escapeHtml(art)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<div class="gu-art ph" aria-hidden="true">♪</div>`}
+    <div class="gu-meta"><b>${escapeHtml(t.title)}</b><span>${escapeHtml(t.artist)}</span><small>${escapeHtml([meta, who].filter(Boolean).join(' · '))}</small></div>
+    <div class="gu-acts">
+      <button type="button" class="gu-play${st==='play'?' on':''}" data-gf-play="${escapeHtml(k)}" aria-pressed="${st==='play'?'true':'false'}" aria-label="${escapeHtml('Posłuchaj zajawki: '+t.title+' — '+t.artist)}">${playIc}</button>
+      ${kind==='rec' ? rateBtns : `<a class="gu-link sp" href="${escapeHtml(spotifyUrl(t))}" target="_blank" rel="noopener noreferrer">Spotify</a>`}
+    </div>
+  </div>`;
+}
+const meter = (lab, v, tx) => `<div class="gf-part"><span class="gf-pl">${escapeHtml(lab)}</span><span class="gf-pm" aria-hidden="true"><i style="width:${Math.max(0, Math.min(100, v))}%"></i></span><b>${escapeHtml(tx)}</b></div>`;
+const LIST_SHOW = 12;
+function compareCardHTML(id){
+  const h=handleOf(id), c=cmpCache.get(id) || { state:'load' };
+  const back=`<button type="button" class="gf-back" data-gf-back>‹ Wszyscy znajomi</button>`;
+  const head=`<div class="gf-head"><span class="gf-av big" style="background:${avColor(h)}" aria-hidden="true">${escapeHtml(h.slice(0,1).toUpperCase())}</span><b>Ty i ${escapeHtml(h)}</b></div>`;
+  const msg=(ic, title, sub, extra='') => `${back}${head}<div class="gu-empty" data-gf-state="${escapeHtml(c.state)}"><div class="gu-empty-ic" aria-hidden="true">${ic}</div><b>${escapeHtml(title)}</b><span>${escapeHtml(sub)}</span>${extra}</div>`;
+  if(c.state==='load') return `${back}${head}<div class="gu-empty" aria-live="polite"><div class="bb-loader"><i></i><i></i><i></i></div><span>Porównuję gusty…</span></div>`;
+  if(c.state==='hidden') return msg('🔒', `${h} ukrywa swój gust`, 'Porównanie i gra z półki będą możliwe, gdy zmieni ustawienie prywatności na „znajomi".');
+  if(c.state==='old') return msg('🛠', 'Porównania wymagają aktualizacji serwera', 'Twoje oceny są bezpieczne na tym urządzeniu — porównania ruszą po aktualizacji.');
+  if(c.state==='not_friends') return msg('👥', 'Nie jesteście już znajomymi', 'Dodaj się ponownie na ekranie znajomych.', `<button type="button" class="dz-go gu-empty-cta" data-gf-add>Znajomi</button>`);
+  if(c.state==='limit') return msg('⏳', 'Za dużo porównań naraz', 'Odczekaj chwilę i spróbuj ponownie.', `<button type="button" class="dz-go gu-empty-cta" data-gf-reload="${escapeHtml(id)}">Spróbuj ponownie</button>`);
+  if(c.state!=='ok') return msg('📡', 'Brak połączenia z serwerem', 'Porównania gustu działają online.', `<button type="button" class="dz-go gu-empty-cta" data-gf-reload="${escapeHtml(id)}">Spróbuj ponownie</button>`);
+  const r=resultOf(id);
+  const songs=shelfSongs(c.items);
+  let top;
+  if(r.enough){
+    const v=r.verdict;
+    top=`<div class="gf-score" data-gf-score="${r.score}">
+        <div class="gf-big"><b>${r.score}%</b><small>zgodności</small></div>
+        <div class="gf-verdict"><span class="gf-vic" aria-hidden="true">${v.emoji}</span><b data-gf-verdict>${escapeHtml(v.name)}</b><span>${escapeHtml(v.desc)}</span></div>
+      </div>
+      <div class="tp-box gf-parts" aria-label="${escapeHtml('Składowe: '+r.explain)}">
+        ${r.parts.genres!=null ? meter('gatunki', r.parts.genres, r.parts.genres+'%') : ''}
+        ${r.parts.decades!=null ? meter('dekady', r.parts.decades, r.parts.decades+'%') : ''}
+        ${meter('wspólne utwory', r.parts.commonPct, String(r.parts.common))}
+        <div class="tp-note">Zgodność = 60% podobieństwa gatunków i dekad + 40% wspólnych polubionych utworów.</div>
+      </div>`;
+  } else {
+    const lines=[];
+    if(r.need.me || !r.need.likedMe) lines.push(r.need.me ? `Tobie brakuje ${r.need.me} ${plural(r.need.me,'oceny','ocen','ocen')}.` : 'Polub (👍/❤️) choć jeden utwór.');
+    if(r.need.them || !r.need.likedThem) lines.push(r.need.them ? `${h}: brakuje ${r.need.them} ${plural(r.need.them,'oceny','ocen','ocen')}.` : `${h} nie polubił(a) jeszcze żadnego utworu.`);
+    top=`<div class="gu-empty gf-few" data-gf-few><div class="gu-empty-ic" aria-hidden="true">📊</div><b>Za mało danych do porównania</b>
+      <span>${escapeHtml(lines.join(' '))}</span>
+      ${(r.need.me || !r.need.likedMe) ? `<button type="button" class="dz-go gu-empty-cta" data-gu-start>Oceń 20 utworów</button>` : ''}</div>`;
+  }
+  const more = (arr) => arr.length>LIST_SHOW ? `<div class="tp-note">…i jeszcze ${arr.length-LIST_SHOW}</div>` : '';
+  const shared = r.shared.length
+    ? `<div class="gu-shelf" data-gf-shared>${r.shared.slice(0, LIST_SHOW).map(t=>itemHTML(t, 'shared')).join('')}</div>${more(r.shared)}`
+    : `<div class="tp-none">Brak wspólnych polubień — czas to zmienić 🙂</div>`;
+  const recs = r.recs.length
+    ? `<div class="gu-shelf" data-gf-recs>${r.recs.slice(0, LIST_SHOW).map(t=>itemHTML(t, 'rec')).join('')}</div>${more(r.recs)}`
+    : `<div class="tp-none">Znasz już wszystko, co ${escapeHtml(h)} lubi.</div>`;
+  const diffs = r.diffs.length ? `<div class="pf-lbl">Różnicie się w</div>
+    <div class="tp-box gf-diffs">${r.diffs.map(d=>`<div class="gf-diff"><b>${escapeHtml(d.label)}</b><span>ty ${d.me}% · ${escapeHtml(h)} ${d.them}%</span></div>`).join('')}</div>` : '';
+  return `${back}${head}${top}
+    ${playShelfHTML(songs.length, 'friend', h)}
+    <div class="gf-msg" data-gf-msg role="status" aria-live="polite">${escapeHtml(gfMsg)}</div>
+    <div class="pf-lbl">Wspólne ulubione <span class="gu-n">${r.shared.length}</span></div>
+    ${shared}
+    <div class="pf-lbl">Polecane przez ${escapeHtml(h)} <span class="gu-n">${r.recs.length}</span></div>
+    ${r.recs.length ? `<div class="tp-note gf-sub">utwory, które ${escapeHtml(h)} lubi, a Ty jeszcze ich nie oceniasz — oceń jednym kliknięciem</div>` : ''}
+    ${recs}
+    ${diffs}`;
+}
+function compareItem(key){
+  const r=cmpOpen && resultOf(cmpOpen); if(!r) return null;
+  return r.recs.find(x=>x.trackKey===key) || r.shared.find(x=>x.trackKey===key) || null;
+}
+function rateRec(key, rating){
+  const t=compareItem(key); if(!t) return;
+  const it=tasteRate({ title:t.title, artist:t.artist, year:t.year, genre:t.genre, art:t.art, cat:t.cat }, rating, { source:'swipe' });   // zapis jak w sesji
+  gfMsg = it ? `Oceniono: ${t.title} ${RATE_IC[rating]}` : '';
+  if(shelfPlaying===key) listenStop();
+  render();
+}
+function playShelf(who){
+  if(who==='mine'){
+    const songs=shelfSongs(tasteStore()); const h=knownHandle()||'';
+    return startShelfMatch(h, songs, { label:'Moja półka' });
+  }
+  const c=cmpCache.get(cmpOpen); if(!c || c.state!=='ok') return false;
+  return startShelfMatch(handleOf(cmpOpen), shelfSongs(c.items));
+}
+
 async function doShare(btn){
   const p=profileNow();
   const handle=lsGet(NICK_KEY)==='1' ? (knownHandle()||'') : '';
@@ -418,9 +638,9 @@ function bindCard(){
   card.addEventListener('pointercancel', (e)=>{ if(id!==null && e.pointerId===id){ id=null; card.classList.remove('drag'); card.style.transform=''; card.dataset.dir=''; } });
 }
 
-/* ---- półka: odsłuch ---- */
-function shelfPlay(key){
-  const t=tasteStore()[key]; if(!t || !t.rating) return;
+/* ---- półka / karta porównania: odsłuch ---- */
+function shelfPlay(key, track){
+  const t=track || tasteStore()[key]; if(!t || (!track && !t.rating)) return;
   unlockListen();
   if(shelfPlaying===key && shelfState==='play'){ listenStop(); return; }
   shelfPlaying=key; shelfState='load'; syncShelfBtns();
@@ -433,8 +653,8 @@ function shelfPlay(key){
 }
 function syncShelfBtns(key){
   if(view!=='home') return;
-  document.querySelectorAll('[data-gu-play]').forEach(b=>{
-    const k=b.dataset.guPlay, on=k===shelfPlaying, st=on ? shelfState : (k===key && shelfState==='brak' ? 'brak' : '');
+  document.querySelectorAll('[data-gu-play],[data-gf-play]').forEach(b=>{
+    const k=b.dataset.guPlay || b.dataset.gfPlay, on=k===shelfPlaying, st=on ? shelfState : (k===key && shelfState==='brak' ? 'brak' : '');
     b.textContent = st==='play' ? '■' : (st==='load' ? '…' : (st==='brak' ? '✕' : '▶'));
     b.classList.toggle('on', st==='play');
     b.setAttribute('aria-pressed', st==='play' ? 'true' : 'false');
@@ -446,6 +666,7 @@ export function openGust(){
   showScreen('gust');
   if(view!=='session'){ view='home'; sess=null; }   // trwająca sesja zostaje (powrót z menu), podsumowanie → półka
   known={ state:'idle', byCat:null }; shareMsg='';   // „co znasz" — świeże przy każdym wejściu
+  fr={ state:'idle', list:[] }; cmpCache.clear(); cmpQueue=[]; serverOld=false; cmpOpen=''; gfMsg='';   // znajomi/porównania — świeże
   render();
   tastePull({ create:true }).then(()=>{ if(view==='home' && document.body.classList.contains('gust')) render(); });
 }
@@ -461,7 +682,16 @@ export function openGust(){
     if((b=t.closest('[data-gu-end]'))){ endSession(); return; }
     if((b=t.closest('[data-gu-retry]'))){ if(sess){ sess.offline=0; sess.error=false; showNext(); } return; }
     if((b=t.closest('[data-gu-home]'))){ sess=null; view='home'; render(); return; }
-    if((b=t.closest('[data-gu-tab]'))){ tab=TABS.includes(b.dataset.guTab) ? b.dataset.guTab : 'shelf'; lsSet(TAB_KEY, tab); render();
+    if((b=t.closest('[data-gf-open]'))){ cmpOpen=b.dataset.gfOpen; gfMsg=''; listenStop(); render(); const bk=document.querySelector('[data-gf-back]'); if(bk) bk.focus(); return; }
+    if((b=t.closest('[data-gf-back]'))){ const prev=cmpOpen; cmpOpen=''; gfMsg=''; listenStop(); render();
+      const r=prev && byData('data-gf-open', prev); if(r) r.focus(); return; }
+    if((b=t.closest('[data-gf-rate]'))){ rateRec(b.dataset.gfKey, +b.dataset.gfRate); return; }
+    if((b=t.closest('[data-gf-play]'))){ const it=compareItem(b.dataset.gfPlay); if(it) shelfPlay(it.trackKey, it); return; }
+    if((b=t.closest('[data-gf-playshelf]'))){ if(!b.disabled) playShelf(b.dataset.gfPlayshelf); return; }
+    if((b=t.closest('[data-gf-add]'))){ showScreen('liga'); renderDruzyna(); return; }
+    if((b=t.closest('[data-gf-retry]'))){ fr={ state:'idle', list:[] }; render(); return; }
+    if((b=t.closest('[data-gf-reload]'))){ queueCompare(b.dataset.gfReload, true); render(); return; }
+    if((b=t.closest('[data-gu-tab]'))){ tab=TABS.includes(b.dataset.guTab) ? b.dataset.guTab : 'shelf'; lsSet(TAB_KEY, tab); if(tab!=='friends') cmpOpen=''; render();
       const nb=document.querySelector(`[data-gu-tab="${tab}"]`); if(nb) nb.focus(); return; }
     if((b=t.closest('[data-gu-share]'))){ doShare(b); return; }
     if((b=t.closest('[data-gu-nick]'))){ lsSet(NICK_KEY, b.checked ? '1' : '0'); return; }
@@ -489,5 +719,6 @@ export function openGust(){
   });
 })();
 
-export const _gustDebug = () => ({ view, sess, sortBy, shelfPlaying, shelfState, tab, known, profile:profileNow() });
+export const _gustDebug = () => ({ view, sess, sortBy, shelfPlaying, shelfState, tab, known, profile:profileNow(),
+  friends:fr, cmpOpen, serverOld, compare:(id)=>{ const c=cmpCache.get(id); return c ? { state:c.state, result:resultOf(id) } : null; } });
 export { doShare as _gustShare };

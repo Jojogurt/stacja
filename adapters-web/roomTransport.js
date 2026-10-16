@@ -29,11 +29,14 @@ export function authorityChannel(code, cfg = {}) {
   let presence = {};           // { id:[{name}] }
   let subCb = null, myName = '', statusCb = null;   // 5.6: onStatus('reconnecting'|'ok')
   let ws = null, closed = false, firstOpen = true, retry = 0, retryTimer = null;
+  let myShelf = null;          // gust etap 3: moja półka do „Gust stołu" — dosyłana ponownie po każdym (re)connect
   const emitStatus = (s)=>{ if(statusCb) try{ statusCb(s); }catch(_e){} };
 
   const api = {
     hostId: null,              // ostatni autorytatywny host (z presence)
     serverModes: null,         // F8a: tryby znane serwerowi (presence.modes); null = stary serwer → tylko dawne tryby
+    serverCaps: [],            // gust etap 3: capability serwera (presence.caps, np. 'tableTaste'); stary serwer → []
+    shelves: [],               // gust etap 3: [{id, n}] — kto z obecnych dosłał półkę (presence.shelves)
 
     on(kind, opts, cb) {
       if (kind === 'broadcast') { const e = opts && opts.event; (bcast[e] = bcast[e] || []).push(cb); }
@@ -58,6 +61,8 @@ export function authorityChannel(code, cfg = {}) {
     next() { return send({ t: 'next' }); },
     retry() { return send({ t: 'retry' }); },   // 1.3: host ponawia rundę zablokowaną w NETERR/NOLYRIC
     go() { return send({ t: 'go' }); },         // F2b #6: host „pomiń czekających" w ARMING (stary serwer: ignoruje)
+    // gust etap 3: półka do „Gust stołu" (items = top ❤️ {title,artist,year}; [] = wycofaj). Zapamiętana do reconnectu.
+    shareShelf(items) { myShelf = Array.isArray(items) ? items : []; return send({ t: 'shelf', items: myShelf }); },
 
     presenceState() { return presence; },
     unsubscribe() {
@@ -85,6 +90,7 @@ export function authorityChannel(code, cfg = {}) {
       retry = 0;
       send({ t: 'hello' });
       if (myName) send({ t: 'track', name: myName });
+      if (myShelf && myShelf.length) send({ t: 'shelf', items: myShelf });   // gust etap 3: DO mógł zgubić półkę
       if (subCb) subCb('SUBSCRIBED');
       if (!firstOpen) emitStatus('ok');   // 5.6: wróciliśmy po zerwaniu
       firstOpen = false;
@@ -102,6 +108,9 @@ export function authorityChannel(code, cfg = {}) {
       } else if (msg.t === 'presence') {
         api.hostId = msg.hostId || null;
         if (Array.isArray(msg.modes)) api.serverModes = msg.modes.filter((m) => typeof m === 'string').slice(0, 32);   // F8a: capability
+        api.serverCaps = Array.isArray(msg.caps) ? msg.caps.filter((m) => typeof m === 'string').slice(0, 16) : [];
+        api.shelves = Array.isArray(msg.shelves) ? msg.shelves.filter((x) => x && typeof x.id === 'string')
+          .map((x) => ({ id: x.id, n: Math.max(0, Math.min(20, x.n | 0)) })).slice(0, 64) : [];
         presence = {};
         (msg.members || []).forEach((m) => { if (m && m.id) presence[m.id] = [{ name: m.name || '' }]; });
         if (presenceCb) { try { presenceCb(); } catch (_e) {} }

@@ -39,8 +39,11 @@ node_modules/.bin/wrangler d1 execute stacja-db --local  --file=migrations/0005_
 node_modules/.bin/wrangler d1 execute stacja-db --remote --file=migrations/0005_taste.sql   # produkcja — PRZED deployem Workera
 node_modules/.bin/wrangler d1 execute stacja-db --remote --command "SELECT COUNT(*) FROM taste_ratings"   # sprawdzenie
 ```
-- `0005_taste.sql` („Twój gust"): tabela `taste_ratings` + `profiles.taste_visibility`. `ALTER TABLE … ADD COLUMN` w SQLite
-  nie ma `IF NOT EXISTS` — drugie uruchomienie zgłosi „duplicate column name" (nieszkodliwe; tabela/indeks są idempotentne).
+- `0005_taste.sql` („Twój gust"): tabele `taste_ratings` + `taste_compare_log` (etap 3: rate-limit `GET /api/taste/compare`)
+  + `profiles.taste_visibility`. `ALTER TABLE … ADD COLUMN` w SQLite nie ma `IF NOT EXISTS` (dlatego jest OSTATNI w pliku) —
+  drugie uruchomienie zgłosi „duplicate column name" (nieszkodliwe; tabele/indeksy są idempotentne).
+- „🎧 Gust stołu" (MP, etap 3) NIE dotyka D1: półki graczy (`{t:'shelf'}`) żyją w storage pokoju DO (sprzątane z pokojem);
+  presence ogłasza `caps:['tableTaste']` — stary Worker bez pola → klient chowa opcję.
 - Kolejność wydania: migracja → deploy Workera (`/api/taste`) → klient. Klient bez migracji/nowego Workera działa lokalnie
   (404/500 „no such table" → oceny tylko w localStorage).
 - Testy (`npm test`): `test/taste.test.js` stosuje 0001+0004+0005 na prawdziwym SQLite (`node:sqlite`, Node ≥ 22.5) i fake D1.

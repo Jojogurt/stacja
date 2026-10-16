@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { signToken } from '../lib/auth.js';
-import { handleApi, validateTasteBatch, TASTE_LIMITS } from '../lib/api.js';
+import { handleApi, validateTasteBatch, TASTE_LIMITS, COMPARE_LIMITS } from '../lib/api.js';
 import { trackKey, TASTE_MAX, TASTE_BATCH } from '../../core/taste.js';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
@@ -19,6 +19,9 @@ async function group(name, fn){ console.log('• '+name); try{ await fn(); }catc
 function fakeD1(){
   const rows=new Map();   // `${pid}|${key}` → wiersz (updated_at = ms)
   const vis=new Map();    // profile_id → taste_visibility (etap 2)
+  const handles=new Map(); // profile_id → handle (etap 3)
+  const friends=[];        // etap 3: { from_id, to_id, status }
+  const cmpLog=[];         // etap 3: { profile_id, at(ms) }
   const winMs=w=>/minute/.test(w) ? 60e3*Math.abs(parseInt(w,10)) : 86400e3*Math.abs(parseInt(w,10));
   const mine=pid=>[...rows.values()].filter(r=>r.profile_id===pid);
   const exec=(sql, a)=>{
@@ -31,6 +34,8 @@ function fakeD1(){
     }
     if(/^\s*DELETE FROM taste_ratings/.test(sql)){ rows.delete(a[0]+'|'+a[1]); return; }
     if(/^\s*UPDATE profiles SET taste_visibility=\? WHERE id=\?/.test(sql)){ if(vis.has(a[1])) vis.set(a[1], a[0]); return; }
+    if(/^\s*INSERT INTO taste_compare_log/.test(sql)){ cmpLog.push({ profile_id:a[0], at:Date.now() }); return; }
+    if(/^\s*DELETE FROM taste_compare_log/.test(sql)){ for(let i=cmpLog.length-1;i>=0;i--) if(cmpLog[i].profile_id===a[0] && cmpLog[i].at<=Date.now()-86400e3) cmpLog.splice(i,1); return; }
     throw new Error('fakeD1: nieznany run: '+sql);
   };
   const stmt=(sql)=>({ sql, args:[], bind(...a){ this.args=a; return this; },
@@ -40,13 +45,20 @@ function fakeD1(){
       }
       if(/COUNT\(\*\) AS n FROM taste_ratings WHERE profile_id=\?/.test(sql)) return { n: mine(this.args[0]).length };
       if(/SELECT taste_visibility FROM profiles WHERE id=\?/.test(sql)) return vis.has(this.args[0]) ? { taste_visibility:vis.get(this.args[0]) } : null;
+      if(/COUNT\(\*\) AS n FROM taste_compare_log WHERE profile_id=\? AND at >/.test(sql)){
+        const since=Date.now()-winMs(this.args[1]); return { n: cmpLog.filter(r=>r.profile_id===this.args[0] && r.at>since).length };
+      }
+      if(/SELECT 1 FROM friend_requests WHERE status='accepted'/.test(sql)){
+        const [a1, b1]=this.args; return friends.some(f=>f.status==='accepted' && ((f.from_id===a1 && f.to_id===b1) || (f.from_id===b1 && f.to_id===a1))) ? { 1:1 } : null;
+      }
+      if(/SELECT handle, emoji, taste_visibility FROM profiles WHERE id=\?/.test(sql)) return vis.has(this.args[0]) ? { handle:handles.get(this.args[0])||'gracz', emoji:'', taste_visibility:vis.get(this.args[0]) } : null;
       throw new Error('fakeD1: nieznany first: '+sql);
     },
     async all(){
       if(/SELECT track_key FROM taste_ratings WHERE profile_id=\? AND track_key IN/.test(sql)){
         const [pid, ...keys]=this.args; return { results: mine(pid).filter(r=>keys.includes(r.track_key)).map(r=>({ track_key:r.track_key })) };
       }
-      if(/FROM taste_ratings\s+WHERE profile_id=\? ORDER BY ts DESC LIMIT \?/.test(sql)){
+      if(/FROM taste_ratings\s+WHERE profile_id=\? ORDER BY ts DESC LIMIT \?/.test(sql) || /SELECT title, artist, year, genre, art, cat, rating FROM taste_ratings WHERE profile_id=\?/.test(sql)){
         return { results: mine(this.args[0]).sort((x,y)=>y.ts-x.ts).slice(0, this.args[1]) };
       }
       throw new Error('fakeD1: nieznany all: '+sql);
@@ -54,7 +66,8 @@ function fakeD1(){
     async run(){ exec(sql, this.args); return {}; },
   });
   return { prepare:stmt, async batch(sts){ for(const s of sts) exec(s.sql, s.args); },
-    profile(pid){ vis.set(pid, 'friends'); },
+    profile(pid, handle){ vis.set(pid, 'friends'); if(handle) handles.set(pid, handle); },
+    friend(from_id, to_id, status='accepted'){ friends.push({ from_id, to_id, status }); },
     // seed: n ocen profilu „zapisanych dawno" (poza oknem rate-limitu)
     seed(pid, n){ for(let i=0;i<n;i++) rows.set(pid+'|seed '+i+'|x', { profile_id:pid, track_key:'seed '+i+'|x', title:'x', artist:'seed '+i, year:'', genre:'', art:'', cat:'', rating:1, source:'swipe', ts:1, updated_at:0 }); } };
 }
@@ -71,7 +84,8 @@ async function sqliteD1(){
     async run(){ db.prepare(sql).run(...this.args); return {}; },
   });
   return { prepare:stmt, raw:db,
-    profile(pid){ db.prepare(`INSERT INTO profiles (id, handle) VALUES (?, 'gracz')`).run(pid); },
+    profile(pid, handle){ db.prepare(`INSERT INTO profiles (id, handle) VALUES (?, ?)`).run(pid, handle||'gracz'); },
+    friend(from_id, to_id, status='accepted'){ db.prepare(`INSERT INTO friend_requests (from_id, to_id, status) VALUES (?,?,?)`).run(from_id, to_id, status); },
     async batch(sts){ db.exec('BEGIN'); try{ for(const s of sts) db.prepare(s.sql).run(...s.args); db.exec('COMMIT'); }catch(e){ db.exec('ROLLBACK'); throw e; } },
     seed(pid, n){ const st=db.prepare(`INSERT INTO taste_ratings (profile_id, track_key, title, artist, rating, ts, updated_at) VALUES (?,?,?,?,1,1,'2000-01-01 00:00:00')`);
       for(let i=0;i<n;i++) st.run(pid, 'seed '+i+'|x', 'x', 'seed '+i); } };
@@ -173,6 +187,49 @@ for(const [label, makeDB] of [['fake D1', async()=>fakeD1()], ['SQLite (node:sql
     await api(env, 'POST', '/api/taste/visibility', tA, { visibility:'friends' });
     eq((await api(env, 'GET', '/api/taste', tA)).body.visibility, 'friends', 'powrót do friends');
     eq((await api(env, 'GET', '/api/taste/visibility', tA)).status, 404, 'GET /api/taste/visibility — brak trasy (404)');
+  });
+
+  await group(`taste [${label}]: GET /api/taste/compare — znajomy / nieznajomy / ukryty / nieistniejący / rate-limit`, async ()=>{
+    const DB=await makeDB(), env={ TOKEN_SECRET:'x', DB };
+    for(const [id, h] of [['A','Ala'], ['B','Bartek'], ['C','Celina'], ['D','Darek'], ['E','Ewa']]) DB.profile(id, h);
+    DB.friend('A', 'B');                 // A↔B znajomi (A zaprosił)
+    DB.friend('C', 'A');                 // C↔A znajomi (C zaprosił) — kierunek bez znaczenia
+    DB.friend('A', 'D', 'pending');      // D: zaproszenie oczekujące → nie znajomy
+    DB.friend('E', 'A', 'declined');     // E: odrzucone → nie znajomy
+    const tA=await signToken('x', { sub:'A' }), tB=await signToken('x', { sub:'B' }), tC=await signToken('x', { sub:'C' }), tE=await signToken('x', { sub:'E' });
+    await api(env, 'POST', '/api/taste', tB, { items:[R(1, { rating:2 }), R(2, { rating:-1, art:'https://is1.mzstatic.com/b.jpg' }), R(3)] });
+    await api(env, 'POST', '/api/taste', tC, { items:[R(7, { rating:2 })] });
+    await api(env, 'POST', '/api/taste/visibility', tC, { visibility:'hidden' });
+    const q=f=>'/api/taste/compare?friend='+encodeURIComponent(f);
+    eq((await api(env, 'GET', q('B'), null)).status, 401, 'bez tokenu → 401');
+    const ok1=await api(env, 'GET', q('B'), tA);
+    eq(ok1.status, 200, 'znajomy z widocznym gustem → 200');
+    eq([ok1.body.friend.handle, ok1.body.friend.profile_id, ok1.body.visibility], ['Bartek', 'B', 'friends'], 'ksywa + id znajomego');
+    eq(ok1.body.items.length, 3, 'wszystkie oceny znajomego');
+    const it=ok1.body.items.find(x=>x.title==='Song 2');
+    eq(Object.keys(it).sort(), ['art','artist','cat','genre','rating','title','year'], 'ograniczona forma: bez ts/source/trackKey/profile_id');
+    eq(it.rating, -1, 'ocena zachowana');
+    eq((await api(env, 'GET', q('A'), tB)).status, 200, 'w drugą stronę (B pyta o A) też — znajomość symetryczna');
+    const hid=await api(env, 'GET', q('C'), tA);
+    eq([hid.status, hid.body.error], [403, 'hidden'], 'znajomy z ukrytym gustem → 403 hidden');
+    ok(!hid.body.items, 'ukryty: brak ocen w odpowiedzi');
+    eq((await api(env, 'GET', q('D'), tA)).body, { error:'not_friends' }, 'oczekujące zaproszenie → 403 not_friends');
+    eq((await api(env, 'GET', q('D'), tA)).status, 403, 'not_friends = 403');
+    eq((await api(env, 'GET', q('A'), tE)).body.error, 'not_friends', 'odrzucone zaproszenie → not_friends');
+    eq((await api(env, 'GET', q('ZZZ-nieistnieje'), tA)).body.error, 'not_friends', 'nieistniejący profil → not_friends (bez wycieku istnienia)');
+    // nieznajomy z UKRYTYM gustem — nadal not_friends (nie zdradzamy ustawienia obcym)
+    await api(env, 'POST', '/api/taste/visibility', tE, { visibility:'hidden' });
+    eq((await api(env, 'GET', q('E'), tA)).body.error, 'not_friends', 'nieznajomy ukryty → not_friends, nie hidden');
+    for(const bad of ['', 'x'.repeat(65), "B' OR 1=1", '<b>']) eq((await api(env, 'GET', q(bad), tA)).status, 400, 'zły parametr friend → 400: '+JSON.stringify(bad));
+    eq((await api(env, 'GET', q('A'), tA)).body.error, 'self', 'porównanie z samym sobą → 400 self');
+    eq((await api(env, 'POST', q('B'), tA)).status, 404, 'POST /api/taste/compare — brak trasy');
+    // rate-limit per profil (każde zapytanie, także 403, się liczy)
+    const tF=await signToken('x', { sub:'F' });
+    let last=null;
+    for(let i=0;i<COMPARE_LIMITS[0].max;i++) last=await api(env, 'GET', q('B'), tF);
+    eq(last.status, 403, `${COMPARE_LIMITS[0].max} zapytań w minutę przechodzi (F nie jest znajomym → 403)`);
+    eq((await api(env, 'GET', q('B'), tF)).status, 429, 'kolejne w oknie → 429 rate_limited');
+    eq((await api(env, 'GET', q('B'), tA)).status, 200, 'limit per profil — inny profil nietknięty');
   });
 }
 

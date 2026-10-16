@@ -24,7 +24,7 @@ Gałąź: `gust` (od `main` v65). Realizacja etapami; każdy etap = osobny commi
 - Czysta logika `core/taste.js`: wektory dekad i gatunków ważone ocenami, udział PL/świat, „co znasz" vs „co lubisz", archetyp (deterministyczne reguły, zabawne polskie nazwy, bez obraźliwych), pewność profilu (min. liczba ocen).
 - Ekran profilu: wykres dekad i gatunków (SVG, motyw jasny/ciemny), archetyp, top artyści z półki, karta do udostępnienia (tekst + obrazek PNG z canvas), zachęta do dalszych ocen przy małej pewności.
 
-## Etap 3 — porównanie i granie (M)
+## Etap 3 — porównanie i granie (M) — ZROBIONE (gałąź `gust`, bez commita/deployu)
 - Zgodność ze znajomym: `0.6 × cosinus(wektory gatunków+dekad) + 0.4 × wspólne polubione` (z wyjaśnieniem składowych), „wspólne ulubione", „znajomy lubi, a ty nie oceniłeś" (rekomendacje → szybka ocena).
 - „Zagraj z jej półki" — mecz solo z półki znajomego (kategoria `songs[]`).
 - MP „Gust stołu" — pula meczu z półek graczy w pokoju (każdy klient dosyła swoje top ❤️, host/serwer składa pulę; tylko gracze z `taste_visibility='friends'`).

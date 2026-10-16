@@ -19,6 +19,7 @@ import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
 import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
 import { tasteHeartHTML } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie
+import { shelfCategory, SHELF_PLAY_MIN, SHELF_QUESTIONS } from '../core/tasteCompare.js';   // etap 3: „Zagraj z półki"
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
 import { catLektorLang } from '../core/lektorVoice.js';
@@ -693,6 +694,17 @@ function startSoloMatch(cats, modes, questions, opts={}){
     startSoloMatch(cats, ['music'], QUICK_QUESTIONS);
   };
 })();
+/* „Twój gust" (etap 3): „Zagraj z półki" — mecz solo (10 pytań, tryb muzyka) z puli songs[] półki (moja / znajomego).
+ * Kategoria TYMCZASOWA: tylko w ALL_CATS (catLabel/rozwiązanie utworu), bez ALL_KEYS/pickera/localStorage — nie zapisuje się na stałe. */
+export const SHELF_CAT_KEY = 'polka-tmp';
+export function startShelfMatch(name, songs, { label='' }={}){
+  const list=Array.isArray(songs) ? songs.filter(s=>s && s.title && s.artist) : [];
+  if(list.length<SHELF_PLAY_MIN) return false;
+  ALL_CATS[SHELF_CAT_KEY]=shelfCategory(name, list, { label });
+  unlockCtx();
+  showScreen('solo');
+  return startSoloMatch([SHELF_CAT_KEY], ['music'], SHELF_QUESTIONS);
+}
 /* F6a (R-F10/F11): brak sieci → „Zagraj offline: Lektor / Wiedza" (kategorie z tekstami + paczki wiedzy) */
 function offlinePools(){
   const modes=['lektor','quiz'];

@@ -8,11 +8,30 @@ import { escapeHtml } from '../core/util.js';
 import { pickSummary, pickSummaryText, plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, quizGroupKeys } from '../core/picker.js';
 import { teamColor } from '../core/teams.js';
 import { ic } from './icons.js';
+import { TABLE_KEY, TABLE_LABEL, TABLE_MIN_SONGS } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
 
 let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render widoku pokoju)
 let mpGetPlayers = () => [];             // [{id,name}] obecni gracze (z mp.js) — do przypisania do drużyn
 let mpGetModes = () => MP_MODES;         // F8a: tryby dostępne w tym pokoju (relay: wszystkie MP; autorytet: znane serwerowi)
-export function initMpPicker(render, getPlayers, getModes){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; }
+let mpGetTable = () => ({ cap:false, players:0, withShelf:0, songs:0 });   // gust etap 3: capability + licznik półek (mp.js)
+export function initMpPicker(render, getPlayers, getModes, getTable){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; if(getTable) mpGetTable = getTable; }
+/* gust etap 3: „🎧 Gust stołu" — kategoria-ZAŚLEPKA w ALL_CATS (walidacja wyboru/trybów po stronie hosta jak dla playlisty
+ * z rokiem). Prawdziwą pulę składa serwer z półek graczy przy starcie (mpBuildPools wysyła tylko znacznik `table`).
+ * Poza ALL_KEYS → nie trafia do losowania ani solo. */
+ALL_CATS[TABLE_KEY] = { label:TABLE_LABEL, kind:'playlist', table:true,
+  songs:Array.from({ length:TABLE_MIN_SONGS }, (_,i)=>({ title:'?', artist:'gracz '+(i+1), year:'2000' })) };
+function mpTableHTML(){
+  const t=mpGetTable()||{};
+  if(!t.cap){ mpPickCats.delete(TABLE_KEY); return ''; }   // stary serwer / relay → opcja ukryta
+  const okN=(t.songs|0)>=TABLE_MIN_SONGS;
+  if(!okN) mpPickCats.delete(TABLE_KEY);
+  const on=mpPickCats.has(TABLE_KEY);
+  const sub=`półki od ${t.withShelf|0}/${t.players|0} graczy · ${t.songs|0} utw.`;
+  const hint=okN ? 'pula z ❤️ graczy w pokoju — w odsłonie zobaczycie, czyja to półka'
+    : `potrzeba min. ${TABLE_MIN_SONGS} utworów z półek (gracze z ≥ 5 ❤️, gust nieukryty)`;
+  return `<div class="um-table"><button class="tick pl um-table-tick ${on?'on':''}" data-mp-cat="${TABLE_KEY}" data-mp-table${okN?'':' disabled aria-disabled="true"'} aria-pressed="${on?'true':'false'}">${escapeHtml(TABLE_LABEL)}<small data-mp-table-n>${escapeHtml(sub)}</small></button>
+    <div class="band-sub">${escapeHtml(hint)}</div></div>`;
+}
 // F8a: dostępne tryby + wytnij z wyboru te, których pokój nie obsłuży (np. stary serwer nie zna 'abcd'/'year')
 function mpAvailModes(){ const av=mpGetModes()||MP_MODES; [...mpPickModes].forEach(m=>{ if(m!=='quiz' && !av.includes(m)) mpPickModes.delete(m); }); return av; }
 
@@ -143,6 +162,8 @@ function mpPickerHTML(){
         <div class="um-tnames">${nameInputs}</div>
         <div class="um-assign">${chips}</div></div>`;
   }
+  const tableSec=mpTableHTML();   // przed pickSummary — może wyciąć stół z wyboru (brak capability / za mało utworów)
+  if(mpPickCats.has(TABLE_KEY)) nSel++;
   const s=pickSummary(mpPickCats, mpPickModes, {questions:mpPickQuestions}, ALL_CATS);
   const st=pickSummaryText(s);
   const bad=!!s.error || teamsBad;
@@ -157,7 +178,7 @@ function mpPickerHTML(){
     </div>
     <div class="mp-deck">
       <div class="um-sec"><div class="um-h"><span>Kategorie</span><span class="note">${catCount}</span></div>
-        <div class="um-chips">${grpChips}</div>${grpBands}</div>
+        <div class="um-chips">${grpChips}</div>${grpBands}${tableSec}</div>
       <div class="um-sec"><div class="um-h"><span>Tryby pytań</span><span class="note">jak słyszysz utwór</span></div>
         <div class="um-chips">${modeChips}</div></div>
       <div class="um-sec"><div class="um-h"><span>Długość meczu</span><span class="note val">${mpPickQuestions} pytań</span></div>
@@ -191,6 +212,7 @@ function mpBuildPools(cats, modes){
   const pools={};
   for(const k of cats){
     const c=ALL_CATS[k]; if(!c) continue;
+    if(c.table){ pools[k]={ label:c.label, kind:'playlist', table:true }; continue; }   // gust etap 3: pulę składa serwer z półek graczy
     const out={ label:c.label, range:c.range, kind:c.kind };
     if(wantLektor && c.lang) out.lang=c.lang;   // język opisów lektora (lyrics.js); serwer sanityzuje do 'pl'|'en'
     if(Array.isArray(c.artists) && c.artists.length) out.artists=c.artists.slice();

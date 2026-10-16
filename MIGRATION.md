@@ -43,7 +43,9 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 - Drużyny: `POST /api/group/create {name,emoji}`, `POST /api/group/join {code}`, `POST /api/group/leave {id}`, `GET /api/groups`, `GET /api/group/members?id=`
 - Znajomi: `POST /api/friend/add {code}`, `POST /api/friend/respond {id,accept}`, `GET /api/friends`, `GET /api/friends/pending`
 - Gust (gałąź `gust`, wymaga migracji `0005_taste.sql` — patrz `server/README.md` „Migracje D1"): `GET /api/taste` → `{items:[…]}` (tylko własne),
-  `POST /api/taste {items:[{title,artist,year,genre,art,cat,rating:-1|1|2,source,ts}]}` (≤ 50, LWW po `ts`) → `{ok,saved,rejected}`, `DELETE /api/taste?key=<trackKey>`
+  `POST /api/taste {items:[{title,artist,year,genre,art,cat,rating:-1|1|2,source,ts}]}` (≤ 50, LWW po `ts`) → `{ok,saved,rejected}`, `DELETE /api/taste?key=<trackKey>`,
+  `POST /api/taste/visibility {visibility:'friends'|'hidden'}`, etap 3: `GET /api/taste/compare?friend=<profileId>` → `{friend:{profile_id,handle,emoji}, items:[{title,artist,year,genre,art,cat,rating}]}`
+  (≤ 2000, bez ts/source; 403 `not_friends` / `hidden`; rate-limit 60/min, 600/dobę — tabela `taste_compare_log`). Porównanie liczy klient (`core/tasteCompare.js`).
 
 ---
 

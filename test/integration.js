@@ -2317,5 +2317,186 @@ await group('Twój gust etap 2: Mój profil (pewność/CTA → archetyp, wykresy
     setNav('share', undefined); setNav('canShare', undefined);
   }
 });
+/* ===== „Twój gust" (etap 3): zakładka „Znajomi" — % zgodności leniwie, karta porównania (wspólne/rekomendacje z oceną/różnice),
+   „Zagraj z półki <ksywa>", stany: ukryty / za mało danych / stary serwer / brak znajomych / offline; „Zagraj z mojej półki" ===== */
+await group('Twój gust etap 3: Znajomi — porównanie, rekomendacje z oceną, gra z półki, stany brzegowe', async ()=>{
+  const w=window, d=w.document, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  const tasteMod=await import('../app/taste.js'), catMod=await import('../app/catalog.js');
+  const until=async(fn, n=120)=>{ for(let i=0;i<n && !fn();i++) await settle(2); return fn(); };
+  // moje oceny: 12 × lata 90. pop (wspólne z Olą: Hit 0, Hit 1) — gwarantowane niezależnie od poprzednich grup
+  for(let i=0;i<12;i++) tasteMod.tasteRate({ title:'Hit '+i, artist:'Backstreet Boys', year:'1997', genre:'Pop' }, i<6 ? 2 : 1);
+  const OLA=[
+    ...Array.from({ length:2 }, (_,i)=>({ title:'Hit '+i, artist:'Backstreet Boys', year:'1997', genre:'Pop', rating:2 })),
+    ...Array.from({ length:6 }, (_,i)=>({ title:'Polecany '+i, artist:'Spice Girls', year:'1996', genre:'Pop', rating:2, art:'https://x/'+i+'.jpg' })),
+    ...Array.from({ length:4 }, (_,i)=>({ title:'Kciuk '+i, artist:'Nirvana', year:'1992', genre:'Alternative', rating:1 })),
+    { title:'Nuda', artist:'Ktoś', year:'2015', genre:'Dance', rating:-1 },
+  ].map(x=>({ art:'', cat:'', ...x }));
+  const EWA=[ { title:'Jeden', artist:'Abba', year:'1976', genre:'Pop', rating:2, art:'', cat:'' } ];
+  const srv={ friends:[{ profile_id:'f1', handle:'Ola' }, { profile_id:'f2', handle:'Kuba' }, { profile_id:'f3', handle:'Ewa' }], cmpOld:false, cmp:[] };
+  const J=(o, st=200)=>Promise.resolve({ ok:st<400, status:st, json:()=>Promise.resolve(o) });
+  globalThis.fetch=(url, opts={})=>{
+    const u=new URL(String(url), 'https://stacja.test/');
+    if(u.pathname==='/api/session') return J({ id:'gust-user', token:'tok-gust' });
+    if(u.pathname==='/api/taste'){ if(opts.method==='POST' || opts.method==='DELETE') return J({ ok:true });
+      return J({ items:Object.values(tasteMod.tasteStore()).filter(x=>x.rating), visibility:'friends' }); }
+    if(u.pathname==='/api/taste/visibility') return J({ ok:true });
+    if(u.pathname==='/api/friends') return J(srv.friends);
+    if(u.pathname==='/api/taste/compare'){
+      const f=u.searchParams.get('friend'); srv.cmp.push(f);
+      if(srv.cmpOld) return J({ error:'not_found' }, 404);
+      if(f==='f2') return J({ error:'hidden' }, 403);
+      return J({ friend:{ profile_id:f, handle:f==='f1'?'Ola':'Ewa' }, visibility:'friends', items:f==='f1' ? OLA : EWA });
+    }
+    return J({ results:[] });
+  };
+  try{
+    w.STACJA_CONFIG.roomsBase='https://w.test';
+    $(w,'toMenu') && $(w,'toMenu').click(); await settle(2);
+    d.body.className='menu'; $(w,'goGust').click(); await settle(4);
+    const ft=d.querySelector('[data-gu-tab="friends"]');
+    ok(ft && /Znajomi/.test(ft.textContent), 'zakładka „👥 Znajomi"');
+    ft.click();
+    await until(()=>d.querySelectorAll('[data-gf-open]').length===3);
+    eq2(d.querySelectorAll('[data-gf-open]').length, 3, 'lista 3 znajomych');
+    eq2(d.querySelector('[data-gu-tab="friends"]').getAttribute('aria-selected'), 'true', 'zakładka znajomych: aria-selected');
+    const st=id=>(d.querySelector(`[data-gf-st="${id}"]`)||{}).textContent||'';
+    await until(()=>/%/.test(st('f1')) && /ukryty/.test(st('f2')) && /za mało/.test(st('f3')));
+    ok(/^\d+%$/.test(st('f1').trim()), '% zgodności z Olą (leniwie, po GET /api/taste/compare): '+st('f1'));
+    ok(/ukryty/.test(st('f2')), 'Kuba ukrył gust → „🔒 ukryty"');
+    ok(/za mało danych/.test(st('f3')), 'Ewa: 1 ocena → „za mało danych"');
+    eq2(srv.cmp.slice().sort().join(','), 'f1,f2,f3', 'po jednym zapytaniu porównania na znajomego');
+
+    // karta porównania z Olą
+    d.querySelector('[data-gf-open="f1"]').click(); await settle(2);
+    const score=d.querySelector('[data-gf-score]');
+    ok(score && +score.dataset.gfScore>=0 && +score.dataset.gfScore<=100 && /%/.test(score.textContent), 'duży % zgodności');
+    ok(d.querySelector('[data-gf-verdict]') && d.querySelector('[data-gf-verdict]').textContent.length>3, 'werdykt słowny: '+(d.querySelector('[data-gf-verdict]')||{}).textContent);
+    ok(/gatunki/.test(d.querySelector('.gf-parts').textContent) && /dekady/.test(d.querySelector('.gf-parts').textContent) && /wspólne utwory/.test(d.querySelector('.gf-parts').textContent), 'składowe: gatunki / dekady / wspólne utwory');
+    const shared=[...d.querySelectorAll('[data-gf-shared] .gf-item b')].map(b=>b.textContent);
+    eq2(shared.join(','), 'Hit 0,Hit 1', 'wspólne ulubione (oboje ❤️/👍)');
+    ok(d.querySelector('[data-gf-shared] [data-gf-play]'), 'wspólne: przycisk ▶');
+    const recs=()=>[...d.querySelectorAll('[data-gf-recs] .gf-item b')].map(b=>b.textContent);
+    ok(recs().length===10 && recs()[0].startsWith('Polecany') && !recs().includes('Nuda'), 'rekomendacje: ❤️ Oli najpierw, bez jej 👎 — '+recs().slice(0,3).join(','));
+    // szybka ocena ❤️ rekomendacji → zapis jak w sesji (source swipe), znika z listy, trafia do wspólnych
+    const first=recs()[0];
+    d.querySelector('[data-gf-recs] [data-gf-rate="2"]').click(); await settle(2);
+    const saved=Object.values(JSON.parse(w.localStorage.getItem('stacjaTaste')||'{}')).find(x=>x.title===first && x.artist==='Spice Girls');
+    ok(saved && saved.rating===2 && saved.source==='swipe' && saved.year==='1996' && saved.genre==='Pop', 'ocena rekomendacji zapisana lokalnie (❤️, swipe, rok, gatunek)');
+    ok(!recs().includes(first), 'oceniona rekomendacja znika z listy');
+    ok([...d.querySelectorAll('[data-gf-shared] .gf-item b')].some(b=>b.textContent===first), '…i trafia do wspólnych ulubionych');
+    ok(/Oceniono/.test(d.querySelector('[data-gf-msg]').textContent), 'komunikat „Oceniono"');
+    d.querySelector('[data-gf-recs] [data-gf-rate="-1"]').click(); await settle(2);
+    eq2(recs().length, 8, '👎 też usuwa z rekomendacji');
+    // „Zagraj z półki: Ola" (≥ 8 polubionych) → mecz solo 10 pytań, kategoria tymczasowa
+    const pb=d.querySelector('[data-gf-playshelf="friend"]');
+    ok(pb && !pb.disabled && /Ola/.test(pb.textContent), 'przycisk „Zagraj z półki: Ola" aktywny');
+    const keysBefore=catMod.ALL_KEYS.length;
+    pb.click(); await settle(4);
+    ok(d.body.classList.contains('solo') && d.body.classList.contains('playing'), 'start meczu solo z półki');
+    const tc=catMod.ALL_CATS['polka-tmp'];
+    ok(tc && tc.label==='Półka Ola' && tc.temp && tc.songs.length===12, 'kategoria „Półka Ola" (12 polubionych, tymczasowa): '+(tc&&tc.label)+' / '+(tc&&tc.songs.length));
+    eq2(catMod.ALL_KEYS.length, keysBefore, 'kategoria tymczasowa poza ALL_KEYS (nie w pickerze/losowaniu)');
+    ok(!/polka-tmp/.test(w.localStorage.getItem('stacjaPlaylists')||'') && !/polka-tmp/.test(w.localStorage.getItem('stacjaSoloPick')||''), 'nic nie zapisane na stałe');
+    $(w,'toMenu').click(); await settle(2);
+
+    // ukryty / za mało danych
+    $(w,'goGust').click(); await settle(2);
+    await until(()=>d.querySelectorAll('[data-gf-open]').length===3);
+    d.querySelector('[data-gf-open="f2"]').click(); await until(()=>d.querySelector('[data-gf-state]'));
+    eq2((d.querySelector('[data-gf-state]')||{}).dataset && d.querySelector('[data-gf-state]').dataset.gfState, 'hidden', 'Kuba: karta „ukrywa swój gust"');
+    ok(!d.querySelector('[data-gf-playshelf]'), 'ukryty: bez gry z półki');
+    d.querySelector('[data-gf-back]').click(); await settle(2);
+    ok(d.querySelectorAll('[data-gf-open]').length===3, '‹ powrót do listy');
+    d.querySelector('[data-gf-open="f3"]').click(); await until(()=>d.querySelector('[data-gf-few]'));
+    ok(d.querySelector('[data-gf-few]') && /Ewa: brakuje 9 ocen/.test(d.querySelector('[data-gf-few]').textContent), 'Ewa: „za mało danych" + ile brakuje');
+    const pe=d.querySelector('[data-gf-playshelf="friend"]');
+    ok(pe && pe.disabled && /potrzeba min\. 8/.test(d.querySelector('#gfPlayHint-friend').textContent), 'za mała półka → przycisk nieaktywny z podpowiedzią');
+    d.querySelector('[data-gf-back]').click(); await settle(2);
+
+    // stary serwer (404 na /api/taste/compare) → komunikat o aktualizacji
+    srv.cmpOld=true;
+    $(w,'toMenu').click(); await settle(2); $(w,'goGust').click();
+    await until(()=>d.querySelector('[data-gf-old]') && !d.querySelector('[data-gf-old]').hidden);
+    ok(d.querySelector('[data-gf-old]') && !d.querySelector('[data-gf-old]').hidden && /aktualizacji serwera/.test(d.querySelector('[data-gf-old]').textContent), 'stary serwer → „porównania wymagają aktualizacji serwera"');
+    d.querySelector('[data-gf-open="f1"]').click(); await settle(2);
+    eq2(d.querySelector('[data-gf-state]') && d.querySelector('[data-gf-state]').dataset.gfState, 'old', 'karta: stan „old"');
+    srv.cmpOld=false;
+
+    // brak znajomych → CTA do ekranu znajomych
+    srv.friends=[];
+    $(w,'toMenu').click(); await settle(2); $(w,'goGust').click();
+    await until(()=>d.querySelector('[data-gf-none]'));
+    ok(d.querySelector('[data-gf-none] [data-gf-add]'), 'brak znajomych → CTA „Dodaj znajomego"');
+    d.querySelector('[data-gf-add]').click(); await settle(4);
+    ok(d.body.classList.contains('liga'), 'CTA → ekran Drużyna i znajomi');
+
+    // offline (bez serwera)
+    w.STACJA_CONFIG.roomsBase='';
+    $(w,'toMenu').click(); await settle(2); $(w,'goGust').click(); await settle(4);
+    ok(d.querySelector('[data-gf-offline]'), 'bez serwera → „Brak połączenia z serwerem"');
+
+    // „Zagraj z mojej półki" na półce
+    d.querySelector('[data-gu-tab="shelf"]').click(); await settle(2);
+    const mine=d.querySelector('[data-gf-playshelf="mine"]');
+    ok(mine && !mine.disabled && /mojej półki/.test(mine.textContent), '„Zagraj z mojej półki" na ekranie półki (≥ 8 polubionych)');
+    mine.click(); await settle(4);
+    ok(d.body.classList.contains('playing') && catMod.ALL_CATS['polka-tmp'].label==='Moja półka', 'mecz z mojej półki: kategoria „Moja półka"');
+    $(w,'toMenu').click(); await settle(2);
+    const css=[...d.querySelectorAll('style')].map(x=>x.textContent).join('\n');
+    ok(/@media \(max-width:360px\)\{ \.gu-tl\{display:none\}/.test(css), '320 px: krótsze etykiety zakładek');
+    ok(!/\.gf-[a-z-]+\{[^}]*#[0-9A-Fa-f]{3,6}/.test(css.replace(/color:#fff/g,'')), 'style „Znajomi" z tokenów (jasny/ciemny), bez hardkodów kolorów');
+  } finally { globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; }
+});
+
+/* ===== „Twój gust" (etap 3): MP „🎧 Gust stołu" — capability tableTaste, półka gracza do serwera (prywatność),
+   licznik „półki od X/Y graczy" w pickerze, start z pulą od serwera, odsłona „z półki: <ksywa>" ===== */
+await group('Twój gust etap 3: MP „Gust stołu" — półki graczy, capability, picker, odsłona', async ()=>{
+  const w=window, d=w.document, prevBase=w.STACJA_CONFIG.roomsBase;
+  const tasteMod=await import('../app/taste.js');
+  try{
+    for(let i=0;i<22;i++) tasteMod.tasteRate({ title:'Stół '+i, artist:'Kapela '+i, year:'2001', genre:'Rock', art:'https://x/a.jpg' }, 2);
+    const caps=(ws, over={})=>{ ws._emit({ t:'presence', members:[{ id:ws._id, name:'Host' }, { id:'p2', name:'Ola' }], hostId:ws._id, modes:['music','reverse','snippet','quiz'], caps:['tableTaste'], shelves:[{ id:ws._id, n:20 }, { id:'p2', n:6 }], ...over }); };
+    // 1) gust ukryty → nic nie wysyłamy mimo capability
+    w.localStorage.setItem('stacjaTasteVis', 'hidden');
+    let ws=await f6bRoom(); caps(ws); await settle(4);
+    ok(!ws.sent.some(m=>m.t==='shelf'), 'gust ukryty → półka NIE trafia do pokoju');
+    w.mpLeaveConfirmed('room'); await settle(4);
+    // 2) stary serwer (presence bez caps) → nic nie wysyłamy, opcja ukryta
+    w.localStorage.setItem('stacjaTasteVis', 'friends');
+    ws=await f6bRoom(); await settle(4);
+    ok(!ws.sent.some(m=>m.t==='shelf'), 'stary serwer (bez capability) → półka nie wysłana');
+    w.mpLobbyStart(); await settle(4);
+    ok(!d.querySelector('[data-mp-table]'), 'stary serwer → opcja „Gust stołu" ukryta w pickerze');
+    // 3) nowy serwer: capability → półka (top 20 ❤️: tylko tytuł/wykonawca/rok)
+    caps(ws); await settle(4);
+    const sh=ws.sent.filter(m=>m.t==='shelf');
+    eq2(sh.length, 1, 'po capability → jedna ramka {t:"shelf"}');
+    ok(sh[0] && sh[0].items.length===20 && sh[0].items.every(x=>Object.keys(x).every(k=>['title','artist','year'].includes(k))), 'półka: 20 ❤️, tylko tytuł/wykonawca/rok (bez okładek, ocen, ts)');
+    caps(ws); await settle(2);
+    eq2(ws.sent.filter(m=>m.t==='shelf').length, 1, 'kolejne presence → bez ponownej wysyłki');
+    // picker: licznik + wybór
+    const tb=()=>d.querySelector('[data-mp-table]');
+    ok(tb() && /półki od 2\/2 graczy · 26 utw\./.test(tb().textContent) && !tb().disabled, 'picker: „🎧 Gust stołu" + „półki od 2/2 graczy · 26 utw."');
+    caps(ws, { shelves:[{ id:'p2', n:5 }] }); await settle(2);
+    ok(tb() && tb().disabled && /min\. 8 utworów/.test(tb().parentNode.textContent), '< 8 utworów z półek → opcja nieaktywna z podpowiedzią');
+    caps(ws); await settle(2);
+    d.querySelectorAll('#mpRoom .tick.on').forEach(t=>t.click()); await settle(2);
+    tb().click(); await settle(2);
+    ok(tb().classList.contains('on') && tb().getAttribute('aria-pressed')==='true', 'wybór „Gust stołu"');
+    ok(!/um-summary err/.test($(w,'mpRoom').innerHTML), 'sam „Gust stołu" + muzyka → poprawny mecz');
+    const n0=ws.sent.length;
+    w.mpStart(); await settle(4);
+    const start=ws.sent.slice(n0).find(m=>m.t==='start');
+    ok(start && start.config.pools['gust-stolu'], 'start: kategoria stołu w configu');
+    eq2(JSON.stringify(start && start.config.pools['gust-stolu']), JSON.stringify({ label:'🎧 Gust stołu', kind:'playlist', table:true }), 'host wysyła tylko znacznik — pulę składa serwer');
+    // odsłona: „z półki: Ola"
+    ws.pushState(revealState(ws, { playNonce:9401, catKey:'gust-stolu', catLabel:'🎧 Gust stołu', reveal:{ ...revealState(ws).reveal, from:'Ola <b>' } })); await settle(6);
+    const fr=d.querySelector('#mpRoom [data-rv-from]');
+    ok(fr && /z półki: Ola <b>/.test(fr.textContent) && !fr.querySelector('b b'), 'odsłona: „🎧 z półki: <ksywa>" (escapowane)');
+    ws.pushState(revealState(ws, { playNonce:9402 })); await settle(4);
+    ok(!d.querySelector('#mpRoom [data-rv-from]'), 'zwykłe pytanie → bez „z półki"');
+    w.mpLeaveConfirmed('room'); await settle(4);
+  } finally { w.STACJA_CONFIG.roomsBase=prevBase; }
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

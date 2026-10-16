@@ -6,6 +6,7 @@ import { verifyIdToken } from './oauth.js';
 import { MAX_QUESTIONS } from '../../core/match.js';
 import { SCORE_MAX_PER_Q } from '../../core/scoring.js';
 import { sanitizeRating, isTrackKey, isTasteVisibility, TASTE_MAX, TASTE_BATCH } from '../../core/taste.js';
+import { publicRating } from '../../core/tasteCompare.js';
 
 // 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
 // F1: limit pytań z core/match.js (to samo źródło co picker i clamp `start` w DO).
@@ -261,6 +262,28 @@ export async function handleApi(req, env, url){
     await env.DB.prepare(`UPDATE profiles SET taste_visibility=? WHERE id=?`).bind(v, me).run();
     return json({ ok:true, visibility:v });
   }
+  // etap 3: porównanie gustu — oceny ZNAJOMEGO w ograniczonej formie (bez ts/source; ≤ TASTE_MAX). Porównanie liczy
+  // klient (core/tasteCompare.compareTaste — ten sam rdzeń; klient ma też oceny jeszcze niezsynchronizowane).
+  // Warunki: zaakceptowani znajomi (w dowolnym kierunku) ORAZ znajomy ma taste_visibility='friends'.
+  // Kolejność: rate-limit → znajomość (403 not_friends — także nieistniejący profil, bez wycieku istnienia) → ukryty (403 hidden).
+  if(path==='/api/taste/compare' && m==='GET'){
+    const friend=String(url.searchParams.get('friend')||'');
+    if(!friend || friend.length>64 || !/^[\w-]+$/.test(friend)) return err('bad_friend');
+    if(friend===me) return err('self');
+    if(await compareRateLimited(env, me)) return err('rate_limited', 429);
+    const fr=await env.DB.prepare(
+      `SELECT 1 FROM friend_requests WHERE status='accepted' AND ((from_id=? AND to_id=?) OR (from_id=? AND to_id=?)) LIMIT 1`
+    ).bind(me, friend, friend, me).first();
+    if(!fr) return err('not_friends', 403);
+    const p=await env.DB.prepare(`SELECT handle, emoji, taste_visibility FROM profiles WHERE id=?`).bind(friend).first();
+    if(!p) return err('not_friends', 403);
+    if(p.taste_visibility!=='friends') return err('hidden', 403);
+    const { results } = await env.DB.prepare(
+      `SELECT title, artist, year, genre, art, cat, rating FROM taste_ratings WHERE profile_id=? ORDER BY ts DESC LIMIT ?`
+    ).bind(friend, TASTE_MAX).all();
+    return json({ friend:{ profile_id:friend, handle:p.handle||'gracz', emoji:p.emoji||'' }, visibility:'friends',
+      items:(results||[]).map(publicRating).filter(Boolean) });
+  }
 
   return err('not_found', 404);
 }
@@ -278,6 +301,23 @@ async function tasteRateLimited(env, me){
     ).bind(me, l.window).first();
     if(r && (r.n|0) >= l.max) return true;
   }
+  return false;
+}
+/* etap 3: rate-limit porównań per profil z tokena — log zapytań w D1 (taste_compare_log, 0005_taste.sql).
+ * Lista znajomych ładuje % leniwie (1 zapytanie / znajomy, klient trzyma wynik w pamięci) → 60/min i 600/dobę z zapasem.
+ * Każde zapytanie (także 403) liczy się do limitu — utrudnia sondowanie cudzych id. Stare wpisy (> doba) sprzątane. */
+export const COMPARE_LIMITS = [ { window:'-1 minutes', max:60 }, { window:'-1 day', max:600 } ];
+async function compareRateLimited(env, me){
+  for(const l of COMPARE_LIMITS){
+    const r=await env.DB.prepare(
+      `SELECT COUNT(*) AS n FROM taste_compare_log WHERE profile_id=? AND at > datetime('now', ?)`
+    ).bind(me, l.window).first();
+    if(r && (r.n|0) >= l.max) return true;
+  }
+  await env.DB.batch([
+    env.DB.prepare(`DELETE FROM taste_compare_log WHERE profile_id=? AND at <= datetime('now', '-1 day')`).bind(me),
+    env.DB.prepare(`INSERT INTO taste_compare_log (profile_id, at) VALUES (?, datetime('now'))`).bind(me),
+  ]);
   return false;
 }
 // walidacja + sanityzacja batcha → { items, rejected } albo { error } (czyste — testowane bez D1)
