@@ -11,12 +11,13 @@ import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
   syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick } from '../core/picker.js';
-import { resolveTrack, resolveDistractors, resolveMedley, resolveCover } from '../adapters-web/itunesRepository.js';
+import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolvePiano } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet } from './dom.js';
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
+import { catLektorLang } from '../core/lektorVoice.js';
 import { playClap, playSfx } from './sfx.js';
 import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
@@ -280,7 +281,15 @@ async function newRound(){
     if(gen!==soloGen) return;
     if(r && !r.error) return startArtistQuestion(r, eraKey, gen);
   }
-  const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd});
+  // EKSPERYMENT „fortepian": oryginał + jego cover fortepianowy; brak coveru (np. same polskie utwory) → zwykła „muzyka"
+  let t=null;
+  if(mode==='piano'){
+    setState('szukam coveru fortepianowego…');
+    let p=null; try{ p=await resolvePiano({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd}); }catch(_e){ p=null; }
+    if(gen!==soloGen) return;
+    if(p && (!p.error || p.reason==='offline')) t=p;   // offline → od razu komunikat (bez drugiej kaskady)
+  }
+  if(!t) t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd});
   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem.
   // F2a #3: `busy` należy wtedy już do nowszego stanu (abandonRound je zwolnił, nowa runda mogła je zająć) — nie ruszaj.
   if(gen!==soloGen) return;
@@ -301,6 +310,7 @@ async function newRound(){
   if(mode==='intro') cur.introStage=0;
   if(mode==='revsnip') cur.revStage=0;                       // EKSPERYMENT: okno 3 s (koniec okna losowany po dekodowaniu)
   if(mode==='medley' || mode==='cover') cur.fallback=true;   // EKSPERYMENT: nie znaleziono wykonawcy/albumu → muzyka
+  if(mode==='piano' && !t.coverArtist) cur.fallback=true;    // EKSPERYMENT: brak coveru fortepianowego → muzyka
   if(mode==='year'){
     if(parseYear(t.year)==null) cur.fallback=true;
     else if(!yearReliable(t.year, cat.range, t.yearSrc)) cur.yearNote='rok wg wydania w iTunes';
@@ -435,7 +445,8 @@ function lektorPool(){
   const out=[];
   keys.forEach(k=>{
     const songs=(ALL_CATS[k]&&ALL_CATS[k].songs)||[];
-    songs.forEach(s=>{ if(s.lyric) out.push(s); });
+    const lang=catLektorLang(ALL_CATS[k]);   // język opisów kategorii (lyrics.js `lang`) → głos lektora
+    songs.forEach(s=>{ if(s.lyric) out.push({ ...s, lang }); });
   });
   return out.filter(s=>!seenTracks.has(norm(s.title)));
 }
@@ -460,7 +471,7 @@ async function newLektorRound(){
   }
   const s=pool[Math.floor(Math.random()*pool.length)];
   current={track:s.title, artist:s.artist, era:selectedEra,
-    year:s.year||'', album:s.album||'', preview:'', art:'', lyric:s.lyric, tts:s.tts||''};
+    year:s.year||'', album:s.album||'', preview:'', art:'', lyric:s.lyric, tts:s.tts||'', lang:s.lang||'pl'};
   seenTracks.add(norm(s.title));
   busy=false; qStartAt=Date.now();
   document.getElementById('check').disabled=false;
@@ -469,7 +480,7 @@ async function newLektorRound(){
   document.getElementById('knob').classList.add('live');
   renderSoloForm();
   showLyric(s.lyric);
-  lektorPlay(s.lyric, s.tts, setState);
+  lektorPlay(s.lyric, s.tts, setState, { lang:current.lang });
   document.getElementById('fTitle').focus({preventScroll:true});
 }
 // wiedza ogólna (solo): pytanie z puli kategorii, bez audio — wzorem newLektorRound
@@ -885,6 +896,7 @@ function check(){
   }
   if(current.album) r.appendChild(guessLine(okAlbum,'Album',current.album,g.album, okAlbum && norm(g.album)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
   if(intro) r.appendChild(noteLine('intro', `${roundOk?'zgadłeś':'odpowiedź'} na etapie ${introStageSecs(iStage)} s · mnożnik ×${String(sc.mult).replace('.',',')}`));
+  if(qm==='piano' && current.coverArtist) r.appendChild(noteLine('cover', '🎹 '+current.coverArtist));   // EKSPERYMENT: kto grał cover
   if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(mode==='lektor' && current.lyric){

@@ -2,21 +2,28 @@
  * Stan zamknięty w module; wejścia (tekst/url/callback) idą argumentami.
  * Zależy tylko od app/dom.js (status w UI) + Web Speech/Audio. */
 import { flash, setIcon, setRing, setState, lsGet, lsSet } from './dom.js';
+import { lektorLang, pickVoice, piperVoiceFor, LEKTOR_BCP47 } from '../core/lektorVoice.js';
 
-let plVoice = null;   // głos pl-PL do syntezatora systemowego
+// głosy syntezatora systemowego per język ('pl' | 'en') — wybór w core/lektorVoice.pickVoice
+// (jakość Natural/Neural/Enhanced/Premium > region > lokalny); lista głosów bywa asynchroniczna (onvoiceschanged)
+let voiceByLang = { pl:null, en:null };
 
 function loadVoice(){
   if(!('speechSynthesis' in window)) return;
   const vs=speechSynthesis.getVoices();
-  plVoice = vs.find(v=>/pl(-|_)?/i.test(v.lang)) || vs.find(v=>/pol/i.test(v.name)) || null;
+  voiceByLang = { pl:pickVoice(vs,'pl'), en:pickVoice(vs,'en') };
 }
 if('speechSynthesis' in window){ loadVoice(); speechSynthesis.onvoiceschanged=loadVoice; }
 
-export function speak(text){
+// `lang` — język tekstu ('pl' domyślnie; 'en' np. „polskie po angielsku"): głos i u.lang w tym języku
+export function speak(text, lang){
   if(!('speechSynthesis' in window)){ flash('Ta przeglądarka nie ma syntezatora mowy (lektor niedostępny).'); return; }
   speechSynthesis.cancel();
+  const L=lektorLang(lang);
+  if(!voiceByLang[L]) loadVoice();   // głosy mogły dojść po starcie (Chrome ładuje je leniwie)
   const u=new SpeechSynthesisUtterance(text);
-  if(plVoice){ u.voice=plVoice; u.lang=plVoice.lang; } else { u.lang='pl-PL'; }
+  const v=voiceByLang[L];
+  if(v){ u.voice=v; u.lang=v.lang || LEKTOR_BCP47[L]; } else { u.lang=LEKTOR_BCP47[L]; }
   u.rate=0.96; u.pitch=0.9;
   const gen=lektorGen;   // 2.1: onend z poprzedniej rundy nie może resetować ikony/statusu nowej
   u.onend=()=>{ if(gen!==lektorGen) return; setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); };
@@ -35,8 +42,9 @@ export function isSpeaking(){
 
 /* ===== kolejność jakości: pre-gen audio > Piper > głos systemowy ===== */
 let piperOn = lsGet('stacjaPiper')==='1';   // F2a #11: bez rzucania przy zablokowanym storage
-const PIPER_VOICE = 'pl_PL-gosia-medium';
-let piperMod=null, piperReady=false, lektorAudio=null, lektorUrl=null;   // lektorUrl: blob Pipera do zwolnienia
+// głos Pipera wg języka (core/lektorVoice.PIPER_VOICES: pl_PL-gosia-medium / en_US-hfc_female-medium) — każdy pobierany raz
+let piperMod=null, lektorAudio=null, lektorUrl=null;   // lektorUrl: blob Pipera do zwolnienia
+const piperReady=new Set();                            // identyfikatory pobranych głosów
 // token „pokolenia": każde nowe odtworzenie/stop unieważnia poprzednie. Bez tego
 // wolna synteza Piper z poprzedniego pytania kończyła się PO zmianie rundy i czytała
 // stary tekst (oraz nakładała się = brzmiało jak zapętlenie).
@@ -46,9 +54,9 @@ export function lektorStop(){ lektorGen++; if(lektorAudio){ lektorAudio.pause();
   if(lektorUrl){ try{ URL.revokeObjectURL(lektorUrl); }catch(_e){} lektorUrl=null; }   // 2.3: zwolnij blob także przy stopie w połowie
   stopSpeech(); }
 
-async function piperEnsure(onPct){
+async function piperEnsure(onPct, voiceId=piperVoiceFor('pl')){
   if(!piperMod) piperMod = await import('https://esm.sh/@diffusionstudio/vits-web@1.0.3');
-  if(!piperReady){ await piperMod.download(PIPER_VOICE, p=>{ if(onPct&&p.total) onPct(Math.round(p.loaded/p.total*100)); }); piperReady=true; }
+  if(!piperReady.has(voiceId)){ await piperMod.download(voiceId, p=>{ if(onPct&&p.total) onPct(Math.round(p.loaded/p.total*100)); }); piperReady.add(voiceId); }
   return piperMod;
 }
 
@@ -66,8 +74,13 @@ function playLektorAudio(a, gen, onStatus, label){
 
 // odtwarza lektora RAZ; callback onStatus(tekst) do pokazania postępu w UI.
 // Powtórka tylko ręcznie (gałka / przycisk ↻) — tu nie ma żadnej pętli.
-export async function lektorPlay(text, ttsUrl, onStatus){
+// `opts.lang` — język tekstu ('pl' | 'en'; brak → 'pl'): głos Pipera i syntezatora systemowego w tym języku.
+// Pre-gen audio (`ttsUrl`) jest już nagrane właściwym głosem (tools/gen_lektor.py wybiera go wg `lang` kategorii).
+let lastLang='pl';
+export function lektorLastLang(){ return lastLang; }   // do testów (siatka jsdom): język ostatniego odtworzenia
+export async function lektorPlay(text, ttsUrl, onStatus, opts={}){
   lektorStop();
+  const lang=lektorLang(opts && opts.lang); lastLang=lang;
   const gen=lektorGen;                          // to odtworzenie; jeśli zmieni się — przerwij
   if(ttsUrl){
     const a=new Audio(ttsUrl); if(gen!==lektorGen) return; lektorAudio=a;
@@ -76,11 +89,12 @@ export async function lektorPlay(text, ttsUrl, onStatus){
   if(piperOn){
     try{
       onStatus && onStatus('przygotowuję lepszy głos…');
-      const mod = await Promise.race([ piperEnsure(p=>{ if(gen===lektorGen) onStatus&&onStatus('pobieram głos… '+p+'%'); }),
+      const voiceId=piperVoiceFor(lang);
+      const mod = await Promise.race([ piperEnsure(p=>{ if(gen===lektorGen) onStatus&&onStatus('pobieram głos… '+p+'%'); }, voiceId),
         new Promise((_,r)=>setTimeout(()=>r(new Error('load')),120000)) ]);
       if(gen!==lektorGen) return;                // runda się zmieniła w trakcie pobierania
       onStatus && onStatus('lektor czyta (Piper)…');
-      const wav = await Promise.race([ mod.predict({text, voiceId:PIPER_VOICE}),
+      const wav = await Promise.race([ mod.predict({text, voiceId}),
         new Promise((_,r)=>setTimeout(()=>r(new Error('synth')),60000)) ]);
       if(gen!==lektorGen) return;                // synteza skończyła się po zmianie pytania → NIE graj starego
       const url=URL.createObjectURL(wav); lektorUrl=url;
@@ -91,7 +105,7 @@ export async function lektorPlay(text, ttsUrl, onStatus){
   }
   if(gen!==lektorGen) return;
   onStatus && onStatus('lektor czyta…');
-  speak(text);
+  speak(text, lang);
 }
 
 const piperToggleBtn=document.getElementById('piperToggle');

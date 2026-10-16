@@ -594,6 +594,21 @@ await group('F2b #11: lektor — tekst/TTS nie w ARMING (newRound z pulą piosen
   } else ok(false, 'lektor: oczekiwano ARMING, było '+g.phase);
 });
 
+await group('lektor: język opisu kategorii (lang) → game.lyricLang w PLAY, sanityzacja pl|en', async ()=>{
+  for(const [lang, want] of [['en','en'], [undefined,'pl'], ['<script>','pl'], ['EN','en']]){
+    const { room } = await makeRoom();
+    const a=room.join('A','Ala');
+    const ly={ label:'Teksty', kind:'lyrics', songs:[{ title:'T', artist:'A', lyric:'clue in English' }] };
+    if(lang!==undefined) ly.lang=lang;
+    await room.msg(a, { t:'start', config:CONFIG({ modes:['lektor'], pools:{ ly } }) });
+    const g=a.last('state').game;
+    eq(g.lyricLang||'', '', 'lang='+lang+': brak języka w ARMING (odsłaniany z tekstem)');
+    await readyAll(room, a);
+    eq(a.last('state').game.lyricLang, want, 'lang='+lang+' → '+want);
+    ok(lang===undefined ? room.pools.ly.lang===undefined : room.pools.ly.lang===want, 'pula po clampPools: lang tylko pl|en');
+  }
+});
+
 await group('F2b #12: duplikat ready nie powoduje broadcastu (bez kaskady re-arm)', async ()=>{
   const { room } = await makeRoom();
   const a=room.join('A','Ala'), b=room.join('B','Bo');

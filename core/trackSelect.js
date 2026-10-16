@@ -582,6 +582,107 @@ export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random,
   return { error:true, reason: anyResponse ? 'empty' : 'offline' };
 }
 
+/* ======================= EKSPERYMENT: „fortepian" (piano) — fortepianowy COVER utworu =======================
+ * Gracz słyszy zajawkę coveru fortepianowego i zgaduje TYTUŁ i ORYGINALNEGO wykonawcę (punkty jak „muzyka").
+ * OSOBNA ścieżka: BAD (filtr coverów/tributów) dla zwykłych trybów zostaje nietknięty — tu covery są celem,
+ * ale wybór ma własne, ostrzejsze reguły (słowo „piano", tytuł = oryginał, inny wykonawca, bez wokalu/kołysanek).
+ * Badanie iTunes PL: światowe hity mają piano cover z zajawką ~11/12, polskie ~0/8 → modesFor nie oferuje
+ * trybu w kategoriach polskich (pianoCapable w core/match.js), a resolvePiano pomija utwory z polskimi znakami. */
+export const PIANO_WORD = /\b(?:piano|pianoforte|klavier|fortepian\w*)\b/i;
+// odrzuć: wokal, karaoke, kołysanki (Rockabye Baby to nie fortepian), inne instrumenty, składanki/mashupy
+export const PIANO_REJECT = /\bvocals?\b|with vocals|karaoke|sing-?along|in the style of|backing track|lullab|rockabye|guitar|string quartet|\bstrings\b|quartet|\bviolins?\b|\bcellos?\b|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|medley|mash-?up|\bmegamix\b/i;
+export const PIANO_TRIES = 6;
+// tytuł wyniku/oryginału do porównania: bez nawiasów, sufiksu „ - …" i dopisków „Piano Version/Cover"
+export function pianoTitleKey(title){
+  const t=String(title||'').replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(/\s[-–—]\s.*$/,' ')
+    .replace(/\b(?:piano|klavier)\s+(?:version|cover|arrangement|instrumental|solo|rendition)\b.*$/i,' ');
+  return norm(t) || titleKey(title);
+}
+// polski utwór (iTunes nie ma dla nich piano coverów) — znaki typowo polskie w tytule/wykonawcy (bez „ó": hiszp./port.)
+export function looksPolish(t){ return /[ąćęłńśźżĄĆĘŁŃŚŹŻ]/.test(String((t && t.track)||'')+' '+String((t && t.artist)||'')); }
+/* Czysta: wybierz cover fortepianowy oryginału `orig` ({track, artist}) z wyników wyszukiwania. Pierwszy (najwyżej
+ * w wynikach ≈ najpopularniejszy) spełniający: zajawka; tytuł = tytuł oryginału; wykonawca ≠ oryginał; słowo
+ * piano/klavier/fortepian w tytule/wykonawcy/albumie; bez PIANO_REJECT (tytuł/wykonawca/album). → wynik albo null
+ * KOLIZJA TYTUŁÓW (pomiar na żywo: „King" T.Love → cover „King" Florence + the Machine; „Freedom" Wham! → covery
+ * „Freedom" Kygo): gdy wyniki NIE zawierają oryginału albo zawierają ten sam tytuł innego wykonawcy wyżej niż oryginał
+ * (lub oryginał dopiero od pozycji PIANO_OWN_TOP, a innych wykonawców ≥2 — „Enjoy the Silence" z oryginałem na 3. miejscu
+ * i coverami Carli Bruni/Anberlin to NIE kolizja), cover musi mieć DOWÓD — nazwę oryginalnego wykonawcy w tytule/albumie
+ * („Piano Tribute to Madonna", „(Originally Performed by …)"). */
+export const PIANO_OWN_TOP = 5;   // oryginał w top 5 wyników „<tytuł> piano" = tytuł zdominowany przez ten utwór
+const COVER_MARK = /\bcover\b|tribute|originally|made famous|in the style|karaoke|instrumental|version|arrang|rendition|lullab|reimagined/i;
+function pianoAmbiguous(results, want, who){
+  let own=-1; const others=new Set(); let otherFirst=-1;
+  (results||[]).forEach((r, idx)=>{
+    if(!r || !r.trackName || !r.artistName) return;
+    const key=pianoTitleKey(r.trackName);
+    if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)){ if(own<0 && (key===want || textMatch(key, want))) own=idx; return; }
+    if(key!==want) return;
+    const text=r.trackName+' '+r.artistName+' '+(r.collectionName||'');
+    if(PIANO_WORD.test(text) || COVER_MARK.test(text)) return;          // inne covery/aranżacje nie świadczą o kolizji
+    others.add(artistKey(r.artistName)); if(otherFirst<0) otherFirst=idx;
+  });
+  return own<0 || (otherFirst>=0 && otherFirst<own) || (own>=PIANO_OWN_TOP && others.size>=2);
+}
+function pianoEvidence(r, who){
+  const k=artistKey(who); if(!k) return false;
+  // norm() obcina nawiasy i „feat." — dowód bywa właśnie w nawiasie („(Originally Performed by Wham!)"), więc najpierw spacje
+  const flat=String(r.trackName+' '+(r.collectionName||'')).replace(/[()\[\]]/g,' ').replace(/\s[-–—]\s/g,' ').replace(/\b(?:feat|ft|featuring)\b\.?/gi,' ');
+  return (' '+norm(flat)+' ').includes(' '+k+' ');
+}
+export function pickPianoCover(results, orig){
+  const want=pianoTitleKey(orig && orig.track), who=String((orig && orig.artist)||'');
+  if(!want || !who) return null;
+  const ambiguous=pianoAmbiguous(results, want, who);
+  for(const r of (results||[])){
+    if(!r || !r.previewUrl || !r.trackName || !r.artistName) continue;
+    const text=r.trackName+' \u0001 '+r.artistName+' \u0001 '+(r.collectionName||'');
+    if(!PIANO_WORD.test(text) || PIANO_REJECT.test(text)) continue;
+    if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)) continue;   // oryginał (też „X & Y") — nie cover
+    const got=pianoTitleKey(r.trackName);
+    if(!got || !(got===want || textMatch(got, want))) continue;
+    if(ambiguous && !pianoEvidence(r, who)) continue;
+    return r;
+  }
+  return null;
+}
+// zapytania o cover: „<tytuł> piano", zapas „<tytuł> <wykonawca> piano cover" (tryb song: bez attribute=artistTerm)
+export function pianoQueries(orig){
+  const strip=x=>String(x||'').replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(/\s[-–—]\s.*$/,' ').replace(/\s+(?:feat\.?|ft\.?)\s.*$/i,' ').replace(/\s+/g,' ').trim();
+  const t=strip(orig && orig.track), a=strip(orig && orig.artist);
+  return t ? [t+' piano', (t+' '+a).trim()+' piano cover'] : [];
+}
+/* Rozwiąż pytanie „fortepian": oryginał jak w „muzyce" (resolveTrack — popularny, z dekady), potem cover fortepianowy.
+ * Brak coveru → kolejny oryginał (≤ tries; utwory z polskimi znakami pomijane bez zapytania o cover).
+ * → { ...oryginał (track, artist, year, album, art), preview (zajawka COVERU), origPreview, coverArtist, coverTrack }
+ * albo { error, reason } (wołający gra wtedy zwykłą „muzykę"). */
+export async function resolvePiano({ cat, seen, recent, itunes, rnd=Math.random, capMs=RESOLVE_CAP_MS, tries=PIANO_TRIES }){
+  const deadline=Date.now()+capMs;
+  let anyResponse=false;
+  // tani prefiltr: wykonawcy / utwory playlisty z polskimi znakami w nazwie nie mają piano coverów (oszczędza zapytania)
+  const pl=x=>/[ąćęłńśźżĄĆĘŁŃŚŹŻ]/.test(String(x||''));
+  const arts=Array.isArray(cat.artists) ? cat.artists.filter(a=>!pl(a)) : [];
+  const songs=Array.isArray(cat.songs) ? cat.songs.filter(x=>x && !looksPolish({ track:x.title, artist:x.artist })) : [];
+  const pick={ ...cat };
+  if(arts.length) pick.artists=arts;
+  if(songs.length) pick.songs=songs;
+  for(let i=0; i<tries; i++){
+    let remaining=deadline-Date.now(); if(remaining<=0) break;
+    let t;
+    try{ t=await resolveTrack({ cat:pick, seen, recent, itunes, rnd, capMs:remaining }); }catch(_e){ t={ error:true, reason:'offline' }; }
+    if(!t || t.error){ if(t && t.reason==='empty') anyResponse=true; break; }
+    anyResponse=true;
+    if(looksPolish(t)) continue;
+    for(const q of pianoQueries(t)){
+      remaining=deadline-Date.now(); if(remaining<=0) break;
+      let res=null;
+      try{ res=await withTimeout(Promise.resolve(itunes(q, { song:true })), remaining); }catch(_e){ res=null; }
+      const c=pickPianoCover(res, t);
+      if(c) return { ...t, origPreview:t.preview, preview:c.previewUrl, coverArtist:String(c.artistName||'').trim(), coverTrack:String(c.trackName||'').trim() };
+    }
+  }
+  return { error:true, reason: anyResponse ? 'empty' : 'offline' };
+}
+
 /* jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców).
  * `itunes(term, opts) → Promise<results[]>` wstrzyknięty przez warstwę sieci (web/serwer).
  * F8b: `rnd` (opcjonalny) — seedowany PRNG: kolejność wykonawców/utworów playlisty i ważony wybór utworu.

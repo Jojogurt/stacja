@@ -191,6 +191,7 @@ function mpBuildPools(cats, modes){
   for(const k of cats){
     const c=ALL_CATS[k]; if(!c) continue;
     const out={ label:c.label, range:c.range, kind:c.kind };
+    if(wantLektor && c.lang) out.lang=c.lang;   // język opisów lektora (lyrics.js); serwer sanityzuje do 'pl'|'en'
     if(Array.isArray(c.artists) && c.artists.length) out.artists=c.artists.slice();
     if(Array.isArray(c.songs) && c.songs.length){
       out.songs=c.songs.slice(0, MP_POOL_SONG_CAP).map(s=>{

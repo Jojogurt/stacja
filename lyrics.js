@@ -18,6 +18,12 @@
 
    Format kategorii (jak w categories.js): kind:'lyrics' + songs[].
    Brak `preview`/`artists` — kategoria gra TYLKO w trybie lektor.
+
+   `lang` (na poziomie KATEGORII): język opisów — lektor czyta głosem tego
+   języka ('pl' domyślnie, gdy brak pola; 'en' = opisy po angielsku, np.
+   „polskie po angielsku"). Dozwolone: 'pl' | 'en' (core/lektorVoice.js).
+   Pre-generowane audio (`tts` na utworze) robi tools/gen_lektor.py —
+   też wybiera głos wg `lang` kategorii.
    ============================================================ */
 window.CATEGORIES = window.CATEGORIES || {};
 window.CATEGORIES.lyrics = {
@@ -279,7 +285,7 @@ window.CATEGORIES.lyrics = {
   },
 
   'tlum-pl': {
-    label: 'polskie po angielsku', desc: 'clue in EN — guess', kind: 'lyrics',
+    label: 'polskie po angielsku', desc: 'clue in EN — guess', kind: 'lyrics', lang: 'en',
     songs: [
       { title: 'Dziwny jest ten świat', artist: 'Czesław Niemen', year: '1967',
         lyric: 'A 1967 soul-rock protest delivered over a Hammond organ in a powerful, trembling voice: the singer is dismayed by how much hate and contempt people show each other, yet believes decent people will prevail.' },

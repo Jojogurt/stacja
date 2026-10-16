@@ -250,6 +250,7 @@ const f2aRelease = async () => { F2A.hold=null; while(F2A.pending.length){ F2A.p
 const soloAudioMod = await import('../app/audio.js');   // ten sam singleton co w app.js (bez cache-bustera)
 const lektorMod = await import('../app/lektor.js');
 const repoMod = await import('../adapters-web/itunesRepository.js');   // F5: cache iTunes per sesja (singleton)
+const M8dom = await import('../core/match.js');   // EKSP. fortepian: modesFor na danych categories.js
 // start meczu solo: tylko wskazana kategoria + tylko wskazany tryb (chip)
 async function f2aStartMatch(catKey, modeRe){
   resetSelection(window);
@@ -948,6 +949,19 @@ await group('F2b #6: ARMING — host „pomiń czekających" ({t:go}) + licznik;
   const n=ws.sent.filter(m=>m.t==='go').length;
   w.mpHostSkipWait(); await settle(2);
   ok(ws.sent.filter(m=>m.t==='go').length===n+1, '#6: klik wysyła {t:go}');
+});
+
+await group('lektor MP: język opisu (game.lyricLang) → głos lektora; stary serwer bez pola → pl', async ()=>{
+  const w=window, ws=wsInstances[wsInstances.length-1];
+  const ss=globalThis.speechSynthesis, origSpeak=ss.speak; const utts=[]; ss.speak=(u)=>{ utts.push(u); };
+  try{
+    ws.pushState(playState(ws, { mode:'lektor', preview:'', lyric:'A song about a strange world', lyricLang:'en', playNonce:3050 })); await settle(6);
+    eq2(lektorMod.lektorLastLang(), 'en', 'lyricLang:"en" → lektor po angielsku');
+    ok(utts.length && /^en/.test(utts[utts.length-1].lang||''), 'syntezator: u.lang en — '+(utts.length&&utts[utts.length-1].lang));
+    ws.pushState(playState(ws, { mode:'lektor', preview:'', lyric:'Piosenka o dziwnym świecie', playNonce:3051 })); await settle(6);
+    eq2(lektorMod.lektorLastLang(), 'pl', 'brak lyricLang (stary serwer) → pl');
+    ok(/^pl/.test(utts[utts.length-1].lang||''), 'syntezator: u.lang pl');
+  } finally { ss.speak=origSpeak; lektorMod.lektorStop(); }
 });
 
 await group('F2b #6: auto-„dalej" na odsłonie po bezczynności (licznik widoczny)', async ()=>{
@@ -1676,6 +1690,80 @@ await group('EKSP. MP: picker — „od tyłu krótko" z nowym serwerem, składa
   ok(/mpToggleMode\('revsnip'\)/.test(html) && /od tyłu krótko/.test(html), 'nowy serwer → chip „od tyłu krótko"');
   ok(!/mpToggleMode\('medley'\)/.test(html) && !/mpToggleMode\('cover'\)/.test(html), 'składanka/okładka tylko solo');
   w.mpLeaveConfirmed('room'); await settle(4);
+});
+/* ===================== lektor: język opisu kategorii (lyrics.js `lang`) → głos ===================== */
+await group('lektor solo: „polskie po angielsku" (lang:"en") czyta angielskim głosem, inne kategorie — polskim', async ()=>{
+  const w=window, C=w.CATEGORIES||{}, L=C.lyrics||{};
+  ok(L['tlum-pl'] && L['tlum-pl'].lang==='en', 'lyrics.js: tlum-pl ma lang:"en"');
+  ok(L['tlum-int'] && !L['tlum-int'].lang, 'tlum-int bez lang (domyślnie pl)');
+  const ss=globalThis.speechSynthesis, origSpeak=ss.speak, origGV=ss.getVoices; const utts=[]; ss.speak=(u)=>{ utts.push(u); };
+  ss.getVoices=()=>[ { name:'Zosia', lang:'pl-PL', localService:true }, { name:'Daniel', lang:'en-GB', localService:true, default:true },
+    { name:'Microsoft Ava Online (Natural) - English (United States)', lang:'en-US' } ];
+  if(typeof ss.onvoiceschanged==='function') ss.onvoiceschanged();
+  try{
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    for(const [key, want, voice] of [['tlum-pl','en',/Ava/], ['tlum-int','pl',/Zosia/]]){
+      await f2aStartMatch(key, /lektor/);
+      ok(w.document.body.classList.contains('playing'), 'mecz lektora: '+key);
+      for(let i=0;i<20 && !utts.length;i++) await settle(2);
+      eq2(lektorMod.lektorLastLang(), want, key+' → lektorPlay lang '+want);
+      const u=utts[utts.length-1];
+      ok(u && voice.test((u.voice&&u.voice.name)||'') && new RegExp('^'+want).test(u.lang||''), key+': głos '+(u&&u.voice&&u.voice.name)+' / '+(u&&u.lang));
+      $(w,'replay').click(); await settle(3);   // ↻ powtórka — ten sam język
+      eq2(lektorMod.lektorLastLang(), want, key+': powtórka w tym samym języku');
+      utts.length=0;
+      if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+      $(w,'sumAgain').click(); await settle(1);
+    }
+  } finally { ss.speak=origSpeak; ss.getVoices=origGV; if(typeof ss.onvoiceschanged==='function') ss.onvoiceschanged(); lektorMod.lektorStop(); }
+});
+
+/* ===================== EKSPERYMENT: „fortepian" (solo) — cover fortepianowy, odsłona „cover: …" ===================== */
+await group('EKSP. solo: „fortepian" — gra zajawka COVERU, odpowiedź = tytuł + oryginalny wykonawca, odsłona „cover"', async ()=>{
+  const pianoQ=[];
+  const pianoFetch=(url)=>{
+    const u=String(url);
+    if(/^https:\/\/x\/.*\.m4a/.test(u)) return Promise.resolve({ ok:true, status:200, arrayBuffer:()=>Promise.resolve(new ArrayBuffer(16)) });
+    let q; try{ q=new URL(u).searchParams; }catch(_e){ q=new URLSearchParams(); }
+    const term=q.get('term')||'X';
+    if(q.get('attribute')==='artistTerm'){
+      const r=(t,y)=>({ trackName:t, artistName:term, previewUrl:'https://x/orig-'+encodeURIComponent(t)+'.m4a', collectionName:'Album '+term, releaseDate:y+'-01-01', artworkUrl100:'https://x/orig/100x100bb.jpg' });
+      return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:['Raz','Dwa','Trzy'].map((t,i)=>r(t+' '+term, 1960+i)) }) });
+    }
+    pianoQ.push(term);
+    const m=term.match(/^(.*) piano$/);
+    const who=m ? m[1].replace(/^(Raz|Dwa|Trzy) /,'') : '';   // oryginał też jest w wynikach (jak w iTunes) — kotwica tytułu
+    const results = m ? [ { trackName:m[1], artistName:who, collectionName:'Album '+who, previewUrl:'https://x/orig2.m4a' }, { trackName:m[1]+' (Lullaby Version)', artistName:'Rockabye Baby!', collectionName:'Lullaby Renditions', previewUrl:'https://x/lullaby.m4a' },
+      { trackName:m[1]+' (Piano Version)', artistName:'Piano Tribute Players', collectionName:'Piano Covers', previewUrl:'https://x/piano-'+encodeURIComponent(m[1])+'.m4a', artworkUrl100:'https://x/cover-art/100x100bb.jpg' } ] : [];
+    return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results }) });
+  };
+  const w=window, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  globalThis.fetch=pianoFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache();
+  try{
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    ok(modeChip(w, /fortepian/), 'picker solo: chip „🎹 fortepian"');
+    const C=w.CATEGORIES, all={...(C.decades||{}),...(C.styles||{})};
+    ok(!M8dom.modesFor('rock-pl', all).includes('piano') && !M8dom.modesFor('disco-polo', all).includes('piano') && M8dom.modesFor('pop-world', all).includes('piano'), 'kategorie polskie bez fortepianu, pop świat z nim');
+    await f2aStartMatch('pop-world', /fortepian/);
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    ok(!$(w,'check').disabled, 'pytanie gotowe — stan: '+txt(w,'state'));
+    const q=pianoQ.find(t=>/ piano$/.test(t))||''; const title=q.replace(/ piano$/,'');
+    ok(title, 'zapytanie o cover „<tytuł> piano" — '+q);
+    for(let i=0;i<20 && !soloAudioMod._soloAudioDebug().round;i++) await settle(2);
+    const el=soloAudioMod._soloAudioDebug().el;
+    ok(el && /piano-/.test(el.src||''), 'gra zajawka coveru fortepianowego (nie kołysanka, nie oryginał) — '+(el&&el.src));
+    const artist=title.replace(/^(Raz|Dwa|Trzy) /,'');
+    $(w,'fTitle').value=title; $(w,'fArtist').value=artist;
+    click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/Dobrze!/.test(txt(w,'revealHead')), 'tytuł + ORYGINALNY wykonawca → „Dobrze!" — '+txt(w,'revealHead'));
+    ok(/cover/.test(rm) && /Piano Tribute Players/.test(rm), 'odsłona: „cover 🎹 Piano Tribute Players" — '+rm.slice(0,240));
+    ok(/orig\/300x300/.test($(w,'art').getAttribute('src')||''), 'okładka ORYGINAŁU (nie coveru) — '+$(w,'art').getAttribute('src'));
+    ok(/tytuł 50 · wykonawca 50/.test(txt(w,'footLegend')), 'punktacja jak muzyka');
+  } finally {
+    if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+    $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache();
+  }
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

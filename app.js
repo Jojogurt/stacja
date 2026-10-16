@@ -9,7 +9,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v61';   // eksperyment: tryby składanka (4 wycinki wykonawcy), od tyłu krótko (3-5 s), okładka (pikselizacja)
+const APP_VERSION = 'v62';   // eksperyment: tryb fortepian (piano covery z iTunes) + lektor czyta w języku opisu (EN dla tlum-pl)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).

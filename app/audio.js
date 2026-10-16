@@ -300,7 +300,7 @@ export function toggleAudio(){
   if(mode==='quiz' || mode==='cover'){ return; }   // wiedza ogólna / EKSPERYMENT okładka — brak audio do odtworzenia
   if(mode==='lektor'){
     if(isSpeaking()){ lektorStop(); setIcon('play'); setState('pauza · ▶ wznów'); return; }   // czyta → stop
-    lektorPlay(current.lyric, current.tts, setState); return;
+    lektorPlay(current.lyric, current.tts, setState, { lang:current.lang }); return;
   }
   if((mode==='reverse' || mode==='revsnip' || mode==='medley') && !round){   // EKSPERYMENT: + bufory WebAudio
     if(revSrc){ stopAudio(); setIcon('play'); setState('pauza · ↻ od nowa'); return; }     // od tyłu: stop (replay od nowa)
@@ -317,7 +317,7 @@ export function toggleAudio(){
 export function replay(){
   const current=getCurrent(), mode=getMode();
   if(!current) return;
-  if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState); return; }
+  if(mode==='lektor'){ lektorPlay(current.lyric, current.tts, setState, { lang:current.lang }); return; }
   stopAudio(); startAudio();
 }
 

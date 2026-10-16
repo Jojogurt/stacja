@@ -22,6 +22,7 @@ import { resolveTrack, resolveDistractors } from '../adapters-web/itunesReposito
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
 import { stopAudio } from './audio.js';
 import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
+import { lektorLang, catLektorLang } from '../core/lektorVoice.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle, knownHandle } from './social.js';
 import { playSfx, registerMusicProbe } from './sfx.js';
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
@@ -544,7 +545,8 @@ function mpPlayLocal(){
   if(S.game && !playsAudioLocally(S.game, mpMe.id)){ mpSetKnob('play'); mpSetPlayStatus('🔈 słuchaj z głośnika hosta'); return; }
   audioSession('playback');   // zajawka przejmuje dźwięk
   lektorStop(); mpStopRev();
-  if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}); return; }
+  // język opisu z kategorii (host/serwer → S.game.lyricLang; stary serwer/host bez pola → 'pl')
+  if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}, { lang:lektorLang(S.game.lyricLang) }); return; }
   if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
   if(S.game.mode==='reverse' || S.game.mode==='revsnip'){ return mpPlayReverse(); }   // EKSPERYMENT: + od tyłu krótko
   // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
@@ -676,6 +678,7 @@ async function mpHostNewRound(){
     S.hostCurrent={track:s.title, artist:s.artist, year:s.year||'', album:s.album||'', art:'', preview:'', lyric:s.lyric};
     S.hostSeen.add(norm(s.title));
     S.game.lyric=s.lyric; S.game.preview=''; S.game.ttsUrl=s.tts||''; S.game.prompt=''; S.game.answerSlots=null;
+    S.game.lyricLang=catLektorLang(ALL_CATS[catKey]);   // głos lektora u wszystkich w języku opisu kategorii
   } else {
     // audio (muzyka/od tyłu/fragment) — playlistę i pulę wykonawców rozwiązuje repozytorium
     const t=await resolveTrack({cat:ALL_CATS[catKey], seen:S.hostSeen, cfg:window.STACJA_CONFIG});

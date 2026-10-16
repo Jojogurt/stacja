@@ -35,6 +35,7 @@ import { REACTIONS } from '../core/chatFeed.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm, quizKey, shuffleMC, parseYear } from '../core/scoring.js';
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
+import { lektorLang, catLektorLang } from '../core/lektorVoice.js';   // język lektora (pl|en) z puli
 import { mpSnipOffset, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
 import { resolveTrackServer, resolveDistractorsServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
@@ -112,6 +113,7 @@ function clampPools(pools){
     const c=pools[k]; if(!c || typeof c!=='object') continue;
     // F1: wszystko z hosta jako TEKST z capem (catLabel/utwór lecą do stanu u wszystkich)
     const o={ label:clipText(c.label, CAT_TEXT_MAX), range:clipText(c.range, CAT_TEXT_MAX), kind:clipText(c.kind, 16) };
+    if(c.lang!=null) o.lang=lektorLang(c.lang);   // język opisów lektora: tylko 'pl' | 'en'
     if(Array.isArray(c.artists)) o.artists=c.artists.slice(0, POOL_MAX_SONGS).map(a=>clipText(a, SONG_TEXT_MAX)).filter(Boolean);
     if(Array.isArray(c.songs)) o.songs=c.songs.slice(0, POOL_MAX_SONGS).filter(s=>s && typeof s==='object').map(s=>{
       const r={ title:clipText(s.title, SONG_TEXT_MAX), artist:clipText(s.artist, SONG_TEXT_MAX) };
@@ -430,7 +432,7 @@ export class GameAuthority extends Server {
     this.game.reveal=null; this.game.endsAt=null; this.game.playAt=null; this.current=null;
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
-    const hidden={ prompt:'', lyric:'', ttsUrl:'', snipStart:0 };   // F2b #11: odsłaniane w go()
+    const hidden={ prompt:'', lyric:'', ttsUrl:'', lyricLang:'', snipStart:0 };   // F2b #11: odsłaniane w go()
     this.armHidden=null; this.armDeadline=null; this.clearArmTimer();
     if(!cat){ this.game.phase=MP.NETERR; this.game.netReason='nocat'; this.broadcastState(); await this.persist(); return; }
 
@@ -454,8 +456,9 @@ export class GameAuthority extends Server {
       const x=songs[Math.floor(Math.random()*songs.length)];
       this.current={ track:x.title, artist:x.artist, year:x.year||'', album:x.album||'', art:'', preview:'', lyric:x.lyric };
       this.hostSeen.add(norm(x.title));
-      this.game.lyric=''; this.game.preview=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
+      this.game.lyric=''; this.game.preview=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null; this.game.lyricLang='';
       hidden.lyric=x.lyric; hidden.ttsUrl=x.tts||'';   // F2b #11: tekst/TTS lektora dopiero w PLAY
+      hidden.lyricLang=catLektorLang(cat);              // język głosu lektora (klient bez pola → 'pl')
     } else {
       const t=await this.resolver.track({ cat, seen:this.hostSeen, recent:this.recent });
       if(t.error){ this.game.phase=MP.NETERR; this.game.netReason=t.reason; this.broadcastState(); await this.persist(); return; }
@@ -535,6 +538,7 @@ export class GameAuthority extends Server {
       if(h.prompt) this.game.prompt=h.prompt;
       if(h.lyric) this.game.lyric=h.lyric;
       if(h.ttsUrl) this.game.ttsUrl=h.ttsUrl;
+      if(h.lyricLang) this.game.lyricLang=h.lyricLang;
       if(h.snipStart) this.game.snipStart=h.snipStart;
       this.armHidden=null;
     }

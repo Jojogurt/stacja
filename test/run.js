@@ -116,8 +116,8 @@ const CATS={
   gk:{label:'wiedza', kind:'quiz', questions:[{prompt:'q',slots:[{key:'a',label:'odp'}],answers:{a:['x']}}]},
 };
 group('match.modesFor', ()=>{
-  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip'],'audio bez tekstu (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
-  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','lektor'],'audio + lektor (jest lyric)');
+  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip','piano'],'audio bez tekstu (EKSP.: + fortepian) (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
+  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','piano','lektor'],'audio + lektor (jest lyric)');
   eq(modesFor('lyr',CATS),['lektor'],'kind=lyrics → tylko lektor');
   eq(modesFor('gk',CATS),['quiz'],'kind=quiz → tylko quiz');
   ok(!modesFor('d80',CATS).includes('quiz'),'muzyka nigdy nie ma trybu quiz');
@@ -1356,14 +1356,14 @@ group('F8a trackSelect: wiarygodność roku', ()=>{
 group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
   ok(['intro','abcd','year'].every(m=>ALL_MODES.includes(m) && MODE_LABEL[m]), 'nowe tryby w ALL_MODES + etykiety');
   eq(MODE_LABEL.intro,'⏱ intro','etykieta intro');
-  eq(SOLO_ONLY_MODES,['intro','medley','cover'],'intro (EKSP.: + składanka, okładka) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
+  eq(SOLO_ONLY_MODES,['intro','medley','cover','piano'],'intro (EKSP.: + składanka, okładka, fortepian) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
   const C={ dek:{label:'80', range:'1980–89', artists:['A','B','C']}, pl:{label:'pl', songs:[1,2,3,4,5].map(i=>({title:'t'+i,artist:'a'+i,year:'199'+i}))},
     pl2:{label:'pl2', songs:[{title:'x',artist:'y'},{title:'z',artist:'w'}]}, lyr:{label:'l', kind:'lyrics', songs:[{title:'d'}]}, q:{label:'q', kind:'quiz', questions:[]},
     solo1:{label:'s', artists:['Only']} };
-  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover'],'dekada: wszystkie tryby audio');
+  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover','piano'],'dekada: wszystkie tryby audio');
   eq(modesFor('pl',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover'],'playlista z rokiem: + rok (EKSP.: 5 wykonawców → składanka/okładka)');
-  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip'],'2 utwory bez roku: bez ABCD/roku');
-  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
+  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip','piano'],'2 utwory bez roku: bez ABCD/roku');
+  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover','piano'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
   eq(modesFor('lyr',C),['lektor'],'teksty bez audio — bez nowych trybów'); eq(modesFor('q',C),['quiz'],'quiz bez nowych trybów');
   const mi=buildMatch(['dek'],['intro'],{questions:5},C); ok(!mi.error && mi.slots[0].mode==='intro', 'buildMatch: mecz intro');
   eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','zzz'] }).modes,['music','abcd','year'],'MP config: intro odrzucone (tylko solo)');
@@ -1728,5 +1728,100 @@ await (async ()=>{
   const a1=await cf('Toto'), a2=await cf('Toto',{album:true}), a3=await cf('Toto');
   ok(a1[0].kind==='song' && a2[0].kind==='album' && a3===a1,'cachedFetcher: osobny klucz „al:" dla albumów');
 })();
+/* ===== EKSPERYMENT „fortepian" (piano): wybór coveru fortepianowego, reguła kategorii polskich, fallback ===== */
+group('EKSP. fortepian: tryb, modesFor (bez kategorii polskich), pickPianoCover', ()=>{
+  ok(M8.ALL_MODES.includes('piano') && M8.MODE_LABEL.piano && M8.MODE_SHORT.piano && M8.MODE_SUB.piano,'tryb + etykiety');
+  ok(!M8.MP_MODES.includes('piano') && M8.SOLO_ONLY_MODES.includes('piano'),'tylko solo');
+  eq(M8.sanitizeMpConfig({ modes:['piano','music'] }).modes,['music'],'MP config: fortepian odrzucony');
+  const C={ '80s':{label:'lata 80', range:'1980–89', artists:['Maanam','Madonna']}, 'pop-world':{label:'pop świat', desc:'wielkie gwiazdy', artists:['Adele']},
+    'rock-pl':{label:'rock PL', desc:'polski rock', artists:['Dżem']}, 'rap-pl':{label:'rap PL', artists:['Mata']}, 'disco-polo':{label:'disco polo', artists:['Akcent']},
+    'evergreen-pl':{label:'evergreeny PL', desc:'polskie złoto', artists:['Anna German']}, 'pl:abc':{label:'Polskie hity 2024', songs:[{title:'a',artist:'b'}]},
+    'pl:def':{label:'Top 50 Global', songs:[{title:'a',artist:'b'}]}, wym:{label:'x', artists:['A'], lang:'pl'}, odwr:{label:'hity PL', artists:['A'], lang:'en'},
+    lyr:{label:'polskie po angielsku', kind:'lyrics', lang:'en', songs:[{title:'t',lyric:'x'}]} };
+  ok(M8.modesFor('80s',C).includes('piano') && M8.modesFor('pop-world',C).includes('piano'),'dekada i pop świat → fortepian');
+  ['rock-pl','rap-pl','disco-polo','evergreen-pl','pl:abc','wym'].forEach(k=>ok(!M8.modesFor(k,C).includes('piano'),'kategoria polska bez fortepianu: '+k));
+  ok(M8.modesFor('pl:def',C).includes('piano'),'playlista światowa → fortepian');
+  ok(M8.modesFor('odwr',C).includes('piano'),'jawne lang:"en" wygrywa z etykietą „PL"');
+  eq(M8.modesFor('lyr',C),['lektor'],'teksty — bez fortepianu');
+  const it=(t,a,col='Piano Covers',extra={})=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+encodeURIComponent(a+t), ...extra });
+  const orig={ track:'Billie Jean', artist:'Michael Jackson' };
+  const res=[ it('Billie Jean','Michael Jackson','Thriller'), it('Billie Jean (Piano & Vocal Version)','Ana Piano'), it('Billie Jean (Lullaby Rendition)','Rockabye Baby!','Lullaby Renditions of Michael Jackson'),
+    it('Billie Jean (Piano & Cello)','The Cello Fingers'), it('Billie Jean (Instrumental)','Studio Band','Hits Instrumental'), it('Billie Jean (Michael Jackson Cover)','Calum Graham','Tabula Rasa'),
+    it('Bad / Billie Jean (Medley) [Piano Version]','Piano Guys'), it('Billie Jean (Piano Cover)','Dreaming Piano','Billie Jean (Piano Cover) - Single'), it('Billie Jean (Piano Version)','Steven Garreda') ];
+  const c=TS8.pickPianoCover(res, orig);
+  eq(c && c.artistName,'Dreaming Piano','pierwszy poprawny: bez oryginału, wokalu, kołysanki, wiolonczeli, „instrumental" bez piano, gitary, medleya');
+  eq(TS8.pickPianoCover([it('Billie Jean','Michael Jackson','Piano Hits')],orig),null,'oryginał (nawet w albumie „Piano…") odrzucony');
+  const O=it('Billie Jean','Michael Jackson','Thriller');   // oryginał w wynikach = „kotwica" (bez kolizji tytułów)
+  eq(TS8.pickPianoCover([O, it('Billie Jean (Piano Version)','Michael Jackson & Piano Friends')],orig),null,'człon kolaboracji = oryginał → odrzucony');
+  eq(TS8.pickPianoCover([O, it('Beat It (Piano Version)','Dreaming Piano')],orig),null,'inny tytuł → brak');
+  eq(TS8.pickPianoCover([O, it('Billie Jean (Piano Version)','X',undefined,{previewUrl:''})],orig),null,'bez zajawki → brak');
+  eq(TS8.pickPianoCover([O, it('Billie Jean','Flying Fingers','Piano Covers, Vol. 2')],orig).artistName,'Flying Fingers','słowo „piano" w albumie wystarcza');
+  eq(TS8.pickPianoCover([O, it('Billie Jean - Klavierversion','Klavier Klaus','Pop')],orig) ? 1 : 0,1,'klavier + sufiks „ - …"');
+  eq(TS8.pickPianoCover([O, it('Billie Jean Piano Version','Pianaura','Single')],orig).artistName,'Pianaura','dopisek „Piano Version" bez nawiasu');
+  eq(TS8.pickPianoCover([O, it('Bilie Jean (Piano)','Pianaura')],orig).artistName,'Pianaura','literówka w tytule coveru — textMatch');
+  // kolizja tytułów (pomiar na żywo: „King" T.Love dostał cover „King" Florence + the Machine)
+  const king={ track:'King', artist:'T.Love' };
+  eq(TS8.pickPianoCover([it('King','Florence + the Machine','King - Single'), it('King (Piano Arrangement)','The Theorist','Piano Covers, Vol. 4')],king),null,'brak oryginału w wynikach + ten sam tytuł innego wykonawcy → cover bez dowodu odrzucony');
+  eq(TS8.pickPianoCover([it('King (Piano Arrangement)','The Theorist'), it('King (Piano Version)','Piano Tribute Players','Piano Tribute to T.Love')],king).artistName,'Piano Tribute Players','dowód: nazwa oryginalnego wykonawcy w albumie');
+  const fr={ track:'Freedom', artist:'Wham!' };
+  const frRes=[ it('Freedom (Piano)','Lumina Vibe'), it('Freedom (Piano Arrangement)','Niko Kotoulas','Piano Covers Tribute to Kygo'), it('Freedom (Piano Only)','S. Williams'),
+    it('Freedom (Piano Version)','George Simpson'), it('Freedom (Piano)','Piano Peace'), it('Freedom','Wham!','Make It Big'), it('Freedom','Kygo & Zak Abel','Freedom - Single'), it('Freedom','Ed Sheeran','Play') ];
+  eq(TS8.pickPianoCover(frRes,fr),null,'oryginał dopiero na 6. miejscu i ≥2 inne „Freedom" → wymagany dowód');
+  const ets={ track:'Enjoy the Silence', artist:'Depeche Mode' };
+  eq(TS8.pickPianoCover([it('Enjoy the Silence','SD Project','Piano Covers Popular Songs'), it('Enjoy the Silence','Depeche Mode','Violator'), it('Enjoy the Silence','Carla Bruni','French Touch'), it('Enjoy the Silence','Anberlin','Lost Songs')],ets).artistName,'SD Project','oryginał w top 5 + covery innych wykonawców niżej → bez wymogu dowodu');
+  eq(TS8.pickPianoCover(frRes.concat(it('Freedom (Originally Performed by Wham!) [Piano Version]','Piano Hits')),fr).artistName,'Piano Hits','„Originally Performed by Wham!" = dowód');
+  const tom={ track:'Take On Me', artist:'a-ha' };
+  eq(TS8.pickPianoCover([it('Take On Me (Piano Version)','Dreaming Piano'), it('Take On Me','a-ha','Hunting High and Low'), it('Take On Me','Weezer','Teal Album')],tom).artistName,'Dreaming Piano','jeden inny wykonawca PONIŻEJ oryginału → bez wymogu dowodu');
+  eq(TS8.pickPianoCover([it('Take On Me (Piano Version)','Dreaming Piano'), it('Take On Me','Weezer','Teal Album'), it('Take On Me','a-ha','Hunting High and Low')],tom),null,'inny wykonawca WYŻEJ niż oryginał → wymagany dowód');
+  eq(TS8.pianoQueries({ track:'Billie Jean (Single Version)', artist:'Michael Jackson feat. X' }),['Billie Jean piano','Billie Jean Michael Jackson piano cover'],'zapytania: tytuł piano, zapas tytuł+wykonawca piano cover');
+  ok(TS8.looksPolish({ track:'Wszystko czego dziś chcę', artist:'Izabela Trojanowska' }) && !TS8.looksPolish({ track:'Despacito', artist:'Luis Fonsi' }),'polskie znaki → pomiń');
+  ok(!TS8.BAD.test('x') && TS8.BAD.test('Piano Tribute Players'),'BAD bez zmian (tribute dalej odfiltrowany w zwykłych trybach)');
+});
+console.log('• EKSP. fortepian: resolvePiano — cover, kolejne próby, fallback');
+await (async ()=>{
+  const it=(t,a,col='Album',extra={})=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+encodeURIComponent(a+'|'+t), releaseDate:'1985-01-01', artworkUrl100:'https://a/'+encodeURIComponent(a)+'/100x100bb.jpg', ...extra });
+  const net={ 'a:Madonna':[it('Like a Prayer','Madonna')], 'a:Maanam':[it('Kocham cię, kochanie moje','Maanam')], 'a:Toto':[it('Africa','Toto')],
+    's:like a prayer piano':[it('Like a Prayer','Madonna'), it('Like a Prayer (Piano Version)','Piano Tribute Players','Piano Tribute to Madonna')],
+    's:africa piano':[it('Africa (Lullaby)','Rockabye Baby!')], 's:africa toto piano cover':[it('Africa','Toto','Toto IV'), it('Africa','The Piano Guys','Uncharted')] };
+  const calls=[];
+  const itunes=async(term,opts)=>{ const k=(opts&&opts.song?'s:':'a:')+(opts&&opts.song?term.toLowerCase():term); calls.push(k); return net[k]||[]; };
+  const r=await TS8.resolvePiano({ cat:{ artists:['Madonna'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq([r.track, r.artist, r.coverArtist],['Like a Prayer','Madonna','Piano Tribute Players'],'oryginał + cover (tribute dozwolony w trybie fortepian)');
+  ok(r.preview===net['s:like a prayer piano'][1].previewUrl && r.origPreview===net['a:Madonna'][0].previewUrl,'zajawka COVERU, zapamiętana zajawka oryginału');
+  ok(/Madonna/.test(r.art),'okładka oryginału (nie coveru)');
+  ok(calls.includes('s:like a prayer piano'),'wyszukiwanie utworu (tryb song, bez artistTerm)');
+  const r2=await TS8.resolvePiano({ cat:{ artists:['Toto'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq(r2.coverArtist,'The Piano Guys','kołysanka odrzucona → zapytanie zapasowe „tytuł wykonawca piano cover"');
+  calls.length=0;
+  const seen=new Set();
+  const r3=await TS8.resolvePiano({ cat:{ artists:['Maanam','Madonna'] }, seen, recent:[], itunes, rnd:()=>0 });
+  eq(r3.artist,'Madonna','polski utwór pominięty → następna próba');
+  ok(!calls.some(k=>/kocham/.test(k)),'polski utwór bez zapytania o cover');
+  const r4=await TS8.resolvePiano({ cat:{ artists:['Maanam'] }, seen:new Set(), recent:[], itunes, rnd:()=>0, tries:3 });
+  ok(r4.error && r4.reason==='empty','brak coveru po próbach → błąd (wołający gra zwykłą muzykę)');
+  const off=await TS8.resolvePiano({ cat:{ artists:['Madonna'] }, seen:new Set(), recent:[], itunes:async()=>{ throw new Error('x'); }, rnd:()=>0 });
+  eq(off.reason,'offline','brak sieci → offline');
+  const pl=await TS8.resolvePiano({ cat:{ songs:[{ title:'Like a Prayer', artist:'Madonna' }] }, seen:new Set(), recent:[],
+    itunes:async(term,opts)=>{ const t=term.toLowerCase(); if(t==='madonna like a prayer') return net['a:Madonna']; return net['s:'+t]||[]; }, rnd:()=>0 });
+  eq(pl.coverArtist,'Piano Tribute Players','playlista: oryginał z utworów + cover');
+})();
+/* ===== lektor: język opisu → głos ===== */
+const LV = await import('../core/lektorVoice.js');
+group('lektor: język kategorii i wybór głosu (core/lektorVoice)', ()=>{
+  eq([LV.lektorLang('en'), LV.lektorLang('EN-us'), LV.lektorLang('pl'), LV.lektorLang(undefined), LV.lektorLang('de'), LV.lektorLang('<x>')],['en','en','pl','pl','pl','pl'],'sanityzacja: tylko pl|en, domyślnie pl');
+  eq([LV.catLektorLang({lang:'en'}), LV.catLektorLang({}), LV.catLektorLang(null)],['en','pl','pl'],'język kategorii');
+  eq([LV.piperVoiceFor('pl'), LV.piperVoiceFor('en'), LV.piperVoiceFor('xx')],['pl_PL-gosia-medium','en_US-hfc_female-medium','pl_PL-gosia-medium'],'głosy Pipera wg języka');
+  const V=[ {name:'Zosia', lang:'pl-PL', localService:true}, {name:'Daniel', lang:'en-GB', localService:true, default:true}, {name:'Samantha', lang:'en-US', localService:true},
+    {name:'Microsoft Marek Online (Natural) - Polish (Poland)', lang:'pl-PL'}, {name:'Veena', lang:'en-IN', localService:true}, {name:'Thomas', lang:'fr-FR'} ];
+  eq(LV.pickVoice(V,'pl').name,'Microsoft Marek Online (Natural) - Polish (Poland)','pl: głos „Natural" przed zwykłym');
+  eq(LV.pickVoice(V,'en').name,'Samantha','en: en-US przed en-GB (domyślnym) i en-IN');
+  eq(LV.pickVoice(V.concat({name:'Microsoft Ava Online (Natural) - English (United States)', lang:'en-US'}),'en').name,'Microsoft Ava Online (Natural) - English (United States)','en: Natural wygrywa');
+  eq(LV.pickVoice([{name:'Kate (Enhanced)', lang:'en_GB'}, {name:'Fred', lang:'en-US'}],'en').name,'Kate (Enhanced)','Enhanced + zapis en_GB');
+  eq(LV.pickVoice([{name:'Thomas', lang:'fr-FR'}],'en'),null,'brak głosu w języku → null (u.lang wystarczy)');
+  eq(LV.pickVoice([{name:'Daniel', lang:'en-GB'}],'pl'),null,'pl nie bierze angielskiego');
+  eq(LV.pickVoice([{name:'Polish voice', lang:''}],'pl').name,'Polish voice','pusty lang → po nazwie');
+  eq(LV.pickVoice(null,'en'),null,'brak listy');
+  eq(LV.LEKTOR_BCP47,{pl:'pl-PL', en:'en-US'},'znaczniki BCP-47');
+});
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);
