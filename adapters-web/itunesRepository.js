@@ -2,12 +2,15 @@
  * Sieć: proxy Workera (omija blokady) → bezpośredni fetch → JSONP. Czystą selekcję
  * (filtr coverów, anty-powtórki, normalizacja) trzyma `core/trackSelect.js`, wspólna
  * z serwerem; tu tylko wstrzykujemy webowy `itunes(term)`. */
-import { resolveTrack as coreResolveTrack, pickTrack, BAD, cachedFetcher, gatherDistractors } from '../core/trackSelect.js';
+import { resolveTrack as coreResolveTrack, pickTrack, BAD, cachedFetcher, gatherDistractors, resolveMedley as coreResolveMedley,
+  resolveCover as coreResolveCover } from '../core/trackSelect.js';
 
 /* ---- sieć (iTunes) ----
  * opts.song=true (F5 #5) → wyszukiwanie „artysta tytuł" BEZ attribute=artistTerm (utwór spoza
  * top-60 wykonawcy też się znajdzie); domyślnie — po wykonawcy (artistTerm, limit 60). */
 function searchParams(term, opts){
+  // EKSPERYMENT (okładka): albumy wykonawcy — entity=album (top wyniki ≈ popularność)
+  if(opts && opts.album) return {term,media:'music',entity:'album',attribute:'artistTerm',limit:'25',country:'PL'};
   return opts && opts.song
     ? {term,media:'music',entity:'song',limit:'25',country:'PL'}
     : {term,media:'music',entity:'song',attribute:'artistTerm',limit:'60',country:'PL'};
@@ -50,6 +53,9 @@ function itunesProxy(term, cfg={}, opts){
 }
 // jedyne publiczne wejście do sieci — używane też bezpośrednio przez lektor/import
 export function itunes(term, cfg, opts){
+  // EKSPERYMENT: proxy Workera nie zna wyszukiwania albumów (zwróciłby UTWORY) → albumy tylko wprost/JSONP;
+  // gdy oba padną, core/resolveCover bierze albumy z wyników utworów (te idą przez proxy)
+  if(opts && opts.album) return itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts));
   return itunesProxy(term, cfg, opts)
     .then(res=>res.length?res:itunesFetch(term, opts))   // proxy puste? spróbuj bezpośrednio
     .catch(()=>itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts)));
@@ -103,4 +109,15 @@ export function resolveTrack({cat, seen, recent, cfg, rnd}){
 export function resolveDistractors({cat, correct, cfg, rnd}){
   if(cfg) lastCfg=cfg;
   return gatherDistractors({ cat, correct, itunes:cachedItunes, rnd });
+}
+
+// EKSPERYMENT „składanka": 4 utwory jednego wykonawcy z puli kategorii (ten sam cache wyników co resolveTrack)
+export function resolveMedley({cat, seen, recent, cfg, rnd}){
+  if(cfg) lastCfg=cfg;
+  return coreResolveMedley({ cat, seen, recent, itunes:cachedItunes, rnd });
+}
+// EKSPERYMENT „okładka": popularny album wykonawcy z puli (albumy iTunes → zapas: albumy z wyników utworów)
+export function resolveCover({cat, seen, recent, cfg, rnd}){
+  if(cfg) lastCfg=cfg;
+  return coreResolveCover({ cat, seen, recent, itunes:cachedItunes, rnd });
 }

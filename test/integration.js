@@ -1529,5 +1529,153 @@ await group('F8b stopka-legenda punktacji wg trybu pytania (rok / intro / ABCD)'
   await f8aSolo(/intro/, async (w)=>{ eq2(txt(w,'footLegend'), 'im wcześniej, tym więcej: ×2.0 → ×1.0', 'intro'); });
   await f8aSolo(/ABCD/, async (w)=>{ eq2(txt(w,'footLegend'), 'trafienie 100 · szybkość · seria', 'ABCD'); });
 });
+/* ===================== EKSPERYMENT: „od tyłu krótko" / „składanka" / „okładka" (solo) + picker MP ===================== */
+const eksTerms=[];   // zapytania iTunes (entity:term) — test zna wykonawcę wylosowanego pytania
+// zaślepka iTunes: 5 różnych utworów per wykonawca, albumy (entity=album), bajty zajawek (arrayBuffer)
+const eksFetch=(url)=>{
+  const u=String(url);
+  if(/^https:\/\/x\/.*\.m4a/.test(u)) return Promise.resolve({ ok:true, status:200, arrayBuffer:()=>Promise.resolve(new ArrayBuffer(16)) });
+  let term='X', entity='song'; try{ const q=new URL(u).searchParams; term=q.get('term')||'X'; entity=q.get('entity')||'song'; }catch(_e){}
+  eksTerms.push(entity+':'+term);
+  if(entity==='album'){
+    const al=(n,extra={})=>({ collectionName:n, artistName:term, artworkUrl100:'https://x/c/'+encodeURIComponent(n)+'/100x100bb.jpg', releaseDate:'1984-05-01T00:00:00Z', trackCount:10, ...extra });
+    return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:[ al('Greatest Hits'), al('Płyta '+term), al('Jakiś Singiel - Single',{trackCount:1}) ] }) });
+  }
+  const r=(t,y)=>({ trackName:t, artistName:term, previewUrl:'https://x/'+encodeURIComponent(t)+'.m4a', collectionName:'Album '+term, releaseDate:y+'-01-01', artworkUrl100:'https://x/a100x100.jpg' });
+  return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:['Raz','Dwa','Trzy','Cztery','Pięć'].map((t,i)=>r(t+' '+term, 1980+i)) }) });
+};
+// minimalny WebAudio (dekodowanie/bufory/źródła) na prototypie FakeAudioContext — przywracany po grupie
+class EksBuf { constructor(ch,len,sr){ this.numberOfChannels=ch; this.length=len; this.sampleRate=sr; this.duration=len/sr; this._d=[...Array(ch)].map(()=>new Float32Array(len)); } getChannelData(c){ return this._d[c]; } }
+const eksSources=[];
+function eksWebAudio(on){
+  const P=window.AudioContext.prototype;
+  const api={ decodeAudioData(){ return Promise.resolve(new EksBuf(2, 30*800, 800)); }, createBuffer(ch,len,sr){ return new EksBuf(ch,len,sr); },
+    createBufferSource(){ const src={ buffer:null, connect(){}, start(){ src.started=true; eksSources.push(src); }, stop(){ src.stopped=true; }, onended:null }; return src; },
+    createGain(){ return { gain:{ value:1 }, connect(){} }; } };
+  for(const k of Object.keys(api)){ if(on) P[k]=api[k]; else delete P[k]; }
+  if(on){ P.destination={}; P.currentTime=0; } else { delete P.destination; delete P.currentTime; }
+}
+const stateLog=[];
+const stateObs=new window.MutationObserver(()=>stateLog.push(txt(window,'state')));
+async function eksSolo(modeRe, run){
+  const w=window, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  const P=w.HTMLCanvasElement.prototype, prevGC=P.getContext;
+  const draws=[]; P.getContext=function(){ const cv=this; return { imageSmoothingEnabled:true, clearRect(){}, drawImage(src,x,y,wd,ht){ draws.push({ to:cv.width, w:wd, smooth:this.imageSmoothingEnabled }); } }; };
+  globalThis.fetch=eksFetch; w.STACJA_CONFIG.roomsBase=''; repoMod.clearTrackCache(); eksWebAudio(true);
+  stateLog.length=0; stateObs.observe($(w,'state'), { childList:true, characterData:true, subtree:true });
+  try{
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    const { audio } = catsByKind(w);
+    ok(modeChip(w, modeRe), 'picker solo: chip trybu '+modeRe);
+    await f2aStartMatch(audio, modeRe);
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    ok(!$(w,'check').disabled, 'pytanie gotowe — stan: '+txt(w,'state'));
+    await run(w, { draws });
+  } finally {
+    stateObs.disconnect();
+    if($(w,'session').classList.contains('live')){ click(w,'sessEnd'); await settle(4); }
+    $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache(); eksWebAudio(false); P.getContext=prevGC;
+  }
+}
+await group('EKSP. solo: „od tyłu krótko" — okno 3 s wspak (WebAudio), „+ dłużej (5 s)" ×0,8, odpowiedź jak muzyka', async ()=>{
+  await eksSolo(/od tyłu krótko/, async (w)=>{
+    const body=w.document.body, more=$(w,'introMore'), dbg=()=>soloAudioMod._soloAudioDebug();
+    ok(body.classList.contains('revsnip-mode') && !body.classList.contains('intro-mode'), 'body.revsnip-mode');
+    ok(more && !more.disabled && /\+ dłużej \(5 s\)/.test(more.textContent), '„+ dłużej (5 s)" aktywne — '+(more&&more.textContent));
+    for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
+    const src=dbg().revSrc && dbg().revSrc.source;
+    ok(src && src.started, 'bufor WebAudio gra');
+    ok(src && Math.abs(src.buffer.duration-3)<0.01, 'okno 3 s — '+(src&&src.buffer.duration));
+    ok(dbg().revCache && /\.m4a$/.test(dbg().revCache.url), 'zajawka zdekodowana raz (cache do „dłużej")');
+    more.click(); await settle(2);
+    for(let i=0;i<50 && !(dbg().revSrc && dbg().revSrc.source!==src);i++) await settle(2);
+    const src2=dbg().revSrc && dbg().revSrc.source;
+    ok(src2 && src2!==src && Math.abs(src2.buffer.duration-5)<0.01 && src.stopped, '„dłużej" → nowe okno 5 s (poprzednie zatrzymane)');
+    ok(more.disabled, 'ostatni etap → przycisk nieaktywny');
+    $(w,'fTitle').value='Zupełnie inny'; click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/okno 5 s/.test(rm) && /„dłużej" ×0,8/.test(rm), 'odsłona: okno 5 s · ×0,8 — '+rm.slice(0,200));
+    ok(/Tytuł/.test(rm) && /Wykonawca/.test(rm), 'odsłona jak muzyka (tytuł + wykonawca)');
+    eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · szybkość · „dłużej" ×0.8', 'legenda');
+  });
+});
+await group('EKSP. solo: „składanka" — 4 zajawki buforowane („ładuję składankę k/4"), jeden bufor, zgadujesz wykonawcę, odsłona z 4 tytułami', async ()=>{
+  await eksSolo(/składanka/, async (w)=>{
+    ok(stateLog.some(t=>/ładuję składankę [1-4]\/4/.test(t||'')), 'pasek ładowania „ładuję składankę k/4" — '+stateLog.filter(Boolean).slice(0,6).join(' | '));
+    const dbg=()=>soloAudioMod._soloAudioDebug();
+    for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
+    const src=dbg().revSrc && dbg().revSrc.source;
+    ok(src && src.started && Math.abs(src.buffer.duration-6.75)<0.01, 'jeden sklejony bufor 4 × 1,5 s + 3 × 0,25 s — '+(src&&src.buffer.duration));
+    ok($(w,'qf_artist') && !$(w,'qf_album') && $(w,'form').classList.contains('quiz'), 'tylko pole „Wykonawca" (tytuł/rok/album schowane)');
+    eq2(txt(w,'footLegend'), 'wykonawca 100 · szybkość · seria', 'legenda składanki');
+    ok(/składanka/.test(txt(w,'sessCtx')), 'pasek meczu: tryb składanka — '+txt(w,'sessCtx'));
+    $(w,'replay').click(); await settle(4);
+    ok(src.stopped && dbg().revSrc && dbg().revSrc.source!==src, '↻ od nowa — składanka gra ponownie');
+    const who=(eksTerms.filter(t=>t.startsWith('song:')).pop()||'').slice(5);   // wykonawca pytania = ostatnie zapytanie o utwory
+    const C=w.CATEGORIES, { audio } = catsByKind(w), pool=({...(C.decades||{}),...(C.styles||{})})[audio].artists;
+    ok(pool.includes(who), 'wykonawca z puli kategorii — '+who);
+    $(w,'qf_artist').value=who.toLowerCase();
+    click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/Wykonawca/.test(rm) && /zagrały/.test(rm), 'odsłona: wykonawca + lista utworów — '+rm.slice(0,220));
+    const zl=[...w.document.querySelectorAll('#rmeta .rnote')].map(e=>e.textContent.replace(/\s+/g,' ').trim()).map(t=>t.replace(/^·\s*/,'')).find(t=>/^zagrały/.test(t))||'';
+    const m=zl.match(/^zagrały\s*1\. (.+?) · 2\. (.+?) · 3\. (.+?) · 4\. (.+)$/);
+    ok(m && new Set(m.slice(1,5)).size===4 && m.slice(1,5).every(t=>/^(Raz|Dwa|Trzy|Cztery|Pięć) /.test(t) && t.endsWith(who)), '4 różne tytuły tego wykonawcy — '+(m&&m.slice(1,5).join(' | ')));
+    ok(/Dobrze!/.test(txt(w,'revealHead')), 'trafiony wykonawca → „Dobrze!"');
+    const pts=+txt(w,'sPoints'); ok(pts>=100 && pts<=150, 'punkty: 100 + szybkość (jak quiz) — '+pts);
+    ok(!$(w,'replay').disabled && $(w,'qf_artist').disabled, 'po odsłonie: ↻ aktywne, pole zablokowane');
+    click(w,'next'); await settle(4);
+    for(let i=0;i<300 && $(w,'check').disabled;i++) await settle(2);
+    const who2=(eksTerms.filter(t=>t.startsWith('song:')).pop()||'').slice(5);
+    ok(who2 && who2!==who, 'następna składanka — inny wykonawca (anty-powtórka) — '+who2);
+    $(w,'qf_artist').value='Ktoś Zupełnie Inny'; click(w,'check'); await settle(2);
+    ok(/Pudło/.test(txt(w,'revealHead')) && +txt(w,'sPoints')===pts, 'pudło: 0 pkt, seria zerowana');
+    click(w,'sessEnd'); await settle(4);
+    ok(/Raz|Dwa|Trzy|Cztery|Pięć/.test(txt(w,'sumList')) && /składanka/.test(txt(w,'sumList')), 'podsumowanie: tytuły + tryb — '+txt(w,'sumList').slice(0,100));
+  });
+});
+await group('EKSP. solo: „okładka" — bez audio, pikselizacja 8→16 („wyraźniej"), wykonawca + album (bonus), mnożnik etapu', async ()=>{
+  await eksSolo(/okładka/, async (w, { draws })=>{
+    const body=w.document.body, more=$(w,'introMore'), box=$(w,'coverBox');
+    ok(body.classList.contains('cover-mode'), 'body.cover-mode (gałka/audio schowane)');
+    ok(box && !box.hidden && box.dataset.blocks==='8', 'okładka widoczna, etap 8×8 — '+(box&&box.dataset.blocks));
+    ok(!soloAudioMod._soloAudioDebug().round && !soloAudioMod._soloAudioDebug().revSrc, 'brak odtwarzania audio');
+    ok(/600x600bb\.jpg$/.test($(w,'coverImg').getAttribute('src')||''), 'okładka 600×600 z iTunes — '+$(w,'coverImg').getAttribute('src'));
+    ok(/Płyta /.test(decodeURIComponent($(w,'coverImg').getAttribute('src')||'')), 'album studyjny zamiast „Greatest Hits" i singla');
+    ok($(w,'qf_artist') && $(w,'qf_album'), 'pola: wykonawca + album (bonus)');
+    ok(more && !more.disabled && /wyraźniej/.test(more.textContent), 'przycisk „wyraźniej"');
+    // obraz „wczytany" → rysowanie: zmniejszanie z wygładzaniem, powiększenie bez wygładzania (twarde bloki)
+    const img=(await import('../app/cover.js'))._coverDebug().img;
+    if(img){ Object.defineProperty(img,'complete',{value:true,configurable:true}); Object.defineProperty(img,'naturalWidth',{value:600,configurable:true}); img.onload && img.onload(); }
+    ok(draws.some(d=>d.to===8 && d.smooth) && draws.some(d=>d.to===320 && d.smooth===false), 'pikselizacja: 8×8 → widok 320 bez wygładzania — '+JSON.stringify(draws.slice(-3)));
+    more.click(); await settle(1);
+    eq2(box.dataset.blocks, '16', '„wyraźniej" → 16×16');
+    const src=decodeURIComponent($(w,'coverImg').getAttribute('src')||'');
+    const who=(src.match(/Płyta (.+?)\//)||[])[1]||'';
+    $(w,'qf_artist').value=who; $(w,'qf_album').value='Plyta '+who;
+    click(w,'check'); await settle(2);
+    const rm=txt(w,'rmeta').replace(/\s+/g,' ');
+    ok(/Wykonawca/.test(rm) && /Album/.test(rm) && /1984/.test(rm), 'odsłona: wykonawca + album + rok — '+rm.slice(0,220));
+    ok(/16×16/.test(rm) && /mnożnik ×1,6/.test(rm), 'mnożnik etapu 16×16 = ×1,6');
+    eq2(+txt(w,'sPoints'), Math.round(120*1.6), 'punkty: (100 + album 20) × 1,6, bez bonusu za szybkość');
+    eq2(box.dataset.blocks, '0', 'po Sprawdź — pełna okładka');
+    ok(/Dobrze!/.test(txt(w,'revealHead')), 'nagłówek: trafienie');
+    ok(/wykonawca 100 · album \+20/.test(txt(w,'footLegend')), 'legenda okładki');
+  });
+  ok($(window,'coverBox').hidden && !window.document.body.classList.contains('cover-mode'), 'koniec meczu chowa okładkę i cover-mode');
+});
+await group('EKSP. MP: picker — „od tyłu krótko" z nowym serwerem, składanka/okładka nigdy', async ()=>{
+  const w=window; const ws=await f6bRoom();
+  ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  let html=$(w,'mpRoom').innerHTML;
+  ok(!/mpToggleMode\('revsnip'\)/.test(html), 'stary serwer → bez „od tyłu krótko"');
+  ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','revsnip','quiz'] }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  html=$(w,'mpRoom').innerHTML;
+  ok(/mpToggleMode\('revsnip'\)/.test(html) && /od tyłu krótko/.test(html), 'nowy serwer → chip „od tyłu krótko"');
+  ok(!/mpToggleMode\('medley'\)/.test(html) && !/mpToggleMode\('cover'\)/.test(html), 'składanka/okładka tylko solo');
+  w.mpLeaveConfirmed('room'); await settle(4);
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

@@ -2,8 +2,8 @@
  * mecz solo (rundy × kategorie × pytania), sprawdzanie odpowiedzi. Self-wiring przy imporcie
  * (jak app/mp.js): wiąże DOM i wstrzykuje stan do app/audio.js przez initAudio. Zero zależności od app.js. */
 import { escapeHtml } from '../core/util.js';
-import { norm, textMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend } from '../core/scoring.js';
-import { introStageSecs, introNextStage } from '../core/timing.js';
+import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend, revsnipMult, coverMult } from '../core/scoring.js';
+import { introStageSecs, introNextStage, revsnipStageSecs, revsnipNextStage, coverNextStage, coverStageBlocks } from '../core/timing.js';
 import { buildTrackMC, yearReliable, parseRange } from '../core/trackSelect.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, matchTotal, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
 import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailyShareText, matchShareText, resultGrid, DAILY_QUESTIONS } from '../core/daily.js';
@@ -11,7 +11,8 @@ import { dailyInfo, saveDailyRecord, shareText, shareUrl } from './daily.js';
 import { buildSoloRecord } from '../core/matchRecord.js';
 import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSelected as _allSelected,
   syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary, pickSummaryText, quickPool, restorePick } from '../core/picker.js';
-import { resolveTrack, resolveDistractors } from '../adapters-web/itunesRepository.js';
+import { resolveTrack, resolveDistractors, resolveMedley, resolveCover } from '../adapters-web/itunesRepository.js';
+import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
 import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet } from './dom.js';
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
@@ -19,7 +20,7 @@ import { lektorPlay } from './lektor.js';
 import { playClap, playSfx } from './sfx.js';
 import { initCatEditor, openEditor } from './catEditor.js';
 import { unlockCtx } from './audioCtx.js';
-import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio } from './audio.js';
+import { startAudio, stopAudio, toggleAudio, replay, initAudio, unlockSoloAudio, loadMedley } from './audio.js';
 import { mpMe } from './mp.js';   // tożsamość gracza (displayName w rekordzie solo)
 import { ERAS, STYLES, READY, LYRICS, QUIZ, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   ALL_CATS, ALL_KEYS, CATS_OK, matchHeader, catLabel, buildMatch, randomPools, modesFor,
@@ -262,7 +263,7 @@ async function newRound(){
   soloGen++;   // 2.1: nowa runda — unieważnij ewentualny wcześniejszy async (rozwiązanie/„od tyłu")
   const gen=soloGen;
   busy=true; roundDone=false; current=null;   // F2a #3: gałka w trakcie strojenia nie zagra utworu poprzedniego pytania
-  stopAudio(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm(); hideOfflineOffer();
+  stopAudio(); coverHide(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm(); hideOfflineOffer();
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
   disableRoundControls();
@@ -271,6 +272,14 @@ async function newRound(){
   const cat = ALL_CATS[eraKey];
   // F8b: Stacja dnia — osobny seedowany strumień rnd per pytanie (ten sam wykonawca/utwór u wszystkich)
   const rnd = session && session.daily ? dailyQuestionRnd(session.daily.trackSeed, matchProgress(session.match).n-1) : undefined;
+  // EKSPERYMENT: składanka / okładka — pytanie o WYKONAWCĘ (4 utwory albo album z puli wykonawców kategorii).
+  // Brak (za mało utworów/albumów u kilku wykonawców, sieć) → pytanie jak zwykła „muzyka" (cur.fallback).
+  if(mode==='medley' || mode==='cover'){
+    const args={cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd};
+    let r=null; try{ r = mode==='medley' ? await resolveMedley(args) : await resolveCover(args); }catch(_e){ r=null; }
+    if(gen!==soloGen) return;
+    if(r && !r.error) return startArtistQuestion(r, eraKey, gen);
+  }
   const t = await resolveTrack({cat, seen:seenTracks, recent:recentArtists, cfg:window.STACJA_CONFIG, rnd});
   // 2.1: rundę porzucono w trakcie losowania (Zakończ / zmiana trybu / nowa runda) — nie startuj audio nad podsumowaniem.
   // F2a #3: `busy` należy wtedy już do nowszego stanu (abandonRound je zwolnił, nowa runda mogła je zająć) — nie ruszaj.
@@ -290,6 +299,8 @@ async function newRound(){
   // F8a: przygotowanie pytania wg trybu (intro: etap 0; rok: wiarygodność; ABCD: kafle z dystraktorów).
   // Brak roku / za mało dystraktorów → pytanie jak zwykła „muzyka" (cur.fallback).
   if(mode==='intro') cur.introStage=0;
+  if(mode==='revsnip') cur.revStage=0;                       // EKSPERYMENT: okno 3 s (koniec okna losowany po dekodowaniu)
+  if(mode==='medley' || mode==='cover') cur.fallback=true;   // EKSPERYMENT: nie znaleziono wykonawcy/albumu → muzyka
   if(mode==='year'){
     if(parseYear(t.year)==null) cur.fallback=true;
     else if(!yearReliable(t.year, cat.range, t.yearSrc)) cur.yearNote='rok wg wydania w iTunes';
@@ -308,18 +319,62 @@ async function newRound(){
   qStartAt=Date.now();   // F6a: od teraz liczy się czas odpowiedzi
   startAudio();
 }
-/* F8a: tryb efektywny bieżącego pytania — ABCD bez kafli / rok bez roku grają jak „muzyka" */
+/* EKSPERYMENT: start pytania „tylko wykonawca" (składanka / okładka) po rozwiązaniu r (core/trackSelect.resolveMedley/Cover).
+ * Składanka: wszystkie zajawki pobierane i dekodowane PRZED startem (pasek „ładuję składankę k/n"). */
+async function startArtistQuestion(r, eraKey, gen){
+  let cur;
+  if(mode==='medley'){
+    const clips=r.clips.map(c=>({ ...c }));
+    cur={ track:clips.map(c=>c.track).join(' · '), artist:r.artist, artistAlt:r.artistAlt, clips, year:'', album:'',
+      preview:clips[0].preview, art:clips[0].art, era:eraKey, lyric:'' };
+    setState('ładuję składankę 0/'+clips.length); setRing(0);
+    await loadMedley(cur, { alive:()=>gen===soloGen, onProgress:(k,n)=>{ if(gen!==soloGen) return; setState('ładuję składankę '+k+'/'+n); setRing(k/n); } });
+    if(gen!==soloGen) return;
+  } else {
+    cur={ track:r.album, album:r.album, artist:r.artist, artistAlt:r.artistAlt, year:r.year||'', art:r.art, preview:'',
+      era:eraKey, lyric:'', coverStage:0 };
+  }
+  busy=false;
+  current=cur;
+  renderSoloForm(); syncIntroBtn();
+  dailyTouch();
+  qStartAt=Date.now();
+  if(mode==='cover'){
+    document.getElementById('check').disabled=false; document.getElementById('skip').disabled=false;
+    setIcon('play'); setState('kto to? okładka odsłania się co kilka sekund');
+    coverShow(cur, { onStage:(st)=>{ if(current!==cur || roundDone) return false; cur.coverStage=st; syncIntroBtn(); return true; } });
+    const f=document.getElementById('qf_artist'); if(f) f.focus({preventScroll:true});
+    return;
+  }
+  startAudio();
+}
+/* F8a: tryb efektywny bieżącego pytania — ABCD bez kafli / rok bez roku grają jak „muzyka" (EKSP.: też składanka/okładka bez wyniku) */
 function qMode(){ return (current && current.fallback) ? 'music' : mode; }
-/* F8a: „+ więcej" (intro) — następny etap odsłony, gra od początku do nowej długości */
+/* F8a: „+ więcej" (intro) — następny etap odsłony, gra od początku do nowej długości.
+ * EKSPERYMENT: ten sam przycisk = „+ dłużej" („od tyłu krótko": 3 → 5 s) i „wyraźniej" (okładka: następny etap). */
 function syncIntroBtn(){
   const b=document.getElementById('introMore'); if(!b) return;
-  const can = mode==='intro' && current && !roundDone && introNextStage(current.introStage)!=null;
-  b.disabled=!can;
-  const nx = current && mode==='intro' ? introNextStage(current.introStage) : null;
-  b.textContent = nx!=null ? '+ więcej ('+introStageSecs(nx)+' s)' : '+ więcej';
+  const qm=qMode(), live=!!current && !roundDone;
+  let nx=null, label='+ więcej';
+  if(qm==='revsnip'){ nx=current ? revsnipNextStage(current.revStage||0) : null; label = nx!=null ? '+ dłużej ('+revsnipStageSecs(nx)+' s)' : 'dłużej ✓'; }
+  else if(qm==='cover'){ nx=current ? coverNextStage(current.coverStage||0) : null; label = nx!=null ? 'wyraźniej' : 'pełna okładka'; }
+  else { nx = current && mode==='intro' ? introNextStage(current.introStage) : null; label = nx!=null ? '+ więcej ('+introStageSecs(nx)+' s)' : '+ więcej'; }
+  b.disabled = !(live && nx!=null && (qm==='intro' || qm==='revsnip' || qm==='cover'));
+  b.textContent = label;
 }
 function introMore(){
-  if(mode!=='intro' || !current || roundDone || busy) return;
+  if(!current || roundDone || busy) return;
+  const qm=qMode();
+  if(qm==='revsnip'){   // EKSPERYMENT: dłuższe okno (mniejszy mnożnik), gra od nowa
+    const nx=revsnipNextStage(current.revStage||0); if(nx==null) return;
+    unlockSoloAudio({ctx:true});   // gest → AudioContext (iOS)
+    current.revStage=nx; syncIntroBtn(); startAudio(); return;
+  }
+  if(qm==='cover'){     // EKSPERYMENT: następny etap odsłony okładki (mniejszy mnożnik)
+    const nx=coverNextStage(current.coverStage||0); if(nx==null) return;
+    current.coverStage=nx; coverStage(nx); syncIntroBtn(); return;
+  }
+  if(mode!=='intro') return;
   const nx=introNextStage(current.introStage); if(nx==null) return;
   unlockSoloAudio({ctx:false});   // gest → element odblokowany (iOS)
   current.introStage=nx; syncIntroBtn();
@@ -329,7 +384,8 @@ function introMore(){
 
 /* ============ audio (solo) → app/audio.js + app/audioCtx.js ============ */
 // stan gry (current/mode) i wznowienie rundy wstrzykiwane; uchwyty odtwarzacza żyją w module
-initAudio({ current: ()=>current, mode: ()=>mode, newRound, gen: ()=>soloGen, busy: ()=>busy });
+// EKSPERYMENT: tryb AUDIO = tryb efektywny (składanka/okładka bez wyniku grają jak „muzyka")
+initAudio({ current: ()=>current, mode: ()=>qMode(), newRound, gen: ()=>soloGen, busy: ()=>busy });
 document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
 
@@ -344,6 +400,7 @@ function disableRoundControls(){
    na `if(busy) return` (a gałka grała utwór z poprzedniego meczu). */
 function abandonRound(){
   soloGen++; busy=false; current=null; roundDone=true;
+  coverStop(false);   // EKSPERYMENT: timer odsłony okładki
   disableRoundControls();
 }
 // klasy trybu na body: quiz-mode (bez gałki) i lektor-mode („lepszy głos" tylko dla lektora)
@@ -351,6 +408,10 @@ function syncModeClasses(){
   document.body.classList.toggle('quiz-mode', mode==='quiz');
   document.body.classList.toggle('lektor-mode', mode==='lektor');
   document.body.classList.toggle('intro-mode', mode==='intro');   // F8a: „+ więcej"
+  // EKSPERYMENT: „+ dłużej" (od tyłu krótko), okładka = bez gałki/audio (jak quiz) + przycisk „wyraźniej"
+  const qm=qMode();
+  document.body.classList.toggle('revsnip-mode', qm==='revsnip');
+  document.body.classList.toggle('cover-mode', qm==='cover');
 }
 
 /* ============ przełącznik trybu muzyka/lektor ============ */
@@ -458,11 +519,17 @@ function renderSoloForm(){
   const qm = qMode();
   const isMC = (isQuiz || qm==='abcd') && !!(current && current.mc);   // F8a: ABCD muzyki = te same kafle .mc-opt
   const isYear = qm==='year' && !!current;                             // F8a: pole roku zamiast tytułu/wykonawcy
-  form.classList.toggle('quiz', isQuiz || isMC || isYear);
+  const isArtist = (qm==='medley' || qm==='cover') && !!current;       // EKSPERYMENT: tylko wykonawca (+ album przy okładce)
+  form.classList.toggle('quiz', isQuiz || isMC || isYear || isArtist);
   syncModeClasses();   // quiz-mode: ukryj gałkę/audio w decku; lektor-mode: pokaż „lepszy głos"
   syncLegend();        // F8b: stopka-legenda punktacji wg trybu bieżącego pytania
   const qf=document.getElementById('quizForm'); if(!qf) return;
   if(isYear){ renderYearForm(qf); return; }
+  if(isArtist){
+    qf.innerHTML=`<div class="field"><label for="qf_artist">Wykonawca</label><input id="qf_artist" autocomplete="off" autocapitalize="off" placeholder="${qm==='medley'?'czyje to utwory?':'czyja to okładka?'}"></div>`+
+      (qm==='cover' ? `<div class="field"><label for="qf_album">Album <small>(bonus +20)</small></label><input id="qf_album" autocomplete="off" autocapitalize="off" placeholder="opcjonalnie"></div>` : '');
+    return;
+  }
   if(isMC){
     qf.innerHTML='<div class="mc-opts">'+current.mc.options.map(o=>
       `<button type="button" class="mc-opt" aria-pressed="false" data-letter="${o.letter}"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span></button>`).join('')+'</div>';
@@ -501,7 +568,7 @@ function showPrompt(text){ const b=document.getElementById('lyricBox'); if(!b) r
   b.innerHTML='<span class="lyric-cap">pytanie</span>'+escapeHtml(text||''); b.classList.add('quiz'); b.hidden=false; }
 document.getElementById('skip').onclick=()=>{
   if(roundDone) return;   // F2a #4: pytanie już ocenione („Sprawdź") — drugi wpis tego samego pytania zablokowany
-  roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true; syncIntroBtn();
+  roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true; syncIntroBtn(); coverStop(false);
   unlockSoloAudio({ctx:session?session.hasReverse:false});   // F2a #9: gest → kolejna zajawka zagra bez dodatkowego stuknięcia (iOS)
   // F8b: Stacja dnia — pytanie niewczytane (błąd sieci) i pominięte też ma kratkę (⬛), siatka = 10 pytań
   if(session && (current || session.daily)){ const s=matchSlot(session.match); pushResult({track:current?current.track:'(nie wczytano)', artist:current?current.artist:'', okTitle:false, okArtist:false, skipped:true, points:0, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); }
@@ -525,7 +592,7 @@ function startSoloMatch(cats, modes, questions, opts={}){
   if(r.error){ const el=document.getElementById('matchInfo'); el.className='um-summary err'; el.textContent=r.error; return false; }
   if(session || busy) abandonRound();   // poprzedni mecz / losowanie w locie → porzuć (busy zwolnione, async unieważniony)
   hideOfflineOffer();
-  const hasReverse=r.slots.some(x=>x.mode==='reverse');
+  const hasReverse=r.slots.some(x=>['reverse','revsnip','medley'].includes(x.mode));   // AudioContext (WebAudio): od tyłu, EKSP.: od tyłu krótko, składanka
   const match={slots:r.slots, rounds:r.rounds, si:0, qi:0};
   if(r.qpc) match.qpc=r.qpc;
   session={match, results:[], hasReverse, cats:[...cats], modes:[...modes], questions:r.questions, daily:opts.daily||null};
@@ -611,7 +678,7 @@ function endMatch(){
   abandonRound();   // 2.1/F2a #3: koniec meczu — porzuć async ostatniej rundy i zwolnij busy
   session=null;
   document.getElementById('session').classList.remove('live');
-  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','match-over','daily');
+  document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','match-over','daily');
   hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
   soloHead('Ułóż mecz');   // 5.7: powrót do tytułu pickera
 }
@@ -645,7 +712,7 @@ function finishMatch(){
   stopAudio(); setIcon('play'); hideReveal();
   // F2a #10: deck/formularz pod podsumowaniem wyłączone (nic do sprawdzenia/odtworzenia z zakończonego meczu)
   resetForm(); hideLyric(); const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
-  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode'); document.body.classList.add('match-over');
+  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode'); document.body.classList.add('match-over'); coverHide();
   setState('mecz zakończony');
   const cut = played < tot;
   document.getElementById('sumBig').textContent=hits+' / '+(cut?played:tot);
@@ -738,7 +805,7 @@ function showDailyResult(info){
   session=null; document.getElementById('session').classList.remove('live');
   stopAudio(); setIcon('play'); hideReveal(); resetForm(); hideLyric(); hideOfflineOffer();
   const qf=document.getElementById('quizForm'); if(qf) qf.innerHTML='';
-  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode');
+  document.body.classList.remove('quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode'); coverHide();
   document.body.classList.add('playing','match-over','daily');
   document.getElementById('sumBig').textContent=rec.hits+' / '+rec.total;
   const sp=document.getElementById('sumPts'); if(sp) sp.textContent=(rec.points||0)+' pkt';
@@ -788,6 +855,7 @@ function check(){
   const qm=qMode();
   if(qm==='abcd' && current.mc){ return checkQuiz(); }   // F8a: ABCD muzyki — ocena po wybranym kaflu
   if(qm==='year'){ return checkYear(); }                 // F8a: rok wydania
+  if(qm==='medley' || qm==='cover'){ return checkArtistQ(); }   // EKSPERYMENT: składanka / okładka
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
   const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
@@ -796,8 +864,10 @@ function check(){
   const intro = mode==='intro' && !current.introBroken;
   const iStage = intro ? (current.introStage||0) : null;
   // F6a (R2/R-U3): punkty — częściowe trafienie, rok/album +20, szybkość, seria
+  // EKSPERYMENT: „od tyłu krótko" — etap „dłużej" (5 s) ×0,8 (szybkość/seria jak w muzyce)
+  const rStage = qm==='revsnip' ? (current.revStage||0) : null;
   const sc=scoreRound({ okTitle, okArtist, okYear, okAlbum, roundOk, elapsedMs: intro ? null : (qStartAt ? Date.now()-qStartAt : null), limitMs:SPEED_CAP_MS, streak,
-    mult: intro ? introMult(iStage) : 1 });
+    mult: intro ? introMult(iStage) : (rStage!=null ? revsnipMult(rStage) : 1) });
   points+=sc.points;
   if(mode==='intro') current.introFull=true;   // F8a: po ocenie ↻ od nowa gra całą zajawkę (dosłuchanie)
   updateScore();
@@ -815,7 +885,8 @@ function check(){
   }
   if(current.album) r.appendChild(guessLine(okAlbum,'Album',current.album,g.album, okAlbum && norm(g.album)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
   if(intro) r.appendChild(noteLine('intro', `${roundOk?'zgadłeś':'odpowiedź'} na etapie ${introStageSecs(iStage)} s · mnożnik ×${String(sc.mult).replace('.',',')}`));
-  if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
+  if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(mode==='lektor' && current.lyric){
     const d=document.createElement('div'); d.className='rline';
     d.innerHTML='<span class="mk" style="color:var(--muted)">„</span>'+
@@ -906,6 +977,51 @@ function checkQuiz(){
   if(abcd) document.getElementById('replay').disabled=false;   // można dosłuchać
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
+/* EKSPERYMENT: składanka / okładka — ocena WYKONAWCY (artistMatch: też człon duetu; forma z puli albo zapis iTunes),
+ * okładka: + album (bonus 20, textMatch bez „(Deluxe…)") i mnożnik etapu odsłony ZAMIAST bonusu za szybkość (jak intro). */
+function checkArtistQ(){
+  const cover = qMode()==='cover';
+  stopAudio(); setIcon('play');
+  const stage = cover ? (current.coverStage||0) : null;
+  if(cover) coverStop(true);   // odsłona: pełna okładka
+  const ga=val('qf_artist'), gal=cover ? val('qf_album') : '';
+  const okArtist = !!ga && (artistMatch(ga, current.artist) || (!!current.artistAlt && artistMatch(ga, current.artistAlt)));
+  const okAlbum = cover && !!gal && !!current.album && textMatch(gal, current.album);
+  total++; if(okArtist){score++;streak++;} else streak=0;
+  const sc=scoreRound({ okArtist, okAlbum, artistOnly:true, elapsedMs: cover ? null : (qStartAt ? Date.now()-qStartAt : null), limitMs:SPEED_CAP_MS, streak,
+    mult: cover ? coverMult(stage) : 1 });
+  points+=sc.points;
+  updateScore();
+  if(session){ const s=matchSlot(session.match); pushResult({track:current.track, artist:current.artist, okTitle:okArtist, okArtist, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
+  document.querySelectorAll('#quizForm input').forEach(x=>{ x.disabled=true; });
+  const r=document.getElementById('rmeta'); r.innerHTML='';
+  const tagA = okArtist && norm(ga)!==norm(current.artist) ? (textMatch(ga, current.artist) || textMatch(ga, current.artistAlt||'') ? 'literówka OK' : 'jeden z wykonawców OK') : '';
+  r.appendChild(guessLine(okArtist, 'Wykonawca', current.artist, ga, tagA, sc.parts.artist));
+  if(cover){
+    r.appendChild(guessLine(okAlbum, 'Album', current.album, gal, okAlbum && norm(gal)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
+    if(current.year) r.appendChild(noteLine('rok', String(current.year)));
+    const bl=coverStageBlocks(stage);
+    r.appendChild(noteLine('okładka', (bl ? `odpowiedź przy ${bl}×${bl} pikselach` : 'odpowiedź przy pełnej okładce')+` · mnożnik ×${String(sc.mult).replace('.',',')}`));
+  } else {
+    const played=(current.playedClips || current.clips.filter(c=>c.ok)).length ? (current.playedClips || current.clips.filter(c=>c.ok)) : current.clips;
+    r.appendChild(noteLine('zagrały', played.map((c,i)=>(i+1)+'. '+c.track).join(' · ')));
+  }
+  if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  const img=document.getElementById('art');
+  if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
+  const rh=document.getElementById('revealHead');
+  if(rh){
+    const cls = okArtist ? 'win' : (okAlbum ? 'part' : 'fail'), ic = okArtist ? '✓' : (okAlbum ? '≈' : '✗');
+    const sub = okArtist ? (cover ? (okAlbum ? 'wykonawca i album trafione' : 'wykonawca trafiony') : 'wykonawca trafiony') : (okAlbum ? 'album OK — wykonawca nie' : 'następnym razem');
+    rh.className='rv-shead '+cls;
+    rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${okArtist?'Dobrze!':(okAlbum?'Prawie!':'Pudło')}</b><small>${escapeHtml(sub)}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
+  }
+  document.getElementById('reveal').classList.add('show');
+  if(okArtist){ confetti(); playClap(); } else playSfx(okAlbum ? 'ding' : 'buzz');
+  document.getElementById('check').disabled=true;
+  if(!cover) document.getElementById('replay').disabled=false;   // składanka: można posłuchać jeszcze raz
+  document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
+}
 /* F8a: tryb „rok" — ocena yearScore (100 / ±1 70 / ±2 50 / dekada 20), punkty przez scoreRound({yearPts}) */
 const YEAR_TIER = { exact:'Dokładnie!', off1:'±1 rok', off2:'±2 lata', decade:'Właściwa dekada', miss:'Pudło' };
 function checkYear(){
@@ -992,7 +1108,7 @@ function ptsBreakdown(sc){
   const parts=['baza '+sc.base];
   if(sc.speed>1) parts.push('szybkość ×'+(Math.round(sc.speed*100)/100).toString().replace('.',','));
   if(sc.streakMult>1) parts.push('seria ×'+String(sc.streakMult).replace('.',','));
-  if(sc.mult>1) parts.push('etap ×'+String(sc.mult).replace('.',','));   // F8a: intro
+  if(sc.mult!==1) parts.push('etap ×'+String(sc.mult).replace('.',','));   // F8a: intro; EKSP.: okładka / „dłużej"
   return parts.join(' · ')+' = '+sc.points+' pkt';
 }
 // F6a (R-U2): wiersz odsłony muzyki — poprawna wartość + tag („literówka OK") + „Ty: …" + zdobyte punkty. Tekst ESCAPOWANY.

@@ -35,7 +35,7 @@ import { REACTIONS } from '../core/chatFeed.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm, quizKey, shuffleMC, parseYear } from '../core/scoring.js';
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
-import { MP_SNIP_WINDOW_S, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
+import { mpSnipOffset, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
 import { resolveTrackServer, resolveDistractorsServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 
@@ -483,7 +483,8 @@ export class GameAuthority extends Server {
     // F2b #11: offset fragmentu ustalany na serwerze, ale wysyłany dopiero w PLAY (w ARMING 0).
     // Klient i tak buforuje CAŁY plik zajawki (URL musi być znany w ARMING dla równego startu) —
     // ukrywamy tylko, KTÓRY 2-s wycinek zagra.
-    hidden.snipStart = this.game.mode==='snippet' ? Math.max(0.5, Math.random()*MP_SNIP_WINDOW_S) : 0;
+    // EKSPERYMENT: „od tyłu krótko" — ten sam mechanizm: offset = KONIEC okna 3 s odwracanego u klientów (core/timing.mpSnipOffset)
+    hidden.snipStart = mpSnipOffset(this.game.mode);
     this.game.snipStart = 0;
     this.armHidden = hidden;
     // FAZA GOTOWOŚCI: roześlij utwór (bez odpowiedzi), czekaj aż wszyscy zbuforują

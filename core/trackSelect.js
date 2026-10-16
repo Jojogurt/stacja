@@ -124,6 +124,13 @@ function weightedPick(list, rng=Math.random){
  * Wersje tego samego utworu zgrupowane po titleKey: z grupy bierzemy najlepszy tier
  * (bez nawiasów > remaster > live/remix), przy remisie — wyżej w wynikach iTunes. */
 export function rankTracks(results, artist, seen, opts={}){
+  const buckets=trackBuckets(results, artist, seen, opts);
+  for(let level=0; level<4; level++) if(buckets[level].length) return { level, list:buckets[level] };
+  return { level:-1, list:[] };
+}
+/* wszystkie poziomy rankingu naraz (rankTracks bierze pierwszy niepusty; składanka potrzebuje kilku utworów,
+ * więc dobiera z kolejnych poziomów) → [[poziom 0], [1], [2], [3]] kandydatów {r, idx, key, tier, level} */
+export function trackBuckets(results, artist, seen, opts={}){
   const rng=opts.range || null;
   const groups=new Map();
   (results||[]).forEach((r, idx)=>{
@@ -150,8 +157,7 @@ export function rankTracks(results, artist, seen, opts={}){
     const b=g.best;
     buckets[b.level].push({ r:b.r, idx:g.idx, key:b.key, tier:b.tier, level:b.level });
   }
-  for(let level=0; level<4; level++) if(buckets[level].length) return { level, list:buckets[level] };
-  return { level:-1, list:[] };
+  return buckets;
 }
 
 /* wybór utworu z wyników (ten sam artysta, bez coverów/live/remiksów, preferuj dekadę i popularne).
@@ -181,7 +187,7 @@ function normalize(t){
 export function cachedFetcher(fn, { ttlMs=30*60*1000, max=200, pendingMs=30000, now=()=>Date.now() }={}){
   const cache=new Map();
   const wrapped=(term, opts)=>{
-    const key=(opts && opts.song ? 's:' : 'a:')+String(term||'').toLowerCase().trim();
+    const key=(opts && opts.album ? 'al:' : opts && opts.song ? 's:' : 'a:')+String(term||'').toLowerCase().trim();   // EKSPERYMENT: + albumy (okładka)
     const hit=cache.get(key);
     // trafienie: gotowy wynik w TTL albo zapytanie w locie nie starsze niż pendingMs (wiszące → ponów)
     if(hit && (hit.done ? now()-hit.at<ttlMs : now()-hit.at<pendingMs)){ cache.delete(key); cache.set(key, hit); return hit.p; }
@@ -404,6 +410,176 @@ export async function gatherDistractors({ cat, correct, itunes, rnd=Math.random,
     }
   }
   return pick();
+}
+
+/* ======================= EKSPERYMENT: „składanka" (medley) i „okładka" (cover) — pytania o WYKONAWCĘ =======================
+ * Oba tryby potrzebują PULI WYKONAWCÓW: `cat.artists` albo — dla playlisty — różnych wykonawców jej utworów
+ * (gdy jest ich ≥ MIN_PLAYLIST_ARTISTS; playlista 2–3 wykonawców dawałaby ciągle tych samych). */
+export const MIN_PLAYLIST_ARTISTS = 4;
+// wykonawca główny wpisu playlisty: bez „feat./ft./featuring/x/with …" (miękkie „&"/przecinek zostają — „Simon & Garfunkel")
+const primaryArtist = a => String(a||'').split(/\s+(?:feat\.?|ft\.?|featuring|x|with)\s+/i)[0].trim();
+export function artistPool(cat){
+  if(!cat || typeof cat!=='object' || cat.kind==='quiz' || cat.kind==='lyrics') return [];
+  if(Array.isArray(cat.artists) && cat.artists.length) return cat.artists.filter(a=>typeof a==='string' && a.trim());
+  const byKey=new Map();
+  (Array.isArray(cat.songs) ? cat.songs : []).forEach(x=>{
+    const a=primaryArtist(x && x.artist), k=artistKey(a);
+    if(a && k && !byKey.has(k)) byKey.set(k, a);
+  });
+  return byKey.size>=MIN_PLAYLIST_ARTISTS ? [...byKey.values()] : [];
+}
+// kolejność prób wykonawców: bez ostatnio użytych (recent), seedowalny rnd, najwyżej `tries`
+function artistOrder(pool, recent, rnd, tries){
+  const fresh = recent ? pool.filter(a=>!recent.includes(a)) : pool.slice();
+  return shuffle(fresh.length ? fresh : pool, rnd).slice(0, tries);
+}
+function rememberArtist(recent, artist){ if(recent){ recent.push(artist); if(recent.length>6) recent.shift(); } }
+
+/* ---------- składanka: 4 RÓŻNE utwory tego samego wykonawcy ----------
+ * Kolejność grup: studyjne/remaster popularne (pozycja < MEDLEY_TOP) → studyjne mniej popularne → live/remix
+ * popularne → reszta. W grupie losowanie ważone popularnością (popWeight) BEZ zwracania. Dedup tytułów
+ * (titleKey) i filtr wersji/coverów robi trackBuckets (ta sama logika co wybór utworu w „muzyce"). */
+export const MEDLEY_N = 4, MEDLEY_MIN = 3, MEDLEY_TOP = 15, MEDLEY_ARTIST_TRIES = 5;
+export function pickMedleyTracks(results, artist, rnd=Math.random, opts={}){
+  const n = Number.isInteger(opts.n) && opts.n>0 ? opts.n : MEDLEY_N;
+  const top = Number.isInteger(opts.top) ? opts.top : MEDLEY_TOP;
+  const b = trackBuckets(results, artist, opts.seen || null, { range: opts.range || null });
+  const studio=[...b[0], ...b[1]], alt=[...b[2], ...b[3]];
+  const groups=[ studio.filter(c=>c.idx<top), studio.filter(c=>c.idx>=top), alt.filter(c=>c.idx<top), alt.filter(c=>c.idx>=top) ];
+  const out=[], used=new Set();
+  for(const g of groups){
+    let rest=g.filter(c=>!used.has(c.key));
+    while(out.length<n && rest.length){
+      const c=weightedPick(rest, rnd);
+      out.push(c); used.add(c.key);
+      rest=rest.filter(x=>x!==c && !used.has(x.key));
+    }
+    if(out.length>=n) break;
+  }
+  return out;
+}
+/* Rozwiąż składankę: kolejni wykonawcy z puli (≤ tries) aż któryś ma n grywalnych utworów; inaczej najlepszy z ≥ min
+ * (3 wycinki). Brak → {error, reason} (wołający gra wtedy zwykłą „muzykę").
+ * → { artist (z puli — forma odpowiedzi), artistAlt (zapis iTunes), clips:[{track, artist, year, album, preview, art}] } */
+export async function resolveMedley({ cat, seen, recent, itunes, rnd=Math.random, capMs=RESOLVE_CAP_MS, n=MEDLEY_N, min=MEDLEY_MIN, tries=MEDLEY_ARTIST_TRIES }){
+  const pool=artistPool(cat);
+  if(!pool.length) return { error:true, reason:'empty' };
+  const range=parseRange(cat.range), deadline=Date.now()+capMs;
+  let best=null, anyResponse=false;
+  for(const artist of artistOrder(pool, recent, rnd, tries)){
+    const remaining=deadline-Date.now(); if(remaining<=0) break;
+    let res=null;
+    try{ res=await withTimeout(Promise.resolve(itunes(artist)), remaining); anyResponse=true; }catch(_e){ continue; }
+    const picks=pickMedleyTracks(res, artist, rnd, { n, range, seen });
+    if(picks.length>=n){ best={ artist, picks }; break; }
+    if(picks.length>=min && (!best || picks.length>best.picks.length)) best={ artist, picks };
+  }
+  if(!best) return { error:true, reason: anyResponse ? 'empty' : 'offline' };
+  rememberArtist(recent, best.artist);
+  if(seen) best.picks.forEach(p=>{ seen.add(p.key); seen.add(norm(p.r.trackName)); });
+  const clips=best.picks.map(p=>normalize(p.r));
+  const exact=clips.find(c=>artistKey(c.artist)===artistKey(best.artist));
+  return { artist:best.artist, artistAlt:(exact||clips[0]).artist, clips };
+}
+
+/* ---------- okładka: popularny album wykonawcy ----------
+ * Źródło: iTunes `entity=album` (top wyniki ≈ popularność); gdy niedostępne — albumy zebrane z wyników utworów
+ * (collectionName/artwork piosenek wykonawcy, albumsFromSongs). Odrzucamy single/EP i albumy innych wykonawców;
+ * rangi: 0 — album „zwykły" (też „(Remastered)"), 1 — edycje (deluxe/expanded/anniversary), 2 — kompilacje
+ * (greatest hits/best of/collection/…), koncertowe, soundtracki. Gramy najlepszą niepustą rangę („bez kompilacji,
+ * jeśli są alternatywy"); w niej losowanie ważone popularnością z top ALBUM_TOP. */
+export const ALBUM_TOP = 8, COVER_ARTIST_TRIES = 5;
+const ALBUM_SINGLE = /\s[-–]\s(?:single|ep)\s*$/i;
+const ALBUM_COMPILATION = /\b(?:greatest hits|best of|the best|very best|hits|collection|kolekcja|essentials?|anthology|antologia|gold|platinum|singles|przeboje|soundtrack|motion picture|original score|live|unplugged|in concert|koncert|na żywo|na zywo|remix(?:es|ed)?|karaoke|tribute|covers)\b|\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b/i;
+const ALBUM_EDITION = /\b(?:deluxe|expanded|anniversary|edition|bonus|special|collector'?s)\b/i;
+const ALBUM_DECOR = /remaster|deluxe|expanded|anniversary|edition|version|bonus|special|collector|mono|stereo|explicit|clean|\d{4}/i;
+// tytuł albumu do odsłony/oceny: bez „(Remastered)", „(Deluxe Edition)", „ - Single/EP"
+export function albumTitle(name){
+  const t=String(name||'').trim();
+  const c=t.replace(ALBUM_SINGLE,'').replace(/\s*[(\[]([^)\]]*)[)\]]/g,(m,inner)=> ALBUM_DECOR.test(inner) ? '' : m).replace(/\s+/g,' ').trim();
+  return c || t;
+}
+export function albumKey(name){
+  const t=String(name||'');
+  return norm(t.replace(/\(([^)]*)\)|\[([^\]]*)\]/g,' ').replace(ALBUM_SINGLE,' ').replace(/\s[-–]\s.*$/,'')) || norm(t);
+}
+// ranga albumu (-1 = odrzucony: singiel/EP/za mało utworów)
+export function albumTier(a){
+  const name=String((a && a.collectionName)||'');
+  if(!name || ALBUM_SINGLE.test(name)) return -1;
+  const tc=Number(a.trackCount);
+  if(Number.isFinite(tc) && tc>0 && tc<4) return -1;
+  if(ALBUM_COMPILATION.test(name)) return 2;
+  if(ALBUM_EDITION.test(name)) return 1;
+  return 0;
+}
+// okładka iTunes w zadanym rozmiarze („…/100x100bb.jpg" → „…/600x600bb.jpg")
+export function coverArtUrl(url, size=600){
+  const u=String(url||''); if(!u) return '';
+  const r=u.replace(/\/\d+x\d+(bb)?(\.[a-z]+)$/i, `/${size}x${size}bb$2`);
+  return r!==u ? r : u.replace('100x100', `${size}x${size}`);
+}
+/* Czysta: wybierz album z wyników → { a (surowy wynik), key, tier, idx } albo null */
+export function pickAlbum(albums, artist, seen, rnd=Math.random, opts={}){
+  const top=Number.isInteger(opts.top) ? opts.top : ALBUM_TOP;
+  const groups=new Map();
+  (albums||[]).forEach((a, idx)=>{
+    if(!a || !a.artworkUrl100 || !a.collectionName) return;
+    const who=a.collectionArtistName || a.artistName || '';
+    if(BAD.test(who) || BAD.test(a.collectionName)) return;
+    if(!sameArtist(who, artist) && !sameArtist(a.artistName||'', artist)) return;
+    const tier=albumTier(a); if(tier<0) return;
+    const key=albumKey(a.collectionName); if(!key) return;
+    if(seen && seen.has('album:'+key)) return;
+    const prev=groups.get(key);
+    if(!prev){ groups.set(key, { a, key, tier, idx }); return; }
+    if(tier<prev.tier) { prev.a=a; prev.tier=tier; }       // ta sama płyta: wersja „zwykła" przed deluxe
+    prev.idx=Math.min(prev.idx, idx);
+  });
+  const all=[...groups.values()];
+  if(!all.length) return null;
+  const best=Math.min(...all.map(g=>g.tier));
+  const list=all.filter(g=>g.tier===best).sort((x,y)=>x.idx-y.idx).slice(0, Math.max(1, top));
+  return weightedPick(list, rnd);
+}
+// albumy z wyników UTWORÓW (zapas, gdy wyszukiwanie albumów niedostępne): grupowanie po collectionId/nazwie
+export function albumsFromSongs(results){
+  const by=new Map();
+  (results||[]).forEach(r=>{
+    if(!r || !r.collectionName) return;
+    const k=r.collectionId!=null ? 'id:'+r.collectionId : 'n:'+norm(r.collectionName);
+    if(by.has(k)) return;
+    by.set(k, { collectionName:r.collectionName, artistName:r.collectionArtistName || r.artistName || '', artworkUrl100:r.artworkUrl100 || '',
+      releaseDate:r.releaseDate || '', trackCount:r.trackCount, collectionId:r.collectionId });
+  });
+  return [...by.values()];
+}
+/* Rozwiąż okładkę: kolejni wykonawcy z puli (≤ tries). `itunes(artist, {album:true})` → albumy; pusto/błąd →
+ * albumy z wyników utworów (`itunes(artist)` — ten sam cache co muzyka). Brak → {error, reason}.
+ * → { artist (z puli), artistAlt, album (tytuł do odsłony/oceny), albumRaw, year, art (600×600), tier } */
+export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random, capMs=RESOLVE_CAP_MS, tries=COVER_ARTIST_TRIES }){
+  const pool=artistPool(cat);
+  if(!pool.length) return { error:true, reason:'empty' };
+  const deadline=Date.now()+capMs;
+  let anyResponse=false;
+  for(const artist of artistOrder(pool, recent, rnd, tries)){
+    let p=null;
+    for(const opts of [{ album:true }, undefined]){
+      const remaining=deadline-Date.now(); if(remaining<=0) break;
+      try{
+        const res=await withTimeout(Promise.resolve(itunes(artist, opts)), remaining); anyResponse=true;
+        p=pickAlbum(opts ? res : albumsFromSongs(res), artist, seen, rnd);
+      }catch(_e){ /* błąd/timeout — następne źródło */ }
+      if(p) break;
+    }
+    if(!p) continue;
+    rememberArtist(recent, artist);
+    if(seen) seen.add('album:'+p.key);
+    const a=p.a;
+    return { artist, artistAlt:a.artistName || artist, album:albumTitle(a.collectionName), albumRaw:a.collectionName,
+      year:String(a.releaseDate||'').slice(0,4), art:coverArtUrl(a.artworkUrl100, 600), tier:p.tier };
+  }
+  return { error:true, reason: anyResponse ? 'empty' : 'offline' };
 }
 
 /* jedno wejście: rozwiąż grywalny utwór dla kategorii (playlista vs pula wykonawców).

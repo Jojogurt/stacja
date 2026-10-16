@@ -822,5 +822,33 @@ await group('F8a: tryb „rok" — brak roku (np. Deezer) → pytanie jak muzyka
   await room.msg(a, { t:'start', config:{ questions:5, modes:['year'], format:'coop', pools:audioPools() } });
   eq(room.game.mode, 'music', 'fallback muzyka'); eq(room.game.answerSlots, null, 'sloty domyślne');
 });
+/* ==================== EKSPERYMENT: „od tyłu krótko" w MP; składanka/okładka tylko solo ==================== */
+await group('EKSP.: presence ogłasza „od tyłu krótko", bez składanki/okładki; start z samymi trybami solo → brak meczu', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); stubResolver(room);
+  const pr=a.last('presence');
+  ok(pr.modes.includes('revsnip'), 'presence.modes: revsnip');
+  ok(!pr.modes.includes('medley') && !pr.modes.includes('cover'), 'składanka/okładka tylko solo');
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['medley','cover'], format:'coop', pools:audioPools() } });
+  ok(!room.game || room.game.phase==null, 'start tylko z trybami solo → zignorowany');
+});
+await group('EKSP.: „od tyłu krótko" — offset okna od autorytetu, ukryty do PLAY, odpowiedź jak muzyka', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'), b=room.join('B','Bo'); stubResolver(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['revsnip'], format:'coop', pools:audioPools() } });
+  let g=a.last('state').game;
+  eq([g.phase, g.mode], [MP.ARMING, 'revsnip'], 'ARMING, tryb revsnip');
+  eq(g.snipStart, 0, 'offset ukryty w ARMING (F2b #11)');
+  eq(g.answerSlots, null, 'sloty domyślne (tytuł + wykonawca)');
+  const hidden=room.armHidden && room.armHidden.snipStart;
+  ok(hidden>=8 && hidden<=20, 'koniec okna w [8..20] — '+hidden);
+  for(const c of [a,b]) await room.msg(c, { t:'action', action:{ type:'ready', armNonce:room.game.armNonce } });
+  g=b.last('state').game;
+  eq(g.phase, MP.PLAY, 'PLAY'); eq(g.snipStart, hidden, 'offset ujawniony w PLAY');
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ title:'Africa', artist:'Toto' } } });
+  await room.msg(a, { t:'lock' });
+  const r=a.last('state').game.reveal;
+  eq(r.kind, 'music', 'odsłona jak muzyka'); ok(r.teamOk && r.gained>=100, 'trafienie tytuł+wykonawca punktuje jak muzyka');
+});
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

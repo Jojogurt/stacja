@@ -427,7 +427,7 @@ function mpQLabel(g){
 }
 function mpHeaderHTML(g){
   const MODE={music:ic('music')+' muzyka',lektor:ic('mic')+' lektor',reverse:ic('reverse')+' od tyłu',snippet:ic('scissors')+' fragment',quiz:ic('brain')+' wiedza',
-    abcd:ic('music')+' ABCD', year:ic('music')+' rok'};   // F8a
+    abcd:ic('music')+' ABCD', year:ic('music')+' rok', revsnip:ic('reverse')+' od tyłu krótko'};   // F8a; EKSPERYMENT
   // F6b (F6): strzałka = „opuścić pokój?" (potwierdzenie), nie natychmiastowe wyjście
   return `<div class="mp-hd">
     <div class="mp-hd-r1">

@@ -264,7 +264,16 @@
   .mc-opt.no .mc-let{background:var(--red);color:#fff}
   .mc-opt:disabled{cursor:default}
   /* F8a: tryb „intro" — „+ więcej" tylko w intro; tryb „rok" — pole roku ±1 + suwak */
-  body:not(.intro-mode) #introMore{display:none}
+  body:not(.intro-mode):not(.revsnip-mode):not(.cover-mode) #introMore{display:none}   /* EKSP.: „+ dłużej" / „wyraźniej" */
+  /* EKSPERYMENT: tryb „okładka" — okładka albumu odsłaniana etapami (canvas z twardymi blokami → pełny <img>) */
+  .cover-box{position:relative;margin:14px auto 0;width:min(72vw,260px);aspect-ratio:1/1;border-radius:var(--r-md);overflow:hidden;
+    background:var(--panel2);border:2px solid var(--line)}
+  .cover-box[hidden]{display:none}
+  .cover-box canvas,.cover-box img{display:block;width:100%;height:100%;object-fit:cover}
+  .cover-box canvas{image-rendering:crisp-edges;image-rendering:pixelated}
+  .cover-box canvas[hidden],.cover-box img[hidden]{display:none}
+  .cover-box.broken::after{content:'okładka niedostępna';position:absolute;inset:0;display:grid;place-items:center;
+    font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase}
   #quizForm .yr-row{display:flex;gap:8px;align-items:stretch}
   #quizForm .yr-row input{flex:1;text-align:center;font-size:22px;font-weight:800}
   #quizForm .yr-step{flex:0 0 56px;min-height:44px;border-radius:12px;font-weight:800;cursor:pointer}
@@ -971,6 +980,7 @@
   body.solo.playing .deck-eq{display:flex}
   /* QUIZ (wiedza ogólna): brak audio → ukryj gałkę, equalizer, „lepszy głos" i „od nowa" */
   body.quiz-mode .knob-wrap, body.quiz-mode .deck-eq, body.quiz-mode .voice-toggle, body.quiz-mode #replay, body.quiz-mode .foot-src{display:none !important}   /* F8b: legenda punktacji quizu zostaje */
+  body.cover-mode .knob-wrap, body.cover-mode .deck-eq, body.cover-mode .voice-toggle, body.cover-mode #replay, body.cover-mode .foot-src{display:none !important}   /* EKSP.: okładka bez audio */
   .deck-eq i{width:6px;border-radius:3px;background:var(--blue)}
   .deck-eq i:nth-child(1){height:14px;animation:mpeq .9s ease-in-out infinite}
   .deck-eq i:nth-child(2){height:26px;animation:mpeq .9s .1s ease-in-out infinite}
@@ -1582,6 +1592,7 @@
     <div class="deck-state" id="state" role="status" aria-live="polite">naciśnij, żeby wylosować</div>
     <button class="offline-play" id="offlinePlay" type="button" hidden>Zagraj offline: Lektor / Wiedza</button>
     <div class="lyric-box" id="lyricBox" aria-live="polite" hidden></div>
+    <div class="cover-box" id="coverBox" hidden><canvas id="coverCanvas" width="8" height="8" role="img" aria-label="okładka albumu (rozpikselowana)"></canvas><img id="coverImg" alt="okładka albumu" referrerpolicy="no-referrer" hidden></div>
     <div class="mini">
       <button id="replay" disabled>↻ od nowa</button>
       <button id="introMore" type="button" disabled>+ więcej</button>

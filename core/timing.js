@@ -20,8 +20,81 @@ export function introNextStage(stage){
   return i+1 < INTRO_STAGES.length ? i+1 : null;
 }
 
+/* EKSPERYMENT: tryb „od tyłu krótko" (revsnip) — krótkie OKNO zajawki odtwarzane od tyłu.
+ * Okno opisane KOŃCEM `end` (s w zajawce): etap 0 = [end−3, end], „dłużej" = [end−5, end]. Odwrócone okno zaczyna
+ * się od `end`, więc „dłużej" powtarza te same 3 s i dokłada 2 s dalej (gracz nie traci tego, co już słyszał). */
+export const REVSNIP_STAGES = [3, 5];
+export const REVSNIP_SAFE_MIN = 3;        // początek okna nie wcześniej niż 3 s (cisza/wejście utworu)
+export const REVSNIP_MAX_END = 28;        // koniec okna nie dalej niż 28 s (zajawka ~30 s, wyciszenie na końcu)
+export const MP_REVSNIP_END_MAX = 20;     // MP: koniec okna losowany w [SAFE_MIN+5 .. 20]
+export function revsnipStageSecs(stage){
+  const i = Math.floor(Number(stage));
+  return REVSNIP_STAGES[Number.isFinite(i) ? Math.max(0, Math.min(REVSNIP_STAGES.length-1, i)) : 0];
+}
+export function revsnipNextStage(stage){
+  const i = Math.max(0, Math.floor(Number(stage)) || 0);
+  return i+1 < REVSNIP_STAGES.length ? i+1 : null;
+}
+const REV_MAX_SECS = REVSNIP_STAGES[REVSNIP_STAGES.length-1];
+// koniec okna (solo): losowo w [SAFE_MIN+5 .. min(dur,28)−0,5]; krótka zajawka → przycięte do [secs .. dur]
+export function revsnipEnd(dur, rnd = Math.random){
+  const d = Number(dur) > 0 ? Number(dur) : 30;
+  const lo = REVSNIP_SAFE_MIN + REV_MAX_SECS;
+  const hi = Math.min(d, REVSNIP_MAX_END) - 0.5;
+  if(hi <= lo) return hi > 0 ? hi : d;   // bardzo krótka zajawka — okno kończy się tuż przed jej końcem
+  return lo + rnd() * (hi - lo);
+}
+// MP: koniec okna bez znajomości długości zajawki (serwer) — [8 .. 20]
+export function mpRevsnipEnd(rnd = Math.random){
+  const lo = REVSNIP_SAFE_MIN + REV_MAX_SECS;
+  return lo + rnd() * (MP_REVSNIP_END_MAX - lo);
+}
+// okno etapu: {start, secs} (start ≥ 0)
+export function revsnipWindow(end, stage){
+  const secs = revsnipStageSecs(stage), e = Number(end) > 0 ? Number(end) : secs;
+  const start = Math.max(0, e - secs);
+  return { start, secs: e - start };
+}
+// MP: wspólny offset fragmentu per tryb (serwer-autorytet i relay-host): fragment → start 2 s, od tyłu krótko → koniec okna
+export function mpSnipOffset(mode, rnd = Math.random){
+  if(mode === 'snippet') return mpSnipStart(rnd);
+  if(mode === 'revsnip') return mpRevsnipEnd(rnd);
+  return 0;
+}
+
+/* EKSPERYMENT: „składanka" (medley) — 4 wycinki po 1,5 s z różnych utworów wykonawcy, przerwa 250 ms + cichy tik.
+ * Start wycinka w bezpiecznym oknie 8–20 s zajawki (nie cisza na początku, nie wyciszenie na końcu). */
+export const MEDLEY_CLIP_S = 1.5;
+export const MEDLEY_GAP_S = 0.25;
+export const MEDLEY_SAFE_FROM = 8, MEDLEY_SAFE_TO = 20;
+export function medleyClipStart(dur, rnd = Math.random){
+  const d = Number(dur) > 0 ? Number(dur) : 30;
+  const hi = Math.min(MEDLEY_SAFE_TO, d - MEDLEY_CLIP_S - 0.5);
+  if(hi <= 0) return 0;
+  const lo = Math.min(MEDLEY_SAFE_FROM, hi);
+  return lo + rnd() * (hi - lo);
+}
+// łączna długość składanki (s) dla n wycinków
+export function medleyDuration(n){
+  const k = Math.max(0, Math.floor(Number(n)) || 0);
+  return k ? k*MEDLEY_CLIP_S + (k-1)*MEDLEY_GAP_S : 0;
+}
+
+/* EKSPERYMENT: „okładka" (cover) — okładka albumu odsłaniana etapami rozdzielczości (bloki na bok; 0 = pełna).
+ * Auto-odsłona co COVER_STEP_MS albo przycisk „wyraźniej". Mnożnik punktów jak intro (core/scoring.coverMult). */
+export const COVER_STAGES = [8, 16, 32, 64, 0];
+export const COVER_STEP_MS = 3000;
+export function coverStageBlocks(stage){
+  const i = Math.floor(Number(stage));
+  return COVER_STAGES[Number.isFinite(i) ? Math.max(0, Math.min(COVER_STAGES.length-1, i)) : 0];
+}
+export function coverNextStage(stage){
+  const i = Math.max(0, Math.floor(Number(stage)) || 0);
+  return i+1 < COVER_STAGES.length ? i+1 : null;
+}
+
 // ile sekund trwa faza „słuchaj" per tryb (gdy kategoria nie nadpisuje listenSecs)
-export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15 };
+export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15, revsnip:12, medley:15, cover:15 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
 // F2b (#6): twardy limit fazy gotowości (ARMING) po stronie serwera — po nim pytanie rusza z tymi,

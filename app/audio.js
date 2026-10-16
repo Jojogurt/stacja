@@ -11,13 +11,16 @@
 import { setIcon, setRing, setState } from './dom.js';
 import { lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { ensureCtx, ensureCtxResumed, unlockCtx } from './audioCtx.js';
-import { playReverse, unlockAudioElement } from '../adapters-web/webAudio.js';
-import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs } from '../core/timing.js';
-import { registerMusicProbe } from './sfx.js';
+import { playReverse, unlockAudioElement, fetchAudioBytes, sliceBuffer, buildMedleyBuffer, playBuffer, decodeAudio } from '../adapters-web/webAudio.js';
+import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs, revsnipEnd, revsnipWindow, medleyClipStart, MEDLEY_CLIP_S, MEDLEY_GAP_S } from '../core/timing.js';
+import { MEDLEY_MIN } from '../core/trackSelect.js';
+import { registerMusicProbe, playSfx } from './sfx.js';
 
 let el = null;           // trwały element HTMLAudio (music/snippet/fallback „od tyłu")
 let round = null;        // bieżące odtwarzanie na `el`: {cur, mode, said} — null = element bezczynny
-let revSrc = null;       // uchwyt BufferSource trybu „od tyłu" (z playReverse)
+let revSrc = null;       // uchwyt BufferSource (WebAudio): „od tyłu" (playReverse), EKSPERYMENT: „od tyłu krótko", składanka
+let revCache = null;     // EKSPERYMENT „od tyłu krótko": {url, decoded} — „dłużej"/↻ bez ponownego pobierania i dekodowania
+let bufStartGen = null;  // EKSPERYMENT: start bufora (składanka/„od tyłu krótko") tej rundy w toku — bez podwójnego startu po geście
 // iOS: zajawka quizu PRZEJMUJE dźwięk ('playback'); po stopie wracamy do 'ambient' (UI miksuje, nie pauzuje muzyki)
 const audioSession = t => { try{ if(navigator.audioSession) navigator.audioSession.type = t; }catch(e){} };
 
@@ -44,15 +47,24 @@ function ensureEl(){
   // ikona gałki STEROWANA REALNYM stanem odtwarzacza (nie optymistycznie) — #1/#3
   el.addEventListener('playing',()=>{ if(!round) return; setIcon('pause');
     if(round.mode==='intro'){ armIntroStop(); setState('intro '+introStageSecs(round.cur.introStage)+' s…'); return; }   // F8a
+    if(round.mode==='medley'){ setState('składanka '+(round.ci+1)+'/'+round.cur.clips.length+'…'); return; }   // EKSPERYMENT (zapas na <audio>)
     if(!round.said){ round.said=true; setState(round.mode==='snippet'?'słuchaj — krótki fragment!':(round.mode==='reverse'?'„od tyłu" niedostępne tutaj — gram normalnie':'słuchaj uważnie…')); } });
   el.addEventListener('play',   ()=>{ if(round) setIcon('pause'); });
   el.addEventListener('pause',  ()=>{ if(round && round.stopT) clearTimeout(round.stopT); if(round && !el.ended) setIcon('play'); });   // F8a: pauza intro wstrzymuje timer etapu
   el.addEventListener('waiting',()=>{ if(round) setIcon('wait'); });
   // 2.2: 404/stall zajawki → nie zawieszaj rundy; pokaż komunikat i odblokuj pomiń/sprawdź
-  el.addEventListener('error',  ()=>{ if(!round) return; if(round.mode==='intro') round.cur.introBroken=true;   // F8a: bez zajawki intro = jak muzyka (bez mnożnika)
+  el.addEventListener('error',  ()=>{ if(!round) return; if(round.mode==='medley'){ medleyElNext(); return; }   // EKSPERYMENT: zepsuty wycinek → następny
+    if(round.mode==='intro') round.cur.introBroken=true;   // F8a: bez zajawki intro = jak muzyka (bez mnożnika)
     setIcon('play'); setState('zajawka niedostępna — pomiń albo sprawdź'); armControls(); });
-  el.addEventListener('ended',  ()=>{ if(!round) return; round=null; setIcon('play'); setRing(1); setState('koniec zajawki · ↻ od nowa'); });
+  el.addEventListener('ended',  ()=>{ if(!round) return; if(round.mode==='medley'){ medleyElNext(); return; }
+    round=null; setIcon('play'); setRing(1); setState('koniec zajawki · ↻ od nowa'); });
   el.addEventListener('loadedmetadata',()=>{
+    if(round && round.mode==='medley' && !round.seeked){   // EKSPERYMENT: zapas składanki — seek do wycinka
+      round.seeked=true; const c=round.cur.clips[round.ci];
+      if(c.start==null) c.start=medleyClipStart(el.duration||30);
+      round.clipStart=c.start; try{ el.currentTime=c.start; }catch(_e){}
+      playEl(); return;
+    }
     if(!round || round.mode!=='snippet' || round.seeked) return;
     round.seeked=true;
     const cur=round.cur, dur=el.duration||25;
@@ -63,6 +75,7 @@ function ensureEl(){
   el.addEventListener('timeupdate',()=>{
     if(!round) return;
     if(round.mode==='intro'){ introTick(); return; }   // F8a
+    if(round.mode==='medley'){ medleyElTick(); return; }   // EKSPERYMENT
     if(round.mode==='snippet'){
       const cur=round.cur; if(cur.snipStart==null) return;
       const t=el.currentTime-cur.snipStart;
@@ -101,6 +114,99 @@ function startIntro(){
   try{ el.currentTime=0; }catch(_e){}
   playEl();
 }
+/* ===== EKSPERYMENT: „składanka" — 4 wycinki × 1,5 s, przerwa 250 ms + cichy tik =====
+ * Tor główny: WebAudio (patrz adapters-web/webAudio.js — dlaczego nie <audio> na iOS). Wszystkie zajawki pobierane
+ * RÓWNOLEGLE, dekodowane po kolei (mniejszy szczyt pamięci: ~10 MB na zdekodowane 30 s), z każdej zostaje tylko
+ * wycinek → jeden sklejony bufor `cur.medleyBuf`. Zapas (WebAudio/CORS padło, < MEDLEY_MIN wycinków): kolejne
+ * wycinki na TRWAŁYM elemencie (seek + stop + przerwa) — mniej precyzyjnie, ale gra. */
+export async function loadMedley(cur, { onProgress, alive=()=>true }={}){
+  const clips=cur.clips||[], cfg=window.STACJA_CONFIG;
+  let ctx=null; try{ ctx=ensureCtx(); }catch(_e){ ctx=null; }
+  if(!ctx || typeof ctx.decodeAudioData!=='function' || typeof ctx.createBuffer!=='function'){ cur.medleyBuf=null; return 0; }
+  const bytes=clips.map(c=>fetchAudioBytes(c.preview, cfg).catch(()=>null));
+  const parts=[]; let done=0;
+  for(let i=0;i<clips.length;i++){
+    const b=await bytes[i];
+    if(!alive()) return 0;
+    try{
+      if(!b) throw new Error('fetch');
+      const dec=await ctx.decodeAudioData(b);
+      if(!alive()) return 0;
+      const c=clips[i]; c.start=medleyClipStart(dec.duration);
+      parts.push(sliceBuffer(ctx, dec, c.start, MEDLEY_CLIP_S)); c.ok=true;
+    }catch(_e){ clips[i].ok=false; }
+    done++; if(onProgress) onProgress(done, clips.length);
+  }
+  cur.medleyBuf = parts.length>=Math.min(MEDLEY_MIN, clips.length) ? buildMedleyBuffer(ctx, parts, { gap:MEDLEY_GAP_S }) : null;
+  if(cur.medleyBuf) cur.playedClips=clips.filter(c=>c.ok);   // odsłona: tytuły, które NAPRAWDĘ zagrały
+  return parts.length;
+}
+// wspólny start bufora WebAudio z obsługą iOS (kontekst wstrzymany poza gestem) i tokenem rundy
+async function startBuffer(make, { playingState, endState }){
+  const gen=getGen();
+  if(bufStartGen===gen) return;   // start tej rundy w toku (np. czeka na gest) — drugi klik nie gra drugi raz
+  bufStartGen=gen;
+  let ctxState='running'; try{ ctxState=ensureCtx().state; }catch(_e){}
+  if(ctxState==='suspended'){ setIcon('play'); setState('stuknij ▶, by odtworzyć'); armControls(); }
+  else { setIcon('wait'); }
+  try{
+    const ctx=await ensureCtxResumed();
+    if(getGen()!==gen || !getCurrent()) return;
+    const buf=await make(ctx);
+    if(getGen()!==gen || !getCurrent()) return;
+    if(!buf) return 'fail';
+    revSrc=playBuffer(ctx, buf, { onProgress:f=>setRing(f), onEnded:()=>{ revSrc=null; setIcon('play'); setRing(1); setState(endState); } });
+    setIcon('pause'); setState(playingState); armControls();
+  } catch(_e){ return 'fail'; }
+  finally { if(bufStartGen===gen) bufStartGen=null; }
+}
+async function startMedley(){
+  const cur=getCurrent();
+  if(!cur.medleyBuf){ startMedleyEl(); return; }
+  await startBuffer(async()=>cur.medleyBuf, { playingState:'słuchaj — składanka ('+(cur.playedClips||cur.clips).length+' utwory)!', endState:'koniec składanki · ↻ od nowa' });
+}
+function startMedleyEl(){ const cur=getCurrent(); armControls(); medleyElClip(cur, 0); }
+function medleyElClip(cur, i){
+  if(getCurrent()!==cur) return;
+  const clips=cur.clips||[];
+  if(i>=clips.length){ round=null; setIcon('play'); setRing(1); setState('koniec składanki · ↻ od nowa'); return; }
+  ensureEl();
+  round={ cur, mode:'medley', ci:i, said:true, seeked:false, snipDone:false, clipStart:null };
+  el.muted=false; el.src=clips[i].preview;
+  setIcon('wait'); setState('składanka '+(i+1)+'/'+clips.length+' — ładowanie…');
+}
+function medleyElTick(){
+  const r=round, n=r.cur.clips.length;
+  if(r.clipStart==null) return;
+  const t=el.currentTime-r.clipStart;
+  setRing(Math.min(1, (r.ci+Math.min(1, Math.max(0,t)/MEDLEY_CLIP_S))/n));
+  if(t>=MEDLEY_CLIP_S) medleyElNext();
+}
+function medleyElNext(){
+  const r=round; if(!r || r.mode!=='medley' || r.snipDone) return;
+  r.snipDone=true; r.cur.clips[r.ci].ok=true;
+  try{ el.pause(); }catch(_e){}
+  playSfx('tick');   // cichy „tik" między wycinkami (zapas: dźwięk UI)
+  setTimeout(()=>{ if(round===r) medleyElClip(r.cur, r.ci+1); }, MEDLEY_GAP_S*1000);
+}
+
+/* ===== EKSPERYMENT: „od tyłu krótko" — okno 3 s (etap „dłużej": 5 s) z zajawki, odwrócone =====
+ * Zdekodowana zajawka trzymana w revCache (↻ / „dłużej" bez ponownego pobierania). Koniec okna `cur.revEnd`
+ * losowany raz na pytanie (core/timing.revsnipEnd), więc „dłużej" zaczyna od tych samych 3 s i dokłada 2 s. */
+async function startRevsnip(){
+  const cur=getCurrent(), url=cur.preview;
+  const res=await startBuffer(async(ctx)=>{
+    let dec = revCache && revCache.url===url ? revCache.decoded : null;
+    if(!dec){ setState('odwracam…'); dec=await decodeAudio(ctx, url, window.STACJA_CONFIG); revCache={ url, decoded:dec }; }
+    if(cur.revEnd==null) cur.revEnd=revsnipEnd(dec.duration);
+    const w=revsnipWindow(cur.revEnd, cur.revStage||0);
+    return sliceBuffer(ctx, dec, w.start, w.secs, { reverse:true });
+  }, { playingState:'słuchaj — '+revsnipWindow(cur.revEnd||10, cur.revStage||0).secs+' s od tyłu!', endState:'koniec · ↻ od nowa albo „dłużej"' });
+  if(res==='fail' && getCurrent()===cur){   // proxy/dekodowanie padło → zagraj normalnie (jak „od tyłu"), runda działa
+    loadEl(cur, 'reverse'); playEl();
+  }
+}
+
 // F2a #9: odblokowanie w GEŚCIE (synchronicznie) — AudioContext („od tyłu") i trwały element.
 // Element odblokowujemy tylko, gdy nie gra (ciche WAV podmienia .src).
 export function unlockSoloAudio({ ctx=true } = {}){
@@ -130,7 +236,10 @@ export function startAudio(){
   audioSession('playback');   // quiz przejmuje dźwięk (wszystkie tryby: music/snippet/reverse)
   const mode=getMode(), current=getCurrent();
   if(!current) return;
+  if(mode==='cover' || mode==='quiz') return;          // EKSPERYMENT: okładka — bez audio
   if(mode==='reverse'){ return startReverse(); }
+  if(mode==='revsnip'){ return startRevsnip(); }       // EKSPERYMENT
+  if(mode==='medley'){ return startMedley(); }         // EKSPERYMENT
   if(mode==='snippet'){ return startSnippet(); }
   if(mode==='intro' && !current.introFull){ return startIntro(); }   // F8a (po odsłonie ↻ gra całą zajawkę)
   loadEl(current, 'music');
@@ -188,14 +297,14 @@ export function toggleAudio(){
   unlockCtx();
   const current=getCurrent(), mode=getMode();
   if(!current){ unlockSoloAudio({ctx:false}); requestRound(); return; }
-  if(mode==='quiz'){ return; }   // wiedza ogólna — brak audio do odtworzenia
+  if(mode==='quiz' || mode==='cover'){ return; }   // wiedza ogólna / EKSPERYMENT okładka — brak audio do odtworzenia
   if(mode==='lektor'){
     if(isSpeaking()){ lektorStop(); setIcon('play'); setState('pauza · ▶ wznów'); return; }   // czyta → stop
     lektorPlay(current.lyric, current.tts, setState); return;
   }
-  if(mode==='reverse' && !round){
+  if((mode==='reverse' || mode==='revsnip' || mode==='medley') && !round){   // EKSPERYMENT: + bufory WebAudio
     if(revSrc){ stopAudio(); setIcon('play'); setState('pauza · ↻ od nowa'); return; }     // od tyłu: stop (replay od nowa)
-    startReverse(); return;
+    startAudio(); return;
   }
   // music / snippet (i fallback „od tyłu") — trwały element: pauza/wznów BEZ restartu (jak w multi)
   if(round && !el.paused && !el.ended){ el.pause(); return; }                                // gra → pauza
@@ -216,4 +325,4 @@ export function replay(){
 registerMusicProbe(()=> !!(round && el && !el.paused && !el.ended) || !!revSrc || !!isSpeaking());
 
 // do testów (siatka jsdom): trwały element solo i stan dekodowania „od tyłu"
-export const _soloAudioDebug = () => ({ el, round, revDecodingGen });
+export const _soloAudioDebug = () => ({ el, round, revDecodingGen, revSrc, revCache });

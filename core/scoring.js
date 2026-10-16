@@ -248,17 +248,31 @@ export function introMult(stage){
   return INTRO_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(INTRO_MULTS.length-1, i)) : INTRO_MULTS.length-1];
 }
 
+/* EKSPERYMENT: „od tyłu krótko" — etap „dłużej" (5 s) ma MNIEJSZY mnożnik niż 3 s (szybkość/seria jak w muzyce) */
+export const REVSNIP_MULTS = [1.0, 0.8];
+export function revsnipMult(stage){
+  const i=Math.floor(Number(stage));
+  return REVSNIP_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(REVSNIP_MULTS.length-1, i)) : 0];
+}
+/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (8 → 16 → 32 → 64 bloki → pełna) jak intro (×2.0 → ×1.0) */
+export const coverMult = stage => introMult(stage);
+/* EKSPERYMENT: tryby „tylko wykonawca" (składanka, okładka): trafiony wykonawca = ARTIST_ONLY_PTS (jak ABCD/quiz),
+ * okładka: + album (bonus PTS.album, niezależny od wykonawcy). Pełne trafienie (seria/statystyki) = wykonawca. */
+export const ARTIST_ONLY_PTS = 100;
+
 // rdzeń punktacji (bez mnożnika trybu) — z niego też limit SCORE_MAX_PER_Q
-function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, yearPts,
+function scoreCore({ okTitle=false, okArtist=false, okYear=false, okAlbum=false, roundOk, quizOk, yearPts, artistOnly=false,
   elapsedMs=null, limitMs=0, streak=0, sure=false } = {}){
   const isQuiz = quizOk!==undefined && quizOk!==null;
   const isYear = !isQuiz && yearPts!==undefined && yearPts!==null;   // F8a: tryb „rok" — punkty z yearScore
+  const isArtist = !isQuiz && !isYear && artistOnly===true;           // EKSPERYMENT: składanka / okładka
   const yp = isYear ? Math.max(0, Math.min(YEAR_PTS.exact, Math.round(+yearPts)||0)) : 0;
   const parts = isQuiz
     ? { title:0, artist:0, year:0, album:0, quiz: quizOk ? PTS.quiz : 0 }
     : isYear ? { title:0, artist:0, year:yp, album:0, quiz:0 }
+    : isArtist ? { title:0, artist: okArtist?ARTIST_ONLY_PTS:0, year:0, album: okAlbum?PTS.album:0, quiz:0 }
     : { title: okTitle?PTS.title:0, artist: okArtist?PTS.artist:0, year: okYear?PTS.year:0, album: okAlbum?PTS.album:0, quiz:0 };
-  const full = isQuiz ? !!quizOk : isYear ? yp>=YEAR_OK_PTS : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
+  const full = isQuiz ? !!quizOk : isYear ? yp>=YEAR_OK_PTS : isArtist ? !!okArtist : (roundOk!==undefined ? !!roundOk : !!(okTitle && okArtist));
   const base = parts.title + parts.artist + parts.year + parts.album + parts.quiz;
   const speed = base>0 ? speedFactor(elapsedMs, limitMs) : 1;
   const sMult = full ? streakMult(streak) : 1;
@@ -281,12 +295,15 @@ export function scoreRound(args = {}){
 
 /* F8b: stopka-legenda punktacji solo zależna od trybu BIEŻĄCEGO pytania (tekst z tych samych stałych co liczenie):
  *  • ABCD / quiz: „trafienie 100 · szybkość · seria"; • rok: „dokładnie 100 · ±1 70 · ±2 50 · dekada 20";
- *  • intro: „im wcześniej, tym więcej: ×2.0 → ×1.0"; • reszta (muzyka/lektor/od tyłu/fragment): tytuł/wykonawca/rok/album. */
+ *  • intro: „im wcześniej, tym więcej: ×2.0 → ×1.0"; • składanka/okładka/od tyłu krótko (EKSPERYMENT); • reszta (muzyka/lektor/od tyłu/fragment): tytuł/wykonawca/rok/album. */
 const fmtX = x => '×' + Number(x).toFixed(1);
 export function scoreLegend(mode){
   if(mode==='abcd' || mode==='quiz') return `trafienie ${PTS.quiz} · szybkość · seria`;
   if(mode==='year') return `dokładnie ${YEAR_PTS.exact} · ±1 ${YEAR_PTS.off1} · ±2 ${YEAR_PTS.off2} · dekada ${YEAR_PTS.decade}`;
   if(mode==='intro') return `im wcześniej, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
+  if(mode==='medley') return `wykonawca ${ARTIST_ONLY_PTS} · szybkość · seria`;
+  if(mode==='cover') return `wykonawca ${ARTIST_ONLY_PTS} · album +${PTS.album} · im mniej widać, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
+  if(mode==='revsnip') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · szybkość · „dłużej" ${fmtX(REVSNIP_MULTS[REVSNIP_MULTS.length-1])}`;
   return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok ±2 +${PTS.year} · album +${PTS.album} · szybkość do +${Math.round(SPEED_BONUS_MAX*100)}% · seria ×1,5 / ×2`;
 }
 

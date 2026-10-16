@@ -9,7 +9,7 @@ import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { clampTimer, mpSnipStart, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond } from '../core/timing.js';
+import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
@@ -528,7 +528,7 @@ function mpKnobTap(){
     if(speaking){ lektorStop(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }
     return mpPlayLocal();
   }
-  if(mode==='reverse'){
+  if(mode==='reverse' || mode==='revsnip'){   // EKSPERYMENT: + „od tyłu krótko" (okno z offsetem od autorytetu)
     if(S.revSrc){ mpStopRev(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }   // od tyłu: stop (replay od nowa)
     return mpPlayLocal();
   }
@@ -546,7 +546,7 @@ function mpPlayLocal(){
   lektorStop(); mpStopRev();
   if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}); return; }
   if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
-  if(S.game.mode==='reverse'){ return mpPlayReverse(); }
+  if(S.game.mode==='reverse' || S.game.mode==='revsnip'){ return mpPlayReverse(); }   // EKSPERYMENT: + od tyłu krótko
   // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
   const a=mpEnsureAudio(); mpClearSnip(a);
   if(a.src!==S.game.preview) a.src=S.game.preview;
@@ -570,8 +570,10 @@ async function mpPlayReverse(){
   mpSetKnob('wait'); mpSetPlayStatus('odwracam…');
   const ctx=await ensureCtxResumed();          // wspólny AudioContext (app/audioCtx.js)
   const url=S.game.preview;
+  // EKSPERYMENT „od tyłu krótko": odwracane tylko okno 3 s kończące się w S.game.snipStart (losuje autorytet, F2b)
+  const win = S.game.mode==='revsnip' ? revsnipWindow(S.game.snipStart||8, 0) : null;
   const r=await playReverse(ctx, url, {
-    cfg: window.STACJA_CONFIG,
+    cfg: window.STACJA_CONFIG, window: win || undefined,
     shouldPlay: ()=>S.game.preview===url,    // runda mogła się zmienić w trakcie dekodowania
     onEnded: ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); },
   });
@@ -697,7 +699,7 @@ async function mpHostNewRound(){
   // RESET slotów dla muzyki/lektora → DEFAULT (tytuł+wykonawca). Bez tego runda audio po quizie
   // dziedziczy sloty quizu (np. a/b/c/d) → złe pola wpisywania + zła ocena/odsłona (rozjazd answerSlots).
   // dla fragmentu: jedno wspólne okno 2 s u wszystkich (host losuje, broadcast)
-  S.game.snipStart = S.game.mode==='snippet' ? mpSnipStart() : 0;
+  S.game.snipStart = mpSnipOffset(S.game.mode);   // fragment: start okna 2 s; EKSP. od tyłu krótko: koniec okna 3 s
   // —— FAZA GOTOWOŚCI (#4): roześlij utwór, poczekaj aż wszyscy zbuforują, dopiero start ——
   S.game.phase=MP.ARMING; S.game.armNonce=(S.game.armNonce||0)+1;
   S.game.endsAt=null; S.game.readyCount=0; S.game.readyTotal=mpExpectedReady().length;

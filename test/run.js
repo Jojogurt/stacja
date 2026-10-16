@@ -116,8 +116,8 @@ const CATS={
   gk:{label:'wiedza', kind:'quiz', questions:[{prompt:'q',slots:[{key:'a',label:'odp'}],answers:{a:['x']}}]},
 };
 group('match.modesFor', ()=>{
-  eq(modesFor('d80',CATS),['music','reverse','snippet','intro'],'audio bez tekstu (F8a: + intro; 2 utwory bez roku → bez abcd/rok)');
-  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','lektor'],'audio + lektor (jest lyric)');
+  eq(modesFor('d80',CATS),['music','reverse','snippet','intro','revsnip'],'audio bez tekstu (F8a: + intro; EKSP.: + revsnip; 2 utwory bez roku → bez abcd/rok; bez puli wykonawców → bez składanki/okładki)');
+  eq(modesFor('rock',CATS),['music','reverse','snippet','intro','revsnip','lektor'],'audio + lektor (jest lyric)');
   eq(modesFor('lyr',CATS),['lektor'],'kind=lyrics → tylko lektor');
   eq(modesFor('gk',CATS),['quiz'],'kind=quiz → tylko quiz');
   ok(!modesFor('d80',CATS).includes('quiz'),'muzyka nigdy nie ma trybu quiz');
@@ -1356,14 +1356,14 @@ group('F8a trackSelect: wiarygodność roku', ()=>{
 group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
   ok(['intro','abcd','year'].every(m=>ALL_MODES.includes(m) && MODE_LABEL[m]), 'nowe tryby w ALL_MODES + etykiety');
   eq(MODE_LABEL.intro,'⏱ intro','etykieta intro');
-  eq(SOLO_ONLY_MODES,['intro'],'intro tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
+  eq(SOLO_ONLY_MODES,['intro','medley','cover'],'intro (EKSP.: + składanka, okładka) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
   const C={ dek:{label:'80', range:'1980–89', artists:['A','B','C']}, pl:{label:'pl', songs:[1,2,3,4,5].map(i=>({title:'t'+i,artist:'a'+i,year:'199'+i}))},
     pl2:{label:'pl2', songs:[{title:'x',artist:'y'},{title:'z',artist:'w'}]}, lyr:{label:'l', kind:'lyrics', songs:[{title:'d'}]}, q:{label:'q', kind:'quiz', questions:[]},
     solo1:{label:'s', artists:['Only']} };
-  eq(modesFor('dek',C),['music','reverse','snippet','intro','abcd','year'],'dekada: wszystkie tryby audio');
-  eq(modesFor('pl',C),['music','reverse','snippet','intro','abcd','year'],'playlista z rokiem: + rok');
-  eq(modesFor('pl2',C),['music','reverse','snippet','intro'],'2 utwory bez roku: bez ABCD/roku');
-  eq(modesFor('solo1',C),['music','reverse','snippet','intro','year'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
+  eq(modesFor('dek',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover'],'dekada: wszystkie tryby audio');
+  eq(modesFor('pl',C),['music','reverse','snippet','intro','revsnip','abcd','year','medley','cover'],'playlista z rokiem: + rok (EKSP.: 5 wykonawców → składanka/okładka)');
+  eq(modesFor('pl2',C),['music','reverse','snippet','intro','revsnip'],'2 utwory bez roku: bez ABCD/roku');
+  eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
   eq(modesFor('lyr',C),['lektor'],'teksty bez audio — bez nowych trybów'); eq(modesFor('q',C),['quiz'],'quiz bez nowych trybów');
   const mi=buildMatch(['dek'],['intro'],{questions:5},C); ok(!mi.error && mi.slots[0].mode==='intro', 'buildMatch: mecz intro');
   eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','zzz'] }).modes,['music','abcd','year'],'MP config: intro odrzucone (tylko solo)');
@@ -1591,5 +1591,142 @@ group('F8b scoring: legenda punktacji wg trybu (stopka solo)', ()=>{
   eq(scoreLegend('music'),'tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2','muzyka (jak dotąd)');
   eq(scoreLegend('reverse'),scoreLegend('music'),'od tyłu = muzyka'); eq(scoreLegend(undefined),scoreLegend('music'),'brak → muzyka');
 });
+/* ===================== EKSPERYMENT: tryby „od tyłu krótko" / „składanka" / „okładka" ===================== */
+const T8 = await import('../core/timing.js');
+const S8 = await import('../core/scoring.js');
+const TS8 = await import('../core/trackSelect.js');
+const M8 = await import('../core/match.js');
+group('EKSP. timing: okno „od tyłu krótko", wycinki składanki, etapy okładki', ()=>{
+  eq(T8.REVSNIP_STAGES,[3,5],'etapy 3 → 5 s');
+  for(const r of [0,0.5,0.999]){ const e=T8.revsnipEnd(30,()=>r); ok(e>=8 && e<=27.5, 'koniec okna w [8..27,5] — '+e); }
+  eq(T8.revsnipWindow(12,0),{start:9,secs:3},'etap 0: [end−3, end]');
+  eq(T8.revsnipWindow(12,1),{start:7,secs:5},'„dłużej": [end−5, end] (te same 3 s + 2 s dalej)');
+  eq(T8.revsnipWindow(2,1),{start:0,secs:2},'okno przycięte do początku zajawki');
+  ok(T8.revsnipEnd(6,()=>0.5)<=6, 'krótka zajawka: koniec okna ≤ długość');
+  for(const r of [0,1]){ const e=T8.mpRevsnipEnd(()=>r); ok(e>=8 && e<=20, 'MP: koniec okna w [8..20] — '+e); }
+  eq(T8.mpSnipOffset('music',()=>0.5),0,'MP offset: muzyka 0');
+  ok(T8.mpSnipOffset('snippet',()=>0.5)===T8.mpSnipStart(()=>0.5),'MP offset: fragment = mpSnipStart');
+  ok(T8.mpSnipOffset('revsnip',()=>0.5)===T8.mpRevsnipEnd(()=>0.5),'MP offset: od tyłu krótko = koniec okna');
+  eq(T8.revsnipNextStage(0),1,'następny etap'); eq(T8.revsnipNextStage(1),null,'ostatni etap');
+  for(const r of [0,0.5,1]){ const st=T8.medleyClipStart(30,()=>r); ok(st>=8 && st<=20, 'wycinek składanki w [8..20] — '+st); }
+  ok(T8.medleyClipStart(12,()=>1)<=12-1.5-0.5+1e-9, 'krótka zajawka: wycinek mieści się przed końcem');
+  eq(T8.medleyClipStart(1,()=>0.5),0,'zajawka krótsza niż wycinek → od początku');
+  eq(T8.medleyDuration(4),6.75,'4 × 1,5 s + 3 × 0,25 s'); eq(T8.medleyDuration(0),0,'pusto');
+  eq(T8.COVER_STAGES,[8,16,32,64,0],'okładka: 8 → 16 → 32 → 64 → pełna');
+  eq(T8.coverStageBlocks(4),0,'etap 4 = pełna'); eq(T8.coverStageBlocks(99),0,'poza zakresem → pełna');
+  eq(T8.coverNextStage(3),4,'następny'); eq(T8.coverNextStage(4),null,'koniec');
+});
+group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etapów, legenda', ()=>{
+  const hit=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:null, streak:1 });
+  eq([hit.points, hit.parts.artist],[100,100],'wykonawca trafiony = 100');
+  eq(S8.scoreRound({ okArtist:false, okTitle:true, artistOnly:true }).points,0,'tytuł nie liczy się w trybie wykonawcy');
+  eq(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true }).points,120,'okładka: + album 20');
+  eq(S8.scoreRound({ okArtist:false, okAlbum:true, artistOnly:true }).points,20,'album bez wykonawcy = sam bonus');
+  eq(S8.scoreRound({ okArtist:true, artistOnly:true, streak:3 }).streakMult,1.5,'seria liczona od trafienia wykonawcy');
+  eq(S8.scoreRound({ okArtist:false, okAlbum:true, artistOnly:true, streak:5 }).streakMult,1,'bez wykonawcy — bez serii');
+  const sp=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:0 }); eq(sp.points,150,'szybkość jak quiz (+50%)');
+  eq(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, mult:S8.coverMult(0) }).points,240,'okładka etap 0: ×2');
+  eq(S8.coverMult(4),1,'pełna okładka ×1');
+  eq(S8.REVSNIP_MULTS,[1,0.8],'od tyłu krótko: 3 s ×1, 5 s ×0,8');
+  eq(S8.scoreRound({ okTitle:true, okArtist:true, mult:S8.revsnipMult(1) }).points,80,'„dłużej" → 100 × 0,8');
+  ok(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, elapsedMs:0, streak:9, mult:2 }).points<=S8.SCORE_MAX_PER_Q,'limit ligi bez zmian');
+  eq(S8.scoreLegend('medley'),'wykonawca 100 · szybkość · seria','legenda składanki');
+  ok(/wykonawca 100 · album \+20/.test(S8.scoreLegend('cover')) && /×2\.0 → ×1\.0/.test(S8.scoreLegend('cover')),'legenda okładki');
+  ok(/„dłużej" ×0\.8/.test(S8.scoreLegend('revsnip')),'legenda od tyłu krótko');
+});
+group('EKSP. match: tryby, etykiety, MP (revsnip tak, składanka/okładka tylko solo), modesFor', ()=>{
+  ok(['revsnip','medley','cover'].every(m=>M8.ALL_MODES.includes(m) && M8.MODE_LABEL[m] && M8.MODE_SHORT[m]),'nowe tryby + etykiety');
+  eq([M8.MODE_LABEL.medley,M8.MODE_LABEL.revsnip,M8.MODE_LABEL.cover],['🎛 składanka','⏪ od tyłu krótko','🖼 okładka'],'etykiety');
+  ok(M8.MP_MODES.includes('revsnip') && !M8.MP_MODES.includes('medley') && !M8.MP_MODES.includes('cover'),'MP_MODES');
+  eq(M8.sanitizeMpConfig({ modes:['revsnip','medley','cover','music'] }).modes,['revsnip','music'],'MP config: składanka/okładka odrzucone');
+  ok(!M8.mpAvailableModes(null,true).includes('revsnip'),'stary serwer → bez „od tyłu krótko"');
+  const C={ pl3:{label:'p', songs:[{title:'a',artist:'A'},{title:'b',artist:'B feat. C'},{title:'c',artist:'A'}]},
+    pl4:{label:'p', songs:['A','B feat. X','C','D'].map((a,i)=>({title:'t'+i,artist:a}))} };
+  ok(!M8.modesFor('pl3',C).includes('medley') && !M8.modesFor('pl3',C).includes('cover'),'playlista 2 wykonawców → bez składanki/okładki');
+  ok(M8.modesFor('pl4',C).includes('medley') && M8.modesFor('pl4',C).includes('cover'),'playlista ≥4 wykonawców → składanka/okładka');
+  for(let k=0;k<20;k++){ const r=M8.randomPools(['pl3'],C); ok(r.modes.length>0 && r.cats.length>0,'kostka: zawsze grywalna para'); }
+});
+group('EKSP. trackSelect: pula wykonawców, wybór 4 utworów składanki', ()=>{
+  eq(TS8.artistPool({artists:['Queen','Toto']}),['Queen','Toto'],'pula z artists');
+  eq(TS8.artistPool({songs:['A','B feat. X','B','C','D x E'].map((a,i)=>({title:'t'+i,artist:a}))}),['A','B','C','D'],'playlista: różni wykonawcy główni (bez feat./x)');
+  eq(TS8.artistPool({songs:[{title:'a',artist:'Simon & Garfunkel'}]}),[],'za mało wykonawców');
+  eq(TS8.artistPool({kind:'lyrics', artists:['X']}),[],'teksty — brak');
+  const it=(t,a,extra={})=>({ trackName:t, artistName:a, previewUrl:'https://p/'+t, collectionName:'Album', releaseDate:'1980-01-01', artworkUrl100:'https://a/100x100bb.jpg', ...extra });
+  const res=[ it('Bohemian Rhapsody','Queen'), it('Bohemian Rhapsody (Live Aid)','Queen'), it('Radio Ga Ga','Queen'), it('Under Pressure','Queen & David Bowie'),
+    it('Killer Queen','Queen'), it('Queen of Hearts','Queen Latifah'), it('Somebody to Love (Live)','Queen'), it('We Will Rock You (Karaoke Version)','Queen') ];
+  const p=TS8.pickMedleyTracks(res,'Queen',()=>0.3);
+  eq(p.length,4,'4 utwory'); eq(new Set(p.map(c=>c.key)).size,4,'różne tytuły');
+  ok(!p.some(c=>/Latifah|Karaoke/.test(c.r.artistName+c.r.trackName)),'tylko ten wykonawca, bez karaoke');
+  ok(!p.some(c=>c.r.trackName==='Bohemian Rhapsody (Live Aid)'),'wersja studyjna zamiast live (dedup tytułu)');
+  eq(p.map(c=>c.r.trackName).sort(),['Bohemian Rhapsody','Killer Queen','Radio Ga Ga','Under Pressure'],'4 studyjne (też duet „Queen & David Bowie") — live tylko, gdy studyjnych za mało');
+  ok(TS8.pickMedleyTracks(res.slice(0,3).concat(res[6]),'Queen',()=>0.3).some(c=>/Live/.test(c.r.trackName)),'za mało studyjnych → dobiera live');
+  const studio=[...Array(12)].map((_,i)=>it('Hit '+i,'Queen'));
+  const p2=TS8.pickMedleyTracks([...studio, it('X (Live)','Queen')],'Queen',Math.random);
+  ok(p2.every(c=>/^Hit /.test(c.r.trackName)),'dość studyjnych → bez live');
+  const pop=[...Array(30)].map((_,i)=>it('Song '+i,'Queen'));
+  for(let k=0;k<10;k++) ok(TS8.pickMedleyTracks(pop,'Queen',Math.random).every(c=>c.idx<TS8.MEDLEY_TOP),'popularne (top '+TS8.MEDLEY_TOP+') przed niszowymi');
+  eq(TS8.pickMedleyTracks(pop,'Queen',Math.random,{ seen:new Set(pop.slice(0,28).map(r=>TS8.titleKey(r.trackName))) }).length,2,'bez już zagranych (seen)');
+});
+console.log('• EKSP. trackSelect: resolveMedley — inny wykonawca, 3 wycinki, brak');
+await (async ()=>{
+  const it=(t,a)=>({ trackName:t, artistName:a, previewUrl:'https://p/'+encodeURIComponent(t), collectionName:'Album', releaseDate:'1985-01-01', artworkUrl100:'https://a/100x100bb.jpg' });
+  const net={ Solo:[it('Jedyny','Solo')], Trio:['a','b','c'].map(t=>it('T'+t,'Trio')), Kwartet:['a','b','c','d','e'].map(t=>it('K'+t,'Kwartet')) };
+  const itunes=async a=>net[a]||[];
+  const recent=[], seen=new Set();
+  const r=await TS8.resolveMedley({ cat:{ artists:['Solo','Trio','Kwartet'] }, seen, recent, itunes, rnd:()=>0 });
+  eq(r.artist,'Kwartet','wykonawca z ≥4 utworami (pozostali za mało)'); eq(r.clips.length,4,'4 wycinki');
+  ok(r.clips.every(c=>c.preview && c.track && c.artist==='Kwartet'),'wycinki: zajawka + tytuł');
+  ok(recent.includes('Kwartet') && seen.size>=4,'recent/seen zaktualizowane');
+  const r3=await TS8.resolveMedley({ cat:{ artists:['Solo','Trio'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq([r3.artist, r3.clips.length],['Trio',3],'po próbach — 3 wycinki');
+  const r0=await TS8.resolveMedley({ cat:{ artists:['Solo'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  ok(r0.error && r0.reason==='empty','brak → błąd (wołający gra muzykę)');
+  const off=await TS8.resolveMedley({ cat:{ artists:['Solo'] }, seen:new Set(), recent:[], itunes:async()=>{ throw new Error('x'); }, rnd:()=>0 });
+  eq(off.reason,'offline','brak sieci → offline');
+  const pl=await TS8.resolveMedley({ cat:{ songs:['Kwartet','Trio','Solo','Inny'].map((a,i)=>({title:'t'+i,artist:a})) }, seen:new Set(), recent:['Trio','Solo','Inny'], itunes, rnd:()=>0 });
+  eq(pl.artist,'Kwartet','playlista ≥4 wykonawców → pula z utworów');
+})();
+group('EKSP. trackSelect: okładka — rangi albumów, tytuł, URL 600×600, wybór', ()=>{
+  const al=(n,a='Queen',extra={})=>({ collectionName:n, artistName:a, artworkUrl100:'https://is1-ssl.mzstatic.com/image/thumb/x/y.jpg/100x100bb.jpg', releaseDate:'1975-11-21T08:00:00Z', trackCount:12, collectionType:'Album', ...extra });
+  eq(TS8.albumTier(al('A Night At The Opera')),0,'zwykły album'); eq(TS8.albumTier(al('Nocny Patrol (Remastered)')),0,'remaster = zwykły');
+  eq(TS8.albumTier(al('Innuendo (Deluxe Edition)')),1,'deluxe = edycja'); eq(TS8.albumTier(al('Greatest Hits II')),2,'kompilacja');
+  eq(TS8.albumTier(al('Live at Wembley Stadium')),2,'koncertowy'); eq(TS8.albumTier(al('Miłość Jest Cudowna (1975-2015)')),2,'zakres lat = składak');
+  eq(TS8.albumTier(al('Face It Alone - Single')),-1,'singiel odrzucony'); eq(TS8.albumTier(al('X',undefined,{trackCount:2})),-1,'EP/2 utwory odrzucone');
+  eq(TS8.albumTitle('Innuendo (Deluxe Edition)'),'Innuendo','tytuł bez „(Deluxe Edition)"'); eq(TS8.albumTitle('Nocny Patrol (Remastered)'),'Nocny Patrol','bez „(Remastered)"');
+  eq(TS8.albumTitle('Bohemian Rhapsody (The Original Soundtrack)'),'Bohemian Rhapsody (The Original Soundtrack)','nawias treściowy zostaje');
+  eq(TS8.albumKey('Innuendo (Deluxe Edition)'),TS8.albumKey('Innuendo'),'klucz wspólny dla wersji płyty');
+  eq(TS8.coverArtUrl('https://is1-ssl.mzstatic.com/image/thumb/x/y.jpg/100x100bb.jpg'),'https://is1-ssl.mzstatic.com/image/thumb/x/y.jpg/600x600bb.jpg','artwork 600×600');
+  eq(TS8.coverArtUrl('https://a/100x100.jpg',300),'https://a/300x300bb.jpg','inny rozmiar');
+  const list=[ al('The Platinum Collection',undefined,{trackCount:51}), al('Greatest Hits II'), al('A Night At The Opera'), al('Made In Heaven (Deluxe Edition)'),
+    al('QUEEN - Single','ZeeDND',{trackCount:1}), al('News Of The World'), al('Queen','Ten Walls'), al('Innuendo (Deluxe Edition)'), al('Innuendo'), al('Queen (Platinum Edition)','Eva') ];
+  for(let k=0;k<20;k++){ const p=TS8.pickAlbum(list,'Queen',null,Math.random); ok(p && p.tier===0 && ['A Night At The Opera','News Of The World','Innuendo'].includes(p.a.collectionName),'album studyjny wykonawcy, bez kompilacji/deluxe/cudzych — '+(p&&p.a.collectionName)); }
+  const onlyComp=TS8.pickAlbum([al('Greatest Hits'), al('Live Killers')],'Queen',null,()=>0);
+  ok(onlyComp && onlyComp.tier===2,'same kompilacje → kompilacja (brak alternatyw)');
+  eq(TS8.pickAlbum([al('Innuendo')],'Queen',new Set(['album:'+TS8.albumKey('Innuendo')]),()=>0),null,'album już pokazany (seen) → brak');
+  eq(TS8.pickAlbum([al('X',undefined,{artworkUrl100:''})],'Queen',null,()=>0),null,'bez okładki → brak');
+  const fromSongs=TS8.albumsFromSongs([{ trackName:'a', artistName:'Queen', collectionName:'Jazz', collectionId:1, artworkUrl100:'u', trackCount:13 },
+    { trackName:'b', artistName:'Queen', collectionName:'Jazz', collectionId:1, artworkUrl100:'u' }, { trackName:'c', artistName:'Queen', collectionName:'Hot Space', collectionId:2, artworkUrl100:'v' }]);
+  eq(fromSongs.map(a=>a.collectionName),['Jazz','Hot Space'],'albumy z wyników utworów (dedup po collectionId)');
+});
+console.log('• EKSP. trackSelect: resolveCover — wyszukiwanie albumów, zapas z utworów, cache „al:"');
+await (async ()=>{
+  const al=(n,a)=>({ collectionName:n, artistName:a, artworkUrl100:'https://m/x.jpg/100x100bb.jpg', releaseDate:'1980-06-01T00:00:00Z', trackCount:10 });
+  const calls=[];
+  const itunes=async(a,opts)=>{ calls.push((opts&&opts.album?'al:':'a:')+a);
+    if(opts && opts.album) return a==='Toto' ? [al('Toto IV','Toto'), al('Greatest Hits','Toto')] : [];
+    return a==='Maanam' ? [{ trackName:'Kocham cię', artistName:'Maanam', collectionName:'Nocny Patrol', collectionId:7, artworkUrl100:'https://m/n.jpg/100x100bb.jpg', releaseDate:'1983-01-01', trackCount:10 }] : []; };
+  const seen=new Set(), recent=[];
+  const r=await TS8.resolveCover({ cat:{ artists:['Toto'] }, seen, recent, itunes, rnd:()=>0 });
+  eq([r.artist, r.album, r.year],['Toto','Toto IV','1980'],'album studyjny z wyszukiwania albumów');
+  ok(/600x600bb\.jpg$/.test(r.art),'okładka 600×600'); ok(seen.has('album:'+TS8.albumKey('Toto IV')) && recent.includes('Toto'),'seen/recent');
+  const r2=await TS8.resolveCover({ cat:{ artists:['Maanam'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  eq([r2.artist, r2.album],['Maanam','Nocny Patrol'],'zapas: album z wyników utworów');
+  const r3=await TS8.resolveCover({ cat:{ artists:['Nikt'] }, seen:new Set(), recent:[], itunes, rnd:()=>0 });
+  ok(r3.error,'brak albumów → błąd (wołający gra muzykę)');
+  // cache: zapytanie o albumy nie koliduje z wynikami utworów tego samego wykonawcy
+  let n=0; const cf=TS8.cachedFetcher(async(t,o)=>[{ kind:o&&o.album?'album':'song', n:++n }]);
+  const a1=await cf('Toto'), a2=await cf('Toto',{album:true}), a3=await cf('Toto');
+  ok(a1[0].kind==='song' && a2[0].kind==='album' && a3===a1,'cachedFetcher: osobny klucz „al:" dla albumów');
+})();
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

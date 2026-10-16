@@ -2,21 +2,26 @@
  * Dane kategorii (`cats`) wstrzykiwane parametrem → moduł nie zna `window`. */
 import { shuffle, escapeHtml } from './util.js';
 import { clampTimer } from './timing.js';
+import { artistPool } from './trackSelect.js';
 
 export const QPC=5, CPR=3;   // pytań na kategorię, kategorii na rundę (jak prawdziwy quiz)
 export const MAX_ROUNDS=4;   // F1 (#5): max rund meczu — serwer przycina `start` do tego (F6a: długość w pytaniach ≤ MAX_ROUNDS×CPR×QPC)
 // F8a: + 'intro' (Heardle 1→16 s), 'abcd' (4 kafle „Tytuł — Wykonawca"), 'year' (rok wydania, oś czasu lite)
-export const ALL_MODES=['music','lektor','reverse','snippet','intro','abcd','year','quiz'];
+// EKSPERYMENT: + 'revsnip' (od tyłu krótko: 3 s wspak), 'medley' (składanka 4 × 1,5 s wykonawcy), 'cover' (okładka albumu)
+export const ALL_MODES=['music','lektor','reverse','snippet','intro','abcd','year','revsnip','medley','cover','quiz'];
 export const MODE_LABEL={music:'♪ muzyka', lektor:'🗣 lektor', reverse:'🔄 od tyłu', snippet:'✂️ fragment', quiz:'🧠 wiedza',
-  intro:'⏱ intro', abcd:'🔠 ABCD', year:'📅 rok'};
+  intro:'⏱ intro', abcd:'🔠 ABCD', year:'📅 rok', revsnip:'⏪ od tyłu krótko', medley:'🎛 składanka', cover:'🖼 okładka'};
 export const MODE_SHORT={music:'muzyka', lektor:'lektor', reverse:'od tyłu', snippet:'fragment', quiz:'wiedza',
-  intro:'intro', abcd:'ABCD', year:'rok'};
+  intro:'intro', abcd:'ABCD', year:'rok', revsnip:'od tyłu 3 s', medley:'składanka', cover:'okładka'};
 export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak', snippet:'2 s', quiz:'pytanie',
-  intro:'1→16 s', abcd:'4 kafle', year:'rok wydania'};
+  intro:'1→16 s', abcd:'4 kafle', year:'rok wydania', revsnip:'3 s wspak', medley:'4 × 1,5 s', cover:'bez dźwięku'};
 /* F8a: tryby tylko solo. „intro" w MP wymagałby etapu odsłony sterowanego przez hosta/serwer + ponownego
  * startu audio u wszystkich i przebudowy lokalnej fazy „słuchaj → kombinuj" — poza zakresem; picker MP go nie pokazuje,
  * a sanitizeMpConfig odrzuca. */
-export const SOLO_ONLY_MODES=['intro'];
+/* EKSPERYMENT: „składanka" (4 zajawki buforowane i sklejane lokalnie) i „okładka" (etapy odsłony obrazu) — też tylko solo:
+ * MP wymagałby rozwiązywania 4 utworów/albumu na serwerze i synchronizacji etapów odsłony. „od tyłu krótko" działa
+ * w MP (offset okna od autorytetu jak „fragment", F2b). */
+export const SOLO_ONLY_MODES=['intro','medley','cover'];
 export const MP_MODES=ALL_MODES.filter(m=>!SOLO_ONLY_MODES.includes(m));
 // tryby, które zna serwer sprzed F8a (brak `modes` w presence → nowe tryby ukryte w MP pod autorytetem)
 export const LEGACY_MP_MODES=['music','lektor','reverse','snippet','quiz'];
@@ -39,13 +44,15 @@ function abcdCapable(c){
   return (Array.isArray(c.artists) && c.artists.length>=2) || (c.songs||[]).length>=4;
 }
 // jakie tryby obsługuje kategoria (kompatybilność). F8a: intro/abcd/year — tylko kategorie z audio.
+// EKSPERYMENT: revsnip — każda kategoria audio; medley/cover — tylko z PULĄ WYKONAWCÓW (artists albo playlista ≥4 wykonawców)
 export function modesFor(catKey, cats){
   const c=cats[catKey]; if(!c) return [];
   if(c.kind==='quiz') return ['quiz'];                // wiedza ogólna — tylko quiz (bez audio)
   if(c.kind==='lyrics') return ['lektor'];            // brak audio
-  const m=['music','reverse','snippet','intro'];
+  const m=['music','reverse','snippet','intro','revsnip'];
   if(abcdCapable(c)) m.push('abcd');
   if(yearCapable(c)) m.push('year');
+  if(artistPool(c).length) m.push('medley','cover');
   if((c.songs||[]).some(s=>s.lyric)) m.push('lektor'); // tekst do lektora (np. hits-now)
   return m;
 }
