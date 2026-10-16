@@ -185,7 +185,7 @@ async function mpLeave(){
   // a stary S.playRound=1 + S.sub='kombinuj' dawały 1. pytanie bez fazy „słuchaj" (zajawka bez gałki).
   if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; }
   if(S.audio){ mpClearSnip(S.audio); mpClearArmWait(S.audio); }
-  S.playRound=S.playSkin=S.playSub=null; S.sub='sluchaj'; S.composerMode='chat'; S.introUntil=0;
+  S.playRound=S.playSkin=S.playSub=null; S.sub='sluchaj'; S.composerMode='typ'; S.introUntil=0;
   S.listenStart=0; S.listenDur=0; S.revealAutoAt=0; S.skipArm=false;
   S.armPending=S.armReported=S.armSeen=null; S.armDeadlineLocal=0;
   S.seenActs.clear(); S.hostSeen.clear(); S.autoLocked=false;
@@ -902,11 +902,12 @@ function mpDoSay(text){
 function mpSay(){ const el=$m('mpSayIn'); if(!el) return; mpDoSay(el.value); el.value=''; }
 // composer „@odp" (skórka czat): „@" → pola slotów (tytuł/wykonawca), inaczej → czat
 function mpSetComposerMode(m){
-  S.composerMode=m;
+  S.composerMode = m==='chat' ? 'chat' : 'typ';
   const chat=$m('mpCompChat'), typ=$m('mpCompTyp'), tog=$m('mpTypToggle');
-  if(chat) chat.style.display = m==='typ'?'none':'flex';
-  if(typ)  typ.style.display  = m==='typ'?'flex':'none';
-  if(tog)  tog.textContent    = m==='typ'?'💬':'✍️';
+  if(chat) chat.style.display = S.composerMode==='typ'?'none':'flex';
+  if(typ)  typ.style.display  = S.composerMode==='typ'?'flex':'none';
+  if(tog){ tog.textContent = S.composerMode==='typ'?'💬':'✍️';
+    tog.setAttribute('aria-label', S.composerMode==='typ'?'przełącz na czat':'przełącz na odpowiedź'); }
 }
 function mpComposerToggle(){
   mpSetComposerMode(S.composerMode==='typ'?'chat':'typ');
@@ -932,7 +933,9 @@ function mpComposerSend(){
     slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); const v=c?c.value.trim():''; if(v){ values[s.key]=v; any=true; } });
     if(any){ mpSend({type:'propose', values}); }
     slots.forEach(s=>{ const c=$m('mpTyp_'+s.key); if(c) c.value=''; });
-    mpSetComposerMode('chat');
+    // FIX „host nie widział moich odpowiedzi": composer ZOSTAJE w trybie odpowiedzi (dawniej wracał do czatu,
+    // więc poprawka typu wpisana „jak w czacie" szła jako wiadomość `say`, nie propozycja)
+    mpSetComposerMode('typ');
     return;
   }
   const el=$m('mpChatIn'); if(!el) return;

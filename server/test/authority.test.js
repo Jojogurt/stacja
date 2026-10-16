@@ -219,6 +219,7 @@ async function toPlay(room, a, b, over={}){
   await room.msg(b, { t:'action', action:{ type:'ready', armNonce:n } });
 }
 const HEX=/^#[0-9a-fA-F]{3,8}$/;
+const teamOfId=(game,id)=>{ const t=(game&&game.teams||[]).find(x=>(x.members||[]).includes(id)); return t?t.id:null; };
 
 await group('F1 #1/#4: relay eventów — whitelist nazw (sync odrzucony) + nadawca wymuszony z tokenu', async ()=>{
   const { room } = await makeRoom();
@@ -1053,6 +1054,61 @@ await group('gust3: „Gust stołu" za mało utworów (< 8) → kategoria wycię
   eq(room.game, null, 'tylko stół z 5 utworami → start zignorowany');
   await room.msg(a, { t:'start', config:{ questions:5, modes:['music','quiz'], format:'coop', pools:{ 'gust-stolu':{ label:'x', kind:'playlist' }, ...quizPools() } } });
   ok(room.game && !room.pools['gust-stolu'] && room.game.catKey==='q1', 'stół wycięty, mecz z pozostałych kategorii');
+});
+/* ==================== FIX „host nie widział moich odpowiedzi" (gość z telefonu) ==================== */
+// propozycja gościa → stan u HOSTA (coop: pełna treść; Solo/Drużyny: bez treści w PLAY, `answered` + odsłona z odpowiedzią)
+async function guestScenario(format, { late=false }={}){
+  const { room } = await makeRoom();
+  const h=await room.connect('H','Host');
+  // Drużyny/późny: A = host + Pola, B = Ola → gość trafia do najmniejszej (B), czyli do RYWALI hosta
+  const extra = (format==='teams' && late) ? [await room.connect('P','Pola'), await room.connect('O','Ola')] : [];
+  let g=late ? null : await room.connect('G','Gosc');
+  const assignments = format==='teams' ? (late ? [{ id:'t0', name:'A', members:['H','P'] }, { id:'t1', name:'B', members:['O'] }]
+    : [{ id:'t0', name:'A', members:['H'] }, { id:'t1', name:'B', members:['G'] }]) : undefined;
+  await room.msg(h, { t:'start', config:CONFIG({ format, assignments }) });
+  if(late) g=await room.connect('G','Gosc');              // gość wchodzi w trakcie (ARMING)
+  await readyAll(room, h, g, ...extra);
+  eq(room.game.phase, MP.PLAY, format+(late?' (późny)':'')+': PLAY');
+  await room.msg(g, { t:'action', action:{ type:'propose', values:{ a:'typ-goscia' } } });
+  return { room, h, g };
+}
+await group('FIX odpowiedzi gościa: coop — typ gościa w stanie hosta i w odsłonie', async ()=>{
+  const { room, h } = await guestScenario('coop');
+  const vh=h.last('state').game;
+  ok(vh.byTeam.all.proposals.some(p=>p.by==='G' && p.values.a==='typ-goscia'), 'host widzi treść typu gościa (coop)');
+  await room.msg(h, { t:'lock' });
+  eq(h.last('state').game.reveal.locked, { a:'typ-goscia' }, 'odsłona: odpowiedź drużyny = typ gościa');
+});
+for(const format of ['solo','teams']){
+  for(const late of [false, true]){
+    await group(`FIX odpowiedzi gościa: ${format}${late?' — gość dołącza W TRAKCIE':''} — typ przyjęty, host widzi „odpowiedział", odsłona z treścią`, async ()=>{
+      const { room, h } = await guestScenario(format, { late });
+      const gt=teamOfId(room.game, 'G');
+      ok(!!gt, format+': gość ma drużynę (dawniej Drużyny: widz do końca meczu / Solo: do następnego pytania)');
+      ok(gt && room.game.byTeam[gt].proposals.some(p=>p.by==='G'), format+': reducer przyjął typ gościa');
+      const vh=h.last('state').game;
+      ok(gt && vh.byTeam[gt].proposals.length===0, format+': host w PLAY NIE widzi treści (anty-ściąganie bez zmian)');
+      ok(gt && Array.isArray(vh.byTeam[gt].answered) && vh.byTeam[gt].answered.includes('G'), format+': host widzi, KTO odpowiedział (answered)');
+      await room.msg(h, { t:'lock' });
+      const r=h.last('state').game.reveal;
+      eq(r && r.byTeam[gt] && r.byTeam[gt].locked, { a:'typ-goscia' }, format+': odsłona u hosta zawiera odpowiedź gościa');
+    });
+  }
+}
+await group('FIX odpowiedzi gościa: Solo — wejście już w PLAY → własna drużyna od razu', async ()=>{
+  const { room } = await makeRoom();
+  const h=await room.connect('H','Host');
+  await room.msg(h, { t:'start', config:CONFIG({ format:'solo' }) });
+  await readyAll(room, h);
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  const g=await room.connect('G','Gosc');
+  ok(room.game.teams.some(t=>t.id==='G' && t.members.includes('G')), 'gość w PLAY dostał drużynę od razu');
+  eq(g.last('state').game.teams.length, 2, 'gość dostaje stan z nowym składem');
+  await room.msg(g, { t:'action', action:{ type:'propose', values:{ a:'x' } } });
+  ok(room.game.byTeam.G.proposals.length===1, 'typ gościa przyjęty w tym samym pytaniu');
+  eq(room.game.scores.G, 0, 'wynik gościa od 0');
+  await room.msg(g, { t:'track', name:'Gosia' });
+  eq(room.game.teams.find(t=>t.id==='G').name, 'Gosia', 'ksywa z track (po onConnect) → nazwa drużyny Solo (nie „gracz")');
 });
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

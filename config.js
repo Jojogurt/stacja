@@ -18,3 +18,17 @@ window.STACJA_CONFIG = {
   googleClientId: '457977357449-dfbs62prkpt65m4rv92lm7pqda0ge08t.apps.googleusercontent.com',
   appleServicesId: 'com.kked.apps.stacja.web',
 };
+// DEV: lokalny Worker (`wrangler dev`) — `?rooms=http://127.0.0.1:8787` (zapamiętane w localStorage 'stacjaRooms').
+// Akceptowane WYŁĄCZNIE, gdy strona stoi na localhost/127.0.0.1 i adres też jest lokalny — produkcji nie da się przekierować.
+(function devRoomsOverride(){
+  try{
+    const local=/^(localhost|127\.0\.0\.1|\[::1\])$/;
+    if(!local.test(location.hostname)) return;
+    const okUrl=(u)=> typeof u==='string' && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])(:\d{1,5})?\/?$/.test(u);
+    const q=new URLSearchParams(location.search).get('rooms');
+    if(q==='0' || q===''){ localStorage.removeItem('stacjaRooms'); return; }
+    if(okUrl(q)) localStorage.setItem('stacjaRooms', q);
+    const v=localStorage.getItem('stacjaRooms');
+    if(okUrl(v)) window.STACJA_CONFIG.roomsBase=v.replace(/\/$/,'');
+  }catch(_e){}
+})();

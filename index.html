@@ -908,6 +908,15 @@
   .mp-rchip b{width:20px;height:20px;border-radius:50%;font-family:var(--display);font-weight:900;font-size:var(--fs-xs);display:flex;align-items:center;justify-content:center;flex:0 0 auto}
   .mp-rchip>span{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);white-space:nowrap}
   .mp-rchip.you{outline:2px solid var(--ink);outline-offset:1px}
+  /* Solo/Drużyny: status rywali w PLAY (kto już odpowiedział — bez treści) */
+  .mp-rivals{flex:1 0 100%;display:flex;flex-wrap:wrap;align-items:center;gap:5px;margin-top:6px}
+  .mp-rivals-h{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted)}
+  .mp-rival{display:inline-flex;align-items:center;gap:5px;background:var(--panel2);border-radius:20px;padding:3px 10px 3px 6px;max-width:100%}
+  .mp-rival i{width:10px;height:10px;border-radius:50%;flex:0 0 auto}
+  .mp-rival b{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:120px}
+  .mp-rival small{font-family:var(--display);font-weight:700;font-size:var(--fs-xs);color:var(--muted);white-space:nowrap}
+  .mp-rival.ans small{color:var(--green)}
+  .mp-lockbtn .mp-lockcnt{font-size:.75em;opacity:.85;font-weight:800}
 
   /* ===== DESIGN v2 — Fala 3: menu ===== */
   body.menu .top{display:none}
@@ -998,6 +1007,7 @@
   .rv-stand-row .rk{font-family:var(--display);font-weight:900;font-size:12px;color:var(--muted);width:16px}
   .rv-stand-row .av{width:24px;height:24px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;font-family:var(--display);font-weight:900;font-size:12px;flex:0 0 auto}
   .rv-stand-row .nm{flex:1;min-width:0;font-family:var(--body);font-weight:700;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .rv-stand-row .nm .ans{display:block;font-weight:600;font-size:11px;color:var(--muted);overflow:hidden;text-overflow:ellipsis}
   .rv-stand-row .mk{font-weight:900;font-size:13px} .rv-stand-row .mk.ok{color:var(--green)} .rv-stand-row .mk.no{color:var(--red)}
   .rv-stand-row .pts{font-family:var(--display);font-weight:900;font-size:15px;color:var(--ink);min-width:22px;text-align:right}
   .mp-next{width:100%;font-family:var(--display);font-weight:900;font-size:16px;letter-spacing:.04em;color:#fff;background:var(--blue);border:none;border-radius:18px;padding:16px;cursor:pointer;box-shadow:0 5px 0 var(--blue-d);margin-top:6px}

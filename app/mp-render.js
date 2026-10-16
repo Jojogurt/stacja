@@ -164,10 +164,13 @@ function mpRender(){
 }
 // pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania.
 // SALON (TV): host nie wysyła (latające emotki nadal widzi) → cały pasek znika.
-function mpReactsBarHTML(){
+// `listen` = faza „słuchaj" w PLAY: pole to TYLKO czat — podpowiedź kieruje odpowiedź do „kombinujemy" (wpisana tu
+// szła jako wiadomość i nie trafiała do stanu gry — „host nie widział moich odpowiedzi").
+function mpReactsBarHTML(listen){
   if(mpIsSalonHost()) return '';
+  const ph = listen ? 'czat · odpowiedź wpiszesz po „kombinujemy →”' : 'napisz coś krótkiego…';
   return `<div class="mp-reacts">${REACTIONS.map(e=>`<button onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
-    <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="napisz coś krótkiego…" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
+    <div class="mp-saybar"><input id="mpSayIn" maxlength="32" placeholder="${ph}" aria-label="wiadomość na czacie" onkeydown="if(event.key==='Enter')mpSay()"><button onclick="mpSay()">Wyślij</button></div>`;
 }
 
 // loader „Uszy & Muzk" (3 kropki) — lokalny string (NIE współdzielony import: kruchy przy stale-cache).
@@ -222,8 +225,38 @@ const ROSTER_META={
   sure:  {bg:'var(--gold)',fg:'#7a5a00',lab:'🟡 pewniak',lc:'var(--rs-sure-lc)',ring:'var(--rs-sure-ring)'},
   pass:  {bg:'var(--rs-idle-bg)',fg:'var(--rs-idle-fg)',lab:'✋ pas',lc:'var(--rs-idle-fg)',dim:1},
 };
+/* Solo/Drużyny: KTO z rywali już odpowiedział (bez treści — serwer i tak ją wycina w PLAY, viewFor).
+ * FIX „host nie widział moich odpowiedzi": w Solo host widział tylko siebie — zero śladu typów gościa.
+ * Źródło: bucket.answered (nowy serwer) → pełne proposals (relay/TV) → counts przy 1-os. drużynie (stary serwer). */
+function mpTeamAnswered(g, t){
+  const b=(g.byTeam&&g.byTeam[t.id])||{}, ms=t.members||[];
+  if(Array.isArray(b.answered)) return ms.filter(id=>b.answered.includes(id));
+  if((b.proposals||[]).length) return ms.filter(id=>b.proposals.some(p=>p.by===id));
+  return (ms.length===1 && b.counts && b.counts.proposals>0) ? ms.slice() : [];
+}
+function mpRivalsHTML(g){
+  if(!g || g.phase!==MP.PLAY || (g.format||'coop')==='coop' || mpIsCompTV()) return '';
+  const tid=myTeamId();
+  const rivals=(g.teams||[]).filter(t=>t.id!==tid && (t.members||[]).length);
+  if(!rivals.length) return '';
+  const chips=rivals.map(t=>{
+    const col=safeColor(t.color, mpAvatarColor(t.name));
+    const ms=t.members||[], done=mpTeamAnswered(g, t);
+    const b=(g.byTeam&&g.byTeam[t.id])||{};
+    const passed=ms.length && ms.every(id=>(b.passed||[]).some(p=>p.id===id));
+    const typing=ms.some(id=>S.typingSet && S.typingSet.has(id));
+    const solo1=ms.length===1;
+    const st = passed ? '✋ pas' : done.length ? (solo1 ? '✓ odpowiedział(a)' : `✓ ${num(done.length)}/${num(ms.length)} z typem`) : typing ? 'pisze…' : 'myśli';
+    const nm = solo1 ? (mpNameOf(ms[0])||t.name||'gracz') : (t.name||'drużyna');
+    return `<span class="mp-rival${done.length?' ans':''}" data-rival="${escapeHtml(t.id)}"><i style="background:${col}"></i><b>${escapeHtml(nm)}</b><small>${st}</small></span>`;
+  }).join('');
+  return `<div class="mp-rivals" role="status" aria-label="rywale — bez treści odpowiedzi"><span class="mp-rivals-h">rywale:</span>${chips}</div>`;
+}
 function mpRosterHTML(g){
   if(mpIsCompTV()) return '';   // F6b: TV (Solo/Drużyny) — status graczy jest w kartach drużyn (mpTvTeamsHTML)
+  return mpMyRosterHTML(g) + mpRivalsHTML(g);
+}
+function mpMyRosterHTML(g){
   const tid=myTeamId();   // roster pokazuje TYLKO moją drużynę (izolacja)
   if(curSkin()==='czat'){   // design 08: kompaktowe pigułki „stół: [awatar status]"
     return `<span class="mp-stol">stół:</span>`+myTeamMembers().map(m=>{
@@ -252,7 +285,7 @@ function mpTvTeamsHTML(g){
   return `<div class="mp-tvteams">${teams.map(t=>{
     const col=safeColor(t.color, mpAvatarColor(t.name));
     const b=(g.byTeam&&g.byTeam[t.id])||{};
-    const nTyp=(b.proposals||[]).length || (b.counts&&b.counts.proposals) || 0;
+    const nTyp=(b.proposals||[]).length || (b.counts&&b.counts.proposals) || (Array.isArray(b.answered)?b.answered.length:0) || 0;
     const ppl=(t.members||[]).map(id=>{
       const st=rosterState(g,t.id,id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle, nm=mpNameOf(id)||'gracz';
       return `<span class="mp-rchip${me.dim?' dim':''}"><b style="background:${me.bg};color:${me.fg}">${escapeHtml(nm.slice(0,1).toUpperCase())}</b><span style="color:${me.lc}">${escapeHtml(nm)} · ${me.lab}</span></span>`;
@@ -285,8 +318,12 @@ function mpSlotsHTML(g){
 function mpTeamHTML(g){
   // F6b (F8): host zatwierdza PEŁNYM przyciskiem (dawniej ✓ 36 px); reszta widzi, na kogo czeka
   const comp=(g.format||'coop')!=='coop';
+  // Solo/Drużyny: host widzi, ile drużyn ma już typ (bez treści) — nie zatwierdza „w ciemno" przed graczami
+  const teamsAll=(g.teams||[]).filter(t=>(t.members||[]).length);
+  const nAns=comp ? teamsAll.filter(t=>mpTeamAnswered(g, t).length).length : 0;
+  const cnt=comp && teamsAll.length ? ` <small class="mp-lockcnt">${num(nAns)}/${num(teamsAll.length)} z typem</small>` : '';
   const lockBtn = S.host
-    ? `<button type="button" class="mp-lockbtn" onclick="mpLock()" aria-label="${comp?'Zakończ pytanie i zatwierdź odpowiedzi wszystkich drużyn':'Zatwierdź odpowiedź drużyny'}">✓ ${comp?'ZATWIERDŹ WSZYSTKICH':'ZATWIERDŹ ODPOWIEDŹ'}</button>`
+    ? `<button type="button" class="mp-lockbtn" onclick="mpLock()" aria-label="${comp?'Zakończ pytanie i zatwierdź odpowiedzi wszystkich drużyn':'Zatwierdź odpowiedź drużyny'}">✓ ${comp?'ZATWIERDŹ WSZYSTKICH':'ZATWIERDŹ ODPOWIEDŹ'}${cnt}</button>`
     : `<div class="mp-lockwait">${g.timer>0?'host zatwierdza — albo koniec czasu':'czekamy, aż host zatwierdzi odpowiedź'}</div>`;
   if(mpIsCompTV()) return lockBtn;   // TV (Solo/Drużyny): bez odpowiedzi drużyny, tylko „zatwierdź wszystkich"
   const tid=myTeamId();
@@ -434,16 +471,19 @@ function mpFormHTML(g){
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
-// composer „@odp" (czat): po wpisaniu „@" pole morfuje w pola slotów (tytuł/wykonawca) z szarymi
-// placeholderami — klikalne osobno. Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
+// composer „@odp" (czat): DOMYŚLNIE pola slotów (tytuł/wykonawca) — odpowiedź to główna akcja fazy. 💬 przełącza
+// na zwykłą wiadomość (tam „@" nadal morfuje w pola). FIX „host nie widział moich odpowiedzi": dawniej domyślny
+// był czat, a odpowiedź wpisana bez „@" szła jako wiadomość `say` — host widział czat, w stanie gry nie było typu.
+// Pola flex:1 (bez stałych 42%) → brak przerwy na iOS Safari.
 function mpComposerHTML(g){
   const slots=renderSlots(g);
-  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
+  const typ = S.composerMode!=='chat';
+  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" autocomplete="off" placeholder="${escapeHtml(s.label)}" aria-label="odpowiedź: ${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
-      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/typ" aria-label="przełącz czat/typ">✍️</button>
+      <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/odpowiedź" aria-label="${typ?'przełącz na czat':'przełącz na odpowiedź'}">${typ?'💬':'✍️'}</button>
       <div class="mp-compfield">
-        <div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="napisz… (@ = typ odpowiedzi)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
-        <div class="mp-cwrap mp-cwrap-typ" id="mpCompTyp" style="display:none"><span class="mp-at">@</span>${chips}</div>
+        <div class="mp-cwrap" id="mpCompChat"${typ?' style="display:none"':''}><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="czat… (@ = odpowiedź)" oninput="mpChatInput()" onkeydown="if(event.key==='Enter')mpComposerSend()"></div>
+        <div class="mp-cwrap mp-cwrap-typ" id="mpCompTyp"${typ?'':' style="display:none"'}><span class="mp-at" title="odpowiedź">@</span>${chips}</div>
       </div>
       <button id="mpCompBtn" class="mp-send" onclick="mpComposerSend()">➤</button>
     </div>`;
@@ -481,7 +521,7 @@ function mpSluchajBodyHTML(g){
   if(g.mode==='quiz'){
     return `${mpPromptHTML(g)}
       <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">odpowiadamy →</button>
-      <div class="mp-foot">${mpHr()}${mpReactsBarHTML()}</div>`;
+      <div class="mp-foot">${mpHr()}${mpReactsBarHTML(true)}</div>`;
   }
   // F6b (tryb #6): nie-host przy „Dźwięk tylko u hosta"/salonie = pilot — gałka głośnika, bez odtwarzania
   const here=mpPlaysHere(g);
@@ -492,7 +532,7 @@ function mpSluchajBodyHTML(g){
       <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
     ${mpLyricHTML(g)}${mpPromptHTML(g)}
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
-    <div class="mp-foot">${mpHr()}${mpReactsBarHTML()}</div>`;
+    <div class="mp-foot">${mpHr()}${mpReactsBarHTML(true)}</div>`;
 }
 // FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze).
 // Kolejność: profile ─ odpowiedź drużyny ─ kolumny ─ [dół: input+wrzuć ─ pewność ─ emotki].
@@ -566,7 +606,7 @@ function mpRenderPlay(g, head, st){
   const skin=curSkin();
   const newRound = S.playRound!==g.playNonce;
   if(newRound){                                  // nowe pytanie → faza „słuchaj", licznik czasu fazy
-    mpClearTyping(); S.composerMode='chat'; S.sub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
+    mpClearTyping(); S.composerMode='typ'; S.sub='sluchaj'; mpFeedReset();   // świeży feed na nowe pytanie
     // intro fazy + okno słuchania + start audio uruchamia mpAfterSync DOPIERO po animacji intro
   }
   if(newRound || S.playSkin!==skin || S.playSub!==S.sub || !$m('mpRoster')){
@@ -589,12 +629,22 @@ function mpTasteHTML(tracks){
 function mpRevealMine(r){ const tid=myTeamId&&myTeamId(); return (r && r.byTeam && tid && r.byTeam[tid]) || r || {}; }
 // ranking między drużynami (odsłona) — tylko nazwy + pkt + ✓/✗, BEZ cudzych odpowiedzi (izolacja).
 // Pokazywany dopiero przy >1 drużynie; w coop (1 drużyna) zwraca '' (zachowanie jak dziś).
-function mpRevealStandingsHTML(ranking){
+// Odpowiedź drużyny w odsłonie (reveal.byTeam[tid].locked — jawne po zatwierdzeniu): FIX „host nie widział moich
+// odpowiedzi" — w Solo/Drużynach odsłona pokazywała tylko ✓/✗ rywali, bez tego, CO wpisali.
+function mpTeamLockedText(r, teamId){
+  const t=r && r.byTeam && r.byTeam[teamId]; const lk=t && t.locked; if(!lk || typeof lk!=='object') return '';
+  const slots=(Array.isArray(r.slots) && r.slots.length ? r.slots : Object.keys(lk).map(key=>({key})));
+  const vals=slots.map(s=>String(lk[s.key]||'').trim());
+  return vals.some(Boolean) ? vals.map(v=>v||'—').join(' · ') : '';
+}
+function mpRevealStandingsHTML(ranking, r){
   if(!ranking || ranking.length<2) return '';
   const tid=myTeamId&&myTeamId();
   const rows=ranking.map((t,i)=>{
     const av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
-    return `<div class="rv-stand-row${t.teamId===tid?' me':''}"><span class="rk">${i+1}</span><b class="av" style="background:${safeColor(t.color, mpAvatarColor(t.name))}">${av}</b><span class="nm">${escapeHtml(t.name||'drużyna')}${t.teamId===tid?' (Ty)':''}</span><span class="mk ${t.teamOk?'ok':'no'}">${t.teamOk?'✓':'✗'}</span><span class="pts">${num(t.score)}</span></div>`;
+    const ans=mpTeamLockedText(r, t.teamId);
+    const ansHtml=`<small class="ans">${ans?'„'+escapeHtml(ans)+'"':'bez odpowiedzi'}</small>`;
+    return `<div class="rv-stand-row${t.teamId===tid?' me':''}"><span class="rk">${i+1}</span><b class="av" style="background:${safeColor(t.color, mpAvatarColor(t.name))}">${av}</b><span class="nm">${escapeHtml(t.name||'drużyna')}${t.teamId===tid?' (Ty)':''}${r?ansHtml:''}</span><span class="mk ${t.teamOk?'ok':'no'}">${t.teamOk?'✓':'✗'}</span><span class="pts">${num(t.score)}</span></div>`;
   }).join('');
   return `<div class="rv-standings"><div class="rv-stand-h">RANKING DRUŻYN</div>${rows}</div>`;
 }
@@ -648,7 +698,7 @@ function mpRenderRevealCard(snap){
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':`<div class="rv-locked">odpowiedź drużyny: „${escapeHtml(locked.title||'—')} · ${escapeHtml(locked.artist||'—')}"</div>`}
     ${tv?'':mpCreditsHTML(snap.credits)}
-    ${mpRevealStandingsHTML(r.ranking)}
+    ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealNextHTML(last)}`;
 }
@@ -676,7 +726,7 @@ function mpRenderYearReveal(snap){
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits)}
-    ${mpRevealStandingsHTML(r.ranking)}
+    ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealNextHTML(last)}`;
 }
@@ -716,7 +766,7 @@ function mpRenderQuizReveal(snap){
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits, isMC)}
-    ${mpRevealStandingsHTML(r.ranking)}
+    ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealNextHTML(last)}`;
 }

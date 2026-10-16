@@ -43,7 +43,7 @@ export const S = {
   playSkin: null,         // dla której skórki zbudowany scaffold gry
   playSub: null,          // dla którego pod-stanu fazy zbudowany scaffold
   sub: 'sluchaj',         // klient-lokalny pod-stan fazy PLAY (sluchaj/kombinuj)
-  composerMode: 'chat',   // composer @odp: 'chat' / 'typ'
+  composerMode: 'typ',    // composer skórki czat: 'typ' (pola odpowiedzi — DOMYŚLNIE) / 'chat' (wiadomość)
   subTimer: null,         // auto-przejście słuchaj → kombinuj
   listenStart: 0,         // okno fazy „słuchaj" — start (ms)
   listenDur: 0,           // okno fazy „słuchaj" — długość (ms)

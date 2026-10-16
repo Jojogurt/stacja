@@ -30,7 +30,7 @@
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
 import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
-import { buildTeams, emptyByTeam, reconcileTeams } from '../core/teams.js';
+import { buildTeams, emptyByTeam, reconcileTeams, joinTeam } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
@@ -225,9 +225,11 @@ export class GameAuthority extends Server {
     if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && this.game.phase!==MP.DONE){
       this.hostId=id; this.game.hostId=id; await this.persist();
     }
-    // F2b #7: coop — powrót (albo wejście) w trakcie pytania → dołącz do jedynej drużyny OD RAZU
-    // (dawniej skład liczony tylko w newRound → krótki rozłącz między pytaniami = całe pytanie bez gry)
-    if(this.coopRejoin(id)){ this.broadcastState(); await this.persist(); }
+    // F2b #7: powrót (albo wejście) w trakcie pytania → dołącz do drużyny OD RAZU (dawniej skład liczony tylko
+    // w newRound → krótki rozłącz między pytaniami = całe pytanie bez gry). Fix „host nie widział moich odpowiedzi":
+    // dotyczy też Solo (własna drużyna) i Drużyn (najmniejsza drużyna) — wcześniej tylko coop, a typy późnego
+    // gracza Solo/Drużyn reducer odrzucał po cichu (teamOf=null; w Drużynach do końca meczu).
+    if(this.rejoin(id, name)){ this.broadcastState(); await this.persist(); }
     conn.send(JSON.stringify({ t:'state', game:this.viewFor(id) }));   // 3.1: okrojony widok
     this.pushPresence();
     await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (+ twardy limit armTimeoutMs, F2b #6)
@@ -259,17 +261,17 @@ export class GameAuthority extends Server {
   idPresent(id, except){
     return [...this.getConnections()].some(c=>c!==except && c.state && c.state.id===id);
   }
-  // F2b #7: coop — dopisz gracza do drużyny 'all' w LOADING/ARMING/PLAY (salon: nie TV-hosta).
-  // Zwraca true, gdy skład się zmienił. Solo/Drużyny bez zmian (reconcile między pytaniami / skład zamrożony).
-  coopRejoin(id){
+  // F2b #7: dopisz OBECNEGO gracza bez drużyny w LOADING/ARMING/PLAY (salon: nie TV-hosta) — core/teams.joinTeam:
+  // coop → 'all', solo → własna drużyna, teams → najmniejsza. Zwraca true, gdy skład się zmienił.
+  rejoin(id, name){
     const g=this.game;
-    if(!g || (g.format||'coop')!=='coop' || ![MP.LOADING, MP.ARMING, MP.PLAY].includes(g.phase)) return false;
+    if(!g || ![MP.LOADING, MP.ARMING, MP.PLAY].includes(g.phase)) return false;
     if(g.salon && id===this.hostId) return false;
-    const t=(g.teams||[])[0]; if(!t) return false;
-    t.members=t.members||[];
-    if(t.members.includes(id)) return false;
-    t.members.push(id); return true;
+    if((g.format||'coop')==='coop' && !(g.teams||[])[0]) return false;   // coop bez drużyny (stan sprzed startu) — bez zmian
+    const m=this.members().find(x=>x.id===id);
+    return joinTeam(g, { id, name:(m && m.name) || name || '' });
   }
+  coopRejoin(id){ return this.rejoin(id); }   // zgodność wsteczna (nazwa z F2b #7)
 
   // sprzątanie: alarm odpala po karencji od opustoszenia — jeśli nadal pusto, skasuj storage pokoju
   async onAlarm(){
@@ -300,6 +302,12 @@ export class GameAuthority extends Server {
       case 'track':                                   // aktualizacja nicka obecności (jak relay)
         conn.setState({ id:(conn.state&&conn.state.id)||null, name:clipText(msg.name, NAME_MAX)||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
         this.pushPresence();
+        // Solo: drużyna = gracz. Gość dołączający w trakcie dostaje drużynę w onConnect, ZANIM klient przyśle ksywę
+        // (track po otwarciu socketu) → nazwa „gracz" w rankingu. Ksywa z track nadpisuje nazwę jego 1-os. drużyny.
+        if(this.game && this.game.format==='solo' && conn.state.name){
+          const t=(this.game.teams||[]).find(x=>x.id===me && (x.members||[]).length===1 && x.members[0]===me);
+          if(t && t.name!==conn.state.name){ t.name=conn.state.name; this.broadcastState(); await this.persist(); }
+        }
         return;
 
       case 'shelf': {                                 // gust etap 3: półka gracza do „Gust stołu" (tylko własna — id z tokenu)
@@ -424,6 +432,7 @@ export class GameAuthority extends Server {
       byTeam[tid] = (tid===myTid) ? b : {
         proposals:[], votes:{}, passed:b.passed,               // kształt zachowany; treść odpowiedzi rywali wycięta
         sure:b.sure,                                           // pewniak/pas publiczne (statusy, nie odpowiedzi)
+        answered:[...new Set((b.proposals||[]).map(p=>p.by))], // KTO już dał typ (status „✓ odpowiedział", bez treści)
         counts:{ proposals:(b.proposals||[]).length,
                  votes:Object.keys(b.votes||{}).length },
       };
@@ -594,8 +603,8 @@ export class GameAuthority extends Server {
       if(h.snipStart) this.game.snipStart=h.snipStart;
       this.armHidden=null;
     }
-    // F2b #7: coop — skład = wszyscy obecni gracze także na starcie PLAY (dopisz, nie usuwaj)
-    if((this.game.format||'coop')==='coop') this.playersOf().forEach(p=>this.coopRejoin(p.id));
+    // F2b #7: skład = wszyscy obecni gracze także na starcie PLAY (dopisz, nie usuwaj) — każdy format
+    this.playersOf().forEach(p=>this.rejoin(p.id, p.name));
     this.game.phase=assertMp(this.game.phase, MP.PLAY, console.warn);
     this.game.playNonce=(this.game.playNonce||0)+1;
     this.game.playAt=Date.now();                    // F6a: start PLAY → bonus za szybkość liczony do zatwierdzenia

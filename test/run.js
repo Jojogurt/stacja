@@ -8,7 +8,7 @@ import { MP_INTRO_MS, LAST_ROOM_TTL_MS, lastRoomCode, tickSecond } from '../core
 import { REACTIONS } from '../core/chatFeed.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, answerTiming, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf,
   answerCredits, audioHostOnly, playsAudioLocally } from '../core/mpReducer.js';
-import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
+import { buildTeams, emptyByTeam, reconcileTeams, joinTeam, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
 import { escapeHtml, safeColor, isSlotKey, num, clipText } from '../core/util.js';
 import { clampRounds, sanitizeMpConfig, MAX_ROUNDS, clampQuestions, roundsForQuestions, MAX_QUESTIONS, DEFAULT_QUESTIONS, QUICK_QUESTIONS, MATCH_LENGTHS, matchProgress } from '../core/match.js';
 import { clampTimer, MP_TIMER_MAX_S, secsLeft, MP_ARM_TIMEOUT_MS, MP_REVEAL_AUTO_MS, MP_BUFFER_TIMEOUT_MS } from '../core/timing.js';
@@ -229,12 +229,28 @@ group('teams.reconcileTeams', ()=>{
   reconcileTeams(gs,[{id:'u1',name:'Ala'},{id:'u2',name:'Bob'}]);
   eq(gs.teams.length,2,'solo: nowy gracz → nowa drużyna');
   eq(gs.scores.u2,0,'solo: scores zainicjowane dla nowej drużyny');
-  // teams: skład ZAMROŻONY — późny gracz bez drużyny
-  const gt={ format:'teams', teams:[{id:'t0',name:'A',members:['u1']},{id:'t1',name:'B',members:['u2']}], scores:{} };
-  reconcileTeams(gt,[{id:'u1'},{id:'u2'},{id:'u9'}]);
-  eq(gt.teams.length,2,'teams: reconcile nie tworzy nowych drużyn (skład zamrożony)');
-  ok(!gt.teams.find(t=>t.members.includes('u9')),'teams: późny gracz bez drużyny (widz do rewanżu)');
+  // teams: podział hosta zostaje, późny gracz → do NAJMNIEJSZEJ drużyny (fix: dawniej „widz do rewanżu",
+  // jego typy reducer odrzucał po cichu — host nie widział odpowiedzi gościa przez cały mecz)
+  const gt={ format:'teams', teams:[{id:'t0',name:'A',members:['u1','u3']},{id:'t1',name:'B',members:['u2']}], scores:{} };
+  reconcileTeams(gt,[{id:'u1'},{id:'u2'},{id:'u3'},{id:'u9'}]);
+  eq(gt.teams.length,2,'teams: reconcile nie tworzy nowych drużyn');
+  eq(gt.teams[0].members,['u1','u3'],'teams: podział hosta nietknięty');
+  eq(gt.teams[1].members,['u2','u9'],'teams: późny gracz → najmniejsza drużyna (B)');
   eq(gt.scores.t0,0,'teams: scores zainicjowane');
+});
+group('teams.joinTeam — późne wejście / powrót (fix „host nie widział moich odpowiedzi")', ()=>{
+  const gc={ format:'coop', teams:[{id:'all',members:['h']}], scores:{all:3} };
+  ok(joinTeam(gc,{id:'g',name:'Gość'}),'coop: gość dopisany'); eq(gc.teams[0].members,['h','g'],'coop: do drużyny all');
+  ok(!joinTeam(gc,{id:'g'}),'coop: powtórka → bez zmian'); eq(gc.scores.all,3,'coop: wynik nietknięty');
+  const gs={ format:'solo', teams:[{id:'h',name:'Host',members:['h']}], scores:{h:5} };
+  ok(joinTeam(gs,{id:'g',name:'Gość'}),'solo: gość dostaje własną drużynę');
+  eq(gs.teams.map(t=>t.id),['h','g'],'solo: id drużyny = id gracza'); eq(gs.teams[1].name,'Gość','solo: nazwa = ksywa'); eq(gs.scores.g,0,'solo: wynik od 0');
+  ok(!joinTeam(gs,{id:'h'}),'solo: powrót gracza z drużyną → bez zmian');
+  const gt={ format:'teams', teams:[{id:'t0',members:['a','b']},{id:'t1',members:['c']}], scores:{t0:1,t1:2} };
+  ok(joinTeam(gt,{id:'g'}),'teams: późny gracz przypisany'); eq(gt.teams[1].members,['c','g'],'teams: do najmniejszej');
+  ok(joinTeam(gt,{id:'h'}),'teams: remis → pierwsza'); eq(gt.teams[0].members,['a','b','h'],'teams: remis → t0');
+  ok(!joinTeam({ format:'teams', teams:[], scores:{} },{id:'x'}),'teams bez podziału → bez zmian (nie wymyślamy drużyn)');
+  ok(!joinTeam(null,{id:'x'}) && !joinTeam(gc,null),'null-safe');
 });
 group('mpReducer.propose: JEDNA odpowiedź na gracza (nowa zastępuje starą)', ()=>{
   const g=mkGame();
@@ -356,6 +372,10 @@ group('mpReducer.selektory (per-drużyna)', ()=>{
   eq(rosterState(g,COOP_TEAM,'u2'),'ans','u2 wrzucił typ (bez pewniaka)');
   eq(rosterState(g,COOP_TEAM,'zzz'),'idle','brak aktywności → myśli');
   eq(rosterState(g,COOP_TEAM,'zzz',new Set(['zzz'])),'type','w secie typing (bez typu) → pisze');
+  // rywal w PLAY: serwer wycina proposals, zostawia `answered` (KTO dał typ) → status „✓ typ" bez treści
+  const gr={ byTeam:{ r:{ proposals:[], votes:{}, sure:[], passed:[], answered:['rv'] } } };
+  eq(rosterState(gr,'r','rv'),'ans','answered (okrojony bucket rywala) → ✓ typ');
+  eq(rosterState(gr,'r','inny'),'idle','spoza answered → myśli');
   eq(rosterState(g,COOP_TEAM,'u2',new Set(['u2'])),'ans','typ ma priorytet nad „pisze"');
   eq(rosterState(g,COOP_TEAM,'u1',new Set(['u1'])),'sure','pewniak ma priorytet nad „pisze"');
   g.byTeam[COOP_TEAM].passed=[{id:'u1'}];

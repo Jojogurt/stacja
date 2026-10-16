@@ -171,6 +171,7 @@ export function rosterState(game, teamId, id, typingSet){
   if((bkt.passed||[]).some(p=>p.id===id)) return 'pass';
   if((bkt.sure||[]).some(p=>p.id===id)) return 'sure';
   if((bkt.proposals||[]).some(p=>p.by===id)) return 'ans';
+  if(Array.isArray(bkt.answered) && bkt.answered.includes(id)) return 'ans';   // rywal w PLAY (serwer wyciął treść, zostawił KTO)
   if(typingSet && typingSet.has && typingSet.has(id)) return 'type';
   return 'idle';
 }

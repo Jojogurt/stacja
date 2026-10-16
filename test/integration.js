@@ -680,6 +680,88 @@ await group('MP: akcje gracza (react/say/propose/typing) nie rzucają', async ()
   ok(!threw, 'mpTypingPing bez wyjątku');
 });
 
+/* FIX „host nie widział moich odpowiedzi" (zgłoszenie v66: gość z telefonu, skórka CZAT, coop). Pełna ścieżka
+ * UI → ramka WS: odpowiedź MUSI wyjść jako {t:'action', action:{type:'propose'}} (stan gry), nie {t:'event', event:'say'}. */
+await group('FIX odpowiedzi gościa: skórka CZAT — domyślnie pola odpowiedzi, wysyłka = propose (nie czat)', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  w.mpSetSkin('czat'); await settle(2);
+  const base = { phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}], preview:'https://x/p.m4a', lyric:'', prompt:'',
+    timer:0, endsAt:null, beerTally:{}, hostId:'HOST', results:[],
+    format:'coop', teams:[{id:'all',name:'Drużyna',members:['HOST', ws._id]}], scores:{all:0},
+    byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } } };
+  ws.pushState({ ...base, playNonce:41 }); await settle(6);
+  // faza „słuchaj": jedyne pole to czat → podpowiedź, gdzie wpisać odpowiedź
+  ok(/kombinujemy/.test(($(w,'mpSayIn')||{}).placeholder||''), 'słuchaj: pole czatu podpowiada „odpowiedź wpiszesz po kombinujemy" — '+(($(w,'mpSayIn')||{}).placeholder));
+  w.mpGoKombinuj(); await settle(3);
+  const typ=$(w,'mpCompTyp'), chat=$(w,'mpCompChat');
+  ok(typ && typ.style.display!=='none' && chat && chat.style.display==='none', 'czat/kombinuj: pola odpowiedzi WIDOCZNE domyślnie (czat schowany)');
+  ok(($(w,'mpTypToggle')||{}).textContent==='💬', 'przełącznik pokazuje 💬 (na czat)');
+  const n0=ws.sent.length;
+  $(w,'mpTyp_title').value='The Look'; $(w,'mpTyp_artist').value='Roxette';
+  w.mpComposerSend(); await settle(3);
+  const out=ws.sent.slice(n0);
+  const prop=out.find(m=>m.t==='action' && m.action && m.action.type==='propose');
+  ok(!!prop && prop.action.values.title==='The Look' && prop.action.values.artist==='Roxette', 'wysyłka = {t:action, propose} z tytułem i wykonawcą — '+JSON.stringify(out));
+  ok(!out.some(m=>m.t==='event' && m.event==='say'), 'odpowiedź NIE poszła jako wiadomość czatu (say)');
+  ok($(w,'mpCompTyp').style.display!=='none', 'po wysłaniu composer zostaje w trybie odpowiedzi');
+  // 💬 → czat: zwykła wiadomość to `say`; „@…" w czacie nadal morfuje w pola i wysyła propose
+  w.mpComposerToggle(); await settle(1);
+  ok($(w,'mpCompChat').style.display!=='none', '💬 → pole czatu');
+  const n1=ws.sent.length;
+  $(w,'mpChatIn').value='kto to śpiewa?'; w.mpComposerSend(); await settle(2);
+  ok(ws.sent.slice(n1).some(m=>m.t==='event' && m.event==='say'), 'tryb czatu: wiadomość = say');
+  const ci=$(w,'mpChatIn'); ci.value='@Joyride, Roxette'; w.mpChatInput(); await settle(1);
+  const n2=ws.sent.length; w.mpComposerSend(); await settle(2);
+  const p2=ws.sent.slice(n2).find(m=>m.t==='action' && m.action && m.action.type==='propose');
+  ok(p2 && p2.action.values.title==='Joyride' && p2.action.values.artist==='Roxette', '„@tytuł, wykonawca" w czacie → propose');
+  // nowe pytanie → znów domyślnie pola odpowiedzi (nawet gdy ostatnio był czat)
+  w.mpComposerToggle(); await settle(1);
+  ws.pushState({ ...base, playNonce:42 }); await settle(6); w.mpGoKombinuj(); await settle(3);
+  ok($(w,'mpCompTyp') && $(w,'mpCompTyp').style.display!=='none', 'nowe pytanie: composer znów w trybie odpowiedzi');
+  w.mpSetSkin('kolumny'); await settle(2);
+});
+await group('FIX odpowiedzi gościa: skórka KOLUMNY — „Wrzuć" wysyła propose', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}], preview:'https://x/p.m4a', lyric:'', prompt:'',
+    playNonce:43, timer:0, endsAt:null, beerTally:{}, hostId:'HOST', results:[],
+    format:'coop', teams:[{id:'all',name:'Drużyna',members:['HOST', ws._id]}], scores:{all:0},
+    byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } } });
+  await settle(6); w.mpGoKombinuj(); await settle(3);
+  const n0=ws.sent.length;
+  $(w,'mpProp_title').value='Listen to Your Heart'; $(w,'mpProp_artist').value='Roxette';
+  w.mpPropose(); await settle(3);
+  const prop=ws.sent.slice(n0).find(m=>m.t==='action' && m.action && m.action.type==='propose');
+  ok(prop && prop.action.values.title==='Listen to Your Heart', 'kolumny: Wrzuć → {t:action, propose}');
+});
+await group('FIX odpowiedzi gościa: Solo — host widzi, KTO odpowiedział (bez treści), a odsłona pokazuje odpowiedzi', async ()=>{
+  const w = window;
+  const ws = wsInstances[wsInstances.length-1];
+  const me=ws._id;
+  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
+    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}], preview:'https://x/p.m4a', lyric:'', prompt:'',
+    playNonce:44, timer:0, endsAt:null, beerTally:{}, hostId:me, results:[],
+    format:'solo', teams:[{id:me,name:'Ja',members:[me]},{id:'G',name:'Gosc',members:['G']}], scores:{[me]:0,G:0},
+    byTeam:{ [me]:{ proposals:[], votes:{}, sure:[], passed:[] },
+             G:{ proposals:[], votes:{}, sure:[], passed:[], answered:['G'], counts:{proposals:1,votes:2} } } });
+  await settle(6); w.mpGoKombinuj(); await settle(3);
+  const h=$(w,'mpRoom').innerHTML;
+  ok(/mp-rivals/.test(h) && /data-rival="G"/.test(h) && /odpowiedział/.test(h), 'Solo/PLAY: pasek rywali — gość „✓ odpowiedział(a)"');
+  ok(/1\/2 z typem/.test(h), 'host: przycisk zatwierdzenia pokazuje 1/2 z typem');
+  ws.pushState({ phase:'reveal', round:1, rounds:4, si:0, qi:0, slots:[{round:1,cat:'d80',mode:'music'}], playNonce:44,
+    mode:'music', catKey:'d80', catLabel:'80s', answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    format:'solo', teams:[{id:me,name:'Ja',members:[me]},{id:'G',name:'Gosc',members:['G']}], scores:{[me]:0,G:100}, hostId:me, results:[],
+    reveal:{ kind:'music', track:'The Look', artist:'Roxette', year:'1989', album:'', art:'', slots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+      byTeam:{ [me]:{ locked:{title:'',artist:''}, teamOk:false }, G:{ locked:{title:'The Look',artist:'Roxette'}, teamOk:true } },
+      ranking:[{teamId:'G',name:'Gosc',score:100,teamOk:true,gained:100},{teamId:me,name:'Ja',score:0,teamOk:false,gained:0}] } });
+  await settle(6);
+  const r=$(w,'mpRoom').innerHTML;
+  ok(/RANKING DRUŻYN/.test(r) && r.includes('„The Look · Roxette"'), 'odsłona Solo: ranking pokazuje odpowiedź gościa');
+  ok(/bez odpowiedzi/.test(r), 'odsłona Solo: pusta odpowiedź = „bez odpowiedzi"');
+});
 await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
   const w = window;
   const ws = wsInstances[wsInstances.length-1];

@@ -58,22 +58,50 @@ export function emptyByTeam(teams){
   const o={}; (teams||[]).forEach(t=>{ o[t.id]={proposals:[],votes:{},sure:[],passed:[]}; }); return o;
 }
 
+/* dopisz OBECNEGO gracza bez drużyny do składu (późne wejście / powrót). Mutuje game.teams/scores; zwraca true,
+ * gdy skład się zmienił. Gracz już w jakiejś drużynie → bez zmian (powrót po reconnect zachowuje drużynę).
+ * coop:  do jedynej drużyny 'all'.
+ * solo:  nowa 1-os. drużyna (id = id gracza).
+ * teams: do NAJMNIEJSZEJ drużyny (remis → pierwsza) — podział hosta dla obecnych zostaje nietknięty.
+ *        Dawniej późny gracz był „widzem do rewanżu": jego typy reducer odrzucał po cichu (teamOf=null),
+ *        a baner obiecywał „dołączysz od następnego pytania" — host nie widział jego odpowiedzi przez cały mecz. */
+export function joinTeam(game, player){
+  if(!game || !player || !player.id) return false;
+  const id = player.id;
+  game.teams = game.teams || [];
+  game.scores = game.scores || {};
+  if(game.teams.some(t=>(t.members||[]).includes(id))) return false;
+  const fmt = game.format || 'coop';
+  let t = null;
+  if(fmt==='solo'){
+    if(game.teams.some(x=>x.id===id)) return false;          // anty-kolizja id (nie powinno się zdarzyć)
+    t = { id, name:clipText(player.name, 40) || 'gracz', color:teamColor(game.teams.length), members:[] };
+    game.teams.push(t);
+  } else if(fmt==='teams'){
+    if(!game.teams.length) return false;                      // brak podziału — nie wymyślamy drużyn
+    t = game.teams.reduce((a,b)=> ((b.members||[]).length < (a.members||[]).length ? b : a));
+  } else {
+    t = game.teams[0];
+    if(!t){ t = { id:COOP_TEAM, name:'Drużyna', color:teamColor(0), members:[] }; game.teams.push(t); }
+  }
+  t.members = t.members || [];
+  t.members.push(id);
+  if(game.scores[t.id]==null) game.scores[t.id]=0;
+  return true;
+}
+
 /* uzgodnij skład drużyn z AKTUALNYM presence (dołączenia/wyjścia między rundami).
  * Mutuje game.teams i game.scores w miejscu; NIE rusza byTeam (caller resetuje go osobno).
  * coop:  drużyna 'all' = wszyscy obecni.
  * solo:  dorzuć brakujących jako nowe 1-os. drużyny; nieobecnych zostaw (wynik historyczny).
- * teams: skład ZAMROŻONY przy starcie (host go ułożył) — nie ruszamy members; późny gracz
- *        bez drużyny gra jako widz do rewanżu (teamOf=null → akcje ignorowane). */
+ * teams: podział hosta ZOSTAJE (nikogo nie przenosimy); późny gracz bez drużyny → do najmniejszej (joinTeam). */
 export function reconcileTeams(game, players){
   if(!game) return;
   const ps = players || [];
   game.teams = game.teams || [];
   game.scores = game.scores || {};
-  if(game.format==='solo'){
-    const have = new Set(game.teams.map(t=>t.id));
-    ps.forEach(p=>{ if(!have.has(p.id)){ game.teams.push({ id:p.id, name:p.name||'gracz', color:teamColor(game.teams.length), members:[p.id] }); have.add(p.id); } });
-  } else if(game.format==='teams'){
-    /* skład zamrożony — bez zmian members */
+  if(game.format==='solo' || game.format==='teams'){
+    ps.forEach(p=>joinTeam(game, p));
   } else {   // coop → jedna drużyna ze wszystkimi obecnymi
     const t = game.teams[0] || { id:COOP_TEAM, name:'Drużyna', color:teamColor(0), members:[] };
     t.members = ps.map(p=>p.id);
