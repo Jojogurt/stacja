@@ -7,6 +7,7 @@
  * BEZ attribute=artistTerm), więc moduł nie zna `window` ani `fetch`. */
 import { shuffle } from './util.js';
 import { norm, textMatch } from './scoring.js';
+import { guitarCoverOk } from './guitarCovers.js';   // EKSPERYMENT „gitara": zaostrzona akceptacja coveru (lista wykonawców + znaczniki)
 
 /* filtr coverów/karaoke/tributów (twardy: nigdy nie gramy) */
 export const BAD = /karaoke|tribute|made famous|cover version|instrumental|backing track|originally performed/i;
@@ -623,7 +624,11 @@ export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random,
  * Wspólny rdzeń (resolveInstrumentalCover / pickInstrumentalCover) sparametryzowany instrumentem z COVER_INSTRUMENTS.
  * Badanie iTunes PL: światowe hity mają piano cover z zajawką ~11/12, gitarowy ~11/12; polskie ~0/8 (piano) i 0/4
  * (gitara) → modesFor nie oferuje tych trybów w kategoriach polskich (instrumentalCapable w core/match.js),
- * a resolver pomija utwory z polskimi znakami. */
+ * a resolver pomija utwory z polskimi znakami.
+ * Gitara — poprawki po testach (2026-10): akceptacja ZAOSTRZONA (core/guitarCovers.js: znacznik instrumentalny w tytule
+ * / kuratorowana lista wykonawców / album coverów + „guitar" w nazwie wykonawcy; bez vocal/feat./lyrics/karaoke).
+ * Pomiar na żywym iTunes PL (22 światowe hity, 3 zapytania/hit): przed 13/22, po zaostrzeniu 12/22 (55%) — odpadły
+ * m.in. „Acoustic Version" bez pewności braku wokalu; pytanie i tak ma do COVER_TRIES oryginałów na znalezienie coveru. */
 export const PIANO_WORD = /\b(?:piano|pianoforte|klavier|fortepian\w*)\b/i;
 // odrzuć: wokal, karaoke, kołysanki (Rockabye Baby to nie fortepian), inne instrumenty, składanki/mashupy
 export const PIANO_REJECT = /\bvocals?\b|with vocals|karaoke|sing-?along|in the style of|backing track|lullab|rockabye|guitar|string quartet|\bstrings\b|quartet|\bviolins?\b|\bcellos?\b|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|medley|mash-?up|\bmegamix\b/i;
@@ -642,7 +647,9 @@ export const COVER_INSTRUMENTS = {
   piano: { word:PIANO_WORD, reject:PIANO_REJECT,
     tail:/\b(?:piano|klavier)\s+(?:version|cover|arrangement|instrumental|solo|rendition)\b.*$/i,
     queries:(t, a)=>[t+' piano', (t+' '+a).trim()+' piano cover'] },
-  guitar: { word:GUITAR_WORD, reject:GUITAR_REJECT, albumOk:GUITAR_ALBUM_OK,
+  // poprawki po testach: + `strict` (core/guitarCovers.guitarCoverOk) — znacznik instrumentalny w tytule ALBO wykonawca
+  // z kuratorowanej listy ALBO album coverów + „guitar" w nazwie wykonawcy; zawsze bez vocal/feat./lyrics/karaoke
+  guitar: { word:GUITAR_WORD, reject:GUITAR_REJECT, albumOk:GUITAR_ALBUM_OK, strict:guitarCoverOk,
     // „Wonderwall Guitar", „Song Acoustic Guitar Version" (tylko NA KOŃCU — „Guitar Man" zostaje)
     tail:/(\S)\s+(?:(?:acoustic|spanish|classical|fingerstyle|instrumental|solo)\s+)*(?:guitars?|gitar\w*)(?:\s+(?:version|cover|arrangement|instrumental|solo|rendition))?\s*$/i,
     queries:(t, a)=>[t+' guitar', t+' acoustic guitar', (t+' '+a).trim()+' guitar'] },
@@ -700,6 +707,7 @@ export function pickInstrumentalCover(results, orig, instrument='piano'){
     const text=r.trackName+' \u0001 '+r.artistName+' \u0001 '+(r.collectionName||'');
     if(!inst.word.test(text) || inst.reject.test(text)) continue;
     if(inst.albumOk && !inst.word.test(r.trackName+' \u0001 '+r.artistName) && !inst.albumOk.test(r.collectionName||'')) continue;   // słowo tylko w albumie
+    if(inst.strict && !inst.strict(r)) continue;   // gitara: zaostrzone reguły (bez „piosenek z gitarą" z wokalem)
     if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)) continue;   // oryginał (też „X & Y") — nie cover
     const got=coverTitleKey(r.trackName, name);
     if(!got || !(got===want || textMatch(got, want))) continue;

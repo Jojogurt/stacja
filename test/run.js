@@ -1611,10 +1611,24 @@ group('EKSP. timing: okno „od tyłu krótko", wycinki składanki, etapy okład
   for(const r of [0,0.5,1]){ const st=T8.medleyClipStart(30,()=>r); ok(st>=8 && st<=20, 'wycinek składanki w [8..20] — '+st); }
   ok(T8.medleyClipStart(12,()=>1)<=12-1.5-0.5+1e-9, 'krótka zajawka: wycinek mieści się przed końcem');
   eq(T8.medleyClipStart(1,()=>0.5),0,'zajawka krótsza niż wycinek → od początku');
-  eq(T8.medleyDuration(4),6.75,'4 × 1,5 s + 3 × 0,25 s'); eq(T8.medleyDuration(0),0,'pusto');
-  eq(T8.COVER_STAGES,[8,16,32,64,0],'okładka: 8 → 16 → 32 → 64 → pełna');
-  eq(T8.coverStageBlocks(4),0,'etap 4 = pełna'); eq(T8.coverStageBlocks(99),0,'poza zakresem → pełna');
-  eq(T8.coverNextStage(3),4,'następny'); eq(T8.coverNextStage(4),null,'koniec');
+  eq(T8.MEDLEY_GAP_S,3,'przerwa między fragmentami 3 s (było 0,25 s)');
+  eq(T8.medleyDuration(4),15.4,'0,4 s wejścia + 4 × 1,5 s + 3 × 3 s'); eq(T8.medleyDuration(0),0,'pusto'); eq(T8.medleyDuration(1),1.9,'1 wycinek: bez przerwy');
+  eq(T8.medleyClipOffsets(4),[0.4,4.9,9.4,13.9],'początki wycinków w buforze');
+  ok(T8.medleyTickOffsets(4).every((t,i)=>t>=0 && t<T8.medleyClipOffsets(4)[i] && T8.medleyClipOffsets(4)[i]-t<=0.31),'„tik" tuż przed KAŻDYM wycinkiem (także pierwszym)');
+  ok(T8.medleyTickOffsets(4).every((t,i,a)=>i===0 || t-a[i-1]>=T8.MEDLEY_GAP_S),'tiki rozdzielone ≥ przerwa');
+  eq(T8.medleyClipAt(0,4),{index:0,playing:false,done:false},'wejście: czekamy na fragment 1');
+  eq(T8.medleyClipAt(1,4),{index:0,playing:true,done:false},'gra fragment 1');
+  eq(T8.medleyClipAt(3,4),{index:1,playing:false,done:false},'przerwa → następny fragment 2');
+  eq(T8.medleyClipAt(14,4),{index:3,playing:true,done:false},'gra fragment 4');
+  eq(T8.medleyClipAt(99,4).done,true,'po końcu → done'); eq(T8.medleyClipAt(NaN,4).index,0,'śmieci → początek'); eq(T8.medleyClipAt(1,0).done,true,'0 wycinków → done');
+  eq(T8.medleyLabel(5.2,4),'fragment 2/4…','licznik w trakcie'); eq(T8.medleyLabel(7,4),'przerwa · zaraz fragment 3/4','licznik w przerwie');
+  ok(/^koniec/.test(T8.medleyLabel(20,4)),'po końcu: koniec składanki');
+  eq(T8.COVER_STAGES,[16,32,64,0],'okładka: 16 → 32 → 64 → pełna (bez etapu 8×8)');
+  eq(T8.coverStageBlocks(0),16,'pierwszy etap = 16 bloków'); eq(T8.coverStageBlocks(-3),16,'ujemny → etap 0');
+  eq(T8.coverStageBlocks(3),0,'etap 3 = pełna'); eq(T8.coverStageBlocks(99),0,'poza zakresem → pełna');
+  eq(T8.coverNextStage(2),3,'następny'); eq(T8.coverNextStage(3),null,'koniec');
+  eq(T8.COVER_STEP_MS,6000,'etap okładki trwa 6 s (było 3 s)');
+  eq(T8.COVER_STEP_MS*(T8.COVER_STAGES.length-1),18000,'pełna okładka po 18 s auto-odsłony (mieści się w czasie pytania)');
 });
 group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etapów, legenda', ()=>{
   const hit=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:null, streak:1 });
@@ -1626,7 +1640,11 @@ group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etap�
   eq(S8.scoreRound({ okArtist:false, okAlbum:true, artistOnly:true, streak:5 }).streakMult,1,'bez wykonawcy — bez serii');
   const sp=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:0 }); eq(sp.points,150,'szybkość jak quiz (+50%)');
   eq(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, mult:S8.coverMult(0) }).points,240,'okładka etap 0: ×2');
-  eq(S8.coverMult(4),1,'pełna okładka ×1');
+  eq(S8.COVER_MULTS,[2,1.6,1.3,1],'mnożniki okładki: ×2.0 → ×1.6 → ×1.3 → ×1.0');
+  eq(S8.COVER_MULTS.length,T8.COVER_STAGES.length,'mnożnik na każdy etap odsłony');
+  ok(S8.COVER_MULTS.every((m,i,a)=>i===0 || m<a[i-1]),'mnożniki maleją');
+  eq(S8.coverMult(3),1,'pełna okładka ×1'); eq(S8.coverMult(99),1,'poza zakresem → ×1'); eq(S8.coverMult('x'),1,'śmieci → ×1');
+  eq(S8.coverMult(1),1.6,'etap 32×32 ×1.6');
   eq(S8.REVSNIP_MULTS,[1,0.8],'od tyłu krótko: 3 s ×1, 5 s ×0,8');
   eq(S8.scoreRound({ okTitle:true, okArtist:true, mult:S8.revsnipMult(1) }).points,80,'„dłużej" → 100 × 0,8');
   ok(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, elapsedMs:0, streak:9, mult:2 }).points<=S8.SCORE_MAX_PER_Q,'limit ligi bez zmian');
@@ -1805,6 +1823,44 @@ await (async ()=>{
     itunes:async(term,opts)=>{ const t=term.toLowerCase(); if(t==='madonna like a prayer') return net['a:Madonna']; return net['s:'+t]||[]; }, rnd:()=>0 });
   eq(pl.coverArtist,'Piano Tribute Players','playlista: oryginał z utworów + cover');
 })();
+/* ===== poprawki po testach: rzędy kategorii (core/picker.rowEdges / wheelScrollTarget) ===== */
+const PKR = await import('../core/picker.js');
+group('rzędy kategorii: podpowiedź krawędzi + kółko myszy → poziomy scroll', ()=>{
+  eq(PKR.rowEdges({ scrollLeft:0, scrollWidth:300, clientWidth:300 }),{left:false,right:false},'mieści się — bez podpowiedzi');
+  eq(PKR.rowEdges({ scrollLeft:0, scrollWidth:900, clientWidth:300 }),{left:false,right:true},'początek: strzałka w prawo');
+  eq(PKR.rowEdges({ scrollLeft:300, scrollWidth:900, clientWidth:300 }),{left:true,right:true},'środek: obie');
+  eq(PKR.rowEdges({ scrollLeft:599, scrollWidth:900, clientWidth:300 }),{left:true,right:false},'koniec (subpiksel) — bez prawej');
+  eq(PKR.rowEdges(),{left:false,right:false},'brak danych (ukryty rząd)');
+  eq(PKR.wheelScrollTarget({ deltaY:100, scrollLeft:0, scrollWidth:900, clientWidth:300 }),100,'kółko w dół → w prawo');
+  eq(PKR.wheelScrollTarget({ deltaY:-100, scrollLeft:50, scrollWidth:900, clientWidth:300 }),0,'kółko w górę → w lewo (do krawędzi)');
+  eq(PKR.wheelScrollTarget({ deltaY:3, deltaMode:1, scrollLeft:0, scrollWidth:900, clientWidth:300 }),120,'tryb linii: 3 × 40 px');
+  eq(PKR.wheelScrollTarget({ deltaY:1, deltaMode:2, scrollLeft:0, scrollWidth:900, clientWidth:300 }),300,'tryb strony: szerokość rzędu');
+  eq(PKR.wheelScrollTarget({ deltaY:5000, scrollLeft:0, scrollWidth:900, clientWidth:300 }),600,'przycięte do końca');
+  eq(PKR.wheelScrollTarget({ deltaY:100, scrollLeft:600, scrollWidth:900, clientWidth:300 }),null,'na prawej krawędzi → strona przewija się dalej');
+  eq(PKR.wheelScrollTarget({ deltaY:-100, scrollLeft:0, scrollWidth:900, clientWidth:300 }),null,'na lewej krawędzi → strona');
+  eq(PKR.wheelScrollTarget({ deltaY:100, scrollLeft:0, scrollWidth:300, clientWidth:300 }),null,'rząd się mieści (≥600 px zawija) → nie przejmuj');
+  eq(PKR.wheelScrollTarget({ deltaX:80, deltaY:10, scrollLeft:0, scrollWidth:900, clientWidth:300 }),null,'gest poziomy (trackpad) → natywnie');
+  eq(PKR.wheelScrollTarget({ deltaY:0, scrollLeft:0, scrollWidth:900, clientWidth:300 }),null,'bez ruchu');
+});
+/* ===== EKSPERYMENT „gitara": zaostrzona akceptacja coveru (core/guitarCovers.js) ===== */
+const GC = await import('../core/guitarCovers.js');
+group('EKSP. gitara: guitarCoverVerdict — znacznik w tytule / lista wykonawców / album coverów + „guitar"; odrzuty vocal/feat./lyrics/karaoke', ()=>{
+  const v=(t,a,c='Album')=>GC.guitarCoverVerdict({ trackName:t, artistName:a, collectionName:c });
+  eq(v('Hotel California (Guitar Version)','Manuel Granada','Spanish Guitar 2'),{ok:true,why:'title'},'(a) „Guitar Version"');
+  for(const t of ['X (Instrumental)','X (Fingerstyle Guitar)','X (Acoustic Guitar Version)','X (Guitar Cover)','X (Arr. for Guitar)','X (Guitar Instrumental)','X Finger-Style'])
+    ok(v(t,'Nobody','Single').ok, '(a) znacznik w tytule: '+t);
+  eq(v('Creep','Andy Angel','Guitar Covers, Vol. 2'),{ok:true,why:'artist'},'(b) lista: Andy Angel');
+  ok(v('Africa','sungha jung','Cover Compilation').ok,'(b) lista bez wielkości liter');
+  ok(GC.isGuitarCoverArtist('Johanna & Ebba Högberg') && GC.isGuitarCoverArtist('Johanna and Ebba Hogberg'),'(b) „&"/„and" i diakrytyki');
+  eq(v('Zombie','Best Guitar Players','Fingerstyle Hits'),{ok:true,why:'album'},'(c) album „Fingerstyle" + „guitar" w wykonawcy');
+  eq(v('Zombie','Best Players','Fingerstyle Hits'),{ok:false,why:'none'},'(c) bez „guitar" w wykonawcy');
+  eq(v('Zombie (Acoustic)','Some Guitar Guy','Acoustic Hits'),{ok:false,why:'none'},'„Acoustic" bez znacznika/listy/albumu coverów → nie');
+  for(const [t,a,c] of [['X (Guitar Version) [Vocal Version]','Paco Nula','A'],['X (feat. Y) [Guitar Version]','Z','A'],['X (Instrumental) ft. Y','Z','A'],['X (Guitar Version)','Z featuring Y','A'],['X (Guitar Version with Lyrics)','Z','A'],['X (Instrumental)','Z','Acoustic Guitar Karaoke'],['X','Andy Angel','Vocal Covers']])
+    eq(v(t,a,c).why,'reject','twardy odrzut: '+[t,a,c].join(' / '));
+  eq(v('X (Acoustic Guitar Instrumental)','Sing2Guitar','A').why,'deny','lista odmów (karaoke)');
+  ok(GC.GUITAR_COVER_ARTISTS.length>=30 && new Set(GC.GUITAR_COVER_ARTISTS.map(a=>a.toLowerCase())).size===GC.GUITAR_COVER_ARTISTS.length,'lista ≥30 wykonawców, bez duplikatów');
+  ok(!GC.GUITAR_COVER_ARTISTS.some(a=>GC.GUITAR_COVER_DENY.includes(a)),'lista i odmowy rozłączne');
+});
 /* ===== EKSPERYMENT „gitara" (guitar): cover gitarowy — wspólna ścieżka z fortepianem (resolveInstrumentalCover) ===== */
 group('EKSP. gitara: tryb, modesFor (bez kategorii polskich), pickInstrumentalCover(guitar)', ()=>{
   ok(M8.ALL_MODES.includes('guitar') && M8.MODE_LABEL.guitar==='🎸 gitara' && M8.MODE_SHORT.guitar && M8.MODE_SUB.guitar,'tryb + etykiety „🎸 gitara"');
@@ -1829,8 +1885,16 @@ group('EKSP. gitara: tryb, modesFor (bez kategorii polskich), pickInstrumentalCo
   eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Acoustic Cover)','Jane Singer','Acoustic Covers')], orig, 'guitar'),null,'cover bez słowa guitar/gitar/fingerstyle → odrzucony (zwykle wokal)');
   eq(TS8.pickInstrumentalCover([O, it('Wonderwall - Guitar Tutorial','Learn Guitar'), it('Wonderwall (Easy Guitar Tabs)','TabMaster')], orig, 'guitar'),null,'lekcja/tutorial/taby odrzucone');
   eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Fingerstyle)','Fingerstyle Duo','Acoustic Covers')], orig, 'guitar').artistName,'Fingerstyle Duo','fingerstyle przyjęty');
-  eq(TS8.pickInstrumentalCover([O, it('Wonderwall Guitar','Kim Yu Na','Peaceful Music Romantic Guitar')], orig, 'guitar').artistName,'Kim Yu Na','dopisek „Guitar" bez nawiasu na końcu tytułu');
-  eq(TS8.pickInstrumentalCover([O, it('Wonderwall','Gitarowe Duo','Gitara akustyczna')], orig, 'guitar').artistName,'Gitarowe Duo','polskie „gitar…" w wykonawcy/albumie');
+  // poprawki po testach (zaostrzenie): samo słowo „Guitar" w tytule/albumie już NIE wystarcza (bywał wokal)
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall Guitar','Kim Yu Na','Peaceful Music Romantic Guitar')], orig, 'guitar'),null,'zaostrzenie: dopisek „Guitar" bez znacznika instrumentalnego → odrzucony');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall Guitar Version','Kim Yu Na','Peaceful Music Romantic Guitar')], orig, 'guitar').artistName,'Kim Yu Na','… ze znacznikiem „Guitar Version" na końcu tytułu → przyjęty');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall','Gitarowe Duo','Gitara akustyczna')], orig, 'guitar'),null,'zaostrzenie: polskie „gitar…" bez znacznika/listy → odrzucony');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall','Andy Angel','Guitar Covers, Vol. 1')], orig, 'guitar').artistName,'Andy Angel','(b) wykonawca z kuratorowanej listy — bez znacznika w tytule');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall','Guitar Moods Band','Guitar Covers 2020')], orig, 'guitar').artistName,'Guitar Moods Band','(c) album „Guitar Covers" + „guitar" w nazwie wykonawcy');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall','Moods Band','Guitar Covers 2020')], orig, 'guitar'),null,'(c) bez „guitar" w nazwie wykonawcy → odrzucony');
+  eq(TS8.pickInstrumentalCover([O, it('Smells Like Teen Spirit (Acoustic Version)','Acoustic Guitar Revival',"90's Alternative Rock Hits (Acoustic Version)")], { track:'Smells Like Teen Spirit', artist:'Nirvana' }, 'guitar'),null,'pomiar: „Acoustic Version" wykonawcy z „Guitar" w nazwie (bez albumu coverów) → odrzucony');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Guitar Version) [feat. Anna]','Paco Nula','Spanish Guitar Hits')], orig, 'guitar'),null,'„feat." → odrzucony nawet z listy/znacznikiem');
+  eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Acoustic Guitar Instrumental)','singahit','Guitar Acoustic Instrumental, Vol. 19')], orig, 'guitar'),null,'wytwórnia karaoke/podkładów (lista odmów) → odrzucona');
   eq(TS8.pickInstrumentalCover([O, it('Wonderwall (Guitar Version)','Oasis & Friends')], orig, 'guitar'),null,'człon kolaboracji = oryginał → odrzucony');
   const aag={ track:'About a Girl', artist:'Nirvana' }, AO=it('About a Girl','Nirvana','Bleach');
   eq(TS8.pickInstrumentalCover([AO, it('About a Girl','The Academy Is...','Guitar Underground')], aag, 'guitar'),null,'pomiar: „guitar" tylko w nazwie kompilacji rockowej (inna piosenka, wokal) → odrzucony');
@@ -2021,6 +2085,8 @@ group('Łamigłówki: lint — oneLetterApart / ladderErrors / puzzleFieldErrors
   ok(!LR9.oneLetterApart('Hey Jude','HeyXJude') === false, 'spacja→litera to też 1 podmiana');
   const good={ slots:[{key:'a'},{key:'b'},{key:'c'}], answers:{a:['Creep','x'],b:['Creed'],c:['Greed']} };
   eq(LR9.ladderErrors(good), [], 'poprawna drabinka');
+  ok(LR9.ladderErrors({ ...good, tracks:[{title:'Creep',artist:'Radiohead'}, null, null] }).some(m=>/bez odsłuchu/.test(m)), 'drabinka z tracks → błąd (bez odsłuchu w odsłonie)');
+  ok(LR9.ladderErrors({ ...good, track:{title:'Creep',artist:'Radiohead'} }).some(m=>/bez odsłuchu/.test(m)), 'drabinka z track → błąd');
   eq(LR9.ladderErrors({ ...good, answers:{a:['Creep'],b:['Creed'],c:['Cream']} }).length, 1, 'złamany krok 2→3 (Creed→Cream)');
   eq(LR9.ladderErrors({ slots:[{key:'a'}], answers:{a:['X']} }).length, 1, '1 slot → błąd');
   ok(LR9.ladderErrors({ slots:[{key:'a'},{key:'b'}], answers:{a:['Sylwia'],b:['Sylvia']} }).some(m=>/tolerancja/.test(m)), '≥6 znaków: sąsiad zaliczany jako literówka → błąd');

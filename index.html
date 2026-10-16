@@ -125,8 +125,20 @@
   .dial-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
   .dial-head span{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.03em;color:var(--muted);text-transform:uppercase}
   .dial-head span#dialNote{color:var(--green)}
-  .ticks{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px}
+  .ticks{display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 0 4px;overscroll-behavior-x:contain}
   .ticks::-webkit-scrollbar{display:none}
+  /* rzędy kategorii (poprawka tymczasowa do czasu przeprojektowania ekranu): wąsko — poziomy scroll z PODPOWIEDZIĄ
+     (gradient + strzałka na krawędzi, gdy jest coś dalej; klasy more-l/more-r z app/rowScroll.js; kółko myszy przewija
+     poziomo); od 600 px — rzędy się ZAWIJAJĄ (siatka), bez ukrytego scrolla, którego nie da się przewinąć myszą. */
+  .ticks::before,.ticks::after{position:sticky;z-index:2;flex:0 0 34px;align-self:stretch;display:grid;place-items:center;
+    font-family:var(--display);font-weight:900;font-size:22px;color:var(--muted);pointer-events:none;opacity:0;transition:opacity .15s}
+  .ticks::before{content:'‹';left:0;margin-right:-42px;background:linear-gradient(to left, transparent, var(--ticks-fade,var(--panel)) 62%)}
+  .ticks::after{content:'›';right:0;margin-left:-42px;background:linear-gradient(to right, transparent, var(--ticks-fade,var(--panel)) 62%)}
+  .ticks.more-l::before,.ticks.more-r::after{opacity:1}
+  @media (min-width:600px){
+    .ticks,.grp-band .ticks{flex-wrap:wrap;overflow-x:visible}
+    .ticks::before,.ticks::after{display:none}
+  }
   .tick{flex:0 0 auto;font-family:var(--display);font-weight:800;font-size:16px;letter-spacing:0;
     color:var(--ink);background:var(--panel);border:2px solid var(--line);border-bottom-width:3px;border-radius:14px;
     padding:9px 14px;cursor:pointer;transition:.12s;white-space:nowrap;position:relative}
@@ -204,16 +216,6 @@
 
   /* ---- play deck / gałka ---- */
   .deck{margin-top:16px;background:var(--panel);border:2px solid var(--line);border-radius:var(--r-lg);padding:24px 20px 22px;text-align:center}
-  .knob-wrap{width:140px;height:140px;margin:0 auto;position:relative}
-  .ring{width:100%;height:100%;border-radius:50%;
-    background:conic-gradient(var(--gold) 0deg, var(--line) 0deg);
-    transition:background .12s linear;padding:8px;display:grid;place-items:center}
-  .knob{width:100%;height:100%;border-radius:50%;border:none;cursor:pointer;
-    background:var(--green);color:#fff;display:grid;place-items:center;
-    box-shadow:0 5px 0 var(--green-d);transition:transform .08s,box-shadow .08s}
-  .knob:active{transform:translateY(5px);box-shadow:0 0 0 var(--green-d)}
-  .knob svg{width:46px;height:46px;fill:currentColor}
-  .knob.live{background:var(--blue);box-shadow:0 5px 0 var(--blue-d)}
   .deck-state{font-family:var(--display);font-weight:800;font-size:var(--fs-md);letter-spacing:.01em;color:var(--muted);
     margin-top:18px;min-height:14px}
   .deck-state.err{color:var(--red);text-transform:none;letter-spacing:0;line-height:1.5;font-weight:700}
@@ -265,24 +267,33 @@
   .mc-opt:disabled{cursor:default}
   /* F8a: tryb „intro" — „+ więcej" tylko w intro; tryb „rok" — pole roku ±1 + suwak */
   body:not(.intro-mode):not(.revsnip-mode):not(.cover-mode):not(.slowmo-mode) #introMore{display:none}   /* EKSP.: + „szybciej" (zwolnione obroty) */
-  body.tempo-mode .deck-eq{display:none !important}   /* EKSP.: płyta zamiast „equalizera" */
-  /* EKSPERYMENT: zwolnione / przyspieszone obroty — płyta winylowa zamiast gałki (app/vinyl.js). Płyta zawsze czarna
-     (winyl) — czytelna w obu motywach; talerz/ramię z tokenów. Obrót: --vn-turn (s/obrót ∝ 1/tempo), start od --vn-a0. */
-  .vinyl-wrap{display:none;width:min(240px,72vw);margin:0 auto}
-  body.tempo-mode .knob-wrap{display:none}
-  body.tempo-mode .vinyl-wrap{display:block}
-  .vinyl{cursor:pointer;border-radius:var(--r-md);outline:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation}
+  /* płyta winylowa = kontrolka odtwarzania we wszystkich trybach z dźwiękiem (app/vinyl.js). Płyta zawsze czarna (winyl)
+     — czytelna w obu motywach; talerz/ramię/środek z tokenów. Obrót: --vn-turn (s/obrót ∝ 1/tempo), start od --vn-a0.
+     Rozmiar responsywny (mieści się na 320 px). Postęp zajawki = złoty łuk na obwodzie (.vn-prog, dawny pierścień gałki). */
+  .vinyl-wrap{width:min(220px,64vw);margin:0 auto}
+  .vinyl{cursor:pointer;border-radius:var(--r-md);outline:none;-webkit-tap-highlight-color:transparent;touch-action:manipulation;user-select:none;-webkit-user-select:none}
   .vinyl:focus-visible{box-shadow:0 0 0 3px var(--blue)}
   .vinyl svg{display:block;width:100%;height:auto;overflow:visible}
   .vn-platter{fill:var(--panel2);stroke:var(--line);stroke-width:2}
+  .vn-prog{fill:none;stroke:var(--gold);stroke-width:3.2;stroke-linecap:butt;transition:stroke-dashoffset .12s linear}
+  .vinyl[data-state="idle"] .vn-prog{opacity:0}
   .vn-grooves circle{fill:none;stroke:#fff;stroke-opacity:.07;stroke-width:.8}
   .vn-grooves circle:nth-child(3n){stroke-opacity:.13}
   .vn-label{fill:var(--gold);stroke:#000;stroke-opacity:.25;stroke-width:1}
-  .vn-q{font-family:var(--display);font-weight:900;font-size:30px;fill:#3C3C3C}
+  .vn-q{font-family:var(--display);font-weight:900;font-size:15px;fill:#3C3C3C}
   .vn-dot{fill:#3C3C3C;opacity:.55}
   .vinyl.revealed .vn-q,.vinyl.revealed .vn-dot{display:none}
-  .vn-hole{fill:var(--panel2);stroke:#000;stroke-opacity:.4}
   .vn-sheen{pointer-events:none}
+  /* środek: STATYCZNY przycisk z ikoną stanu (nie kręci się z płytą) */
+  .vn-ctl-bg{fill:rgba(0,0,0,.62);stroke:rgba(255,255,255,.9);stroke-width:1.6;transition:fill .15s}
+  .vn-ic{fill:#fff;color:#fff}
+  .vinyl:hover .vn-ctl-bg,.vinyl:focus-visible .vn-ctl-bg{fill:var(--green)}
+  .vinyl[data-state="playing"]:hover .vn-ctl-bg{fill:var(--blue)}
+  .vinyl[data-state="error"] .vn-ctl-bg{fill:var(--red)}
+  .vinyl[data-state="loading"] .vn-ctl-bg{fill:rgba(0,0,0,.72);animation:vnPulse 1.1s ease-in-out infinite}
+  .vn-spin{transform-box:fill-box;transform-origin:center;animation:vnSpinIc .9s linear infinite}
+  @keyframes vnSpinIc{to{transform:rotate(360deg)}}
+  @keyframes vnPulse{50%{stroke-opacity:.35}}
   .vn-disc{transform-box:view-box;transform-origin:100px 100px}
   .vinyl.spinning .vn-disc{animation:vnSpin var(--vn-turn,1.8s) linear infinite}
   @keyframes vnSpin{from{transform:rotate(var(--vn-a0,0deg))}to{transform:rotate(calc(var(--vn-a0,0deg) + 360deg))}}
@@ -294,10 +305,12 @@
   .vn-arm-head{fill:#6b7480}
   .vn-arm-pivot{fill:#6b7480}
   html.dark .vn-arm-tube{stroke:#c3cbd4} html.dark .vn-arm-head,html.dark .vn-arm-pivot{fill:#9aa3ad}
-  .vinyl.still .vn-disc{animation:none !important}
+  .vinyl.still .vn-disc,.vinyl.still .vn-spin{animation:none !important}
   .vinyl.still .vn-arm{transition:none !important}
-  @media (prefers-reduced-motion: reduce){ .vn-disc{animation:none !important;transition:none !important} .vn-arm{transition:none !important} }
-  body:not(.tempo-mode) .vinyl-wrap{display:none}
+  @media (prefers-reduced-motion: reduce){ .vn-disc,.vn-spin,.vn-ctl-bg{animation:none !important;transition:none !important} .vn-arm{transition:none !important} }
+  /* MP: płyta w fazie „słuchaj" (mniejsza; salon — większa) */
+  .mp-vinyl{width:min(190px,56vw);margin:4px auto 0}
+  #mpStage.salon .mp-vinyl{width:min(300px,60vw)}
   /* EKSPERYMENT: „oś czasu" (Hitster) — pionowa oś kart (rok duży, tytuł/wykonawca małe) ze szczelinami „tu";
      scroll w obrębie osi (auto-scroll do ostatnio wstawionej), kompaktowo na 320 px */
   .tl{position:relative;border:2px solid var(--line);border-radius:var(--r-md);background:var(--panel2)}
@@ -379,8 +392,24 @@
   .score b{display:block;font-family:var(--display);font-weight:900;font-size:26px;letter-spacing:0;color:var(--ink);margin-top:3px}
   .score .hot b{color:var(--gold)}
   .score .pts b{color:var(--part-ink)}
-  .foot{text-align:center;font-family:var(--body);font-weight:700;font-size:var(--fs-xs);letter-spacing:.02em;color:var(--muted);
-    margin-top:24px;line-height:1.7}
+  .foot{text-align:center;font-family:var(--body);font-weight:700;font-size:12px;letter-spacing:.02em;color:var(--muted);
+    margin-top:14px;line-height:1.5;opacity:.85}
+  /* legenda punktacji: przycisk pod wynikiem + dymek nad nim (zamyka ✕ / Esc / klik poza) */
+  .legend{position:relative;text-align:center;margin-top:2px}
+  .legend-btn{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);background:transparent;border:2px solid var(--line);
+    border-radius:999px;padding:5px 12px;cursor:pointer;letter-spacing:.01em}
+  .legend-btn:hover,.legend-btn[aria-expanded="true"]{color:var(--ink);border-color:var(--blue)}
+  .legend-btn:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
+  .legend-pop{position:absolute;left:50%;bottom:calc(100% + 8px);transform:translateX(-50%);z-index:30;width:min(340px,calc(100vw - 32px));
+    background:var(--panel);border:2px solid var(--line);border-radius:var(--r-md);box-shadow:0 10px 28px rgba(0,0,0,.18);padding:12px 14px;text-align:left}
+  .legend-pop[hidden]{display:none}
+  .legend-pop::after{content:'';position:absolute;left:50%;bottom:-8px;width:12px;height:12px;margin-left:-6px;background:var(--panel);
+    border-right:2px solid var(--line);border-bottom:2px solid var(--line);transform:rotate(45deg)}
+  .legend-h{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .legend-h b{font-family:var(--display);font-weight:900;font-size:var(--fs-md);color:var(--ink)}
+  .legend-mode{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--blue-d)}
+  .legend-x{margin-left:auto;width:28px;height:28px;border-radius:50%;border:2px solid var(--line);background:var(--panel2);color:var(--muted);cursor:pointer;font-size:12px;line-height:1}
+  .legend-tx{margin:0;font-family:var(--body);font-weight:700;font-size:14px;line-height:1.6;color:var(--ink)}
 
   /* ---- tryb muzyka/lektor ---- */
   .modepick{display:flex;gap:8px;justify-content:center;flex-wrap:wrap;margin-bottom:14px}
@@ -496,11 +525,11 @@
   .stat-cat .pct{min-width:38px;text-align:right;color:var(--muted);font-size:12px}
   body:not(.solo) .dial, body:not(.solo) .session, body:not(.solo) .deck,
   body:not(.solo) .form, body:not(.solo) .reveal, body:not(.solo) .summary,
-  body:not(.solo) .score, body:not(.solo) .foot{display:none}
+  body:not(.solo) .score, body:not(.solo) .foot, body:not(.solo) .legend{display:none}
   /* solo: ekran układania meczu (.dial) vs ekran gry (deck/form/…) */
   body.solo:not(.playing) .deck, body.solo:not(.playing) .form, body.solo:not(.playing) .reveal,
   body.solo:not(.playing) .summary, body.solo:not(.playing) .score, body.solo:not(.playing) .session,
-  body.solo:not(.playing) .foot{display:none}
+  body.solo:not(.playing) .foot, body.solo:not(.playing) .legend{display:none}
   body.solo.playing .dial{display:none}
   body.solo.playing #modePick{display:none}   /* tryb ustala slot meczu, nie ręcznie */
   .match-rand{width:100%;margin-top:14px;font-family:var(--display);font-weight:800;font-size:13px;letter-spacing:.02em;
@@ -1056,19 +1085,9 @@
   body.solo.playing .deck .lyric-box .rebus-hint{color:#cfe9ff}   /* Łamigłówki: podpowiedź pod rebusem na ciemnym decku */
   body.solo.playing .deck .mini button{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
   body.solo.playing .deck .mini button:disabled{opacity:.35}
-  .deck-eq{display:none;align-items:flex-end;justify-content:center;gap:4px;height:30px;margin-top:16px}
-  body.solo.playing .deck-eq{display:flex}
   /* QUIZ (wiedza ogólna): brak audio → ukryj gałkę, equalizer, „lepszy głos" i „od nowa" */
-  body.quiz-mode .knob-wrap, body.quiz-mode .deck-eq, body.quiz-mode .voice-toggle, body.quiz-mode #replay, body.quiz-mode .foot-src{display:none !important}   /* F8b: legenda punktacji quizu zostaje */
-  body.cover-mode .knob-wrap, body.cover-mode .deck-eq, body.cover-mode .voice-toggle, body.cover-mode #replay, body.cover-mode .foot-src{display:none !important}   /* EKSP.: okładka bez audio */
-  .deck-eq i{width:6px;border-radius:3px;background:var(--blue)}
-  .deck-eq i:nth-child(1){height:14px;animation:mpeq .9s ease-in-out infinite}
-  .deck-eq i:nth-child(2){height:26px;animation:mpeq .9s .1s ease-in-out infinite}
-  .deck-eq i:nth-child(3){height:18px;animation:mpeq .9s .2s ease-in-out infinite}
-  .deck-eq i:nth-child(4){height:30px;animation:mpeq .9s .3s ease-in-out infinite}
-  .deck-eq i:nth-child(5){height:12px;animation:mpeq .9s .4s ease-in-out infinite}
-  .deck-eq i:nth-child(6){height:22px;animation:mpeq .9s .5s ease-in-out infinite}
-  .deck-eq i:nth-child(7){height:16px;animation:mpeq .9s .6s ease-in-out infinite}
+  body.quiz-mode .vinyl-wrap, body.quiz-mode .voice-toggle, body.quiz-mode #replay, body.quiz-mode .foot-src{display:none !important}   /* F8b: legenda punktacji quizu zostaje */
+  body.cover-mode .vinyl-wrap, body.cover-mode .voice-toggle, body.cover-mode #replay, body.cover-mode .foot-src{display:none !important}   /* EKSP.: okładka bez audio */
 
   /* ===== DESIGN v2 — Fala 7: odsłona solo (nagłówek wyniku) ===== */
   .rv-shead{display:none;align-items:center;gap:14px;padding:18px 18px;border-bottom:2px solid var(--line)}
@@ -1204,7 +1223,6 @@
   .grp-chip.mode.open{box-shadow:none}
   .grp-band{display:none;margin-top:11px}
   .grp-band.open{display:block;animation:scrIn .25s cubic-bezier(.2,.8,.2,1) both}
-  .grp-band .ticks{overflow-x:auto}
   .band-sub{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);letter-spacing:.03em;color:var(--muted);text-transform:uppercase;margin:0 2px 8px}
   .um-rounds{display:flex;gap:8px}
   /* F6a (R-F2): segment długości meczu — nazwa + liczba pytań */
@@ -1666,43 +1684,10 @@
       <button data-mode="snippet"><svg class="bbic" viewBox="0 0 256 256" width="1em" height="1em" fill="currentColor" aria-hidden="true"><path d="M238.78 183.79L98.28 87.65A40.2 40.2 0 0 0 100 76a40 40 0 1 0-15.29 31.45l30 20.56l-30 20.56a40 40 0 1 0 3.57 59.74A39.73 39.73 0 0 0 100 180a40.2 40.2 0 0 0-1.72-11.66l37.72-25.8l89.22 61.06a12 12 0 0 0 13.56-19.81m-167.47 7.54A16 16 0 1 1 76 180a16 16 0 0 1-4.69 11.33M48.69 87.3a16 16 0 1 1 22.62 0a16 16 0 0 1-22.62 0m112.82 23.24a12 12 0 0 1 3.13-16.68l60.58-41.46a12 12 0 0 1 13.56 19.81l-60.59 41.46a12 12 0 0 1-16.68-3.13"/></svg> fragment</button>
     </div>
     <button class="voice-toggle" id="piperToggle">🎙 lepszy głos: wył.</button>
-    <div class="knob-wrap">
-      <div class="ring" id="ring">
-        <button class="knob" id="knob" aria-label="Odtwórz">
-          <svg id="knobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
-        </button>
-      </div>
-    </div>
-    <!-- EKSPERYMENT: płyta winylowa (zwolnione / przyspieszone obroty) — app/vinyl.js; widoczna tylko w body.tempo-mode -->
+    <!-- płyta winylowa = play/pauza we wszystkich trybach z dźwiękiem (app/vinyl.js wstawia SVG; postęp na obwodzie) -->
     <div class="vinyl-wrap">
-      <div class="vinyl" id="vinyl" role="button" tabindex="0" aria-pressed="false" aria-label="Odtwórz płytę" data-state="idle" data-rate="1">
-        <svg viewBox="0 0 240 200" aria-hidden="true" focusable="false">
-          <defs>
-            <radialGradient id="vnBody" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#262626"/><stop offset=".72" stop-color="#141414"/><stop offset="1" stop-color="#050505"/></radialGradient>
-            <linearGradient id="vnSheen" x1="0" y1="0" x2="1" y2="1"><stop offset=".18" stop-color="#fff" stop-opacity="0"/><stop offset=".38" stop-color="#fff" stop-opacity=".16"/><stop offset=".46" stop-color="#fff" stop-opacity="0"/><stop offset=".6" stop-color="#fff" stop-opacity="0"/><stop offset=".74" stop-color="#fff" stop-opacity=".09"/><stop offset=".84" stop-color="#fff" stop-opacity="0"/></linearGradient>
-            <clipPath id="vnLabelClip"><circle cx="100" cy="100" r="31"/></clipPath>
-          </defs>
-          <circle class="vn-platter" cx="100" cy="100" r="99"/>
-          <g class="vn-disc" id="vinylDisc">
-            <circle cx="100" cy="100" r="96" fill="url(#vnBody)"/>
-            <g class="vn-grooves" transform="translate(100 100)"><circle r="40"/><circle r="44"/><circle r="48"/><circle r="52"/><circle r="56"/><circle r="60"/><circle r="64"/><circle r="68"/><circle r="72"/><circle r="76"/><circle r="80"/><circle r="84"/><circle r="88"/><circle r="92"/></g>
-            <circle class="vn-label" cx="100" cy="100" r="31"/>
-            <text class="vn-q" x="100" y="111" text-anchor="middle">?</text>
-            <circle class="vn-dot" cx="100" cy="78" r="2.4"/>
-            <image id="vinylArt" x="69" y="69" width="62" height="62" clip-path="url(#vnLabelClip)" preserveAspectRatio="xMidYMid slice" href="" visibility="hidden"/>
-            <circle class="vn-hole" cx="100" cy="100" r="3.2"/>
-          </g>
-          <circle class="vn-sheen" cx="100" cy="100" r="96" fill="url(#vnSheen)"/>
-          <g class="vn-arm" id="vinylArm">
-            <circle class="vn-arm-base" cx="214" cy="28" r="12"/>
-            <path class="vn-arm-tube" d="M214 28 L208 92 L168 148"/>
-            <rect class="vn-arm-head" x="158" y="142" width="16" height="11" rx="2.5" transform="rotate(-36 166 148)"/>
-            <circle class="vn-arm-pivot" cx="214" cy="28" r="4.5"/>
-          </g>
-        </svg>
-      </div>
+      <div class="vinyl" id="vinyl" role="button" tabindex="0" aria-pressed="false" aria-label="Odtwórz płytę" data-state="idle" data-rate="1"></div>
     </div>
-    <div class="deck-eq" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
     <div class="deck-state" id="state" role="status" aria-live="polite">naciśnij, żeby wylosować</div>
     <button class="offline-play" id="offlinePlay" type="button" hidden>Zagraj offline: Lektor / Wiedza</button>
     <div class="lyric-box" id="lyricBox" aria-live="polite" hidden></div>
@@ -1753,7 +1738,16 @@
     <div class="pts"><span>punkty</span><b id="sPoints">0</b></div>
     <div><span>trafione</span><b id="sScore">0 / 0</b></div>
   </div>
-  <div class="foot"><span class="foot-src">źródło: iTunes Search API · 30 s zajawki<br></span><span id="footLegend">tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2</span></div>
+  <!-- legenda punktacji bieżącego trybu: mały przycisk przy wyniku/serii → dymek (dawniej stały podpis w stopce) -->
+  <div class="legend" id="legend">
+    <button class="legend-btn" id="legendBtn" type="button" aria-expanded="false" aria-controls="legendPop">ℹ️ jak liczymy punkty</button>
+    <div class="legend-pop" id="legendPop" role="dialog" aria-labelledby="legendTitle" hidden>
+      <div class="legend-h"><b id="legendTitle">Jak liczymy punkty</b><span class="legend-mode" id="legendMode"></span>
+        <button class="legend-x" id="legendClose" type="button" aria-label="Zamknij legendę punktacji">✕</button></div>
+      <p class="legend-tx" id="footLegend">tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2</p>
+    </div>
+  </div>
+  <div class="foot"><span class="foot-src">źródło: iTunes Search API · 30 s zajawki</span></div>
 
 <script type="module" src="quiz-loader.js"></script>
 <script>

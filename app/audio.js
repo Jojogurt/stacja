@@ -8,11 +8,11 @@
  * NotAllowedError i dodatkowym stuknięciem.
  * F2a #15: listenery są trwałe i działają TYLKO na bieżącą rundę odtwarzania (`round`), którą
  * stopAudio zeruje — spóźnione zdarzenia poprzedniej rundy nic nie ruszają. */
-import { setIcon, setRing, setState } from './dom.js';
+import { setIcon, setRing, setState, setLive } from './dom.js';
 import { lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { ensureCtx, ensureCtxResumed, unlockCtx } from './audioCtx.js';
 import { playReverse, unlockAudioElement, fetchAudioBytes, sliceBuffer, buildMedleyBuffer, playBuffer, decodeAudio, setElementRate } from '../adapters-web/webAudio.js';
-import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs, revsnipEnd, revsnipWindow, medleyClipStart, MEDLEY_CLIP_S, MEDLEY_GAP_S, isTempoMode, tempoRate } from '../core/timing.js';
+import { SNIP_SECS as SNIP, soloSnipStart, introStageSecs, revsnipEnd, revsnipWindow, medleyClipStart, medleyLabel, MEDLEY_CLIP_S, MEDLEY_GAP_S, MEDLEY_LEAD_S, MEDLEY_TICK_LEAD_S, isTempoMode, tempoRate } from '../core/timing.js';
 import { MEDLEY_MIN } from '../core/trackSelect.js';
 import { registerMusicProbe, playSfx } from './sfx.js';
 
@@ -33,7 +33,7 @@ export function initAudio({ current, mode, newRound, gen, busy }){
 }
 
 function armControls(){
-  document.getElementById('knob').classList.add('live');
+  setLive(true);
   document.getElementById('check').disabled=false;
   document.getElementById('replay').disabled=false;
   document.getElementById('skip').disabled=false;
@@ -47,15 +47,17 @@ function ensureEl(){
   // ikona gałki STEROWANA REALNYM stanem odtwarzacza (nie optymistycznie) — #1/#3
   el.addEventListener('playing',()=>{ if(!round) return; setIcon('pause');
     if(round.mode==='intro'){ armIntroStop(); setState('intro '+introStageSecs(round.cur.introStage)+' s…'); return; }   // F8a
-    if(round.mode==='medley'){ setState('składanka '+(round.ci+1)+'/'+round.cur.clips.length+'…'); return; }   // EKSPERYMENT (zapas na <audio>)
+    if(round.mode==='medley'){ setState('fragment '+(round.ci+1)+'/'+round.cur.clips.length+'…'); return; }   // EKSPERYMENT (zapas na <audio>): licznik fragmentów
     if(!round.said){ round.said=true; setState(round.mode==='snippet'?'słuchaj — krótki fragment!':(round.mode==='reverse'?'„od tyłu" niedostępne tutaj — gram normalnie':(round.mode==='tempo'?tempoPlayingState(round.rate):'słuchaj uważnie…'))); } });
   el.addEventListener('play',   ()=>{ if(round) setIcon('pause'); });
-  el.addEventListener('pause',  ()=>{ if(round && round.stopT) clearTimeout(round.stopT); if(round && !el.ended) setIcon('play'); });   // F8a: pauza intro wstrzymuje timer etapu
+  el.addEventListener('pause',  ()=>{ if(round && round.stopT) clearTimeout(round.stopT);
+    if(round && round.mode==='medley' && round.snipDone) return;   // EKSPERYMENT: przerwa między wycinkami składanki — to nie pauza gracza
+    if(round && !el.ended) setIcon('play'); });   // F8a: pauza intro wstrzymuje timer etapu
   el.addEventListener('waiting',()=>{ if(round) setIcon('wait'); });
   // 2.2: 404/stall zajawki → nie zawieszaj rundy; pokaż komunikat i odblokuj pomiń/sprawdź
   el.addEventListener('error',  ()=>{ if(!round) return; if(round.mode==='medley'){ medleyElNext(); return; }   // EKSPERYMENT: zepsuty wycinek → następny
     if(round.mode==='intro') round.cur.introBroken=true;   // F8a: bez zajawki intro = jak muzyka (bez mnożnika)
-    setIcon('play'); setState('zajawka niedostępna — pomiń albo sprawdź'); armControls(); });
+    setIcon('error'); setState('zajawka niedostępna — pomiń albo sprawdź'); armControls(); });
   el.addEventListener('ended',  ()=>{ if(!round) return; if(round.mode==='medley'){ medleyElNext(); return; }
     round=null; setIcon('play'); setRing(1); setState('koniec zajawki · ↻ od nowa'); });
   el.addEventListener('loadedmetadata',()=>{
@@ -114,7 +116,7 @@ function startIntro(){
   try{ el.currentTime=0; }catch(_e){}
   playEl();
 }
-/* ===== EKSPERYMENT: „składanka" — 4 wycinki × 1,5 s, przerwa 250 ms + cichy tik =====
+/* ===== EKSPERYMENT: „składanka" — 4 wycinki × 1,5 s, przerwa 3 s, cichy „tik" przed każdym wycinkiem, licznik „fragment k/n" =====
  * Tor główny: WebAudio (patrz adapters-web/webAudio.js — dlaczego nie <audio> na iOS). Wszystkie zajawki pobierane
  * RÓWNOLEGLE, dekodowane po kolei (mniejszy szczyt pamięci: ~10 MB na zdekodowane 30 s), z każdej zostaje tylko
  * wycinek → jeden sklejony bufor `cur.medleyBuf`. Zapas (WebAudio/CORS padło, < MEDLEY_MIN wycinków): kolejne
@@ -137,12 +139,12 @@ export async function loadMedley(cur, { onProgress, alive=()=>true }={}){
     }catch(_e){ clips[i].ok=false; }
     done++; if(onProgress) onProgress(done, clips.length);
   }
-  cur.medleyBuf = parts.length>=Math.min(MEDLEY_MIN, clips.length) ? buildMedleyBuffer(ctx, parts, { gap:MEDLEY_GAP_S }) : null;
+  cur.medleyBuf = parts.length>=Math.min(MEDLEY_MIN, clips.length) ? buildMedleyBuffer(ctx, parts, { gap:MEDLEY_GAP_S, lead:MEDLEY_LEAD_S, tickLead:MEDLEY_TICK_LEAD_S }) : null;
   if(cur.medleyBuf) cur.playedClips=clips.filter(c=>c.ok);   // odsłona: tytuły, które NAPRAWDĘ zagrały
   return parts.length;
 }
 // wspólny start bufora WebAudio z obsługą iOS (kontekst wstrzymany poza gestem) i tokenem rundy
-async function startBuffer(make, { playingState, endState, rate=1, offset=0, onEnd }){
+async function startBuffer(make, { playingState, endState, rate=1, offset=0, onEnd, onPos }){
   const gen=getGen();
   if(bufStartGen===gen) return;   // start tej rundy w toku (np. czeka na gest) — drugi klik nie gra drugi raz
   bufStartGen=gen;
@@ -155,7 +157,7 @@ async function startBuffer(make, { playingState, endState, rate=1, offset=0, onE
     const buf=await make(ctx);
     if(getGen()!==gen || !getCurrent()) return;
     if(!buf) return 'fail';
-    revSrc=playBuffer(ctx, buf, { rate, offset, onProgress:f=>setRing(f), onEnded:()=>{ revSrc=null; if(onEnd) onEnd(); setIcon('play'); setRing(1); setState(endState); } });
+    revSrc=playBuffer(ctx, buf, { rate, offset, onProgress:f=>{ setRing(f); if(onPos) onPos(f*(buf.duration||0)); }, onEnded:()=>{ revSrc=null; if(onEnd) onEnd(); setIcon('play'); setRing(1); setState(endState); } });
     setIcon('pause'); setState(playingState); armControls();
   } catch(_e){ return 'fail'; }
   finally { if(bufStartGen===gen) bufStartGen=null; }
@@ -163,7 +165,10 @@ async function startBuffer(make, { playingState, endState, rate=1, offset=0, onE
 async function startMedley(){
   const cur=getCurrent();
   if(!cur.medleyBuf){ startMedleyEl(); return; }
-  await startBuffer(async()=>cur.medleyBuf, { playingState:'słuchaj — składanka ('+(cur.playedClips||cur.clips).length+' utwory)!', endState:'koniec składanki · ↻ od nowa' });
+  const n=(cur.playedClips||cur.clips).length;
+  let last=medleyLabel(0, n);   // licznik „fragment k/n" / „przerwa · zaraz fragment k/n" — setState tylko przy zmianie
+  const onPos=t=>{ const tx=medleyLabel(t, n); if(tx!==last && !/^koniec/.test(tx)){ last=tx; setState(tx); } };
+  await startBuffer(async()=>cur.medleyBuf, { playingState:'składanka: '+n+' utwory — '+medleyLabel(0, n), endState:'koniec składanki · ↻ od nowa', onPos });
 }
 function startMedleyEl(){ const cur=getCurrent(); armControls(); medleyElClip(cur, 0); }
 function medleyElClip(cur, i){
@@ -173,7 +178,8 @@ function medleyElClip(cur, i){
   ensureEl();
   round={ cur, mode:'medley', ci:i, said:true, seeked:false, snipDone:false, clipStart:null };
   el.muted=false; el.src=clips[i].preview;
-  setIcon('wait'); setState('składanka '+(i+1)+'/'+clips.length+' — ładowanie…');
+  playSfx('tick');   // cichy „tik" na początku KAŻDEGO wycinka (zapas: dźwięk UI) — nowy utwór
+  setIcon('wait'); setState('fragment '+(i+1)+'/'+clips.length+' — ładowanie…');
 }
 function medleyElTick(){
   const r=round, n=r.cur.clips.length;
@@ -186,8 +192,9 @@ function medleyElNext(){
   const r=round; if(!r || r.mode!=='medley' || r.snipDone) return;
   r.snipDone=true; r.cur.clips[r.ci].ok=true;
   try{ el.pause(); }catch(_e){}
-  playSfx('tick');   // cichy „tik" między wycinkami (zapas: dźwięk UI)
-  setTimeout(()=>{ if(round===r) medleyElClip(r.cur, r.ci+1); }, MEDLEY_GAP_S*1000);
+  const n=r.cur.clips.length;
+  if(r.ci+1<n){ setIcon('pause'); setState('przerwa · zaraz fragment '+(r.ci+2)+'/'+n); }   // przerwa 3 s — „gra" dalej (płyta się kręci)
+  setTimeout(()=>{ if(round===r) medleyElClip(r.cur, r.ci+1); }, (r.ci+1<n ? MEDLEY_GAP_S : 0)*1000);
 }
 
 /* ===== EKSPERYMENT: „od tyłu krótko" — okno 3 s (etap „dłużej": 5 s) z zajawki, odwrócone =====
@@ -253,12 +260,12 @@ function playEl(){
 }
 
 // załaduj zajawkę bieżącej rundy na trwały element
-function loadEl(cur, mode, rate=1){
+function loadEl(cur, mode, rate=1, src=cur.preview){
   ensureEl();
   round={ cur, mode, said:false, seeked:false, snipDone:false, rate };
   el.muted=false;
   setElementRate(el, rate);   // EKSPERYMENT: trwały element — tempo zawsze ustawiane (inne tryby: 1.0× z zachowaną wysokością)
-  el.src=cur.preview;
+  el.src=src;
   setIcon('wait'); setState('ładowanie…');
 }
 
@@ -269,6 +276,8 @@ export function startAudio(){
   const mode=getMode(), current=getCurrent();
   if(!current) return;
   if(mode==='cover' || mode==='quiz') return;          // EKSPERYMENT: okładka — bez audio
+  // odsłona (płyta z okładką, ikona ▶ = oryginał): od tyłu / fragment / od tyłu krótko / fortepian / gitara grają ORYGINAŁ
+  if(current.origReveal && (current.origPreview || current.preview)){ loadEl(current, 'music', 1, current.origPreview || current.preview); playEl(); return; }
   if(mode==='reverse'){ return startReverse(); }
   if(mode==='revsnip'){ return startRevsnip(); }       // EKSPERYMENT
   if(mode==='medley'){ return startMedley(); }         // EKSPERYMENT
@@ -321,7 +330,7 @@ export function stopAudio(){
   if(r && r.stopT) clearTimeout(r.stopT);     // F8a: timer końca etapu „intro"
   if(el && r){ try{ el.pause(); }catch(_e){} }
   if(revSrc){ revSrc.stop(); revSrc=null; }   // uchwyt z playReverse sam czyści timer
-  lektorStop(); setRing(0); document.getElementById('knob').classList.remove('live');
+  lektorStop(); setRing(0); setLive(false);
   audioSession('ambient');   // koniec zajawki → oddaj dźwięk muzyce w tle
 }
 

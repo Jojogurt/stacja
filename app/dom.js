@@ -15,22 +15,13 @@ export function lsSet(key, value){ try{ localStorage.setItem(key, String(value))
 const knobObs=[], ringObs=[];
 export function onKnob(fn){ if(typeof fn==='function') knobObs.push(fn); }
 export function onRing(fn){ if(typeof fn==='function') ringObs.push(fn); }
-// ikona pokrętła odtwarzania: play / pause / wait (spinner)
-export function setIcon(mode){
-  knobObs.forEach(f=>{ try{ f(mode); }catch(_e){} });
-  const i=document.getElementById('knobIcon');
-  if(mode==='pause') i.innerHTML='<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>';
-  else if(mode==='wait') i.innerHTML='<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>';
-  else i.innerHTML='<path d="M8 5v14l11-7z"/>';
-  // F2a #20: etykieta dla czytnika ekranu zgodna ze stanem gałki (wcześniej zawsze „Odtwórz")
-  const k=document.getElementById('knob');
-  if(k) k.setAttribute('aria-label', mode==='pause' ? 'Pauza' : (mode==='wait' ? 'Ładowanie…' : 'Odtwórz'));
-}
-
-// pierścień postępu (0..1) wokół pokrętła
-export function setRing(p){ document.getElementById('ring').style.background=
-  `conic-gradient(var(--gold) ${Math.max(0,Math.min(1,p))*360}deg, var(--line) 0deg)`;
-  ringObs.forEach(f=>{ try{ f(p); }catch(_e){} }); }
+// stan odtwarzacza solo: play / pause / wait (ładowanie) / error — płyta winylowa (app/vinyl.js) słucha przez onKnob.
+// (dawna okrągła gałka #knob zastąpiona płytą we wszystkich trybach — poprawki po testach)
+export function setIcon(mode){ knobObs.forEach(f=>{ try{ f(mode); }catch(_e){} }); }
+// postęp zajawki (0..1) — złoty łuk na obwodzie płyty + ramię gramofonu (onRing)
+export function setRing(p){ ringObs.forEach(f=>{ try{ f(p); }catch(_e){} }); }
+// „runda uzbrojona" (dawniej .knob.live) — klasa na płycie
+export function setLive(on){ const v=document.getElementById('vinyl'); if(v) v.classList.toggle('live', !!on); }
 
 export function setState(t){ const e=document.getElementById('state'); e.classList.remove('err'); e.textContent=t; }
 export function flash(t){ const e=document.getElementById('state'); e.classList.add('err'); e.textContent=t; setIcon('play'); }

@@ -87,7 +87,7 @@ await group('audio: mecz solo → newRound → startAudio (ścieżka audio)', as
   ok($(window,'check') && $(window,'check').disabled===false, 'startAudio dograł: przycisk „sprawdź" odblokowany');
 });
 
-await group('lektor: tryb lektor → knob → synteza mowy (app/lektor.js)', async ()=>{
+await group('lektor: tryb lektor → płyta (play) → synteza mowy (app/lektor.js)', async ()=>{
   const { lyrics:lyrKey } = catsByKind(window);
   if(!lyrKey){ ok(true, '(brak kategorii lyrics — pomijam)'); return; }
   resetSelection(window);
@@ -101,8 +101,9 @@ await group('lektor: tryb lektor → knob → synteza mowy (app/lektor.js)', asy
   click(window,'matchStart');
   await settle(10);
   ok(window.document.body.classList.contains('playing'), 'mecz lektor wystartował');
-  // knob → toggleAudio (mode=lektor) → lektorPlay → speak
-  $(window,'knob').click();
+  // płyta → toggleAudio (mode=lektor) → lektorPlay → speak
+  ok(!$(window,'knob'), 'okrągła gałka usunięta — kontrolką jest płyta');
+  $(window,'vinyl').click();
   await settle(6);
   ok(spoke>0, 'lektor: synteza mowy wywołana (speechSynthesis.speak)');
 });
@@ -340,7 +341,7 @@ await group('F2a #4: „pomiń" po „Sprawdź" zablokowane (bez podwójnego wpi
   ok(rows.length===1, '#4: podsumowanie ma 1 wiersz dla 1 ocenionego pytania (jest '+rows.length+')');
   ok(window.document.body.classList.contains('match-over'), '#10: body.match-over (deck/formularz schowane CSS)');
   ok($(window,'check').disabled && $(window,'skip').disabled && $(window,'replay').disabled, '#10: Sprawdź/pomiń/od nowa wyłączone po Zakończ');
-  ok(!$(window,'knob').classList.contains('live'), '#10: gałka nieaktywna');
+  ok(!$(window,'vinyl').classList.contains('live'), '#10: płyta nieaktywna');
   $(window,'fTitle').value='Test Song';
   const ev2=new window.KeyboardEvent('keydown',{ key:'Enter', bubbles:true, cancelable:true });
   $(window,'fTitle').dispatchEvent(ev2); $(window,'check').onclick(); await settle(2);
@@ -409,7 +410,7 @@ await group('F2a #16: lektor — błąd syntezy / koniec i błąd pre-gen audio 
     ok(utt && typeof utt.onerror==='function', 'wypowiedź ma onerror');
     utt.onerror({ error:'synthesis-failed' });
     ok(/przerwany|ponownie/.test(txt(window,'state')), 'onerror → stan „odtwórz ponownie": '+txt(window,'state'));
-    ok(/Odtwórz/.test($(window,'knob').getAttribute('aria-label')), 'gałka wraca do „Odtwórz"');
+    ok(/Odtwórz/.test($(window,'vinyl').getAttribute('aria-label')), 'płyta wraca do „Odtwórz…" — '+$(window,'vinyl').getAttribute('aria-label'));
   } finally { ss.speak=origSpeak; }
   const n=audioInstances.length;
   await lektorMod.lektorPlay('tekst', 'https://x/tts-err.mp3', (t)=>{ $(window,'state').textContent=t; }); await settle(4);
@@ -443,7 +444,12 @@ await group('F2a #20: ABCD — aria-pressed + ✓/✗ tekstem; gałka z aria-lab
   click(window,'sessEnd'); await settle(2);
   const { audio } = catsByKind(window);
   await f2aStartMatch(audio, /muzyka/);
-  ok($(window,'knob').getAttribute('aria-label')==='Pauza', 'gałka gra → aria-label „Pauza" (jest: '+$(window,'knob').getAttribute('aria-label')+')');
+  const vv=$(window,'vinyl');
+  ok(vv.getAttribute('aria-label')==='Pauza — płyta gra', 'płyta gra → aria-label „Pauza — płyta gra" (jest: '+vv.getAttribute('aria-label')+')');
+  ok(vv.dataset.state==='playing' && vv.dataset.rate==='1' && vv.style.getPropertyValue('--vn-turn')==='1.80s' && vv.classList.contains('spinning'), 'muzyka: płyta kręci się 1.0× (1,8 s/obrót)');
+  ok(vv.getAttribute('role')==='button' && vv.getAttribute('tabindex')==='0' && vv.getAttribute('aria-pressed')==='true', 'dostępność: role=button, tabindex, aria-pressed');
+  ok((vv.querySelector('.vn-ic')||{}).dataset.icon==='pause', 'środek płyty: ikona ❚❚');
+  ok(!window.document.querySelector('.knob-wrap') && !window.document.querySelector('.deck-eq'), 'bez gałki i „equalizera"');
   click(window,'sessEnd'); await settle(2);
 });
 
@@ -614,10 +620,17 @@ await group('MP: tryb fragment — po dograniu klik gra fragment OD NOWA (nie re
   a.currentTime = START + SNIP + 0.1; a.emit('timeupdate'); await settle(2);
   ok(a.paused && a._snipEnd, 'po fragmencie: pauza + flaga _snipEnd');
   ok(/↻ jeszcze raz/.test(($(w,'mpPlayStatus')||{}).textContent||''), 'status: „fragment · ↻ jeszcze raz"');
-  ok(/M17\.65/.test(($(w,'mpKnobIcon')||{}).innerHTML||''), 'ikona gałki = replay (↻)');
+  ok(/M17\.65/.test(($(w,'mpKnobIcon')||{}).innerHTML||''), 'ikona płyty = replay (↻)');
+  const mv=$(w,'mpKnob');
+  ok(mv && mv.classList.contains('vinyl') && mv.classList.contains('mp-vinyl') && mv.getAttribute('role')==='button' && mv.getAttribute('tabindex')==='0', 'MP faza słuchaj: płyta winylowa (role=button, klawiatura)');
+  ok(mv && mv.dataset.state==='paused' && !mv.classList.contains('spinning') && /od nowa/.test(mv.getAttribute('aria-label')||''), 'fragment dograł → płyta stoi, aria-label „od nowa" — '+(mv&&mv.getAttribute('aria-label')));
+  ok(mv && mv.querySelector('#mpKnobIcon') && mv.querySelector('#mpvDisc') && !mv.querySelector('#mpKnobIcon').closest('.vn-disc'), 'MP: własne id SVG (prefiks mpv), ikona poza obracającą się płytą');
   // klik gałki → REPLAY fragmentu (seek do startu), NIE wznowienie reszty utworu
   w.mpKnobTap(); await settle(3);
   ok(Math.abs(a.currentTime-START)<0.5 && !a.paused && a.plays>playsBefore, 'klik → fragment od nowa (currentTime≈start, nowe play)');
+  ok($(w,'mpKnob').dataset.state==='playing' && $(w,'mpKnob').dataset.rate==='1', 'gra → płyta MP kręci się 1.0×');
+  a.emit('error'); await settle(1);
+  ok($(w,'mpKnob').dataset.state==='error' && /Błąd/.test($(w,'mpKnob').getAttribute('aria-label')), 'MP: brak zajawki → płyta w stanie błędu');
 });
 
 await group('MP: akcje gracza (react/say/propose/typing) nie rzucają', async ()=>{
@@ -1333,6 +1346,7 @@ await group('F6b (tryb #6): „Dźwięk tylko u hosta" — nie-host nie buforuje
   ws.pushState(playState(ws, { playNonce:7002, preview:'https://x/p2.m4a', hostId:'HOST', audioHostOnly:true })); await settle(8);
   const k=$(w,'mpKnob');
   ok(k && k.classList.contains('remote') && /głośnika/.test(k.getAttribute('aria-label')), 'gałka pilota (głośnik) z opisem — '+(k?k.outerHTML.slice(0,120):$(w,'mpRoom').innerHTML.slice(0,300)));
+  ok(k && !k.classList.contains('vinyl') && !k.hasAttribute('data-state'), 'pilot: bez płyty (nie gra tutaj) — płyta nie nadpisuje gałki głośnika');
   ok(/słuchaj z głośnika hosta/.test(txt(w,'mpPlayStatus')), 'status: „słuchaj z głośnika hosta"');
   w.mpKnobTap(); await settle(2);
   eq2(audioInstances.reduce((n,x)=>n+x.plays,0), plays0, 'nie-host nie odtwarza (też po stuknięciu gałki)');
@@ -1698,7 +1712,22 @@ await group('EKSP. solo: „składanka" — 4 zajawki buforowane („ładuję sk
     const dbg=()=>soloAudioMod._soloAudioDebug();
     for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
     const src=dbg().revSrc && dbg().revSrc.source;
-    ok(src && src.started && Math.abs(src.buffer.duration-6.75)<0.01, 'jeden sklejony bufor 4 × 1,5 s + 3 × 0,25 s — '+(src&&src.buffer.duration));
+    const TM=await import('../core/timing.js');
+    ok(src && src.started && Math.abs(src.buffer.duration-TM.medleyDuration(4))<0.01 && Math.abs(src.buffer.duration-15.4)<0.01, 'jeden sklejony bufor: wejście 0,4 s + 4 × 1,5 s + 3 przerwy × 3 s — '+(src&&src.buffer.duration));
+    if(src){   // zdekodowane zajawki = cisza (fałszywy bufor) → niezerowe próbki to WYŁĄCZNIE „tiki" (przed każdym wycinkiem)
+      const d=src.buffer.getChannelData(0), sr=src.buffer.sampleRate, nz=[]; d.forEach((v,i)=>{ if(v!==0) nz.push(i); });
+      const ticks=TM.medleyTickOffsets(4).map(t=>Math.round(t*sr)), clips=TM.medleyClipOffsets(4).map(t=>Math.round(t*sr));
+      ok(ticks.every((t,i)=>nz.some(j=>j>=t && j<clips[i])), 'cichy „tik" tuż przed każdym z 4 wycinków — '+ticks.join(','));
+      ok(nz.every(j=>ticks.some(t=>j>=t && j<t+Math.round(0.03*sr))), 'poza tikami cisza (przerwy 3 s)');
+      ok(Math.max(...nz.map(j=>Math.abs(d[j])))<=0.15, 'tik cichy (amplituda ≤ 0,15)');
+    }
+    ok(/składanka: 4 utwory — przerwa · zaraz fragment 1\/4/.test(txt(w,'state')), 'start: liczba utworów + „zaraz fragment 1/4" — '+txt(w,'state'));
+    const wait=ms=>new Promise(r=>setTimeout(r,ms));   // postęp bufora: setInterval 100 ms
+    const AP=w.AudioContext.prototype; AP.currentTime=5.2; for(let i=0;i<10 && !/fragment 2\/4…/.test(txt(w,'state'));i++) await wait(60);
+    ok(/^fragment 2\/4…$/.test(txt(w,'state')), 'w trakcie: licznik „fragment 2/4…" — '+txt(w,'state'));
+    AP.currentTime=7; for(let i=0;i<10 && !/zaraz fragment 3\/4/.test(txt(w,'state'));i++) await wait(60);
+    ok(/przerwa · zaraz fragment 3\/4/.test(txt(w,'state')), 'przerwa: „zaraz fragment 3/4" — '+txt(w,'state'));
+    AP.currentTime=0;
     ok($(w,'qf_artist') && !$(w,'qf_album') && $(w,'form').classList.contains('quiz'), 'tylko pole „Wykonawca" (tytuł/rok/album schowane)');
     eq2(txt(w,'footLegend'), 'wykonawca 100 · szybkość · seria', 'legenda składanki');
     ok(/składanka/.test(txt(w,'sessCtx')), 'pasek meczu: tryb składanka — '+txt(w,'sessCtx'));
@@ -1727,29 +1756,30 @@ await group('EKSP. solo: „składanka" — 4 zajawki buforowane („ładuję sk
     ok(/Raz|Dwa|Trzy|Cztery|Pięć/.test(txt(w,'sumList')) && /składanka/.test(txt(w,'sumList')), 'podsumowanie: tytuły + tryb — '+txt(w,'sumList').slice(0,100));
   });
 });
-await group('EKSP. solo: „okładka" — bez audio, pikselizacja 8→16 („wyraźniej"), wykonawca + album (bonus), mnożnik etapu', async ()=>{
+await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wyraźniej"), wykonawca + album (bonus), mnożnik etapu', async ()=>{
   await eksSolo(/okładka/, async (w, { draws })=>{
     const body=w.document.body, more=$(w,'introMore'), box=$(w,'coverBox');
     ok(body.classList.contains('cover-mode'), 'body.cover-mode (gałka/audio schowane)');
-    ok(box && !box.hidden && box.dataset.blocks==='8', 'okładka widoczna, etap 8×8 — '+(box&&box.dataset.blocks));
+    ok(box && !box.hidden && box.dataset.blocks==='16', 'okładka widoczna, pierwszy etap 16×16 (bez 8×8) — '+(box&&box.dataset.blocks));
     ok(!soloAudioMod._soloAudioDebug().round && !soloAudioMod._soloAudioDebug().revSrc, 'brak odtwarzania audio');
     ok(/600x600bb\.jpg$/.test($(w,'coverImg').getAttribute('src')||''), 'okładka 600×600 z iTunes — '+$(w,'coverImg').getAttribute('src'));
     ok(/Płyta /.test(decodeURIComponent($(w,'coverImg').getAttribute('src')||'')), 'album studyjny zamiast „Greatest Hits" i singla');
     ok($(w,'qf_artist') && $(w,'qf_album'), 'pola: wykonawca + album (bonus)');
     ok(more && !more.disabled && /wyraźniej/.test(more.textContent), 'przycisk „wyraźniej"');
     // obraz „wczytany" → rysowanie: zmniejszanie z wygładzaniem, powiększenie bez wygładzania (twarde bloki)
-    const img=(await import('../app/cover.js'))._coverDebug().img;
+    const coverMod=await import('../app/cover.js'); const img=coverMod._coverDebug().img;
     if(img){ Object.defineProperty(img,'complete',{value:true,configurable:true}); Object.defineProperty(img,'naturalWidth',{value:600,configurable:true}); img.onload && img.onload(); }
-    ok(draws.some(d=>d.to===8 && d.smooth) && draws.some(d=>d.to===320 && d.smooth===false), 'pikselizacja: 8×8 → widok 320 bez wygładzania — '+JSON.stringify(draws.slice(-3)));
+    ok(draws.some(d=>d.to===16 && d.smooth) && !draws.some(d=>d.to===8) && draws.some(d=>d.to===320 && d.smooth===false), 'pikselizacja: 16×16 → widok 320 bez wygładzania — '+JSON.stringify(draws.slice(-3)));
+    ok(coverMod._coverDebug().timer, 'auto-odsłona uzbrojona (etap co 6 s)');
     more.click(); await settle(1);
-    eq2(box.dataset.blocks, '16', '„wyraźniej" → 16×16');
+    eq2(box.dataset.blocks, '32', '„wyraźniej" → 32×32');
     const src=decodeURIComponent($(w,'coverImg').getAttribute('src')||'');
     const who=(src.match(/Płyta (.+?)\//)||[])[1]||'';
     $(w,'qf_artist').value=who; $(w,'qf_album').value='Plyta '+who;
     click(w,'check'); await settle(2);
     const rm=txt(w,'rmeta').replace(/\s+/g,' ');
     ok(/Wykonawca/.test(rm) && /Album/.test(rm) && /1984/.test(rm), 'odsłona: wykonawca + album + rok — '+rm.slice(0,220));
-    ok(/16×16/.test(rm) && /mnożnik ×1,6/.test(rm), 'mnożnik etapu 16×16 = ×1,6');
+    ok(/32×32/.test(rm) && /mnożnik ×1,6/.test(rm), 'mnożnik etapu 32×32 = ×1,6');
     eq2(+txt(w,'sPoints'), Math.round(120*1.6), 'punkty: (100 + album 20) × 1,6, bez bonusu za szybkość');
     eq2(box.dataset.blocks, '0', 'po Sprawdź — pełna okładka');
     ok(/Dobrze!/.test(txt(w,'revealHead')), 'nagłówek: trafienie');
@@ -1998,7 +2028,9 @@ await group('EKSP. solo: „zwolnione obroty" — 0.6× (WebAudio playbackRate),
     ok(v.dataset.rate==='0.6' && v.style.getPropertyValue('--vn-turn')==='3.00s', 'płyta: tempo 0.6× → obrót 3 s — '+v.style.getPropertyValue('--vn-turn'));
     ok(v.dataset.state==='playing' && v.classList.contains('spinning') && v.classList.contains('arm-down'), 'gra → płyta się kręci, ramię opuszczone');
     ok(v.getAttribute('role')==='button' && /Pauza — płyta gra \(0,6×\)/.test(v.getAttribute('aria-label')), 'dostępność: role=button + aria-label wg stanu — '+v.getAttribute('aria-label'));
-    ok(/^ ?\?$/.test(w.document.querySelector('#vinyl .vn-q').textContent) && $(w,'vinylArt').getAttribute('visibility')==='hidden', 'naklejka „?" (bez okładki przed odsłoną)');
+    ok(/^ ?\?$/.test(w.document.querySelector('#vinyl .vn-q').textContent) && w.document.querySelector('#vinyl .vn-art').getAttribute('visibility')==='hidden', 'naklejka „?" (bez okładki przed odsłoną)');
+    ok((v.querySelector('.vn-ic')||{}).dataset.icon==='pause' && !v.querySelector('.vn-ic').closest('.vn-disc'), 'ikona ❚❚ na środku — STATYCZNA (poza obracającą się płytą)');
+    ok(+v.querySelector('.vn-prog').getAttribute('stroke-dashoffset')<=100, 'postęp na obwodzie płyty (łuk .vn-prog)');
     ok(more && !more.disabled && /szybciej \(0,75×\)/.test(more.textContent), '„szybciej (0,75×)" — '+(more&&more.textContent));
     eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 0.6× ×1.5 → 0.75× ×1.0', 'legenda');
     // pauza (tap w płytę) → hamowanie, ramię odjeżdża; wznowienie od tego samego miejsca
@@ -2018,7 +2050,7 @@ await group('EKSP. solo: „zwolnione obroty" — 0.6× (WebAudio playbackRate),
     $(w,'fTitle').value='Zupełnie inny'; click(w,'check'); await settle(3);
     const rm=txt(w,'rmeta').replace(/\s+/g,' ');
     ok(/zgadywane przy 0,75×/.test(rm) && /mnożnik ×1/.test(rm), 'odsłona: tempo + mnożnik — '+rm.slice(0,220));
-    ok(v.classList.contains('revealed') && /a100x100|300x300|https:\/\/x\//.test($(w,'vinylArt').getAttribute('href')||'') && $(w,'vinylArt').getAttribute('visibility')==='visible', 'odsłona: naklejka → okładka albumu');
+    ok(v.classList.contains('revealed') && /a100x100|300x300|https:\/\/x\//.test(w.document.querySelector('#vinyl .vn-art').getAttribute('href')||'') && w.document.querySelector('#vinyl .vn-art').getAttribute('visibility')==='visible', 'odsłona: naklejka → okładka albumu');
     ok(v.dataset.rate==='1' && v.style.getPropertyValue('--vn-turn')==='1.80s', 'odsłona: płyta rozpędza się do 1.0× (1,8 s/obrót)');
     const el=dbg().el; ok(dbg().round && el.playbackRate===1 && el.preservesPitch===true && /\.m4a$/.test(el.src), 'odsłona: oryginał 1.0× na trwałym elemencie');
   });
@@ -2064,6 +2096,73 @@ await group('EKSP. MP: obroty — chipy z nowym serwerem (oś czasu nigdy), PLAY
     ok(src && src.stopped, 'gałka MP: stop (jak „od tyłu")');
   } finally { globalThis.fetch=prevFetch; eksWebAudio(false); }
   w.mpLeaveConfirmed('room'); await settle(4);
+});
+/* ===================== poprawki po testach: płyta wszędzie (solo), legenda punktacji, rzędy kategorii ===================== */
+await group('Płyta winylowa (solo, od tyłu): stany, odsłona z okładką → ▶ oryginał, pauza z klawiatury, błąd zajawki', async ()=>{
+  await eksSolo(/🔄 od tyłu/, async (w)=>{
+    const dbg=()=>soloAudioMod._soloAudioDebug(), v=$(w,'vinyl');
+    ok(v && v.querySelector('svg .vn-disc') && v.querySelector('.vn-prog') && v.querySelector('.vn-ctl'), 'płyta: SVG z obracającą się płytą, łukiem postępu i środkiem-przyciskiem');
+    ok(!w.document.body.classList.contains('tempo-mode') && w.getComputedStyle(w.document.querySelector('.vinyl-wrap')).display!=='none', 'płyta widoczna poza trybami obrotów');
+    ok(v.dataset.rate==='1' && !v.classList.contains('revealed') && w.document.querySelector('#vinyl .vn-art').getAttribute('visibility')==='hidden', 'pytanie: 1.0×, naklejka „?" (bez okładki)');
+    for(let i=0;i<50 && !dbg().revSrc;i++) await settle(2);
+    ok(dbg().revSrc && v.dataset.state==='playing' && v.classList.contains('arm-down') && v.dataset.rate==='1', 'od tyłu gra → płyta kręci się 1.0×, ramię opuszczone');
+    ok(v.querySelector('.vn-ic').dataset.icon==='pause' && v.getAttribute('aria-busy')==='false', 'środek: ❚❚');
+    $(w,'fTitle').value='Nic'; click(w,'check'); await settle(3);
+    const href=w.document.querySelector('#vinyl .vn-art').getAttribute('href')||'';
+    ok(/^https?:/.test(href) && v.classList.contains('revealed') && /Odtwórz oryginał/.test(v.getAttribute('aria-label')), 'odsłona: naklejka = okładka, aria „Odtwórz oryginał" — '+href.slice(0,40));
+    ok(v.querySelector('.vn-ic').dataset.icon==='play' && !dbg().revSrc, 'odsłona: ikona ▶, „od tyłu" zatrzymane');
+    v.click();
+    ok(v.dataset.state==='loading' && v.querySelector('.vn-ic').dataset.icon==='wait' && !v.classList.contains('arm-down'), 'ładowanie oryginału (synchronicznie po stuknięciu): spinner, ramię uniesione');
+    await settle(3);
+    const r1=dbg().round;
+    ok(r1 && r1.mode==='music' && !dbg().revSrc && /\.m4a$/.test(dbg().el.src), 'stuknięcie płyty w odsłonie → ORYGINAŁ na elemencie (nie od tyłu)');
+    dbg().el.emit('playing'); await settle(1);
+    ok(v.dataset.state==='playing', 'oryginał gra');
+    v.dispatchEvent(new w.KeyboardEvent('keydown', { key:' ', bubbles:true, cancelable:true })); await settle(2);
+    ok(dbg().el.paused && v.dataset.state==='paused' && !v.classList.contains('arm-down'), 'spacja na płycie → pauza, ramię w spoczynku');
+    dbg().el.emit('error'); await settle(1);
+    ok(v.dataset.state==='error' && /Błąd odtwarzania/.test(v.getAttribute('aria-label')) && v.querySelector('.vn-ic').dataset.icon==='error', 'błąd zajawki → płyta: stan błędu (aria + ikona !)');
+  });
+});
+await group('Legenda punktacji: przycisk „ℹ️ jak liczymy punkty" przy wyniku → dymek z legendą trybu (bez stałego podpisu w stopce)', async ()=>{
+  const w=window, { audio } = catsByKind(w);
+  await f2aStartMatch(audio, /muzyka/);
+  const btn=$(w,'legendBtn'), pop=$(w,'legendPop');
+  ok(btn && /jak liczymy punkty/.test(btn.textContent) && btn.getAttribute('aria-expanded')==='false' && pop.hidden, 'przycisk widoczny, dymek zamknięty');
+  ok(!/tytuł 50/.test(w.document.querySelector('.foot').textContent) && /iTunes/.test(w.document.querySelector('.foot').textContent), 'stopka: tylko źródło (bez stałej legendy)');
+  ok($(w,'footLegend').closest('#legendPop'), 'legenda żyje w dymku');
+  btn.click(); await settle(1);
+  ok(!pop.hidden && btn.getAttribute('aria-expanded')==='true' && /tytuł 50 · wykonawca 50/.test(txt(w,'footLegend')) && /muzyka/.test(txt(w,'legendMode')), 'klik → dymek z legendą bieżącego trybu — '+txt(w,'legendMode'));
+  w.document.dispatchEvent(new w.KeyboardEvent('keydown', { key:'Escape', bubbles:true })); await settle(1);
+  ok(pop.hidden && w.document.activeElement===btn, 'Esc zamyka, fokus wraca na przycisk');
+  btn.click(); await settle(1); $(w,'sessProg').click(); await settle(1);
+  ok(pop.hidden, 'klik poza dymkiem zamyka');
+  btn.click(); await settle(1); $(w,'legendClose').click(); await settle(1);
+  ok(pop.hidden && btn.getAttribute('aria-expanded')==='false', '✕ zamyka');
+  click(w,'sessEnd'); await settle(2);
+});
+await group('Rzędy kategorii: podpowiedź krawędzi (more-l/more-r) + kółko myszy przewija poziomo; CSS ≥600 px zawija', async ()=>{
+  const w=window, rs=await import('../app/rowScroll.js');
+  $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+  const row=$(w,'ticks'); let x=0;
+  Object.defineProperty(row,'scrollWidth',{ value:900, configurable:true }); Object.defineProperty(row,'clientWidth',{ value:300, configurable:true });
+  Object.defineProperty(row,'scrollLeft',{ get:()=>x, set:v=>{ x=v; }, configurable:true });
+  rs.syncRow(row);
+  ok(row.classList.contains('more-r') && !row.classList.contains('more-l'), 'początek rzędu: podpowiedź „›" po prawej');
+  const prevMM=w.matchMedia;
+  w.matchMedia=(q)=>({ matches:/pointer: fine|hover: hover/.test(String(q)), addEventListener(){}, removeEventListener(){}, addListener(){}, removeListener(){} });
+  try{
+    const tk=row.querySelector('.tick')||row;
+    const ev=new w.WheelEvent('wheel', { deltaY:120, bubbles:true, cancelable:true });
+    tk.dispatchEvent(ev);
+    ok(x===120 && ev.defaultPrevented, 'kółko (mysz) → rząd przewija się w prawo, strona nie — scrollLeft='+x);
+    ok(row.classList.contains('more-l') && row.classList.contains('more-r'), 'w środku: podpowiedzi po obu stronach');
+    x=600; const ev2=new w.WheelEvent('wheel', { deltaY:120, bubbles:true, cancelable:true }); tk.dispatchEvent(ev2);
+    ok(!ev2.defaultPrevented && x===600, 'na końcu rzędu kółko przewija stronę (bez przejęcia)');
+  } finally { w.matchMedia=prevMM; }
+  const css=[...w.document.querySelectorAll('style')].map(s=>s.textContent).join('\n');
+  ok(/@media \(min-width:600px\)\{[^}]*\.ticks,\.grp-band \.ticks\{flex-wrap:wrap;overflow-x:visible\}/.test(css), 'CSS: od 600 px rzędy kategorii zawijają się (siatka)');
+  delete row.scrollWidth; delete row.clientWidth; delete row.scrollLeft;
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

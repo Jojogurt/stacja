@@ -20,7 +20,7 @@
  *   9  ten sam początek treści (3 słowa) w >10% paczki                      OSTRZ  (bez łamigłówek — stały format)
  *   J1 „Jedna litera różnicy" (quiz-jedna-litera.json / id): kanoniczne odpowiedzi kolejnych slotów
  *      różnią się DOKŁADNIE jedną literą (podmiana, ta sama długość; bez wielkości liter, ze spacjami
- *      i polskimi znakami)                                                  BŁĄD
+ *      i polskimi znakami); bez pól odsłuchu track/tracks (decyzja: bez audio)  BŁĄD
  *   R1 łamigłówki: display (tylko 'rebus' i wtedy wymagany track), partial bool, kształt track/tracks  BŁĄD
  *   L1 lyrics: tytuł/wykonawca w polu `lyric` (całość/wykonawca BŁĄD, pojedyncze słowo tytułu OSTRZ)
  *   L2 lyrics: duplikat tytuł+wykonawca (w kategorii BŁĄD, między kategoriami OSTRZ) */

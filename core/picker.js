@@ -109,3 +109,24 @@ export function restorePick(saved, allCats, allModes){
   const modes = Array.isArray(o.modes) ? o.modes.filter(m => allModes.includes(m)) : [];
   return { cats, modes, questions: o.questions==null ? null : clampQuestions(o.questions) };
 }
+
+/* ===== rzędy kategorii (poziomy scroll) — decyzje dla app/rowScroll.js (poprawka tymczasowa) =====
+ * krawędzie: czy jest coś do przewinięcia w lewo/prawo (podpowiedź: gradient + strzałka). Tolerancja 2 px (subpiksele). */
+export function rowEdges({ scrollLeft=0, scrollWidth=0, clientWidth=0 }={}){
+  const max = Math.max(0, (Number(scrollWidth)||0) - (Number(clientWidth)||0));
+  const x = Math.max(0, Math.min(max, Number(scrollLeft)||0));
+  return { left: x > 2, right: max - x > 2 };
+}
+/* kółko myszy nad rzędem: docelowe scrollLeft albo null (nie przejmuj — strona przewija się normalnie).
+ * null gdy: rząd się nie przewija, gest jest głównie poziomy (trackpad — przeglądarka obsłuży sama),
+ * albo rząd stoi już na krawędzi w kierunku kółka (dalej przewija się strona). deltaMode: 0 px, 1 linie, 2 strony. */
+export function wheelScrollTarget({ deltaX=0, deltaY=0, deltaMode=0, scrollLeft=0, scrollWidth=0, clientWidth=0 }={}){
+  const max = Math.max(0, (Number(scrollWidth)||0) - (Number(clientWidth)||0));
+  if(max <= 1) return null;
+  const dx = Number(deltaX)||0, dy = Number(deltaY)||0;
+  if(!dy || Math.abs(dx) >= Math.abs(dy)) return null;
+  const d = dy * (deltaMode === 1 ? 40 : deltaMode === 2 ? (Number(clientWidth)||0) : 1);
+  const x = Math.max(0, Math.min(max, Number(scrollLeft)||0));
+  if((d < 0 && x <= 0) || (d > 0 && x >= max)) return null;
+  return Math.max(0, Math.min(max, x + d));
+}

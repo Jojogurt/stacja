@@ -1,7 +1,7 @@
 /* app/lektor.js — synteza mowy (tryb „lektor"): pre-gen audio > Piper (opcjonalny) > głos systemowy.
  * Stan zamknięty w module; wejścia (tekst/url/callback) idą argumentami.
  * Zależy tylko od app/dom.js (status w UI) + Web Speech/Audio. */
-import { flash, setIcon, setRing, setState, lsGet, lsSet } from './dom.js';
+import { flash, setIcon, setRing, setState, setLive, lsGet, lsSet } from './dom.js';
 import { lektorLang, pickVoice, piperVoiceFor, LEKTOR_BCP47 } from '../core/lektorVoice.js';
 
 // głosy syntezatora systemowego per język ('pl' | 'en') — wybór w core/lektorVoice.pickVoice
@@ -30,7 +30,7 @@ export function speak(text, lang){
   // F2a #16: błąd syntezy (Chrome „synthesis-failed", iOS „interrupted", brak głosu) → stan wraca do „odtwórz"
   u.onerror=()=>{ if(gen!==lektorGen) return; setIcon('play'); setRing(0); setState('lektor przerwany · ▶ odtwórz ponownie'); };
   setIcon('pause'); setRing(0); setState('lektor czyta…');
-  document.getElementById('knob').classList.add('live');
+  setLive(true);
   speechSynthesis.speak(u);
 }
 export function stopSpeech(){ if('speechSynthesis' in window) speechSynthesis.cancel(); }
@@ -66,7 +66,7 @@ function playLektorAudio(a, gen, onStatus, label){
   a.addEventListener('ended',()=>{ if(!live()) return; lektorAudio=null; setIcon('play'); setRing(1); setState('koniec · ↻ powtórz'); });
   a.addEventListener('error',()=>{ if(!live()) return; lektorAudio=null; setIcon('play'); setRing(0); setState('nagranie lektora niedostępne · ▶ spróbuj ponownie'); });
   setIcon('wait'); setRing(0);
-  document.getElementById('knob').classList.add('live');
+  setLive(true);
   const p=a.play();
   (p && p.then ? p : Promise.resolve()).then(()=>{ if(!live()) return; setIcon('pause'); onStatus && onStatus(label); })
     .catch(()=>{ if(!live()) return; setIcon('play'); onStatus && onStatus('stuknij ▶, by odtworzyć'); });

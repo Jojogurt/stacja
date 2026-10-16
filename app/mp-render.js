@@ -8,12 +8,13 @@ import { norm, YEAR_MIN, YEAR_MAX } from '../core/scoring.js';   // F8a: + zakre
 import { QPC, matchProgress } from '../core/match.js';
 import { displayTitle } from '../core/trackSelect.js';   // tytuł z iTunes bez „(2012 Remaster)" itp. (tylko wyświetlanie)
 import { MP } from '../core/phases.js';
-import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS, MP_INTRO_MS } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"; F2b #6: auto-„dalej"; F6b: intro
+import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS, MP_INTRO_MS, isTempoMode, mpTempoRate } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"; F2b #6: auto-„dalej"; F6b: intro
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, answerCredits, playsAudioLocally, audioHostOnly } from '../core/mpReducer.js';
 import { REACTIONS } from '../core/chatFeed.js';   // F6b: whitelist emotek wspólna z serwerem (🖕 → 🍺)
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn, promptBodyHTML } from './dom.js';
-import { listenStart, listenHTML } from './listen.js';   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
+import { listenStart, listenHTML } from './listen.js';
+import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie „słuchaj"   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
 import { playClap, playSfx } from './sfx.js';
 import { ic } from './icons.js';
 import { mpPickerHTML } from './mp-picker.js';
@@ -294,7 +295,8 @@ function mpListenSecs(g){
   const cat=ALL_CATS[g.catKey];
   return _listenSecs(g.mode, cat && cat.listenSecs);
 }
-const mpKnobHTML = (id='mpKnob', cls='mp-knob')=> `<button class="${cls}" id="${id}" onclick="mpKnobTap()" aria-label="Odtwórz / pauza"><svg id="mpKnobIcon" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg></button>`;
+// faza „słuchaj": płyta winylowa = play/pauza (app/vinyl.js — ten sam SVG co solo; id „mpKnob", ikona #mpKnobIcon)
+const mpKnobHTML = ()=> mpVinylHTML();
 // F6b (tryb #6): gałka „pilota" — dźwięk gra u hosta; bez #mpKnobIcon (stany odtwarzacza jej nie zmieniają)
 const mpRemoteKnobHTML = ()=> `<button class="mp-knob remote" id="mpKnob" onclick="mpKnobTap()" aria-label="Dźwięk gra u hosta — słuchaj z jego głośnika"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/><path d="M14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></button>`;
 const MP_REMOTE_STATUS = '🔈 słuchaj z głośnika hosta';
@@ -549,6 +551,8 @@ function mpRenderPlay(g, head, st){
     S.playRound=g.playNonce; S.playSkin=skin; S.playSub=S.sub;
     st.innerHTML = mpScaffoldPlay(g, head);
     if(S.sub==='sluchaj') mpAnimListenBar();
+    // płyta: nowe pytanie → naklejka „?" i tempo trybu; przebudowa (skórka) → odtwórz bieżący stan na nowym elemencie
+    if(newRound) mpVinyl.prepare(isTempoMode(g.mode) ? mpTempoRate(g.mode) : 1); else mpVinyl.refresh();
   }
   mpRefreshDynamic(g);
   mpTickTimer();

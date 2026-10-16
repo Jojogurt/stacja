@@ -26,6 +26,7 @@ import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { lektorLang, catLektorLang } from '../core/lektorVoice.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle, knownHandle } from './social.js';
 import { playSfx, registerMusicProbe } from './sfx.js';
+import { mpVinyl } from './vinyl.js';   // płyta winylowa = kontrolka odtwarzania w fazie „słuchaj"
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes } from './mp-picker.js';
@@ -456,15 +457,11 @@ function mpMaybeSkipArm(armNonce){
   S.skipArm=false;
   if(now) mpHostSkipWait();
 }
-// stany gałki: 'pause' (∥ gra), 'wait' (⏳ ładowanie), 'play' (▶ idle/pauza)
+// stany kontrolki (płyta winylowa, app/vinyl.js): 'pause' (gra), 'wait' (ładowanie), 'play' (idle/pauza),
+// 'replay' (fragment dograł — ↻), 'error' (brak zajawki). Ikona środka w #mpKnobIcon.
 function mpSetKnob(state){
   if(state===true) state='pause'; if(state===false) state='play';
-  const i=$m('mpKnobIcon');
-  if(i) i.innerHTML = state==='pause' ? '<path d="M6 5h4v14H6zM14 5h4v14h-4z"/>'
-    : state==='wait' ? '<path d="M12 4a8 8 0 1 0 8 8" fill="none" stroke="currentColor" stroke-width="2.4"/>'
-    : state==='replay' ? '<path d="M17.65 6.35A8 8 0 1 0 19.73 14h-2.08A6 6 0 1 1 16.24 7.76L13 11h7V4z"/>'   // ↻ fragment od nowa
-    : '<path d="M8 5v14l11-7z"/>';
-  const k=$m('mpKnob'); if(k) k.classList.toggle('loading', state==='wait');
+  mpVinyl.fromKnob(state);
 }
 function mpSetPlayStatus(t){ const e=$m('mpPlayStatus'); if(e) e.textContent=t; }
 // JEDEN trwały element audio dla MP — odblokowany gestem (mobilna autoplay-policy),
@@ -480,7 +477,8 @@ function mpEnsureAudio(){
       if(S.audio._snipEnd){ mpSetKnob('replay'); mpSetPlayStatus('fragment '+SNIP_SECS+'s · ↻ jeszcze raz'); }   // fragment dograł → replay
       else { mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); } });
     S.audio.addEventListener('ended',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); });
-    S.audio.addEventListener('error',  ()=>{ mpSetKnob('play'); mpSetPlayStatus('brak zajawki — kombinujcie bez niej'); });   // 1.8: 404/stall zajawki nie zawiesza rundy
+    S.audio.addEventListener('timeupdate',()=>{ const a=S.audio; mpVinyl.setProgress(a.duration ? a.currentTime/a.duration : 0); });   // postęp na obwodzie płyty
+    S.audio.addEventListener('error',  ()=>{ mpSetKnob('error'); mpSetPlayStatus('brak zajawki — kombinujcie bez niej'); });   // 1.8: 404/stall zajawki nie zawiesza rundy
   }
   return S.audio;
 }
@@ -521,7 +519,7 @@ function mpStopRev(){ if(S.revSrc){ S.revSrc.stop(); S.revSrc=null; } }   // uch
 function mpPlayBlocked(err){
   mpSetKnob('play');
   if(err && err.name==='NotAllowedError') mpSetPlayStatus('stuknij ▶, by odtworzyć');   // gest wymagany
-  else mpSetPlayStatus('brak zajawki — kombinujcie bez niej');                          // 404/CORS/uszkodzona
+  else { mpSetKnob('error'); mpSetPlayStatus('brak zajawki — kombinujcie bez niej'); }  // 404/CORS/uszkodzona
 }
 // gałka = TOGGLE: gra → pauza; pauza → wznów; koniec/świeże → od nowa (#bug2: dotąd zawsze restart)
 function mpKnobTap(){
@@ -583,6 +581,7 @@ async function mpPlayReverse(){
   const r=await playReverse(ctx, url, {
     cfg: window.STACJA_CONFIG, window: win || undefined,
     shouldPlay: ()=>S.game.preview===url,    // runda mogła się zmienić w trakcie dekodowania
+    onProgress: f=>mpVinyl.setProgress(f),
     onEnded: ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); },
   });
   if(r.ok){ S.revSrc=r; mpSetKnob('pause'); mpSetPlayStatus('gra od tyłu…'); return; }
@@ -604,7 +603,7 @@ async function mpPlayTempo(){
     if(!dec){ dec=await decodeAudio(ctx, url, window.STACJA_CONFIG); S.tempoCache={ url, decoded:dec }; }
     if(!S.game || S.game.preview!==url) return;            // runda zmieniła się w trakcie dekodowania → cisza
     mpStopRev();
-    S.revSrc=playBuffer(ctx, dec, { rate, onEnded:()=>{ S.revSrc=null; mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); } });
+    S.revSrc=playBuffer(ctx, dec, { rate, onProgress:f=>mpVinyl.setProgress(f), onEnded:()=>{ S.revSrc=null; mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); } });
     mpSetKnob('pause'); mpSetPlayStatus(rate<1 ? `🐢 gra wolniej (${tx})…` : `🐿 gra szybciej (${tx})…`);
   }catch(_e){
     if(!S.game || S.game.preview!==url) return;

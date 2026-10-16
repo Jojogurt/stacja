@@ -1,11 +1,11 @@
 /* app/cover.js — EKSPERYMENT: tryb „okładka" (solo). Okładka albumu odsłaniana ETAPAMI rozdzielczości
- * (core/timing.COVER_STAGES: 8 → 16 → 32 → 64 bloki na bok → pełna), auto co COVER_STEP_MS albo przyciskiem
+ * (core/timing.COVER_STAGES: 16 → 32 → 64 bloki na bok → pełna), auto co COVER_STEP_MS (6 s) albo przyciskiem
  * „wyraźniej" (app/solo.js).
  *
  * CORS: obraz z iTunes CDN (mzstatic) ładujemy BEZ crossOrigin i NIGDY nie czytamy pikseli (getImageData/toDataURL).
  * Rysowanie obcego obrazu na canvasie jest dozwolone — „tainted" blokuje tylko odczyt, nie wyświetlanie. Dzięki temu
  * działa niezależnie od nagłówków CDN (dziś mzstatic i tak wysyła ACAO: *). Pikselizacja: zmniejszanie połówkami
- * (64 → 32 → 16 → 8, z wygładzaniem = uśrednianie bloków), potem powiększenie na canvasie widoku z
+ * (64 → 32 → 16, z wygładzaniem = uśrednianie bloków), potem powiększenie na canvasie widoku z
  * imageSmoothingEnabled=false (+ CSS image-rendering: pixelated jako zapas). Pełny etap = zwykły <img>.
  * Rozpikselowanie na starcie ukrywa też nazwę zespołu na okładce (bez OCR). */
 import { coverStageBlocks, coverNextStage, COVER_STEP_MS, COVER_STAGES } from '../core/timing.js';

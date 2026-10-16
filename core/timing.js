@@ -62,10 +62,15 @@ export function mpSnipOffset(mode, rnd = Math.random){
   return 0;
 }
 
-/* EKSPERYMENT: „składanka" (medley) — 4 wycinki po 1,5 s z różnych utworów wykonawcy, przerwa 250 ms + cichy tik.
+/* EKSPERYMENT: „składanka" (medley) — 4 wycinki po 1,5 s z różnych utworów wykonawcy.
+ * Poprawki po testach: przerwa między wycinkami 3 s (było 0,25 s — utwory zlewały się w jeden), a tuż PRZED
+ * każdym wycinkiem (także pierwszym — stąd krótka cisza na wejściu MEDLEY_LEAD_S) cichy „tik": gracz słyszy, że
+ * zaczyna się nowy utwór. W trakcie licznik „fragment k/n" (medleyClipAt).
  * Start wycinka w bezpiecznym oknie 8–20 s zajawki (nie cisza na początku, nie wyciszenie na końcu). */
 export const MEDLEY_CLIP_S = 1.5;
-export const MEDLEY_GAP_S = 0.25;
+export const MEDLEY_GAP_S = 3;
+export const MEDLEY_LEAD_S = 0.4;      // cisza przed pierwszym wycinkiem (miejsce na jego „tik")
+export const MEDLEY_TICK_LEAD_S = 0.3; // „tik" startuje tyle sekund przed wycinkiem
 export const MEDLEY_SAFE_FROM = 8, MEDLEY_SAFE_TO = 20;
 export function medleyClipStart(dur, rnd = Math.random){
   const d = Number(dur) > 0 ? Number(dur) : 30;
@@ -74,16 +79,44 @@ export function medleyClipStart(dur, rnd = Math.random){
   const lo = Math.min(MEDLEY_SAFE_FROM, hi);
   return lo + rnd() * (hi - lo);
 }
+const medleyN = n => Math.max(0, Math.floor(Number(n)) || 0);
+// początki wycinków w sklejonym buforze (s): lead, lead + klip + przerwa, …
+export function medleyClipOffsets(n){
+  const k = medleyN(n), out = [];
+  for(let i = 0; i < k; i++) out.push(MEDLEY_LEAD_S + i*(MEDLEY_CLIP_S + MEDLEY_GAP_S));
+  return out;
+}
+// momenty „tików" (s) — tuż przed każdym wycinkiem
+export const medleyTickOffsets = n => medleyClipOffsets(n).map(t => Math.max(0, t - MEDLEY_TICK_LEAD_S));
 // łączna długość składanki (s) dla n wycinków
 export function medleyDuration(n){
-  const k = Math.max(0, Math.floor(Number(n)) || 0);
-  return k ? k*MEDLEY_CLIP_S + (k-1)*MEDLEY_GAP_S : 0;
+  const k = medleyN(n);
+  return k ? MEDLEY_LEAD_S + k*MEDLEY_CLIP_S + (k-1)*MEDLEY_GAP_S : 0;
+}
+/* gdzie jesteśmy w składance w chwili t (s od startu bufora): {index (0-based), playing} — index = wycinek grający
+ * (playing:true) albo NASTĘPNY w kolejce (przerwa/wejście, playing:false); po ostatnim → {index:n-1, playing:false, done:true}. */
+export function medleyClipAt(t, n){
+  const k = medleyN(n), x = Number(t);
+  if(!k) return { index:0, playing:false, done:true };
+  const offs = medleyClipOffsets(k), pos = Number.isFinite(x) ? x : 0;
+  for(let i = 0; i < k; i++){
+    if(pos < offs[i]) return { index:i, playing:false, done:false };
+    if(pos < offs[i] + MEDLEY_CLIP_S) return { index:i, playing:true, done:false };
+  }
+  return { index:k-1, playing:false, done:true };
+}
+// tekst licznika dla gracza (solo: deck-state)
+export function medleyLabel(t, n){
+  const k = medleyN(n), at = medleyClipAt(t, k);
+  if(!k || at.done) return 'koniec składanki · ↻ od nowa';
+  return at.playing ? `fragment ${at.index+1}/${k}…` : `przerwa · zaraz fragment ${at.index+1}/${k}`;
 }
 
 /* EKSPERYMENT: „okładka" (cover) — okładka albumu odsłaniana etapami rozdzielczości (bloki na bok; 0 = pełna).
- * Auto-odsłona co COVER_STEP_MS albo przycisk „wyraźniej". Mnożnik punktów jak intro (core/scoring.coverMult). */
-export const COVER_STAGES = [8, 16, 32, 64, 0];
-export const COVER_STEP_MS = 3000;
+ * Auto-odsłona co COVER_STEP_MS albo przycisk „wyraźniej". Mnożnik punktów: core/scoring.coverMult (COVER_MULTS).
+ * Poprawki po testach: etap 8×8 usunięty (praktycznie nie do zgadnięcia) — start od 16×16; etap trwa 6 s (było 3 s). */
+export const COVER_STAGES = [16, 32, 64, 0];
+export const COVER_STEP_MS = 6000;
 export function coverStageBlocks(stage){
   const i = Math.floor(Number(stage));
   return COVER_STAGES[Number.isFinite(i) ? Math.max(0, Math.min(COVER_STAGES.length-1, i)) : 0];
@@ -124,7 +157,7 @@ export function vinylTurnSecs(rate){
 }
 
 // ile sekund trwa faza „słuchaj" per tryb (gdy kategoria nie nadpisuje listenSecs)
-export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15, revsnip:12, medley:15, cover:15, slowmo:18, fastmo:12, timeline:15 };
+export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15, revsnip:12, medley:18, cover:15, slowmo:18, fastmo:12, timeline:15 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
 // F2b (#6): twardy limit fazy gotowości (ARMING) po stronie serwera — po nim pytanie rusza z tymi,

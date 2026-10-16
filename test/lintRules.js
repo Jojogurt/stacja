@@ -30,6 +30,9 @@ export function ladderErrors(q){
     const hit = vars[i].find(g => vars[j].some(v => textMatch(g, v)));
     if(hit && i < j) out.push(`„${hit}" (slot ${i + 1}) zalicza się też w slocie ${j + 1} (tolerancja literówek) — skróć hasła do ≤5 znaków`);
   }
+  // decyzja właściciela (poprawki po testach): „Jedna litera różnicy" BEZ odsłuchu w odsłonie — pola track/tracks
+  // włączałyby auto-odtwarzanie i przyciski „▶ posłuchaj" (app/listen.js). Rebusy zostają z odsłuchem.
+  if(q && (q.tracks !== undefined || q.track !== undefined)) out.push('drabinka bez odsłuchu — usuń pola track/tracks');
   return out;
 }
 

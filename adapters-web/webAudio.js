@@ -76,22 +76,28 @@ export function sliceBuffer(ctx, buf, start, secs, { reverse=false, fade=true }=
   }
   return out;
 }
-// sklej wycinki w jeden bufor: [klip] przerwa(tik) [klip] … — mono → na wszystkie kanały
-export function buildMedleyBuffer(ctx, clips, { gap=0.25, tick=true }={}){
+// sklej wycinki w jeden bufor: [wejście lead] (tik)[klip] przerwa (tik)[klip] … — mono → na wszystkie kanały.
+// „tik" (cichy sygnał nowego utworu) startuje `tickLead` s PRZED każdym wycinkiem — także pierwszym (stąd `lead`).
+// Domyślne wartości = core/timing (MEDLEY_GAP_S / MEDLEY_LEAD_S / MEDLEY_TICK_LEAD_S) — wołający podaje je jawnie.
+export function buildMedleyBuffer(ctx, clips, { gap=3, lead=0.4, tickLead=0.3, tick=true }={}){
   const list=(clips||[]).filter(Boolean);
   if(!list.length) return null;
   const sr=list[0].sampleRate, ch=Math.min(2, Math.max(...list.map(b=>b.numberOfChannels)));
-  const gapN=Math.round(gap*sr);
-  const total=list.reduce((n,b)=>n+b.length,0) + gapN*(list.length-1);
+  const gapN=Math.max(0, Math.round(gap*sr)), leadN=Math.max(0, Math.round(lead*sr)), tickLeadN=Math.max(0, Math.round(tickLead*sr));
+  const total=leadN + list.reduce((n,b)=>n+b.length,0) + gapN*(list.length-1);
   const out=ctx.createBuffer(ch, Math.max(1,total), sr);
-  // cichy „tik" na środku przerwy: 25 ms sinusa 1,8 kHz z obwiednią (amplituda 0,12)
-  const tickN=Math.min(gapN, Math.round(0.025*sr)), tickBuf=new Float32Array(tickN);
-  for(let i=0;i<tickN;i++) tickBuf[i]=0.12*Math.sin(2*Math.PI*1800*i/sr)*Math.sin(Math.PI*i/tickN);
+  // cichy „tik": 25 ms sinusa 1,8 kHz z obwiednią (amplituda 0,14)
+  const tickN=Math.round(0.025*sr), tickBuf=new Float32Array(tickN);
+  for(let i=0;i<tickN;i++) tickBuf[i]=0.14*Math.sin(2*Math.PI*1800*i/sr)*Math.sin(Math.PI*i/tickN);
   for(let c=0;c<ch;c++){
-    const dst=out.getChannelData(c); let pos=0;
+    const dst=out.getChannelData(c); let pos=leadN;
     list.forEach((b,i)=>{
+      if(tick && tickN){
+        const at=Math.max(0, pos-tickLeadN), room=Math.min(tickN, Math.max(0, pos-at));   // tik kończy się przed wycinkiem
+        if(room>0) dst.set(room<tickN ? tickBuf.subarray(0, room) : tickBuf, at);
+      }
       dst.set(b.getChannelData(Math.min(c, b.numberOfChannels-1)), pos); pos+=b.length;
-      if(i<list.length-1){ if(tick && tickN) dst.set(tickBuf, pos+Math.floor((gapN-tickN)/2)); pos+=gapN; }
+      if(i<list.length-1) pos+=gapN;
     });
   }
   return out;

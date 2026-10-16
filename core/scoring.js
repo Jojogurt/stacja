@@ -255,8 +255,13 @@ export function revsnipMult(stage){
   const i=Math.floor(Number(stage));
   return REVSNIP_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(REVSNIP_MULTS.length-1, i)) : 0];
 }
-/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (8 → 16 → 32 → 64 bloki → pełna) jak intro (×2.0 → ×1.0) */
-export const coverMult = stage => introMult(stage);
+/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 32 → 64 bloki → pełna):
+ * ×2.0 na pierwszym widocznym etapie, malejąco do ×1.0 przy pełnej okładce (bez bonusu za szybkość — jak intro). */
+export const COVER_MULTS = [2.0, 1.6, 1.3, 1.0];
+export function coverMult(stage){
+  const i = Math.floor(Number(stage));
+  return COVER_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(COVER_MULTS.length-1, i)) : COVER_MULTS.length-1];
+}
 /* EKSPERYMENT: „zwolnione obroty" — mnożnik wg etapu tempa (0.6× → ×1.5, „szybciej" 0.75× → ×1.0);
  * „przyspieszone" (1.5×, jeden etap) → ×1.2. Szybkość/seria jak w muzyce (mnożnik NIE zastępuje bonusu za szybkość). */
 export const SLOWMO_MULTS = [1.5, 1.0];
@@ -324,7 +329,7 @@ export function scoreLegend(mode){
   if(mode==='year') return `dokładnie ${YEAR_PTS.exact} · ±1 ${YEAR_PTS.off1} · ±2 ${YEAR_PTS.off2} · dekada ${YEAR_PTS.decade}`;
   if(mode==='intro') return `im wcześniej, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
   if(mode==='medley') return `wykonawca ${ARTIST_ONLY_PTS} · szybkość · seria`;
-  if(mode==='cover') return `wykonawca ${ARTIST_ONLY_PTS} · album +${PTS.album} · im mniej widać, tym więcej: ${fmtX(INTRO_MULTS[0])} → ${fmtX(INTRO_MULTS[INTRO_MULTS.length-1])}`;
+  if(mode==='cover') return `wykonawca ${ARTIST_ONLY_PTS} · album +${PTS.album} · im mniej widać, tym więcej: ${fmtX(COVER_MULTS[0])} → ${fmtX(COVER_MULTS[COVER_MULTS.length-1])}`;
   if(mode==='timeline') return `dobre miejsce na osi ${TIMELINE_PTS.place} · tytuł +${TIMELINE_PTS.title} · wykonawca +${TIMELINE_PTS.artist} · szybkość · seria`;
   if(mode==='slowmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 0.6× ${fmtX(SLOWMO_MULTS[0])} → 0.75× ${fmtX(SLOWMO_MULTS[SLOWMO_MULTS.length-1])}`;
   if(mode==='fastmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 1.5× ${fmtX(FASTMO_MULT)}`;

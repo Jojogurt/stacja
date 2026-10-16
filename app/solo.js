@@ -5,7 +5,7 @@ import { escapeHtml } from '../core/util.js';
 import { norm, textMatch, artistMatch, evaluateGuess, evaluateQuiz, quizKey, quizPartialFrac, quizListen, scoreRound, SPEED_CAP_MS, yearScore, parseYear, introMult, YEAR_MIN, YEAR_MAX, YEAR_OK_PTS, scoreLegend, revsnipMult, coverMult, tempoMult } from '../core/scoring.js';
 import { introStageSecs, introNextStage, revsnipStageSecs, revsnipNextStage, coverNextStage, coverStageBlocks, isTempoMode, tempoRate, tempoNextStage } from '../core/timing.js';
 import { pickTimelineTrack, gapOk, correctGaps, insertCard, gapLabel, cardsWord, timelineSummary } from '../core/timeline.js';   // EKSPERYMENT: oś czasu
-import { vinylPrepare, vinylRate, vinylReveal } from './vinyl.js';   // EKSPERYMENT: płyta winylowa (zwolnione / przyspieszone obroty)
+import { vinylPrepare, vinylRate, vinylReveal } from './vinyl.js';   // płyta winylowa = kontrolka odtwarzania (wszystkie tryby z dźwiękiem)
 import { buildTrackMC, yearReliable, parseRange, displayTitle, INSTRUMENT_EMOJI } from '../core/trackSelect.js';
 import { QPC, CPR, ALL_MODES, MODE_LABEL, MODE_SHORT, matchSlot, matchAdvance, matchProgress, matchQLabel, matchTotal, DEFAULT_QUESTIONS, QUICK_QUESTIONS } from '../core/match.js';
 import { dailySeed, dailyPlan, dailyPool, dailyQuestionRnd, dailyRecord, dailyShareText, matchShareText, resultGrid, DAILY_QUESTIONS } from '../core/daily.js';
@@ -16,7 +16,7 @@ import { plPick, togglePick as _togglePick, toggleAllPick as _toggleAll, allSele
 import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolveInstrumental } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
 import { recordMatch, ensureSession } from '../adapters-web/cf.js';
-import { setIcon, setRing, setState, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
+import { setIcon, setRing, setState, setLive, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
 import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
 import { showScreen } from './social.js';   // F6a: „Graj teraz" / „Kontynuuj mecz" z menu
 import { lektorPlay } from './lektor.js';
@@ -278,6 +278,7 @@ async function newRound(){
   const gen=soloGen;
   busy=true; roundDone=false; current=null;   // F2a #3: gałka w trakcie strojenia nie zagra utworu poprzedniego pytania
   stopAudio(); coverHide(); hideReveal(); hideSummary(); resetForm(); hideLyric(); renderSoloForm(); hideOfflineOffer();
+  vinylPrepare(1);   // płyta: naklejka „?" (bez okładki poprzedniej odsłony), 1.0×
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
   disableRoundControls();
@@ -323,6 +324,7 @@ async function newRound(){
     if(t.reason==='offline'){ flash('Brak internetu albo serwis z muzyką nie odpowiada. Stuknij ▶, by spróbować ponownie — albo zagraj offline.'); showOfflineOffer(); }
     else if(cat.songs && cat.songs.length && (!cat.artists||!cat.artists.length)) flash('Brak grających zajawek w tej playliście — wybierz inną kategorię.');
     else flash('Brak zajawek dla tej kategorii — stuknij ▶, by spróbować ponownie, albo pomiń pytanie.');
+    setIcon('error');   // płyta: stan błędu (stuknięcie = ponów)
     return;
   }
   const cur={...t, era:eraKey, lyric:''};
@@ -333,7 +335,7 @@ async function newRound(){
   if(mode==='medley' || mode==='cover') cur.fallback=true;   // EKSPERYMENT: nie znaleziono wykonawcy/albumu → muzyka
   if((mode==='piano' || mode==='guitar') && !t.coverArtist) cur.fallback=true;    // EKSPERYMENT: brak coveru instrumentalnego → muzyka
   if(mode==='timeline'){ if(tlPick && tlPick.card && !tlPick.noAnchor) cur.tlCard=tlPick.card; else cur.fallback=true; }   // EKSPERYMENT
-  if(isTempoMode(mode)){ cur.tempoStage=0; cur.tempoPos=0; vinylPrepare(tempoRate(mode, 0)); }   // EKSPERYMENT: płyta „?" w tempie etapu 0
+  if(isTempoMode(mode)){ cur.tempoStage=0; cur.tempoPos=0; vinylRate(tempoRate(mode, 0)); }   // EKSPERYMENT: płyta „?" w tempie etapu 0
   if(mode==='year'){
     if(parseYear(t.year)==null) cur.fallback=true;
     else if(!yearReliable(t.year, cat.range, t.yearSrc)) cur.yearNote='rok wg wydania w iTunes';
@@ -437,8 +439,18 @@ function introMore(){
   startAudio();
 }
 (function wireIntroMore(){ const b=document.getElementById('introMore'); if(b) b.onclick=introMore; })();
+/* odsłona: naklejka płyty → okładka albumu, ikona ▶ = ORYGINAŁ (od tyłu / fragment / od tyłu krótko / fortepian / gitara
+ * grają po odsłonie oryginalną zajawkę — app/audio.startAudio, cur.origReveal). Tempo ma własną ścieżkę (oryginał 1.0× od razu),
+ * quiz/okładka/lektor bez płyty z okładką. */
+const ORIG_REVEAL_MODES=['reverse','revsnip','snippet','piano','guitar'];
+function revealVinyl(){
+  const qm=qMode();
+  if(!current || mode==='quiz' || mode==='lektor' || qm==='cover' || isTempoMode(qm)) return;
+  vinylReveal(current.art, 1);
+  if(ORIG_REVEAL_MODES.includes(qm)) current.origReveal=true;
+}
 const fmtRate = r => String(r).replace('.', ',')+'×';
-// EKSPERYMENT: płyta winylowa = gałka w trybach tempa (tap / Enter / spacja = play/pauza)
+// płyta winylowa = play/pauza we wszystkich trybach z dźwiękiem (tap / Enter / spacja)
 (function wireVinyl(){
   const v=document.getElementById('vinyl'); if(!v) return;
   v.onclick=()=>toggleAudio();
@@ -449,7 +461,6 @@ const fmtRate = r => String(r).replace('.', ',')+'×';
 // stan gry (current/mode) i wznowienie rundy wstrzykiwane; uchwyty odtwarzacza żyją w module
 // EKSPERYMENT: tryb AUDIO = tryb efektywny (składanka/okładka bez wyniku grają jak „muzyka")
 initAudio({ current: ()=>current, mode: ()=>qMode(), newRound, gen: ()=>soloGen, busy: ()=>busy });
-document.getElementById('knob').onclick=toggleAudio;
 document.getElementById('replay').onclick=replay;
 
 function disableRoundControls(){
@@ -528,12 +539,13 @@ async function newLektorRound(){
   const s=pool[Math.floor(Math.random()*pool.length)];
   current={track:s.title, artist:s.artist, era:selectedEra,
     year:s.year||'', album:s.album||'', preview:'', art:'', lyric:s.lyric, tts:s.tts||'', lang:s.lang||'pl'};
+  vinylPrepare(1);   // lektor: płyta jako play/pauza czytania
   seenTracks.add(norm(s.title));
   busy=false; qStartAt=Date.now();
   document.getElementById('check').disabled=false;
   document.getElementById('replay').disabled=false;
   document.getElementById('skip').disabled=false;
-  document.getElementById('knob').classList.add('live');
+  setLive(true);
   renderSoloForm();
   showLyric(s.lyric);
   lektorPlay(s.lyric, s.tts, setState, { lang:current.lang });
@@ -918,11 +930,28 @@ function startDaily(){
   syncDailyCard();
 })();
 
-/* ============ F8b: stopka-legenda punktacji wg trybu bieżącego pytania ============ */
+/* ============ F8b: legenda punktacji wg trybu bieżącego pytania ============
+ * Poprawki po testach: zamiast stałego podpisu w stopce — przycisk „ℹ️ jak liczymy punkty" pod wynikiem/serią
+ * otwiera dymek z legendą BIEŻĄCEGO trybu (core/scoring.scoreLegend). Zamyka: ✕, Esc (fokus wraca na przycisk), klik poza. */
 function syncLegend(){
   const el=document.getElementById('footLegend'); if(!el) return;
-  el.textContent=scoreLegend(session || current ? qMode() : 'music');
+  const qm = session || current ? qMode() : 'music';
+  el.textContent=scoreLegend(qm);
+  const m=document.getElementById('legendMode'); if(m) m.textContent=MODE_LABEL[qm] || '';
 }
+function legendOpen(on){
+  const pop=document.getElementById('legendPop'), btn=document.getElementById('legendBtn'); if(!pop || !btn) return;
+  if(on) syncLegend();
+  pop.hidden=!on; btn.setAttribute('aria-expanded', on ? 'true' : 'false');
+}
+(function wireLegend(){
+  const pop=document.getElementById('legendPop'), btn=document.getElementById('legendBtn'), x=document.getElementById('legendClose');
+  if(!pop || !btn) return;
+  btn.onclick=()=>legendOpen(pop.hidden);
+  if(x) x.onclick=()=>{ legendOpen(false); btn.focus({preventScroll:true}); };
+  document.addEventListener('keydown', e=>{ if(e.key==='Escape' && !pop.hidden){ legendOpen(false); btn.focus({preventScroll:true}); } });
+  document.addEventListener('click', e=>{ if(!pop.hidden && e.target && !(e.target.closest && e.target.closest('#legend'))) legendOpen(false); });
+})();
 
 /* ============ sprawdzanie ============ */
 function check(){
@@ -989,13 +1018,13 @@ function check(){
     rh.className='rv-shead '+cls;
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${tt}</b><small>${sub}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
-  document.getElementById('reveal').classList.add('show');
+  revealVinyl(); document.getElementById('reveal').classList.add('show');
   if(okTitle && okArtist){ confetti(); playClap(); }   // pełne trafienie → confetti + oklaski
   else playSfx(okTitle||okArtist ? 'ding' : 'buzz');   // F6b (U4): częściowe → „ding", pudło → „bzzt"
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false; // można dosłuchać
   // EKSPERYMENT: odsłona trybu tempa — naklejka → okładka, płyta rozpędza się do 1.0×, gra ORYGINAŁ (gest „Sprawdź")
-  if(tStage!=null){ current.tempoReveal=true; current.tempoPos=0; vinylReveal(current.art, 1); startAudio(); }
+  if(tStage!=null){ current.tempoReveal=true; current.tempoPos=0; vinylReveal(current.art, 1); startAudio(); }   // (revealVinyl pomija tempo — tu z odtworzeniem)
   document.getElementById('reveal').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 // ocena quizu (solo): core/scoring.evaluateQuiz; trafienie = wszystkie sloty
@@ -1065,7 +1094,7 @@ function checkQuiz(){
     rh.className='rv-shead '+cls;
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${roundOk?'Dobrze!':(partHit?'Częściowo':'Pudło')}</b><small>${roundOk?(mc?'dobra odpowiedź':'wszystkie pola trafione'):(partHit?`trafione ${Object.values(okBySlot).filter(Boolean).length} z ${slots.length}`:'sprawdź poprawne odpowiedzi')}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
-  document.getElementById('reveal').classList.add('show');
+  revealVinyl(); document.getElementById('reveal').classList.add('show');
   if(roundOk){ confetti(); playClap(); } else playSfx(partHit ? 'ding' : 'buzz');   // Łamigłówki: częściowe → „ding"   // F6b (U4): pudło → „bzzt"
   document.getElementById('check').disabled=true;
   if(abcd) document.getElementById('replay').disabled=false;   // można dosłuchać
@@ -1149,7 +1178,7 @@ function checkTimeline(){
     rh.className='rv-shead '+cls;
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${placeOk?'Dobre miejsce!':'Pudło'}</b><small>${escapeHtml(sub)}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
-  document.getElementById('reveal').classList.add('show');
+  revealVinyl(); document.getElementById('reveal').classList.add('show');
   if(placeOk){ confetti(); playClap(); } else playSfx((okTitle||okArtist) ? 'ding' : 'buzz');
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false;
@@ -1194,7 +1223,7 @@ function checkArtistQ(){
     rh.className='rv-shead '+cls;
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${okArtist?'Dobrze!':(okAlbum?'Prawie!':'Pudło')}</b><small>${escapeHtml(sub)}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
-  document.getElementById('reveal').classList.add('show');
+  revealVinyl(); document.getElementById('reveal').classList.add('show');
   if(okArtist){ confetti(); playClap(); } else playSfx(okAlbum ? 'ding' : 'buzz');
   document.getElementById('check').disabled=true;
   if(!cover) document.getElementById('replay').disabled=false;   // składanka: można posłuchać jeszcze raz
@@ -1228,7 +1257,7 @@ function checkYear(){
     rh.className='rv-shead '+cls;
     rh.innerHTML=`<span class="ic">${ic}</span><span class="tx"><b>${YEAR_TIER[ys.tier]}</b><small>${escapeHtml(sub)}</small></span><span class="rv-pts">+${sc.points}</span>${streak>1?`<span class="strk">🔥 ${streak}</span>`:''}`;
   }
-  document.getElementById('reveal').classList.add('show');
+  revealVinyl(); document.getElementById('reveal').classList.add('show');
   if(ok){ confetti(); playClap(); } else playSfx(ys.points>0 ? 'ding' : 'buzz');
   document.getElementById('check').disabled=true;
   document.getElementById('replay').disabled=false;
