@@ -42,6 +42,8 @@ Auth: `Authorization: Bearer <token>` (z `/api/session`). Wszystko poza `/api/se
 - `POST /api/record-match {payload}` → `{id}`  (payload jak w starym `record_match`: mode, room_code, host_id, group_id, config, score, total_questions, started_at, participants[], answers[])
 - Drużyny: `POST /api/group/create {name,emoji}`, `POST /api/group/join {code}`, `POST /api/group/leave {id}`, `GET /api/groups`, `GET /api/group/members?id=`
 - Znajomi: `POST /api/friend/add {code}`, `POST /api/friend/respond {id,accept}`, `GET /api/friends`, `GET /api/friends/pending`
+- Gust (gałąź `gust`, wymaga migracji `0005_taste.sql` — patrz `server/README.md` „Migracje D1"): `GET /api/taste` → `{items:[…]}` (tylko własne),
+  `POST /api/taste {items:[{title,artist,year,genre,art,cat,rating:-1|1|2,source,ts}]}` (≤ 50, LWW po `ts`) → `{ok,saved,rejected}`, `DELETE /api/taste?key=<trackKey>`
 
 ---
 
