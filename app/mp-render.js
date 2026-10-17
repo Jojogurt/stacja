@@ -15,8 +15,8 @@ import { standings, rankingTop } from '../core/teams.js';   // P0-5: ranking z r
 import { REACTIONS } from '../core/chatFeed.js';   // F6b: whitelist emotek wspólna z serwerem (🖕 → 🍺)
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn, promptBodyHTML } from './dom.js';
-import { tasteHeartHTML } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie (lokalnie u gracza, bez protokołu)
-import { listenStart, listenHTML } from './listen.js';   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
+import { tasteHeartHTML, tasteHeartButtons } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie (lokalnie u gracza, bez protokołu)
+import { listenStart, listenHTML, listenStop, snippetPlay } from './listen.js';   // + P2-11: ▶ zajawka z listy na wyniku meczu   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
 import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie „słuchaj"
 import { playClap, playSfx } from './sfx.js';
 import { ic } from './icons.js';
@@ -25,6 +25,9 @@ import { renderPreserving } from './matchSetup.js';   // re-render pickera bez g
 import { FORMAT_LABEL, timerLabel, draftModesText, formatCopy, sanitizeDraft } from '../core/matchSetup.js';   // P1-9: copy per format
 import { tvJoinUrl, tvJoinLabel, tvRanking, tvPlayerStatus, tvTeamSummary, tvControls } from '../core/tvStage.js';   // P1-16: TV jako scena
 import { tvQrSVG, tvPatch, tvPatchFlip, tvSetMode, tvSetKeys, initTvKeys, tvMenuOpen, tvReducedMotion } from './mp-tv.js';
+import { typCountText, loadingText, slotPlaceholder, matchPlaylist, matchTally, scoreScale, phaseSfxGain, sfxRole, plural } from '../core/mpView.js';   // P2: copy, wynik meczu, dźwięki faz
+import { shareMpResult } from './mpResultCard.js';   // P2-11: obrazek wyniku do udostępnienia
+import { APP_NAME } from '../core/tasteProfile.js';   // nazwa marki na karcie wyniku (jedno źródło z kartą gustu — decyzja o marce w toku)
 
 const $m = id => document.getElementById(id);
 
@@ -32,6 +35,13 @@ const $m = id => document.getElementById(id);
 let mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds;
 export function initMpRender(deps){
   ({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds } = deps);
+  if(typeof deps.mpServerAuth==='function') mpServerAuth=deps.mpServerAuth;
+}
+let mpServerAuth = ()=>false;   // P2-9: copy „serwer losuje…" przy serwerze-autorytecie
+// P2-14: dźwięk FAZY wg roli ekranu (TV głośniej, telefon-pilot w salonie wyciszony, reszta 1×) — core/mpView
+export function mpPhaseSfx(name){
+  const g=S.game;
+  return playSfx(name, { gain:phaseSfxGain(name, sfxRole({ tv:mpIsSalonHost(), salon:!!(g && (g.salon || S.salon)) })), overMusic:name!=='sting' });
 }
 // czy TEN klient jest ekranem salonowym (host w trybie salon). Fallback S.salon = nim serwer
 // odeśle game.salon (działa bez deployu DO). Wymaga aktywnej gry (przed grą: lobby/picker normalnie).
@@ -81,16 +91,19 @@ function mpNetErrHTML(){
 function mpLobbyWaitHTML(){
   const ms=mpMembers();
   const hostId = S.game ? S.game.hostId : (S.host ? mpMe.id : (S.ch && S.ch.hostId) || null);
+  // P2-1: bez redundantnego badge'a „W POKOJU" — pełne imię (do 2 linii), „to Ty" w podpisie zamiast ucinanego „(Ty)"
   const cards = ms.map(m=>{
     const isHost = m.id===hostId, you = m.id===mpMe.id;
     const av = escapeHtml((m.name||'?').slice(0,1).toUpperCase());
-    return `<div class="pcz-m">
+    return `<div class="pcz-m${you?' you':''}">
       <span class="pcz-av" style="background:${mpAvatarColor(m.name)}">${av}</span>
-      <div class="pcz-mn"><b>${escapeHtml(m.name||'gracz')}${isHost?' '+ic('crown'):''}${you?' (Ty)':''}</b><small>${isHost?'host':'w pokoju'}</small></div>
-      <span class="pcz-badge">W POKOJU</span>
+      <div class="pcz-mn"><b>${escapeHtml(m.name||'gracz')}${isHost?' '+ic('crown'):''}</b><small>${isHost?'host':'gracz'}${you?' · to Ty':''}</small></div>
     </div>`;
-  }).join('') || `<div class="pcz-waitmsg">czekamy na graczy…</div>`;
-  const n=ms.length, word = n===1?'osoba' : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? 'osoby' : 'osób';
+  }).join('') || (S.netErr ? `<div class="pcz-waitmsg">czekamy na graczy…</div>` : '');
+  // P2-3: lista o stałej wysokości (min. 3 wiersze — „wolne miejsce", dalej scroll) → „ZACZNIJ →" nie skacze, gdy ktoś dochodzi
+  const ghosts = S.netErr ? '' : Array.from({ length:Math.max(0, 3-ms.length) }, (_,i)=>
+    `<div class="pcz-m pcz-ghost" aria-hidden="true"><span class="pcz-av"></span><div class="pcz-mn"><small>${i===0 && S.host ? 'wolne miejsce — wyślij kod znajomym' : 'wolne miejsce'}</small></div></div>`).join('');
+  const n=ms.length, word = plural(n, 'osoba', 'osoby', 'osób');
   const draft = !S.host ? mpDraftHTML(S.draft) : '';
   const foot = S.netErr ? ''   // P0-8: bez połączenia nie ma czego zaczynać — akcje są w karcie błędu
     : S.host
@@ -103,8 +116,8 @@ function mpLobbyWaitHTML(){
       <div class="pcz-hd-r1"><button type="button" class="pcz-exit" onclick="mpConfirmLeave('lobby')">${ic('back')} wyjdź</button><span class="pcz-lbl">KOD POKOJU</span></div>
       <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(S.code||'····')}</span><button class="pcz-share" onclick="mpShare(this)">${ic('share')} Udostępnij</button></div>
     </div>
-    <div class="pcz-team"><span>Przy stole</span><span class="pcz-count">${n} ${word}</span></div>
-    <div class="pcz-list">${cards}</div>
+    <div class="pcz-team"><span>Przy stole</span><span class="pcz-count" aria-live="polite">${n} ${word}</span></div>
+    <div class="pcz-list">${cards}${ghosts}</div>
     ${draft}
     <div class="pcz-foot">${foot}</div>
   </div>`;
@@ -155,6 +168,8 @@ function mpOnEnter(g, head, st){
     S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=matchQpc(g)-1), credits,   // P1-7: qpc meczu
       score: mpIsCompTV() ? null : teamScoreLine(g, tid, g.reveal) };   // P1-5: „+N" leci do „⭐" w nagłówku
     S.checkUntil=Date.now()+mpCheckMs(); S.revealFx=g.playNonce;
+    if(mpCheckMs()>0) mpPhaseSfx('drum');   // P2-14: werbel pod „Sprawdzamy…" (zajawka już uciszona w mpAfterSync)
+    mpNoteHistory(g);                        // P2-11: utwór do listy na wyniku meczu (lokalnie u gracza)
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
     // F2b #6: auto-„dalej" po bezczynności (licznik od pokazania karty). TV w salonie nie — przechodzi po „dalej" telefonów.
     S.revealAutoAt = mpIsSalonHost() ? 0 : S.checkUntil + mpRevealAutoMs();
@@ -165,11 +180,25 @@ function mpOnEnter(g, head, st){
     if(g && g.phase===MP.DONE && scene==='ph:'+MP.DONE && (S.sawMatch || S.host)) playSfx('fanfare');   // F6b (U4): fanfara końca meczu (raz); P0-10: nie dla dołączającego po meczu
     // P1-1: karta wchodzi sama (slide-up przy utworzeniu); karta → „słuchaj" = zwinięcie do paska fazy;
     // „słuchaj" → „kombinuj" BEZ nakładki (kolor paska + pola od dołu); odsłona — własne wejście („Sprawdzamy…" → flip)
+    if(scene.startsWith('card:')) mpPhaseSfx('whoosh');   // P2-14: karta pytania wjeżdża (raz na pytanie — klucz karty = si:qi)
     if(scene.startsWith('card:') || scene.startsWith('reveal:') || mpIsSalonHost()){ /* własne wejście (TV: lewa kolumna) */ }
     else if(prev.startsWith('card:') && scene.startsWith('play:')) mpStageFx(st, 'mp-fromcard', 560);
     else if(scene.startsWith('play:') && prev.startsWith('play:') && prev.split(':')[1]===scene.split(':')[1]) mpStageFx(st, 'mp-tokomb', 420);
     else if(!(g && g.phase===MP.DONE)) animIn(st);
   }
+}
+/* P2-11: historia zagranych utworów TEGO klienta (okładka, rok, zajawka, wynik MOJEJ drużyny, +N) — do listy na wyniku meczu.
+ * Kompletną kolejność daje serwer (game.results w DONE); historia ją wzbogaca (core/mpView.matchPlaylist). 1. pytanie = nowy mecz. */
+function mpNoteHistory(g){
+  const r=(g && g.reveal) || {};
+  if(!Array.isArray(S.matchHist) || matchProgress(g).n<=1) S.matchHist=[];
+  const tv=mpIsCompTV(), mine=tv ? {} : mpRevealMine(r);
+  const ok=!tv && !!(mine.teamOk || mine.pewniakWin), gained=tv ? 0 : (Number(mine.gained)||0);
+  const preview = typeof g.preview==='string' && /^https:\/\//.test(g.preview) ? g.preview : '';
+  const tracks = r.track && r.artist ? [{ track:displayTitle(r.track), artist:r.artist, year:r.year, art:r.art, preview }]
+    : (Array.isArray(r.listen) ? r.listen.map(t=>t && ({ track:t.title, artist:t.artist })) : []);
+  const cat=typeof g.catKey==='string' ? g.catKey : '';
+  tracks.filter(Boolean).forEach(t=>{ if(S.matchHist.length<60) S.matchHist.push({ ...t, ok, gained, cat, nonce:g.playNonce }); });
 }
 // P1-14: kolor fazy w nagłówku — przejście (200 ms) z poprzedniego koloru (--ph-from) na bieżący
 function mpNotePhase(g){
@@ -268,6 +297,8 @@ function mpCardSpeech(g){
   const q=mpQNum(g);
   return `Pytanie ${q.n}${q.total?' z '+q.total:''}.${g.catLabel?` Kategoria ${g.catLabel}.`:''}${g.mode?' '+mpTaskText(g)+'.':''}`;
 }
+// P2-9: „serwer losuje utwór…" (autorytet; dawniej „host losuje" — nieprawda) / „losuję…" (host relay) / „host losuje…" (gość relay)
+const mpLoadingText = (g)=> loadingText({ authority:mpServerAuth(), host:S.host, mode:g && g.mode });
 function mpCardInnerHTML(g){
   const q=mpQNum(g), count=mpInCount(g);
   const stage = g.phase===MP.LOADING ? 'loading' : count ? 'count' : 'arming';
@@ -277,7 +308,7 @@ function mpCardInnerHTML(g){
   const cat=g.catLabel||g.catKey||'';
   const chips=`${cat?`<span class="mp-qc-cat">${escapeHtml(cat)}</span>`:''}${g.mode?`<span class="mp-qc-task">${escapeHtml(mpModeIcon(g.mode))} ${escapeHtml(mpTaskText(g))}</span>`:''}`;
   let status='';
-  if(stage==='loading') status=`<div class="mp-qc-st">${bbLoader}<span>losuję pytanie…</span></div>`;
+  if(stage==='loading') status=`<div class="mp-qc-st">${bbLoader}<span>${escapeHtml(mpLoadingText(g))}</span></div>`;
   else if(stage==='arming'){
     const rc=num(g.readyCount||0), rt=num(g.readyTotal||players.length);
     const pend = readyIds ? pendingIds(players.map(m=>m.id), readyIds) : [];
@@ -435,7 +466,7 @@ function mpTvTeamsHTML(g){
       const st=rosterState(g,t.id,id,S.typingSet), me=ROSTER_META[st]||ROSTER_META.idle, nm=mpNameOf(id)||'gracz';
       return `<span class="mp-rchip${me.dim?' dim':''}"><b style="background:${me.bg};color:${me.fg}">${escapeHtml(nm.slice(0,1).toUpperCase())}</b><span style="color:${me.lc}">${escapeHtml(nm)} · ${me.lab}</span></span>`;
     }).join('');
-    return `<div class="mp-tvteam" style="border-color:${col}"><div class="mp-tvteam-h"><i style="background:${col}"></i><b>${escapeHtml(t.name||'drużyna')}</b><small>${num(nTyp)} ${nTyp===1?'typ':'typy'}</small></div><div class="mp-tvteam-ppl">${ppl}</div></div>`;
+    return `<div class="mp-tvteam" style="border-color:${col}"><div class="mp-tvteam-h"><i style="background:${col}"></i><b>${escapeHtml(t.name||'drużyna')}</b><small>${typCountText(nTyp)}</small></div><div class="mp-tvteam-ppl">${ppl}</div></div>`;
   }).join('')}</div>`;
 }
 function mpSlotsHTML(g){
@@ -443,7 +474,13 @@ function mpSlotsHTML(g){
   const slots=renderSlots(g);
   const tid=myTeamId();   // kolumny TYLKO mojej drużyny
   const ro=mpIsSalonHost();   // TV-sędzia: może KLIKNĄĆ propozycję (nadpisuje górkę głosów), ale nie dorzuca własnych typów
-  return `<div class="mp-slots">${slots.map(s=>{
+  // P2-5: pusty stan zamiast pustych kolumn (dawniej ~150 px pustki pod samymi nagłówkami)
+  if(!ro && slots.every(s=>!candidatesForSlot(g, tid, s.key).length)){
+    const solo=(g.format||'coop')==='solo' || myTeamSize()<2;
+    return `<div class="mp-slots-empty" role="note">✍️ ${solo ? 'Wpisz pierwszy typ — pole na dole' : 'Wrzućcie pierwszy typ — pola na dole'}<small>${escapeHtml(slots.map(s=>slotPlaceholder(s.label)).join(' · '))}</small></div>`;
+  }
+  // P2-5: kolumny równej szerokości wg liczby slotów (rok = 1 kolumna wyśrodkowana, nie przyklejona do lewej połowy)
+  return `<div class="mp-slots${slots.length===1?' one':''}" style="grid-template-columns:repeat(${Math.max(1, Math.min(4, slots.length))},minmax(0,1fr))">${slots.map(s=>{
     const cands=candidatesForSlot(g, tid, s.key);
     const myVal=myVoteForSlot(g, tid, s.key, mpMe.id);
     const rows = cands.map((c,i)=>{
@@ -456,7 +493,7 @@ function mpSlotsHTML(g){
       </button>`;
     }).join('') || (ro?`<div class="mp-cand empty"><span class="cv" style="opacity:.5">— czekamy na typy z telefonów —</span></div>`:'');
     // „+ dorzuć typ…" usunięte — wpisywanie jest w sekcji pól (mpFormHTML) pod kolumnami
-    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(s.label)}</div>${rows}</div>`;
+    return `<div class="mp-slotcol"><div class="mp-slot-h">${escapeHtml(slotPlaceholder(s.label))}</div>${rows}</div>`;
   }).join('')}</div>`;
 }
 // „odpowiedź drużyny" (design): ciemna karta (kolumny) / zielona przypięta (czat) + ×2 gdy pewniak
@@ -522,7 +559,10 @@ function mpListenSecs(g){
   return _listenSecs(g.mode, cat && cat.listenSecs);
 }
 // faza „słuchaj": płyta winylowa = play/pauza (app/vinyl.js — ten sam SVG co solo; id „mpKnob", ikona #mpKnobIcon)
-const mpKnobHTML = ()=> mpVinylHTML();
+// P2-7: lektor (synteza mowy) — ikona mikrofonu z falami zamiast płyty winylowej (metafora płyty nie pasuje do TTS).
+// Ten sam id „mpKnob" i mpKnobTap (stop/powtórz); stan „czyta" = klasa .on (mp.js mpSetKnob).
+const mpLektorKnobHTML = ()=> `<button type="button" class="mp-knob mp-lektor" id="mpKnob" onclick="mpKnobTap()" aria-pressed="false" aria-label="Lektor czyta opis — stuknij, by zatrzymać albo powtórzyć"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 14a3 3 0 0 0 3-3V5a3 3 0 0 0-6 0v6a3 3 0 0 0 3 3zm5-3a5 5 0 0 1-10 0H5a7 7 0 0 0 6 6.92V21h2v-3.08A7 7 0 0 0 19 11h-2z"/></svg><i class="mp-lk-w" aria-hidden="true"></i><i class="mp-lk-w w2" aria-hidden="true"></i></button>`;
+const mpKnobHTML = (g)=> g && g.mode==='lektor' ? mpLektorKnobHTML() : mpVinylHTML();
 // F6b (tryb #6): gałka „pilota" — dźwięk gra u hosta; bez #mpKnobIcon (stany odtwarzacza jej nie zmieniają)
 const mpRemoteKnobHTML = ()=> `<button class="mp-knob remote" id="mpKnob" onclick="mpKnobTap()" aria-label="Dźwięk gra u hosta — słuchaj z jego głośnika"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 9v6h4l5 5V4L7 9H3z"/><path d="M16.5 12a4.5 4.5 0 0 0-2.5-4v8a4.5 4.5 0 0 0 2.5-4z"/><path d="M14 3.2v2.1a7 7 0 0 1 0 13.4v2.1a9 9 0 0 0 0-17.6z"/></svg></button>`;
 const MP_REMOTE_STATUS = '🔈 słuchaj z głośnika hosta';
@@ -641,7 +681,7 @@ function mpLegendHTML(){
 function mpFormHTML(g){
   const slots=renderSlots(g);
   // P0-4: Enter = „Wrzuć" (wcześniejsze pole: dalej do następnego); klawiatura telefonu „Dalej"/„Wyślij"
-  const inputs=slots.map((s,i)=>`<input id="mpProp_${s.key}"${slotInputAttrs(s)} placeholder="${escapeHtml(s.label)}" enterkeyhint="${i<slots.length-1?'next':'send'}" autocomplete="off" data-k="${escapeHtml(s.key)}" oninput="mpTypingPing()" onkeydown="mpPropKey(event, this.dataset.k)">`).join('');
+  const inputs=slots.map((s,i)=>`<input id="mpProp_${s.key}"${slotInputAttrs(s)} placeholder="${escapeHtml(slotPlaceholder(s.label))}" aria-label="odpowiedź: ${escapeHtml(slotPlaceholder(s.label))}" enterkeyhint="${i<slots.length-1?'next':'send'}" autocomplete="off" data-k="${escapeHtml(s.key)}" oninput="mpTypingPing()" onkeydown="mpPropKey(event, this.dataset.k)">`).join('');
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
@@ -653,7 +693,7 @@ function mpComposerHTML(g, chatOnly=false){
   const slots=renderSlots(g);
   if(chatOnly) return `<div class="mp-composer chat-only"><div class="mp-compfield"><div class="mp-cwrap" id="mpCompChat"><input id="mpChatIn" maxlength="80" autocomplete="off" placeholder="czat… (odpowiedź = kafel wyżej)" onkeydown="if(event.key==='Enter')mpChatSend()"></div></div><button id="mpCompBtn" class="mp-send" onclick="mpChatSend()" aria-label="wyślij">➤</button></div>`;
   const typ = S.composerMode!=='chat';
-  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" enterkeyhint="send" autocomplete="off" placeholder="${escapeHtml(s.label)}" aria-label="odpowiedź: ${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
+  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" enterkeyhint="send" autocomplete="off" placeholder="${escapeHtml(slotPlaceholder(s.label))}" aria-label="odpowiedź: ${escapeHtml(slotPlaceholder(s.label))}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
       <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/odpowiedź" aria-label="${typ?'przełącz na czat':'przełącz na odpowiedź'}">${typ?'💬':'✍️'}</button>
       <div class="mp-compfield">
@@ -699,6 +739,7 @@ function mpHeaderHTML(g){
       <span class="mp-hd-title">${mpQLabel(g)} <small>· 🍺 ${escapeHtml(S.code||'')}</small></span>
       ${mpScoreHTML(g)}
       <span class="mp-hd-timer" id="mpCountdown" role="status" aria-live="polite"></span>
+      <button type="button" class="mp-hd-more" onclick="mpGameMenu()" aria-label="Menu gry — układ, dźwięki, wyjście" aria-haspopup="dialog">⋯</button>
     </div>
     ${chips}${bar}
   </div>`;
@@ -717,7 +758,7 @@ function mpSluchajBodyHTML(g){
   const here=mpPlaysHere(g);
   // P1-16: telefon-pilot w SALONIE — „patrz na TV" (muzyka/lektor i pytanie grają na dużym ekranie; tu bez audio)
   const lookTV = !here && !!g.salon;
-  const knob = here ? mpKnobHTML() : lookTV ? `<div class="mp-looktv" id="mpKnob" role="img" aria-label="Patrz na TV"><span aria-hidden="true">📺</span></div>` : mpRemoteKnobHTML();
+  const knob = here ? mpKnobHTML(g) : lookTV ? `<div class="mp-looktv" id="mpKnob" role="img" aria-label="Patrz na TV"><span aria-hidden="true">📺</span></div>` : mpRemoteKnobHTML();
   const status = here ? `${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć` : lookTV ? '<b>Patrz na TV</b> — muzyka gra na dużym ekranie' : MP_REMOTE_STATUS;
   // P1-13: polecenie zadania pod winylem („Zgadnij ROK wydania" / „Tytuł + wykonawca" / „Wybierz A–D")
   return `<div class="mp-deck">${knob}
@@ -965,6 +1006,9 @@ function mpScoreFly(line){
     else { const s2=q(); if(s2){ s2.classList.add('bump'); setTimeout(()=>s2.classList.remove('bump'), 420); } } };
   requestAnimationFrame(tick);
 }
+// P2-6: ramka karty odsłony wg wyniku MOJEJ drużyny — trafienie zielona (jak dotąd), częściowe złota, pudło szara/czerwona
+// (dawniej przy pudle też zielona). TV (Solo/Drużyny) — neutralna (brak „swojej" drużyny).
+const mpRvCls = (rv, tv)=> tv ? ' neutral' : (rv.teamOk || rv.pewniakWin) ? '' : Number(rv.gained)>0 ? ' part' : ' miss';
 // odsłona rundy (design): rail + zielona karta utworu + baner pewniaka + odpowiedź drużyny
 function mpRenderRevealCard(snap){
   const r=snap.reveal, head=snap.head, last=snap.isLast;
@@ -979,7 +1023,7 @@ function mpRenderRevealCard(snap){
   const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>`;
   const locked=rv.locked||{};
   return `${mpStillHead(head)}${mpRosterStrip()}${mpHr()}
-    <div class="rv-card">
+    <div class="rv-card${mpRvCls(rv, tv)}">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
       ${slot(rv.okTitle,'TYTUŁ',displayTitle(r.track))}${slot(rv.okArtist,'WYK.',r.artist)}
       ${mpFromHTML(r)}
@@ -1008,7 +1052,7 @@ function mpRenderYearReveal(snap){
   const tier = !tv && team ? `<small class="rv-team">${formatCopy(S.game && S.game.format).typLabel}: „${escapeHtml(team)}" · ${escapeHtml(YEAR_TIER_TX[y.tier]||'')}</small>` : '';
   const note = r.yearNote ? `<div class="rv-team rv-fun">ℹ️ ${escapeHtml(r.yearNote)}</div>` : '';
   return `${mpStillHead(head)}${mpRosterStrip()}${mpHr()}
-    <div class="rv-card">
+    <div class="rv-card${mpRvCls(rv, tv)}">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${r.album?`<span class="m">${escapeHtml(r.album)}</span>`:''}</div></div>
       <div class="rv-slot year"><span class="k">ROK</span><span class="v">${escapeHtml(String(r.year||'—'))}${tier}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>
       ${note}
@@ -1051,7 +1095,7 @@ function mpRenderQuizReveal(snap){
   const promptHtml = rebus ? promptBodyHTML(r.prompt, 'rebus') : escapeHtml(r.prompt||'');
   const listen = listenHTML(r.listen, { allowed:mpPlaysHere(S.game||{}) });
   return `${mpStillHead(head)}${mpRosterStrip()}${mpHr()}
-    <div class="rv-card quiz">
+    <div class="rv-card quiz${mpRvCls(rv, tv)}">
       <div class="rv-prompt">${promptHtml}</div>
       ${rows}${others}${fun}${listen}
       ${tv?'':mpTasteHTML([...(r.track && r.artist ? [r] : []), ...(Array.isArray(r.listen) ? r.listen : [])])}
@@ -1073,7 +1117,7 @@ function mpTeamRanking(g){
 }
 const mpWinnerScore = (g)=>{ const tr=mpTeamRanking(g); return tr.length?tr[0].score:0; };
 function mpJuiceScore(g){
-  const stage=$m('mpStage'); const el=stage&&stage.querySelector('.dn-hero .sc'); if(!el) return;
+  const stage=$m('mpStage'); const el=stage&&(stage.querySelector('.dn-hero .sc .scn')||stage.querySelector('.dn-hero .sc')); if(!el) return;
   const target=String(mpWinnerScore(g));
   if(stage.dataset.jscore===target){ el.textContent=target; return; }
   stage.dataset.jscore=target;
@@ -1093,7 +1137,7 @@ function mpRematchDraftHTML(){
 // wynik meczu (design): złoty hero + MVP + kto stawia + paski wkładu
 /* P1-16: części wyniku meczu wspólne dla telefonu i sceny TV (hero, MVP, „stawia kolejkę") */
 function mpDoneParts(g){
-  const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${num(g.mvp.correct)} trafnych typów</small></span></div>`:'';
+  const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${num(g.mvp.correct)} ${plural(g.mvp.correct, 'trafny typ', 'trafne typy', 'trafnych typów')}</small></span></div>`:'';
   const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
   const stawia = beer.length?`<div class="dn-stawia"><span class="ic">🍺</span><span class="tx"><span class="l">STAWIA KOLEJKĘ</span><b>${beer.map(([n,c])=>escapeHtml(n)+(c>1?` (${num(c)}×)`:'')).join(', ')}</b><small>przepalone pewniaki 🟡💥</small></span></div>`:'';
   // KONKURENCJA (solo/drużyny): hero = zwycięzca, główna lista = ranking drużyn (pkt).
@@ -1107,8 +1151,11 @@ function mpDoneParts(g){
   const heroT = isComp && st.tie ? 'Remis!' : isComp && st.winner ? escapeHtml(st.winner.name)+' wygrywa!' : 'Mecz zakończony!';
   const fc=formatCopy(g.format);   // P1-9: Solo — „zwycięzca", „Ranking graczy"
   const heroS = isComp && st.tie ? escapeHtml(tied.map(x=>x.name).join(' · '))+' · ex aequo' : fc.winnerSub;   // F6a: wynik w punktach (core/scoring.scoreRound)
-  const hero=`<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc">${num(mpWinnerScore(g))}</div></div>`;
-  return { mvp, stawia, isComp, tr, placeOf, fc, hero };
+  // P2-11: skala wyniku „320 / 500" — bazowe maksimum za rozegrane pytania (100/pytanie, bez premii za szybkość/serię)
+  const tal=matchTally({ results:g.results, history:mpIsSalonHost() ? [] : S.matchHist }), scale=scoreScale(tal.played), score=mpWinnerScore(g);
+  const scl = scale ? `<small class="scl" aria-hidden="true">/ ${num(scale)}</small>` : '';
+  const hero=`<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc" aria-label="${num(score)} pkt${scale?' z '+num(scale)+' możliwych bez premii':''}"><b class="scn">${num(score)}</b>${scl}</div>${scale?`<div class="scx">${num(tal.hits)}/${num(tal.played)} trafionych · skala bez premii za szybkość i serię</div>`:''}</div>`;
+  return { mvp, stawia, isComp, tr, placeOf, fc, hero, st, tal, scale, score };
 }
 function mpRenderDone(g, head){
   const tally=(g.tallyList||[]);
@@ -1131,10 +1178,65 @@ function mpRenderDone(g, head){
   return `${hero}
     ${mvp}${stawia}
     ${body}
+    ${mpPlaylistHTML(g)}
+    <button type="button" class="dn-share" onclick="mpShareResult(this)">📤 Udostępnij wynik <small>obrazek z punktami i utworami</small></button>
     ${S.host ? '' : mpRematchDraftHTML()}
     <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">${ic('back')} menu</button>${S.host
       ? '<button class="dn-again" onclick="mpRematch()" aria-label="Jeszcze raz — te same ustawienia">Jeszcze raz 🔁<small>te same ustawienia</small></button><button class="dn-change" onclick="mpNewGame()">Zmień ustawienia</button>'
       : `<div class="dn-wait">${S.draft?'host ustawia rewanż…':'host zaczyna rewanż'}</div>`}</div>`;
+}
+
+/* P2-11: lista zagranych utworów na wyniku meczu — ✓/✗ (moja drużyna), ▶ zajawka (lokalnie, ~10 s), ❤️ „na półkę" (app/taste.js).
+ * Kolejność/komplet z game.results (serwer), okładka/rok/zajawka z historii tego klienta (core/mpView.matchPlaylist). */
+function mpPlaylistHTML(g){
+  const list=matchPlaylist({ results:g.results, history:S.matchHist });
+  S.donePl=list;
+  if(!list.length) return '';
+  const hearts=tasteHeartButtons(list, { cat:typeof g.catKey==='string' ? g.catKey : '' });
+  const tal=matchTally({ results:g.results, history:S.matchHist });
+  const rows=list.map((t,i)=>{
+    const art=t.art ? `<img class="dn-pl-art" src="${escapeHtml(t.art)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : `<span class="dn-pl-art ph" aria-hidden="true">♪</span>`;
+    const meta=[t.artist, t.year].filter(Boolean).join(' · ');
+    return `<li class="dn-pl-row${t.ok?' ok':' no'}"><span class="dn-pl-mk" aria-label="${t.ok?'trafione':'pudło'}">${t.ok?'✓':'✗'}</span>${art}
+      <span class="dn-pl-tx"><b>${escapeHtml(t.title)}</b><small>${escapeHtml(meta)}${t.gained>0?` · <i>+${num(t.gained)}</i>`:''}</small></span>
+      <button type="button" class="dn-pl-play${S.plPlaying===i?' on':''}" data-pl-play="${i}" aria-pressed="${S.plPlaying===i}" aria-label="Posłuchaj: ${escapeHtml(t.title)} — ${escapeHtml(t.artist)}">${S.plPlaying===i?'■':'▶'}</button>${hearts[i]||''}</li>`;   // re-render (presence) nie gubi stanu ▶
+  }).join('');
+  return `<section class="dn-pl" aria-labelledby="dnPlH"><div class="dn-lbl" id="dnPlH">Zagrane utwory <small>${num(tal.hits)}/${num(tal.played)} trafionych · ❤️ = na półkę</small></div><ol class="dn-pl-list">${rows}</ol></section>`;
+}
+// ▶ na liście: jeden odsłuch naraz (snippetPlay przerywa poprzedni); stan przycisku z onState
+function mpPlTap(i){
+  const t=(S.donePl||[])[i]; if(!t) return;
+  const btns=()=>document.querySelectorAll('#mpStage [data-pl-play]');
+  const set=(idx, st)=>btns().forEach(b=>{ const on=+b.dataset.plPlay===idx;
+    if(!on) return; b.textContent = st==='play' ? '■' : st==='load' ? '…' : st==='brak' ? '✕' : '▶'; b.classList.toggle('on', st==='play'); b.setAttribute('aria-pressed', st==='play'?'true':'false'); });
+  if(S.plPlaying===i){ S.plPlaying=null; listenStop(); set(i, 'stop'); return; }
+  if(S.plPlaying!=null) set(S.plPlaying, 'stop');
+  S.plPlaying=i;
+  snippetPlay({ preview:t.preview, title:t.title, artist:t.artist }, { onState:(st)=>{ if(st==='stop' || st==='brak'){ if(S.plPlaying===i) S.plPlaying=null; } set(i, st); } });
+}
+if(typeof document!=='undefined') document.addEventListener('click', (e)=>{
+  const b=e.target && e.target.closest ? e.target.closest('#mpStage [data-pl-play]') : null;
+  if(b){ e.preventDefault(); mpPlTap(+b.dataset.plPlay); }
+});
+// 📤 „Udostępnij wynik" — obrazek PNG (app/mpResultCard.js) + tekst (core/mpView.resultShareText)
+async function mpShareResult(btn){
+  const g=S.game; if(!g || g.phase!==MP.DONE) return;
+  const p=mpDoneParts(g), list=S.donePl || matchPlaylist({ results:g.results, history:S.matchHist });
+  let url=''; try{ url=location.origin+location.pathname; }catch(_e){}
+  const d={ appName:APP_NAME, subtitle:'mecz ze znajomymi · '+(FORMAT_LABEL[g.format]||FORMAT_LABEL.coop), score:p.score, scale:p.scale, hits:p.tal.hits, played:p.tal.played,
+    comp:p.isComp, winner:p.st.winner ? p.st.winner.name : '', tie:!!p.st.tie,
+    ranking:p.tr.slice(0, 3).map(t=>({ name:t.name, score:t.score, place:p.placeOf(t.id) })), mvp:g.mvp || null,
+    tracks:list.map(t=>({ title:t.title, artist:t.artist, ok:t.ok })), url };
+  const lab=btn && btn.innerHTML;
+  if(btn){ btn.disabled=true; btn.textContent='przygotowuję obrazek…'; }
+  let r=null; try{ r=await shareMpResult(d); }catch(_e){ r=null; }
+  if(!btn) return r;
+  btn.disabled=false;
+  if(r && r.how==='cancelled'){ btn.innerHTML=lab; return r; }   // anulowany arkusz — bez komunikatu
+  btn.textContent = !r || r.how==='failed' ? 'nie udało się — spróbuj ponownie' : r.how==='shared' ? '✓ udostępniono'
+    : r.png ? '✓ obrazek zapisany' + (r.copied ? ' · tekst skopiowany' : '') : '✓ tekst skopiowany';
+  setTimeout(()=>{ if(btn.isConnected) btn.innerHTML=lab; }, 2600);
+  return r;
 }
 
 /* ===================== P1-16: TV JAKO SCENA (tryb salonowy: host = TV, gracze = telefony-piloty) =====================
@@ -1262,7 +1364,7 @@ function tvRevealHTML(g, snap){
 }
 function tvLeftHTML(g, sc){
   switch(sc){
-    case 'loading': return `${tvQHeadHTML(g)}<div class="tv-status">${bbLoader}<span>losuję pytanie…</span></div>`;
+    case 'loading': return `${tvQHeadHTML(g)}<div class="tv-status">${bbLoader}<span>${escapeHtml(mpLoadingText(g))}</span></div>`;
     case 'arming': {
       const players=mpPlayers(), ids=Array.isArray(g.readyIds) ? g.readyIds : [];
       const pend=pendingIds(players.map(m=>m.id), ids);
@@ -1275,7 +1377,7 @@ function tvLeftHTML(g, sc){
     }
     case 'listen':
       if(g.mode==='quiz') return `${tvQHeadHTML(g)}<div class="tv-clockrow">${tvClockHTML()}</div>${mpPromptHTML(g)}${mpMcHTML(g)}`;
-      return `${tvQHeadHTML(g)}<div class="tv-listen${mcOptions(g)?' mc':''}">${mpKnobHTML()}<div class="tv-listen-r">${tvClockHTML()}<div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}`;
+      return `${tvQHeadHTML(g)}<div class="tv-listen${mcOptions(g)?' mc':''}">${mpKnobHTML(g)}<div class="tv-listen-r">${tvClockHTML()}<div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}`;
     case 'answer': {
       const comp=(g.format||'coop')!=='coop', mc=!!mcOptions(g);
       const wait = g.allDoneAt ? `<div class="mp-alldone tv-alldone" role="status">✓ Wszyscy gotowi! Sprawdzamy…</div>`
@@ -1400,6 +1502,6 @@ function mpRenderTv(g, st){
   mpTickTimer();
 }
 initTvKeys();
-if(typeof window!=='undefined') Object.assign(window, { mpTvAct, mpTvMenu: tvMenuOpen });
+if(typeof window!=='undefined') Object.assign(window, { mpTvAct, mpTvMenu: tvMenuOpen, mpShareResult });
 
 export { mpIntroLeadMs, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpTvLobbyOn };

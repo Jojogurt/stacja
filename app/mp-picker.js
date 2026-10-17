@@ -12,13 +12,16 @@ import { teamColor } from '../core/teams.js';
 import { createMatchSetup } from './matchSetup.js';
 import { ic } from './icons.js';
 import { TABLE_KEY, TABLE_LABEL, TABLE_MIN_SONGS } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
+import { S } from './mp-state.js';   // P2-2: kod pokoju w pasku „Nowego meczu"
+import { plural } from '../core/mpView.js';
 
 let mpRender = () => {};                 // wstrzykiwany przez mp.js (re-render widoku pokoju)
 let mpGetPlayers = () => [];             // [{id,name}] obecni gracze (z mp.js) — do przypisania do drużyn
 let mpGetModes = () => MP_MODES;         // F8a: tryby dostępne w tym pokoju (relay: wszystkie MP; autorytet: znane serwerowi)
 let mpOnDraft = () => {};                // zmiana konfiguracji → mp.js rozsyła szkic gościom (debounce + limit po stronie serwera)
 let mpGetTable = () => ({ cap:false, players:0, withShelf:0, songs:0 });   // gust etap 3: capability + licznik półek (mp.js)
-export function initMpPicker(render, getPlayers, getModes, onDraft, getTable){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; if(onDraft) mpOnDraft = onDraft; if(getTable) mpGetTable = getTable; }
+let mpAvColor = () => '#888';            // P2-2: kolor awatara (mp-render.mpAvatarColor — wstrzykiwany, bez cyklu)
+export function initMpPicker(render, getPlayers, getModes, onDraft, getTable, avColor){ mpRender = render; if(getPlayers) mpGetPlayers = getPlayers; if(getModes) mpGetModes = getModes; if(onDraft) mpOnDraft = onDraft; if(getTable) mpGetTable = getTable; if(avColor) mpAvColor = avColor; }
 /* gust etap 3: „🎧 Gust stołu" — kategoria-ZAŚLEPKA w ALL_CATS (walidacja wyboru/trybów po stronie hosta jak dla playlisty
  * z rokiem). Prawdziwą pulę składa serwer z półek graczy przy starcie (mpBuildPools wysyła tylko znacznik `table`).
  * Poza ALL_KEYS i grupami kategorii → nie trafia do losowania, wyszukiwarki ani solo. W komponencie „Nowy mecz" to
@@ -185,6 +188,18 @@ function mpSetQuestions(q){ setup.setQuestions(q); }
 // P1-17: „Jeszcze raz — te same ustawienia" — czy bieżąca konfiguracja pickera da się wystartować (wybór + bramki)
 function mpPickReady(){ try{ return !!setup.summary().ok; }catch(_e){ return false; } }
 function mpDraft(){ return { ...setup.draft(), timer:mpPickTimer, format:mpPickFormat, salon:mpPickSalon, audioHostOnly:mpPickAudioHostOnly() }; }
+/* P2-2: host w „Nowym meczu" widzi stół — kod pokoju + awatary graczy (na żywo, presence) + „Udostępnij";
+ * dawniej musiał wracać do poczekalni, żeby sprawdzić, czy ktoś doszedł. */
+function mpPickRoomHTML(){
+  if(!S.code) return '';
+  const ps=mpGetPlayers(), shown=ps.slice(0, 6), more=ps.length-shown.length;
+  const avs=shown.map(p=>{ const nm=p.name||'?'; return `<b class="mp-pkr-av" style="background:${mpAvColor(nm)}" title="${escapeHtml(nm)}">${escapeHtml(nm.slice(0,1).toUpperCase())}</b>`; }).join('')+(more>0?`<b class="mp-pkr-av more">+${more}</b>`:'');
+  const who = ps.length ? `${ps.length} ${plural(ps.length, 'gracz', 'graczy', 'graczy')}${mpPickSalon?' + TV':''}` : 'czekamy na graczy';
+  return `<div class="mp-pkroom" role="status" aria-live="polite" aria-label="Pokój ${escapeHtml(S.code)}: ${escapeHtml(who)}">
+      <span class="mp-pkr-code"><small>POKÓJ</small><b>${escapeHtml(S.code)}</b></span>
+      <span class="mp-pkr-avs" aria-hidden="true">${avs}</span><span class="mp-pkr-n">${escapeHtml(who)}</span>
+      <button type="button" class="mp-pkr-share" onclick="mpShare(this)" aria-label="Udostępnij link do pokoju">${ic('share')}<span> Udostępnij</span></button></div>`;
+}
 function mpPickerHTML(){
   mpTablePrune();   // gust etap 3: stół wycięty z wyboru, zanim komponent policzy podsumowanie (każda zakładka)
   return `<div class="mpnav">
@@ -192,6 +207,7 @@ function mpPickerHTML(){
       <span class="nav-title">Nowy mecz</span>
       <button class="nav-menu" onclick="mpConfirmLeave('menu')" aria-label="menu">${ic('menu')}</button>
     </div>
+    ${mpPickRoomHTML()}
     <div class="mp-deck ms-host">${setup.html()}</div>`;
 }
 // AUTORYTET: złóż MINIMALNĄ pulę kategorii do wysłania (cap payloadu `start`).

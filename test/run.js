@@ -1981,8 +1981,9 @@ group('Nowy mecz: setupSummary / settingsSummary', ()=>{
   eq(MS.setupSummary({ cats:new Set(['80s']), active:['music'], questions:30, allCats:MS_CATS }).text, '30 utworów · 1 kat. · 1 tryb · z powtórkami', 'mała pula → „z powtórkami"');
   eq(MS.setupSummary({ cats:new Set(['80s','rebusy']), active:['music','quiz'], questions:5, allCats:MS_CATS }).text, '5 pytań · 2 kat. · 2 tryby · na przemian', 'z quizem → „pytań" (P1-7: krótki mecz miesza)');
   eq(MS.setupSummary({ cats:new Set(['tlum']), active:['music'], questions:15, allCats:MS_CATS }).ok, false, 'niekompatybilne → ok:false');
-  eq(MS.settingsSummary({ questions:15, trener:false }), '15 pytań · trener wył.', 'solo');
-  eq(MS.settingsSummary({ ctx:'mp', questions:30, format:'teams', timer:0, salon:true }), '30 pytań · Drużyny · bez limitu · TV', 'MP');
+  eq(MS.settingsSummary({ questions:15, trener:false }), '15\u00a0pytań · trener wył.', 'solo');
+  eq(MS.settingsSummary({ ctx:'mp', questions:30, format:'teams', timer:0, salon:true }), '30\u00a0pytań · Drużyny · bez\u00a0limitu · TV', 'MP');
+  eq(MS.timerLabel(60), '60\u00a0s', 'P2-9: „60 s” z twardą spacją (nie łamie się na „60 / s”)');
 });
 group('Nowy mecz: sanitizeDraft — szkic MP dla gości (te same reguły klient/serwer)', ()=>{
   eq(MS.sanitizeDraft(null), null, 'null'); eq(MS.sanitizeDraft([1]), null, 'tablica'); eq(MS.sanitizeDraft('x'), null, 'string');
@@ -3081,5 +3082,43 @@ group('P1-16 TV: link „dołącz", ranking z ruchem miejsc, statusy, sterowanie
   eq([TV.tvTheme(null), TV.tvTheme('light'), TV.tvTheme('dark')], ['dark','light','dark'], 'motyw TV domyślnie ciemny');
 });
 }
+/* ===== P2 (przegląd MP 2026-10): core/mpView.js — copy, lista zagranych utworów, skala wyniku, dźwięki faz ===== */
+const MV = await import('../core/mpView.js');
+group('P2 core/mpView: liczebniki, copy losowania, placeholdery łamigłówek', ()=>{
+  eq([0,1,2,4,5,12,14,22,25,112].map(MV.typCountText), ['0 typów','1 typ','2 typy','4 typy','5 typów','12 typów','14 typów','22 typy','25 typów','112 typów'], 'P2-9: „0 typów", „2 typy", „12 typów", „22 typy"');
+  eq(MV.plural(3,'osoba','osoby','osób'), 'osoby', 'plural 3 → osoby');
+  eq([MV.loadingText({authority:true, mode:'music'}), MV.loadingText({authority:true, mode:'quiz'}), MV.loadingText({host:true}), MV.loadingText({})],
+    ['serwer losuje utwór…','serwer losuje pytanie…','losuję utwór…','host losuje utwór…'], 'P2-9: autorytet → „serwer losuje", relay → host/gość');
+  eq([MV.slotPlaceholder('1'), MV.slotPlaceholder(' 3 '), MV.slotPlaceholder('tytuł'), MV.slotPlaceholder(null)], ['słowo 1','słowo 3','tytuł',''], 'P2-5: sloty „1/2/3" → „słowo N"');
+});
+group('P2-11 core/mpView: lista zagranych utworów + skala + tekst udostępnienia', ()=>{
+  eq([MV.scoreScale(5), MV.scoreScale(0), MV.scoreScale('x'), MV.scoreScale(15)], [500,0,0,1500], 'skala: 100 pkt bazowo na pytanie');
+  const results=[ {track:'Hey Jude',artist:'The Beatles',ok:true,mode:'music'}, {track:'Stolica Polski?',artist:'',ok:false,mode:'quiz'},
+    {track:'Bad',artist:'Michael Jackson',ok:false,mode:'year'}, {track:'Hey Jude',artist:'Beatles',ok:true} ];
+  const history=[ {track:'Bad',artist:'Michael Jackson',year:'1987',art:'https://x/a.jpg',preview:'https://x/p.m4a',ok:true,gained:70},
+    {track:'Hey Jude',artist:'The Beatles',art:'javascript:alert(1)',preview:'http://x/plain.m4a',ok:true,gained:150},
+    {track:'Zombie',artist:'The Cranberries',ok:false} ];
+  const pl=MV.matchPlaylist({ results, history });
+  eq(pl.map(x=>x.title), ['Hey Jude','Bad','Zombie'], 'kolejność z results, quiz bez utworu poza listą, duplikat raz, historia spoza results na końcu');
+  eq([pl[1].year, pl[1].art, pl[1].preview, pl[1].ok, pl[1].gained], ['1987','https://x/a.jpg','https://x/p.m4a',true,70], 'wzbogacenie z historii (rok/okładka/zajawka/MOJE ✓/+N)');
+  eq([pl[0].art, pl[0].preview], ['',''], 'okładka/zajawka tylko https (javascript:/http: odrzucone)');
+  eq(MV.matchPlaylist({ results:[{track:'A'.repeat(500),artist:'B'}] })[0].title.length, 120, 'tytuł przycięty');
+  eq(MV.matchPlaylist({ history:[{track:'X',artist:'Y'}] }).length, 1, 'bez results (stary host) — sama historia');
+  eq(MV.matchPlaylist({ results:'zle', history:null }), [], 'śmieci → pusta lista');
+  eq(MV.matchPlaylist({ results:Array.from({length:40},(_,i)=>({track:'T'+i,artist:'A'})), max:30 }).length, 30, 'limit 30');
+  eq(MV.matchTally({ results }), { played:4, hits:2 }, 'tally z results (TV / bez historii)');
+  eq(MV.matchTally({ results:[], history }), { played:3, hits:2 }, 'tally z historii (bez results)');
+  eq(MV.matchTally({ results:results.slice(0,3), history }), { played:3, hits:2 }, 'pełna historia → MOJE trafienia (nie drużyny prowadzącej)');
+  eq(MV.matchTally({ results, history:history.slice(0,1) }), { played:4, hits:2 }, 'niepełna historia (dołączył w trakcie) → results');
+  const tx=MV.resultShareText({ appName:'Uszy & Muzk', score:320, scale:500, hits:4, played:5, comp:true, winner:'Ola', url:'https://k/s/' });
+  ok(/320 \/ 500 pkt · 4\/5 trafionych/.test(tx) && /Ola wygrywa/.test(tx) && /https:\/\/k\/s\//.test(tx), 'share: „320 / 500 pkt · 4/5 trafionych" + zwycięzca + link — '+tx);
+  ok(/Remis!/.test(MV.resultShareText({ comp:true, tie:true })) && !/wygrywa/.test(MV.resultShareText({ comp:false, winner:'X' })), 'share: remis / coop bez zwycięzcy');
+});
+group('P2-14 core/mpView: głośność dźwięków faz wg roli (TV głośniej, pilot w salonie cicho)', ()=>{
+  eq(['sting','whoosh','drum'].map(n=>MV.phaseSfxGain(n,'tv')), [1.8,1.8,1.8], 'TV: ×1.8');
+  eq(['sting','whoosh','drum'].map(n=>MV.phaseSfxGain(n,'remote')), [0,0,0], 'telefon w salonie: wyciszone');
+  eq([MV.phaseSfxGain('sting'), MV.phaseSfxGain('ding','tv'), MV.phaseSfxGain('tick','remote')], [1,1,1], 'zwykły telefon 1×; inne dźwięki bez zmian');
+  eq([MV.sfxRole({tv:true,salon:true}), MV.sfxRole({salon:true}), MV.sfxRole({})], ['tv','remote','normal'], 'rola ekranu');
+});
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

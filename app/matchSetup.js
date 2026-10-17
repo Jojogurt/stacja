@@ -185,7 +185,8 @@ export function createMatchSetup(cfg){
   }
   function catCard(k, groupLabel){
     const on=pick.cats.has(k), name=catName(k), sub=(groupLabel?groupLabel+' · ':'')+catSub(k);
-    const main=`<button type="button" class="ms-cat${on?' on':''}" data-ms-cat="${escapeHtml(k)}" aria-pressed="${on}"><b>${escapeHtml(name)}</b><small>${escapeHtml(sub)}</small></button>`;
+    // P2-10: jawna nazwa dostępnościowa (nazwa + zakres/opis) — czytnik ekranu nie składa jej z <b>/<small> w każdym silniku
+    const main=`<button type="button" class="ms-cat${on?' on':''}" data-ms-cat="${escapeHtml(k)}" aria-pressed="${on}" aria-label="${escapeHtml(name+(sub?' — '+sub:''))}"><b>${escapeHtml(name)}</b><small>${escapeHtml(sub)}</small></button>`;
     if(!(cfg.ownActions && String(k).startsWith('pl:'))) return main;
     return `<div class="ms-cat-wrap">${main}<span class="ms-cat-acts">`+
       `<button type="button" class="ms-cat-act" data-ms-edit="${escapeHtml(k)}" aria-label="Edytuj: ${escapeHtml(name)}" title="edytuj">✎</button>`+

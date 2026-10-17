@@ -1858,10 +1858,10 @@
   .mp-qc-count{height:96px;display:grid;place-items:center}
   .mp-qc-d{display:block;font-family:var(--display);font-weight:900;font-size:84px;line-height:1;color:var(--ph-sluchaj);animation:mpDigit .3s cubic-bezier(.2,.8,.2,1) both}
   html.dark .mp-qc-d{color:#5CC5FF}
-  @keyframes mpDigit{from{transform:scale(1.15);opacity:.35}to{transform:none;opacity:1}}
+  @keyframes mpDigit{from{transform:scale(1.15);opacity:.6}to{transform:none;opacity:1}}   /* P2-8: cyfra nie znika w dark mode (min. .6) */
   /* krok 2: karta „zwija się" do paska fazy; krok 3: słuchaj → kombinuj bez nakładki — pola wjeżdżają od dołu */
   #mpStage.mp-fromcard .mp-phbar{animation:mpBarIn .24s cubic-bezier(.2,.8,.2,1) both;transform-origin:top center}
-  @keyframes mpBarIn{from{transform:translateY(26px) scaleY(2.6);opacity:.4}to{transform:none;opacity:1}}
+  @keyframes mpBarIn{from{transform:translateY(26px) scaleY(2.6);opacity:.6}to{transform:none;opacity:1}}
   #mpStage.mp-fromcard .mp-play > :not(.mp-hd){animation:mpReveal .32s cubic-bezier(.2,.8,.2,1) both .1s}
   #mpStage.mp-tokomb .mp-phbar .mp-ph-on,#mpStage.mp-tokomb .mp-phtask{animation:mpFade .2s ease both}
   #mpStage.mp-tokomb .mp-foot,#mpStage.mp-tokomb .mp-comp,#mpStage.mp-tokomb .mp-board,#mpStage.mp-tokomb .mp-mc{animation:mpFootUp .22s cubic-bezier(.2,.8,.2,1) both}
@@ -1945,7 +1945,7 @@
   .tv-corner-tx b{font-family:var(--display);font-weight:900;font-size:1.5rem;letter-spacing:.12em}
   .tv-menubtn{width:3rem;height:3rem;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:1.7rem;font-weight:900;line-height:1;cursor:pointer;flex:0 0 auto}
   .tv-menubtn:focus-visible,.tv-btn:focus-visible,.tv-menu-card button:focus-visible{outline:.22rem solid var(--gold);outline-offset:.18rem}
-  .tv-main{display:grid;grid-template-columns:minmax(0,1.55fr) minmax(0,1fr);gap:1.25rem;min-height:0}
+  .tv-main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:1.25rem;min-height:0}   /* v69 P2: prawa kolumna (ranking) szersza — pełne imiona */
   @media (max-width:1000px){ .tv-main{grid-template-columns:minmax(0,1fr)} }
   .tv-left,.tv-right{background:var(--panel);border:2px solid var(--line);border-radius:1.3rem;padding:1.3rem 1.6rem;min-width:0;overflow-x:hidden;overflow-y:auto}
   .tv-left{display:flex;flex-direction:column;gap:.9rem}
@@ -2139,6 +2139,105 @@
   @media (prefers-reduced-motion: reduce){ .mp-looktv{animation:none} }
   .um-tvlobby{display:flex;flex-direction:column;align-items:flex-start;gap:2px;width:100%;margin-top:8px;padding:12px 14px;border-radius:14px;border:2px solid var(--blue);border-bottom-width:4px;background:var(--info-bg);color:var(--ink);font-family:var(--display);font-weight:900;font-size:var(--fs-md);cursor:pointer;text-align:left}
   .um-tvlobby small{font-weight:700;font-size:var(--fs-xs);color:var(--muted)}
+  /* ===== P2 (przegląd MP 2026-10): dopracowanie wizualne ===== */
+  /* P2-1: lobby — pełne imiona (do 2 linii), bez badge'a „W POKOJU"; Ty = niebieska ramka */
+  .pcz-mn{flex:1}
+  .pcz-mn b{white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;overflow-wrap:anywhere;line-height:1.25}
+  .pcz-m.you,html.dark .pcz-m.you{border-color:var(--blue)}
+  .pcz-badge{display:none}
+  /* P2-3: lista o stałej wysokości (3 wiersze, dalej scroll) — „ZACZNIJ →" nie skacze przy dojściu gracza */
+  .pcz-list{height:252px;overflow-y:auto;overscroll-behavior:contain;scrollbar-width:thin;align-content:start}   /* stała wysokość: 3 wiersze (jedno imię w 2 liniach) */
+  .pcz-list>.pcz-m{flex:0 0 auto}
+  .pcz-ghost{background:none!important;border:2px dashed var(--line)!important;animation:none!important}
+  .pcz-ghost .pcz-av{background:transparent;border:2px dashed var(--line)}
+  .pcz-ghost small{font-family:var(--display);font-weight:800}
+  /* P2-2: „Nowy mecz" hosta — pasek pokoju (kod + gracze na żywo) */
+  .mp-pkroom{display:flex;align-items:center;gap:10px;flex-wrap:nowrap;margin:0 0 14px;padding:10px 12px;border-radius:16px;background:var(--panel);border:2px solid var(--line)}
+  .mp-pkr-code{display:flex;flex-direction:column;line-height:1.05}
+  .mp-pkr-code small{font-family:var(--display);font-weight:800;font-size:12px;color:var(--muted);letter-spacing:.06em}
+  .mp-pkr-code b{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.14em;color:var(--ink)}
+  .mp-pkr-avs{display:inline-flex;padding-left:6px}
+  .mp-pkr-av{width:28px;height:28px;margin-left:-6px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-family:var(--display);font-weight:900;font-size:13px;border:2px solid var(--panel)}
+  .mp-pkr-av.more{background:var(--muted);font-size:12px}
+  .mp-pkr-n{font-family:var(--display);font-weight:800;font-size:var(--fs-sm);color:var(--muted)}
+  .mp-pkr-share{margin-left:auto;display:inline-flex;align-items:center;gap:6px;min-height:40px;padding:6px 12px;border-radius:12px;border:2px solid var(--line);border-bottom-width:3px;background:var(--panel2);color:var(--ink);font-family:var(--display);font-weight:900;font-size:13px;cursor:pointer}
+  .mp-pkr-n{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  @media (max-width:420px){ .mp-pkr-share span{display:none} .mp-pkr-share{min-width:44px;justify-content:center;padding:6px} }
+  @media (min-width:900px){
+    .ms .ms-bar{position:sticky;bottom:16px;align-self:end;z-index:20;box-shadow:0 10px 28px rgba(0,0,0,.14)}   /* pasek startu przyklejony w prawej kolumnie */
+  }
+  /* P2-4: rywale w marginesie (zawijanie zamiast wyjazdu poza 16 px); czat: roster zawijany, bez poziomego scrolla */
+  .mp-roster:has(.mp-rivals){flex-wrap:wrap}
+  .mp-rivals{min-width:0;justify-content:center}
+  .mp-rival b{max-width:none;white-space:normal;overflow-wrap:anywhere}
+  .mp-roster-nb{flex-wrap:wrap!important;overflow:visible!important}
+  /* P2-5: kolumny — 1 slot wyśrodkowany, pusty stan z podpowiedzią */
+  .mp-slots.one{max-width:340px;margin-left:auto;margin-right:auto}
+  .mp-slots-empty{display:flex;flex-direction:column;align-items:center;gap:4px;text-align:center;padding:14px 12px;margin:4px 0 10px;border:2px dashed var(--line);border-radius:14px;font-family:var(--display);font-weight:800;font-size:var(--fs-sm);color:var(--muted)}
+  .mp-slots-empty small{font-weight:700;font-size:12px;opacity:.85}
+  /* P2-6: ramka karty odsłony wg wyniku — pudło czerwona (tło neutralne), częściowe złota, TV neutralna */
+  .rv-card.miss{border-color:var(--red);background:var(--panel)} .rv-card.miss .rv-slot{border-color:var(--line)}
+  .rv-card.part{border-color:var(--gold);background:var(--part-bg)} .rv-card.part .rv-slot{border-color:var(--part-line)}
+  .rv-card.neutral{border-color:var(--line);background:var(--panel)} .rv-card.neutral .rv-slot{border-color:var(--line)}
+  html.dark .rv-card.miss{border-color:var(--red);background:var(--panel)} html.dark .rv-card.part{border-color:var(--gold);background:var(--panel)} html.dark .rv-card.neutral{border-color:var(--line)}
+  /* P2-7: słuchaj — status zwykłą czcionką (nie etykieta systemowa); CTA bliżej płyty; lektor = mikrofon */
+  #mpPlayStatus{text-transform:none;letter-spacing:0;font-family:var(--body);font-weight:700;font-size:14px}
+  .mp-play .mp-gokomb{margin-top:2px!important}
+  .mp-play>.mp-deck{margin-bottom:10px}
+  .mp-lektor{position:relative;width:104px;height:104px;margin:6px auto 4px;background:#9B4DDB;color:#fff;box-shadow:0 5px 0 #7434AE}
+  .mp-lektor svg{width:46px;height:46px}
+  .mp-lektor:active{transform:translateY(5px);box-shadow:0 0 0 #7434AE}
+  .mp-lk-w{position:absolute;inset:-7px;border-radius:50%;border:3px solid #9B4DDB;opacity:0;pointer-events:none}
+  .mp-lektor.on .mp-lk-w{animation:mpLkWave 1.6s ease-out infinite} .mp-lektor.on .mp-lk-w.w2{animation-delay:.8s}
+  @keyframes mpLkWave{0%{transform:scale(.92);opacity:.75}100%{transform:scale(1.4);opacity:0}}
+  html.tv .mp-lektor{width:9rem;height:9rem} html.tv .mp-lektor svg{width:4rem;height:4rem}
+  @media (prefers-reduced-motion: reduce){ .mp-lektor.on .mp-lk-w{animation:none;opacity:.6;transform:scale(1.1)} }
+  /* P2-11: wynik meczu — skala, lista zagranych utworów (▶ + ❤️), udostępnianie obrazka */
+  .dn-hero .sc{display:flex;align-items:baseline;justify-content:center;gap:6px}
+  .dn-hero .scl{font-size:26px;font-weight:900;opacity:.72;letter-spacing:0}
+  .dn-hero .scx{font-family:var(--display);font-weight:800;font-size:12px;opacity:.85}
+  .tv-done .dn-hero .scl{font-size:2.4rem} .tv-done .dn-hero .scx{font-size:1.05rem}
+  .dn-lbl small{font-weight:800;font-size:12px;margin-left:6px;opacity:.9}
+  .dn-pl{margin:0 0 14px}
+  .dn-pl-list{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+  .dn-pl-row{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:14px;background:var(--panel);border:2px solid var(--line)}
+  .dn-pl-mk{font-family:var(--display);font-weight:900;font-size:15px;width:14px;text-align:center;flex:0 0 auto}
+  .dn-pl-row.ok .dn-pl-mk{color:var(--ok-ink)} .dn-pl-row.no .dn-pl-mk{color:var(--fail-ink)}
+  .dn-pl-art{width:40px;height:40px;border-radius:9px;object-fit:cover;flex:0 0 auto;background:var(--panel2);display:grid;place-items:center;color:var(--muted);font-weight:900}
+  .dn-pl-tx{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .dn-pl-tx b{font-family:var(--display);font-weight:900;font-size:14px;color:var(--ink);overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;line-height:1.2}
+  .dn-pl-tx small{font-family:var(--body);font-weight:700;font-size:12px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .dn-pl-tx small i{font-style:normal;color:var(--ok-ink);font-weight:900}
+  .dn-pl-play{flex:0 0 auto;width:40px;height:40px;border-radius:50%;border:2px solid var(--line);border-bottom-width:3px;background:var(--panel2);color:var(--ink);font-size:14px;font-weight:900;cursor:pointer;display:grid;place-items:center;padding:0}
+  .dn-pl-play.on{background:var(--green);border-color:var(--green-d);color:#fff}
+  .taste-heart.compact{width:40px;min-width:40px;padding:0;justify-content:center;flex:0 0 auto}
+  .dn-share{display:flex;flex-direction:column;align-items:center;gap:2px;width:100%;margin:0 0 14px;padding:12px;border-radius:16px;border:2px solid var(--blue);border-bottom-width:4px;background:var(--info-bg);color:var(--ink);font-family:var(--display);font-weight:900;font-size:var(--fs-md);cursor:pointer}
+  .dn-share small{font-family:var(--body);font-weight:700;font-size:12px;color:var(--muted)}
+  .dn-share:disabled{opacity:.7;cursor:progress}
+  /* P2-12: pierwsze wejście z linku — ksywa i od razu do pokoju */
+  .mp-deep-in input{width:100%;min-height:50px;box-sizing:border-box;border-radius:14px;border:2px solid var(--line);background:var(--surface);color:var(--ink);padding:0 14px;font-family:var(--display);font-weight:900;font-size:18px}
+  .mp-deep-in input:focus{outline:3px solid var(--blue);outline-offset:1px}
+  .mp-deep .mp-deep-go{color:#fff;background:var(--green);border:none;box-shadow:0 4px 0 var(--green-d)}
+  .mp-deep .mp-dlg-stay{color:var(--muted);background:var(--panel2);border:2px solid var(--line);box-shadow:none}
+  /* P2-13: menu ⋯ w nagłówku gry (układ kolumny/czat, dźwięki, wyjście) */
+  .mp-hd-more{flex:0 0 auto;width:36px;height:36px;margin-right:-4px;border-radius:50%;border:none;background:rgba(255,255,255,.2);color:#fff;font-size:20px;font-weight:900;line-height:1;cursor:pointer;display:grid;place-items:center;padding:0}
+  .mp-hd-more:focus-visible{outline:3px solid #fff;outline-offset:2px}
+  @media (max-width:360px){ .mp-hd-title small{display:none} .mp-hd-r1{gap:6px} .mp-hd-back{display:none} .mp-hd-timer:not(:empty){padding:6px 9px} .mp-hd-score{padding:5px 7px} }   /* 320 px: numer pytania ważniejszy niż kod; wyjście jest w ⋯ */   /* 320 px: numer pytania ważniejszy niż kod pokoju (kod jest w ⋯ i w lobby) */
+  .mp-gm-row{display:flex;align-items:center;gap:10px;padding:10px 0 6px;border-top:2px solid var(--line)}
+  .mp-gm-row>span{display:flex;flex-direction:column;font-family:var(--display);font-weight:900;font-size:var(--fs-md);min-width:0}
+  .mp-gm-row>span small{font-size:12px}
+  .mp-gm-row .seg{flex:0 0 auto}
+  /* rankingi: TV — imię dostaje resztę szerokości (do 2 linii), status i punkty kompaktowe; telefon — zawijanie zamiast ucinania */
+  .tv-team{grid-template-columns:auto minmax(0,1fr) auto auto;gap:.6rem;padding:.65rem .8rem}
+  .tv-rk{font-size:1.5rem;min-width:1.5rem}
+  .tv-tm-col{flex:1 1 auto}
+  .tv-tm-nm{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;line-height:1.12;text-overflow:clip;font-size:1.4rem}
+  .tv-sum{font-size:.92rem;padding:.06rem .5rem}
+  .tv-team .tv-pts{font-size:1.75rem}
+  .tv-mk{font-size:1.5rem}
+  .tv-team.solo1 .tv-av{width:2.4rem;height:2.4rem;font-size:1.1rem}
+  .rv-stand-row .nm{white-space:normal;overflow-wrap:anywhere;text-overflow:clip}
+  .wk-row .nm{white-space:normal;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;line-height:1.2;max-width:42%}
 </style>
 <script>/* motyw przed renderem — bez mignięcia. F6a (R-U7): brak wyboru / 'system' → prefers-color-scheme */try{var _t=localStorage.getItem('stacjaTheme');if(_t==='dark'||(_t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');}catch(e){try{if(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark');}catch(_e){}}</script>
 </head>

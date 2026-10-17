@@ -351,7 +351,8 @@ function dailyProfileHTML(){
 }
 
 // zapis ksywy z Profilu (stan ksywy + nazwa w MP żyją tutaj)
-export async function saveHandle(v){ await setHandle(v); myHandle=v; cacheHandle(v); mpMe.name=mpMe.name||v; }
+// P2-12: najpierw lokalnie (ksywa znana od razu — np. wejście z linku nie czeka na sieć), potem profil na serwerze
+export async function saveHandle(v){ myHandle=v; cacheHandle(v); mpMe.name=mpMe.name||v; await setHandle(v); }
 
 /* F6b (U10): przełącznik „Pikantne ksywy" w menu (domyślnie WYŁ.) — dotyczy losowanych ksyw */
 (function wireSpicy(){

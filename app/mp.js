@@ -26,7 +26,8 @@ import { stopAudio } from './audio.js';
 import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { lektorLang, catLektorLang } from '../core/lektorVoice.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle, knownHandle } from './social.js';
-import { playSfx, registerMusicProbe } from './sfx.js';
+import { pickHandle } from '../core/handles.js';   // P2-12: propozycja ksywy przy pierwszym wejściu z linku
+import { playSfx, registerMusicProbe, sfxDuck } from './sfx.js';
 import { mpVinyl } from './vinyl.js';   // płyta winylowa = kontrolka odtwarzania w fazie „słuchaj"
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
@@ -34,11 +35,11 @@ import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPi
 import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla gości (ta sama sanityzacja co serwer)
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { tvSetMode } from './mp-tv.js';   // P1-16: scena TV (html.tv + motyw)
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpIntroLeadMs, mpTvLobbyOn } from './mp-render.js';
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpIntroLeadMs, mpTvLobbyOn, mpPhaseSfx } from './mp-render.js';
 import { tableShelfPayload } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
 import { tasteStore, tasteVisibility } from './taste.js';
 
-initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH), ()=>mpDraftChanged(), ()=>mpTableInfo());   // F8a: + tryby znane serwerowi; szkic dla gości; gust etap 3: „Gust stołu" (capability + licznik półek)   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
+initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH), ()=>mpDraftChanged(), ()=>mpTableInfo(), (n)=>mpAvatarColor(n));   // F8a: + tryby znane serwerowi; szkic dla gości; gust etap 3: „Gust stołu" (capability + licznik półek)   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
 
 // wstrzyknij powiązania MP → social (mpMe to współdzielony obiekt). Wołane z app.js po zbudowaniu wirelistu.
@@ -55,6 +56,34 @@ export function mpBootDeepLink(){
   const code=mpReadCode();
   const h=knownHandle();
   if(code.length===4 && h){ mpMe.name=h; mpEnterRoom(code, false); mpArmGestureUnlock(); }
+  else if(code.length===4) mpDeepAsk(code);   // P2-12: pierwsze wejście — tylko ksywa, potem od razu pokój (bez „DOŁĄCZ")
+}
+/* P2-12: pierwsze wejście z linku ?room= (brak zapamiętanej ksywy) — arkusz „Jak Cię wołać?" z wylosowaną ksywą do zmiany;
+ * „Wchodzę" = gest (odblokowuje audio) → zapis ksywy → od razu do pokoju. Esc / „Nie teraz" → ekran wejścia z wpisanym kodem. */
+function mpDeepAsk(code){
+  let el=$m('mpDeepDlg');
+  if(!el){ el=document.createElement('div'); el.id='mpDeepDlg'; el.className='mp-dlg mp-deep'; document.body.appendChild(el); }
+  const sug=pickHandle({ spicy:false });
+  el.dataset.code=code;
+  el.innerHTML=`<form class="mp-dlg-card" role="dialog" aria-modal="true" aria-labelledby="mpDeepT" onsubmit="event.preventDefault();mpDeepJoin()">
+      <b id="mpDeepT">Dołączasz do pokoju ${escapeHtml(code)}</b>
+      <small>Jak mają Cię wołać przy stole? Ksywę zmienisz potem w profilu.</small>
+      <label class="mp-deep-in"><span class="sr-only">Twoja ksywa</span><input id="mpDeepName" maxlength="32" autocomplete="nickname" enterkeyhint="go" value="${escapeHtml(sug)}" aria-label="Twoja ksywa"></label>
+      <div class="mp-dlg-btns"><button type="button" class="mp-dlg-stay" onclick="document.getElementById('mpDeepDlg').classList.remove('show')">Nie teraz</button><button type="submit" class="mp-dlg-go mp-deep-go">Wchodzę →</button></div>
+    </form>`;
+  el.classList.add('show');
+  const inp=$m('mpDeepName'); if(inp) try{ inp.focus(); inp.select(); }catch(_e){}
+}
+async function mpDeepJoin(){
+  const el=$m('mpDeepDlg'); if(!el) return;
+  const code=el.dataset.code||mpReadCode();
+  const v=(($m('mpDeepName')||{}).value||'').trim().slice(0, 32);
+  mpUnlockAudio();   // gest — audio gotowe na fazę słuchania
+  el.classList.remove('show');
+  if(!code || code.length!==4) return;
+  if(v){ mpMe.name=v; saveHandle(v).catch(()=>{}); }   // zapis ksywy (profil) w tle — wejście do pokoju nie czeka na sieć
+  else { const n=await ensureHandle(); mpMe.name=n; setHandle(n); }
+  mpEnterRoom(code, false);
 }
 // wejście bez gestu (deep-link, „wróć do pokoju" po przeładowaniu) — odblokuj audio przy PIERWSZYM dotknięciu
 function mpArmGestureUnlock(){
@@ -217,6 +246,7 @@ async function mpLeave(){
   S.clockSamples=[]; S.clockOff=0; S.netErr=null; S.sawMatch=false; S.lastHostId=undefined; S.pastHosts=new Set(); S.sureArmUntil=0;   // etap A
   if(S.countTimer){ clearTimeout(S.countTimer); S.countTimer=null; } if(S.checkTimer){ clearTimeout(S.checkTimer); S.checkTimer=null; }   // etap B
   S.introNonce=null; S.checkUntil=0; S.revealFx=null; S.cardHead=S.cardInner=null; S.hdPh=S.phFrom=null; S.countSaid=null; S.lyricFold=null;
+  S.matchHist=[]; S.donePl=null; S.plPlaying=null; mpGameMenuClose();   // P2-11 / P2-13
   if(S.connTimer){ clearTimeout(S.connTimer); S.connTimer=null; }
   if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
   S.code=null; S.host=false; S.salon=false; S.tvOrder=null; S.tvRankBase=null; S.roomStage='wait'; S.draft=null; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
@@ -490,7 +520,7 @@ function mpAfterSync(){
     // P0-7: okno słuchania wg terminu serwera — powrót w trakcie pytania nie daje pełnych 15 s; < 5 s → od razu „kombinuj" (bez audio)
     const begin=()=>{ if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===S.lastNonce){
       S.introUntil=0; mpRender();   // P1-1 krok 2: karta „zwija się" do paska fazy, pod nią winyl + zegar fazy
-      if(mpStartListenWindow(S.game)>0) mpPlayLocal(); } };
+      if(mpStartListenWindow(S.game)>0){ mpPhaseSfx('sting'); mpPlayLocal(); } } };   // P2-14: sting startu (duck pod zajawkę: sfxDuck na 'playing')
     const wait=(S.introUntil||0)-Date.now();
     if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
     if(wait>20) S.startTimer=setTimeout(begin, wait); else begin();
@@ -580,6 +610,8 @@ function mpMaybeSkipArm(armNonce){
 function mpSetKnob(state){
   if(state===true) state='pause'; if(state===false) state='play';
   mpVinyl.fromKnob(state);
+  // P2-7: lektor ma ikonę mikrofonu (nie płytę) — „czyta" = klasa .on + aria-pressed
+  const k=$m('mpKnob'); if(k && k.classList.contains('mp-lektor')){ k.classList.toggle('on', state==='pause'); k.setAttribute('aria-pressed', state==='pause'?'true':'false'); }
 }
 function mpSetPlayStatus(t){ const e=$m('mpPlayStatus'); if(e) e.textContent=t; }
 // JEDEN trwały element audio dla MP — odblokowany gestem (mobilna autoplay-policy),
@@ -588,7 +620,7 @@ function mpSetPlayStatus(t){ const e=$m('mpPlayStatus'); if(e) e.textContent=t; 
 function mpEnsureAudio(){
   if(!S.audio){
     S.audio=new Audio(); S.audio.preload='auto';
-    S.audio.addEventListener('playing',()=>{ mpSetKnob('pause'); mpSetPlayStatus(S.game&&S.game.mode==='snippet'?'gra fragment…':'gra…'); });
+    S.audio.addEventListener('playing',()=>{ sfxDuck(); mpSetKnob('pause'); mpSetPlayStatus(S.game&&S.game.mode==='snippet'?'gra fragment…':'gra…'); });   // P2-14: ogon stingu ściszony pod zajawkę
     S.audio.addEventListener('waiting',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
     S.audio.addEventListener('stalled',()=>{ mpSetKnob('wait'); mpSetPlayStatus('ładowanie…'); });
     S.audio.addEventListener('pause',  ()=>{ if(S.audio.ended) return;
@@ -671,7 +703,7 @@ function mpPlayLocal(){
   audioSession('playback');   // zajawka przejmuje dźwięk
   lektorStop(); mpStopRev();
   // język opisu z kategorii (host/serwer → S.game.lyricLang; stary serwer/host bez pola → 'pl')
-  if(S.game.mode==='lektor'){ mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}, { lang:lektorLang(S.game.lyricLang) }); return; }
+  if(S.game.mode==='lektor'){ sfxDuck(); mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}, { lang:lektorLang(S.game.lyricLang) }); return; }
   if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
   if(S.game.mode==='reverse' || S.game.mode==='revsnip'){ return mpPlayReverse(); }   // EKSPERYMENT: + od tyłu krótko
   if(isTempoMode(S.game.mode) && S.game.phase!==MP.REVEAL){ return mpPlayTempo(); }   // EKSPERYMENT: zwolnione / przyspieszone obroty
@@ -707,7 +739,7 @@ async function mpPlayReverse(){
     onProgress: f=>mpVinyl.setProgress(f),
     onEnded: ()=>{ mpSetKnob('play'); mpSetPlayStatus('koniec · ↻ stuknij'); },
   });
-  if(r.ok){ S.revSrc=r; mpSetKnob('pause'); mpSetPlayStatus('gra od tyłu…'); return; }
+  if(r.ok){ sfxDuck(); S.revSrc=r; mpSetKnob('pause'); mpSetPlayStatus('gra od tyłu…'); return; }
   if(r.aborted) return;                       // cisza — runda już inna
   // CORS/dekodowanie padło → zagraj normalnie (ten sam trwały element z eventami)
   const a=mpEnsureAudio(); a.src=url; a.play().catch(mpPlayBlocked);
@@ -934,7 +966,43 @@ function mpNewGame(){
 /* ---- render sceny ---- */
 // skórka = preferencja klienta (czysty render); obie mają fazy, różnią się fazą „kombinuj"
 const mpSkin = ()=> lsGet('stacjaUI')==='czat' ? 'czat' : 'kolumny';   // migracja: „fazy"→„kolumny"
-function mpSetSkin(v){ lsSet('stacjaUI', v); S.playSkin=null; S.playRound=null; mpRender(); }
+/* P2-13: zmiana skórki W GRZE (⋯ → „Układ") nie cofa fazy — dawniej S.playRound=null udawało NOWE pytanie, więc
+ * „kombinuj" wracało do „słuchaj" (i do audio). Teraz tylko przebudowa scaffoldu (S.playSkin=null) w bieżącej pod-fazie;
+ * wpisane, niewysłane odpowiedzi przechodzą do pól drugiej skórki. */
+function mpSetSkin(v){
+  const skin = v==='czat' ? 'czat' : 'kolumny';
+  const typed={};
+  document.querySelectorAll('#mpStage [id^="mpProp_"], #mpStage [id^="mpTyp_"]').forEach(el=>{ const k=el.id.replace(/^mp(Prop|Typ)_/, ''); if(el.value && !typed[k]) typed[k]=el.value; });
+  lsSet('stacjaUI', skin); S.playSkin=null; mpRender();
+  Object.entries(typed).forEach(([k,val])=>{ const el=$m('mpProp_'+k) || $m('mpTyp_'+k); if(el && !el.value) el.value=val; });
+  document.querySelectorAll('#skinSeg button').forEach(b=>b.classList.toggle('on', b.dataset.skin===skin));   // menu główne w zgodzie
+}
+/* P2-13: menu ⋯ w nagłówku gry (telefon) — układ kolumny/czat, dźwięki wł/wył, wyjście z potwierdzeniem.
+ * Własny arkusz (wzorzec mpLeaveDlg); TV ma osobne menu (app/mp-tv.js). */
+function mpGameMenu(){
+  let el=$m('mpGameMenu');
+  if(!el){ el=document.createElement('div'); el.id='mpGameMenu'; el.className='mp-dlg mp-gmenu'; document.body.appendChild(el);
+    el.addEventListener('click', (e)=>{ if(e.target===el) mpGameMenuClose(); }); }
+  const skin=mpSkin(); let sfxOn=true; try{ sfxOn=localStorage.getItem('bbSfx')!=='off'; }catch(_e){}
+  const seg=(items, cur, fn)=>items.map(([v,l])=>`<button type="button" class="${v===cur?'on':''}" aria-pressed="${v===cur}" onclick="${fn}('${v}')">${l}</button>`).join('');
+  el.innerHTML=`<div class="mp-dlg-card" role="dialog" aria-modal="true" aria-labelledby="mpGmT">
+      <b id="mpGmT">Menu gry</b>
+      <div class="mp-gm-row"><span>Układ<small>jak wpisujecie odpowiedzi — tylko na tym telefonie</small></span><div class="seg" role="group" aria-label="Układ gry">${seg([['kolumny','kolumny'],['czat','czat']], skin, 'mpGameSkin')}</div></div>
+      <div class="mp-gm-row"><span>Dźwięki<small>efekty i tik zegara — nie muzyka</small></span><div class="seg" role="group" aria-label="Dźwięki">${seg([['on','wł'],['off','wył']], sfxOn?'on':'off', 'mpGameSfx')}</div></div>
+      <div class="mp-dlg-btns"><button type="button" class="mp-dlg-stay" onclick="mpGameMenuClose()">Zamknij</button><button type="button" class="mp-dlg-go" onclick="mpGameMenuClose();mpConfirmLeave('game')">Opuść pokój…</button></div>
+    </div>`;
+  el.classList.add('show');
+  const first=el.querySelector('.seg button.on'); if(first) try{ first.focus(); }catch(_e){}
+}
+function mpGameMenuClose(){ const el=$m('mpGameMenu'); if(el) el.classList.remove('show'); }
+function mpGameSkin(v){ mpSetSkin(v); if($m('mpGameMenu') && $m('mpGameMenu').classList.contains('show')) mpGameMenu(); }
+function mpGameSfx(v){
+  try{ localStorage.setItem('bbSfx', v==='off'?'off':'on'); }catch(_e){}
+  document.querySelectorAll('#sfxSeg button').forEach(b=>b.classList.toggle('on', b.dataset.sfx===(v==='off'?'off':'on')));   // menu główne w zgodzie
+  mpGameMenu();
+}
+// Esc zamyka menu gry (telefon z klawiaturą / desktop)
+document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ const el=$m('mpGameMenu'); if(el && el.classList.contains('show')){ e.preventDefault(); mpGameMenuClose(); } } });
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
 function mpStopAudio(){ lektorStop(); mpStopRev(); if(S.audio){ try{S.audio.pause();}catch(e){} } audioSession('ambient'); }
 function mpGoKombinuj(){ if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; } mpStopAudio(); S.sub='kombinuj'; mpRender(); }
@@ -1166,8 +1234,9 @@ Object.assign(window, {
   mpConfirmLeave, mpLeaveCancel, mpLeaveConfirmed, mpRejoinLast,   // F6b (F6)
   mpRetryRoom, mpRematch, mpSureTap, mpPropKey,                     // przegląd MP 2026-10 (etap A)
   mpMcPick, mpLyricToggle, mpChatSend,                               // etap B (P1-8, P1-12, ABCD w czacie)
+  mpGameMenu, mpGameMenuClose, mpGameSkin, mpGameSfx, mpDeepJoin,    // P2-13 (menu gry), P2-12 (pierwsze wejście z linku)
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
-initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds });
+initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds, mpServerAuth:()=>SERVER_AUTH });
 
-export { mpMe };
+export { mpMe, mpDeepAsk };   // mpDeepAsk — seam testowy P2-12 (pierwsze wejście z linku bez ksywy)

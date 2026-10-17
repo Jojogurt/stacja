@@ -158,10 +158,11 @@ export function formatCopy(format, teamSize = 1){
     hitTitle: solo ? 'Trafione!' : 'Drużyna trafiła!',
   };
 }
-export const timerLabel = (t) => { const s = clampTimer(t); return s ? `${s} s` : 'bez limitu'; };
+// P2-9: twarda spacja — „60 s” / „15 pytań” nie łamią się w dwie linie w podsumowaniu ustawień
+export const timerLabel = (t) => { const s = clampTimer(t); return s ? `${s}\u00a0s` : 'bez\u00a0limitu'; };
 // jednolinijkowe podsumowanie zwiniętych „Ustawień meczu"
 export function settingsSummary({ ctx = 'solo', questions, trener = false, format = 'coop', timer = 0, salon = false }){
-  const q = `${clampQuestions(questions)} pytań`;
+  const q = `${clampQuestions(questions)}\u00a0pytań`;
   if(ctx !== 'mp') return `${q} · trener ${trener ? 'wł.' : 'wył.'}`;
   return [q, FORMAT_LABEL[format] || FORMAT_LABEL.coop, timerLabel(timer)].concat(salon ? ['TV'] : []).join(' · ');
 }

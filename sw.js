@@ -24,6 +24,7 @@ const SHELL = [
   './app/matchSetup.js',  // wspólny komponent ekranu „Nowy mecz” (solo + host MP)
   './app/taste.js', './app/gust.js', './core/taste.js',   // „Twój gust": oceny, półka, sesja oceniania
   './core/tasteProfile.js', './app/tasteCard.js',        // „Twój gust" etap 2: profil, archetyp, karta PNG
+  './core/mpView.js', './app/mpResultCard.js',          // MP P2: copy/wynik meczu/dźwięki faz, karta PNG wyniku
   './core/tasteCompare.js',                              // „Twój gust" etap 3: porównanie, półki do gry
   './click.wav', './clapping.wav',
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',

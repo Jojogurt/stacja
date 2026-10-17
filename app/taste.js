@@ -168,6 +168,8 @@ export function syncLabel(){
   return '📱 tylko na tym urządzeniu';
 }
 export function shelfText(){ return 'na półce: '+tasteCounts(store).hearts; }
+// P2-6: licznik półki tylko przy > 0 („na półce: 0" to szum w odsłonie)
+const shelfShown = () => tasteCounts(store).hearts>0;
 function syncDom(){
   if(typeof document==='undefined') return;
   document.querySelectorAll('[data-taste-sync]').forEach(e=>{ e.textContent=syncLabel(); e.dataset.state=syncState; });
@@ -183,11 +185,12 @@ function revealTrack(t, cat){
   if(!title || !artist || !keyOfTrack({ title, artist })) return null;
   return { title, artist, year:String(t.year||''), art:typeof t.art==='string' ? t.art : '', genre:String(t.genre||''), cat:String(cat||'') };
 }
-function heartBtn(t, i, multi){
+function heartBtn(t, i, multi, compact=false){
   const on=isHearted(t);
   const lab=(on ? 'Zdejmij z półki: ' : 'Dodaj na półkę: ')+t.title+' — '+t.artist;
   const tx=multi ? t.title : (on ? 'dodano' : 'na półkę');
-  return `<button type="button" class="taste-heart${on?' on':''}" data-taste-heart="${i}" aria-pressed="${on?'true':'false'}" aria-label="${escapeHtml(lab)}"><span class="th-ic" aria-hidden="true">${on?'❤️':'🤍'}</span><span class="th-tx">${escapeHtml(tx)}</span></button>`;
+  // compact (P2-11: lista utworów na wyniku meczu MP) — sama ikona, opis w aria-label
+  return `<button type="button" class="taste-heart${on?' on':''}${compact?' compact':''}" data-taste-heart="${i}"${compact?' data-taste-compact':''} aria-pressed="${on?'true':'false'}" aria-label="${escapeHtml(lab)}" title="${escapeHtml(on ? 'na półce' : 'na półkę')}"><span class="th-ic" aria-hidden="true">${on?'❤️':'🤍'}</span>${compact?'':`<span class="th-tx">${escapeHtml(tx)}</span>`}</button>`;
 }
 export function tasteHeartHTML(tracks, { cat='' }={}){
   const seen=new Set();
@@ -197,18 +200,30 @@ export function tasteHeartHTML(tracks, { cat='' }={}){
   revealItems=items;
   if(!items.length) return '';
   const multi=items.length>1;
-  return `<div class="taste-row">${items.map((t,i)=>heartBtn(t, i, multi)).join('')}<span class="taste-shelfn" data-taste-shelfn>${escapeHtml(shelfText())}</span></div>`;
+  return `<div class="taste-row">${items.map((t,i)=>heartBtn(t, i, multi)).join('')}<span class="taste-shelfn" data-taste-shelfn${shelfShown()?'':' hidden'}>${escapeHtml(shelfText())}</span></div>`;
+}
+/* P2-11: ❤️ „na półkę" przy KAŻDYM utworze listy (wynik meczu MP) — tablica HTML przycisków wyrównana z wejściem
+ * ('' dla wpisu bez tytułu/wykonawcy lub duplikatu). Ta sama delegacja kliknięć co w odsłonie (lista zastępuje revealItems). */
+export function tasteHeartButtons(tracks, { cat='' }={}){
+  const items=[], seen=new Set();
+  const out=(Array.isArray(tracks) ? tracks : []).map(t=>{
+    const it=revealTrack(t, (t && t.cat) || cat); if(!it || items.length>=60) return '';
+    const k=keyOfTrack(it); if(seen.has(k)) return ''; seen.add(k);
+    items.push(it); return heartBtn(it, items.length-1, false, true);
+  });
+  revealItems=items;
+  return out;
 }
 function syncHearts(){
   document.querySelectorAll('[data-taste-heart]').forEach(b=>{
     const t=revealItems[+b.dataset.tasteHeart]; if(!t) return;
     const multi=revealItems.length>1;
-    const tmp=document.createElement('div'); tmp.innerHTML=heartBtn(t, +b.dataset.tasteHeart, multi);
+    const tmp=document.createElement('div'); tmp.innerHTML=heartBtn(t, +b.dataset.tasteHeart, multi, b.hasAttribute('data-taste-compact'));
     const nb=tmp.firstChild;
     b.className=nb.className; b.setAttribute('aria-pressed', nb.getAttribute('aria-pressed')); b.setAttribute('aria-label', nb.getAttribute('aria-label'));
     b.innerHTML=nb.innerHTML;
   });
-  document.querySelectorAll('[data-taste-shelfn]').forEach(e=>{ e.textContent=shelfText(); });
+  document.querySelectorAll('[data-taste-shelfn]').forEach(e=>{ e.textContent=shelfText(); e.hidden=!shelfShown(); });
 }
 export const _tasteDebug = () => ({ store, queue, syncState, revealItems, visibility:tasteVisibility(), visPending:tasteVisibilityPending() });
 

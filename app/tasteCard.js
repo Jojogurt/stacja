@@ -7,17 +7,17 @@ import { shareText, topList, APP_NAME, DECADE_LONG, GENRE_SHORT } from '../core/
 export const CARD_W = 1080, CARD_H = 1350;
 export const CARD_FILE = 'moj-gust-uszy-muzk.png';
 // kolory karty stałe (obrazek wygląda tak samo niezależnie od motywu) — paleta design systemu (wariant ciemny)
-const C = { bg:'#15121E', bg2:'#221C33', line:'#39314F', ink:'#ECE9F4', muted:'#A79FBD', green:'#58CC02', blue:'#1CB0F6', gold:'#FFC800', red:'#FF4B4B', track:'#2C2540' };
+export const C = { bg:'#15121E', bg2:'#221C33', line:'#39314F', ink:'#ECE9F4', muted:'#A79FBD', green:'#58CC02', blue:'#1CB0F6', gold:'#FFC800', red:'#FF4B4B', track:'#2C2540' };
 const FONT = "'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif";
-const f = (w, px) => `${w} ${px}px ${FONT}`;
+export const f = (w, px) => `${w} ${px}px ${FONT}`;
 
-function rr(ctx, x, y, w, h, r){
+export function rr(ctx, x, y, w, h, r){
   ctx.beginPath();
   ctx.moveTo(x+r, y); ctx.arcTo(x+w, y, x+w, y+h, r); ctx.arcTo(x+w, y+h, x, y+h, r);
   ctx.arcTo(x, y+h, x, y, r); ctx.arcTo(x, y, x+w, y, r); ctx.closePath();
 }
 // zawijanie tekstu do szerokości; ostatnia linia z „…", gdy przekracza maxLines
-function wrap(ctx, text, maxW, maxLines){
+export function wrap(ctx, text, maxW, maxLines){
   const words=String(text||'').split(/\s+/).filter(Boolean), lines=[];
   let cur='';
   for(const w of words){
@@ -105,17 +105,18 @@ async function fontsReady(){
     }
   }catch(_e){}
 }
-/* PNG (Blob) albo null (brak canvas / toBlob — np. stara przeglądarka, jsdom) */
-export async function renderTasteCard(p, opts={}){
+/* PNG (Blob) albo null (brak canvas / toBlob — np. stara przeglądarka, jsdom). P2-11: wspólne dla kart (gust, wynik meczu MP) */
+export async function renderCardPng(draw, w = CARD_W, h = CARD_H){
   try{
-    const cv=document.createElement('canvas'); cv.width=CARD_W; cv.height=CARD_H;
+    const cv=document.createElement('canvas'); cv.width=w; cv.height=h;
     const ctx=cv.getContext && cv.getContext('2d');
     if(!ctx || typeof cv.toBlob!=='function') return null;
     await fontsReady();
-    drawTasteCard(ctx, p, opts);
+    draw(ctx);
     return await new Promise(res=>{ try{ cv.toBlob(b=>res(b||null), 'image/png'); }catch(_e){ res(null); } });
   }catch(_e){ return null; }
 }
+export async function renderTasteCard(p, opts={}){ return renderCardPng(ctx=>drawTasteCard(ctx, p, opts)); }
 
 async function copyText(text){
   const nav=typeof navigator!=='undefined' ? navigator : null;
@@ -127,27 +128,31 @@ async function copyText(text){
     document.body.appendChild(ta); ta.select(); const okc=document.execCommand && document.execCommand('copy'); ta.remove(); return !!okc;
   }catch(_e){ return false; }
 }
-function download(blob){
+function download(blob, name = CARD_FILE){
   try{
     const u=URL.createObjectURL(blob), a=document.createElement('a');
-    a.href=u; a.download=CARD_FILE; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove();
+    a.href=u; a.download=name; a.rel='noopener'; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(()=>{ try{ URL.revokeObjectURL(u); }catch(_e){} }, 4000);
     return true;
   }catch(_e){ return false; }
 }
 
-/* Udostępnij: { how:'shared'|'cancelled'|'fallback'|'failed', png:bool, copied:bool, text } */
+/* Udostępnij obrazek (P2-11: wspólne dla karty gustu i wyniku meczu MP): navigator.share z plikiem (gdy canShare({files}))
+ * → inaczej pobranie PNG + tekst do schowka. Wynik: { how:'shared'|'cancelled'|'fallback'|'failed', png:bool, copied:bool, text } */
+export async function shareCardPng({ blob, file = CARD_FILE, text = '', title = '' }){
+  const nav=typeof navigator!=='undefined' ? navigator : null;
+  let f=null;
+  try{ if(blob && typeof File==='function') f=new File([blob], file, { type:'image/png' }); }catch(_e){ f=null; }
+  if(f && nav && typeof nav.share==='function' && (typeof nav.canShare!=='function' || nav.canShare({ files:[f] }))){
+    try{ await nav.share({ files:[f], text, title }); return { how:'shared', png:true, copied:false, text }; }
+    catch(e){ if(e && e.name==='AbortError') return { how:'cancelled', png:false, copied:false, text }; /* inny błąd → fallback */ }
+  }
+  const png=blob ? download(blob, file) : false;
+  const copied=await copyText(text);
+  return { how: (png || copied) ? 'fallback' : 'failed', png, copied, text };
+}
 export async function shareTasteCard(p, opts={}){
   const text=shareText(p, opts);
   const blob=await renderTasteCard(p, opts);
-  const nav=typeof navigator!=='undefined' ? navigator : null;
-  let file=null;
-  try{ if(blob && typeof File==='function') file=new File([blob], CARD_FILE, { type:'image/png' }); }catch(_e){ file=null; }
-  if(file && nav && typeof nav.share==='function' && (typeof nav.canShare!=='function' || nav.canShare({ files:[file] }))){
-    try{ await nav.share({ files:[file], text, title:'Mój gust muzyczny' }); return { how:'shared', png:true, copied:false, text }; }
-    catch(e){ if(e && e.name==='AbortError') return { how:'cancelled', png:false, copied:false, text }; /* inny błąd → fallback */ }
-  }
-  const png=blob ? download(blob) : false;
-  const copied=await copyText(text);
-  return { how: (png || copied) ? 'fallback' : 'failed', png, copied, text };
+  return shareCardPng({ blob, file:CARD_FILE, text, title:'Mój gust muzyczny' });
 }

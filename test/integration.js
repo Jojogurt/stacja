@@ -1333,7 +1333,7 @@ await group('F6a (R-F2/R-F1/R-F3): długość meczu 5/15/30, zapamiętana pula, 
   const mu=modeChip(window,/muzyka/); if(!mu.classList.contains('on')) mu.click();
   R().querySelector('[data-ms-len="5"]').click();
   const setSum=()=>(R().querySelector('[data-ms-toggle="settings"] small')||{}).textContent||'';
-  ok(/^5 utworów/.test(soloInfo(window)) && /^5 pytań · trener/.test(setSum()), 'Krótki → „5 utworów…" + podsumowanie ustawień „5 pytań · trener …" — '+soloInfo(window)+' | '+setSum());
+  ok(/^5 utworów/.test(soloInfo(window)) && /^5\s+pytań · trener/.test(setSum()), 'Krótki → „5 utworów…" + podsumowanie ustawień „5 pytań · trener …" — '+soloInfo(window)+' | '+setSum());
   click(window,'matchStart'); await settle(10);
   ok(/^Pyt\. 1\/5$/.test(txt(window,'sessProg')) && !/blok/.test(txt(window,'sessCtx')), 'mecz 5 pytań (1 blok) — '+txt(window,'sessProg'));
   const saved=JSON.parse(window.localStorage.getItem('stacjaSoloPick')||'null');
@@ -2412,10 +2412,10 @@ await group('MP gość: „Mecz, który ustawia host" na żywo (szkic), bez szki
   ok(/Hity wszech czasów/.test(st()) && /lata 80/.test(st()), 'gotowiec + chipy kategorii');
   ok(!w.document.querySelector('#mpStage img') && w.__dx===undefined && /&lt;img/.test(st()), 'etykieta ze szkicu escapowana (XSS)');
   ok(/muzyka · ABCD/.test(txt(w,'mpStage')) && !/hack/.test(st()), 'tryby szkicu (nieznany odrzucony)');
-  ok(/15 pytań/.test(st()) && /Drużyny/.test(st()) && /30 s/.test(st()) && /tylko u hosta/.test(st()), 'długość / format / czas / dźwięk');
+  ok(/15 pytań/.test(st()) && /Drużyny/.test(st()) && /30(\s|&nbsp;)s/.test(st()) && /tylko u hosta/.test(st()), 'długość / format / czas / dźwięk');
   ok(/host układa mecz/.test(st()), 'stopka gościa: host układa mecz — na żywo');
   ws._emit({ t:'event', event:'draft', from:'HOST', payload:{ preset:'', cats:[], modes:['lektor'], questions:5, timer:0, salon:true } }); await settle(2);
-  ok(/host jeszcze nie wybrał/.test(st()) && /5 pytań/.test(st()) && /bez limitu/.test(st()) && /tylko na TV/.test(st()), 'aktualizacja na żywo (pusty wybór, salon → dźwięk tylko na TV)');
+  ok(/host jeszcze nie wybrał/.test(st()) && /5 pytań/.test(st()) && /bez(\s|&nbsp;)limitu/.test(st()) && /tylko na TV/.test(st()), 'aktualizacja na żywo (pusty wybór, salon → dźwięk tylko na TV)');
   // powrót roli hosta (kolejne testy)
   ws._emit({ t:'presence', members:[{id:ws._id,name:'Ja'}], hostId:ws._id }); await settle(4);
   w.mpLeaveConfirmed('room'); await settle(4);
@@ -3162,7 +3162,7 @@ await group('B P1-1/P1-4: LOADING → ARMING → odliczanie = JEDNA karta (łata
   const slots=[{round:1,cat:'d80',mode:'year'},{round:1,cat:'d80',mode:'music'}];
   ws.pushState({ phase:'loading', round:1, rounds:1, si:0, qi:0, slots, qpc:1, mode:'year', catKey:'d80', catLabel:'1980–89', hostId:me, teams:[{id:'all',members:[me,'O','K']}], scores:{all:120}, results:[] }); await settle(4);
   const st=$(w,'mpStage'); const card0=st.querySelector('.mp-qcard');
-  ok(card0 && /losuję pytanie/.test(card0.textContent) && /PYTANIE\s*1\s*\/2/.test(card0.textContent), 'LOADING: karta „PYTANIE 1/2" + „losuję pytanie…" (nie „host losuje utwór")');
+  ok(card0 && /serwer losuje utwór/.test(card0.textContent) && /PYTANIE\s*1\s*\/2/.test(card0.textContent), 'LOADING: karta „PYTANIE 1/2" + P2-9 „serwer losuje utwór…" (autorytet; nie „host losuje")');
   ok(/Zgadnij ROK wydania/.test(card0.textContent), 'LOADING: chip trybu z zadaniem');
   ws.pushState({ phase:'arming', armNonce:801, armMs:12000, round:1, rounds:1, si:0, qi:0, slots, qpc:1, mode:'year', catKey:'d80', catLabel:'1980–89', preview:'', lyric:'', prompt:'',
     hostId:me, readyCount:2, readyTotal:3, readyIds:[me,'O'], teams:[{id:'all',members:[me,'O','K']}], scores:{all:120}, playNonce:0, results:[] }); await settle(4);
@@ -3435,7 +3435,7 @@ await group('P1-16: TV w coop (Wspólna) — tablica typów drużyny klikalna, o
   ok(st.querySelectorAll('.tv-right .tv-p.big').length===2 && /1\/2 z typem/.test(st.querySelector('.tv-right').textContent), 'coop: skład drużyny z dużymi awatarami + 1/2 z typem');
   const css=aCss();
   ok(/@media \(prefers-reduced-motion: reduce\)\{\s*\.tv-left\.tv-in,\.tv-lp,\.tv-gain,\.tv-count b,\.tv-cover[^}]*animation:none!important\}\s*\.tv-team\{transition:none!important;transform:none!important\}/.test(css), 'reduced-motion: TV bez animacji wejścia, „+N", odliczania i przesuwania rankingu');
-  ok(/html\.tv\{font-size:clamp\(14px,1\.25vw,52px\)\}/.test(css) && /\.tv-main\{display:grid;grid-template-columns:minmax\(0,1\.55fr\) minmax\(0,1fr\)/.test(css), 'układ TV: rem skalowany szerokością (×2 przy 1920), dwie kolumny');
+  ok(/html\.tv\{font-size:clamp\(14px,1\.25vw,52px\)\}/.test(css) && /\.tv-main\{display:grid;grid-template-columns:minmax\(0,1\.45fr\) minmax\(0,1fr\)/.test(css), 'układ TV: rem skalowany szerokością (×2 przy 1920), dwie kolumny');
   w.mpLeaveConfirmed('room'); await settle(6);
   ok(!w.document.documentElement.classList.contains('tv') && !w.document.body.classList.contains('salon'), 'wyjście z pokoju: koniec sceny TV (motyw i powłoka przywrócone)');
 });
@@ -3453,6 +3453,130 @@ await group('P1-16: telefon gracza w salonie — „Patrz na TV" w słuchaniu, s
   w.mpGoKombinuj(); await settle(3);
   ok($(w,'mpProp_title') && st.querySelector('.mp-salonteam'), 'kombinuj: pola odpowiedzi + status drużyny');
   w.mpLeaveConfirmed('room'); await settle(6);
+});
+
+/* ===================== Przegląd MP 2026-10 — pakiet P2 (dopracowanie wizualne) ===================== */
+await group('P2-1/P2-2/P2-3/P2-10: lobby (bez „W POKOJU", „to Ty", wolne miejsca), pasek pokoju w „Nowym meczu", aria-label kafli', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws._emit({ t:'presence', members:[{id:me,name:'Ja'},{id:'O',name:'Naczelny Słoik z Piwnicy Babci Zosi'}], hostId:me }); await settle(4);
+  const st=$(w,'mpStage');
+  ok(!/W POKOJU/.test(st.textContent) && !st.querySelector('.pcz-badge'), 'P2-1: bez badge\'a „W POKOJU"');
+  ok(/to Ty/.test(st.querySelector('.pcz-m.you').textContent) && !/\(Ty\)/.test(st.textContent), 'P2-1: „to Ty" w podpisie (nie ucinane „(Ty)")');
+  ok(/Naczelny Słoik z Piwnicy Babci Zosi/.test(st.textContent), 'P2-1: pełne imię w DOM (CSS zawija do 2 linii)');
+  ok(st.querySelectorAll('.pcz-list .pcz-ghost').length===1 && /2 osoby/.test(st.querySelector('.pcz-count').textContent), 'P2-3: lista dopełniona do 3 wierszy („wolne miejsce") — stała pozycja „ZACZNIJ"');
+  ok(/\.pcz-list\{height:252px;overflow-y:auto/.test(aCss()), 'P2-3: lista o stałej wysokości ze scrollem');
+  w.mpLobbyStart(); await settle(3);
+  const bar=st.querySelector('.mp-pkroom');
+  ok(bar && bar.textContent.includes(bar.querySelector('.mp-pkr-code b').textContent) && /2 graczy/.test(bar.textContent) && bar.querySelectorAll('.mp-pkr-av').length===2, 'P2-2: „Nowy mecz" — kod pokoju + awatary + „2 graczy" — '+(bar&&bar.textContent));
+  ws._emit({ t:'presence', members:[{id:me,name:'Ja'},{id:'O',name:'Ola'},{id:'K',name:'Kuba'}], hostId:me }); await settle(3);
+  ok(/3 graczy/.test(st.querySelector('.mp-pkroom').textContent), 'P2-2: pasek pokoju na żywo (presence) — '+st.querySelector('.mp-pkroom').textContent);
+  const cat=st.querySelector('.ms-cat[data-ms-cat]');
+  ok(cat && cat.getAttribute('aria-label') && cat.getAttribute('aria-label').includes(cat.querySelector('b').textContent), 'P2-10: kafel kategorii z aria-label (nazwa + opis) — '+(cat&&cat.getAttribute('aria-label')));
+  ok(/\.ms \.ms-bar\{position:sticky;bottom:16px;align-self:end/.test(aCss()), 'P2-2: desktop — pasek startu przyklejony w prawej kolumnie');
+  w.mpLobbyBack(); await settle(2);
+});
+await group('P2-9/P2-14: karta pytania — „serwer losuje…", „whoosh"; start fazy — „sting"; telefon w salonie — dźwięki faz wyciszone', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  w.__SFX_LOG__=[];
+  ws.pushState({ phase:'loading', round:1, rounds:1, si:0, qi:0, slots:[{round:1,cat:'d80',mode:'quiz'}], qpc:1, mode:'quiz', catKey:'d80', catLabel:'Wiedza', hostId:me, teams:[{id:'all',members:[me]}], scores:{all:0}, results:[] }); await settle(4);
+  ok(/serwer losuje pytanie…/.test($(w,'mpStage').textContent), 'P2-9: quiz pod autorytetem → „serwer losuje pytanie…"');
+  ok(w.__SFX_LOG__.includes('whoosh'), 'P2-14: whoosh przy wejściu karty — '+w.__SFX_LOG__);
+  w.__SFX_LOG__=[];
+  ws.pushState(playState(ws, { playNonce:21001 })); await settle(8);
+  ok(w.__SFX_LOG__.includes('sting'), 'P2-14: sting na start fazy słuchania — '+w.__SFX_LOG__);
+  w.__SFX_LOG__=[];
+  ws.pushState({ phase:'loading', round:1, rounds:1, si:0, qi:1, slots:[{round:1,cat:'d80',mode:'music'}], mode:'music', catKey:'d80', catLabel:'80s', salon:true, tvId:'TV', hostId:'TV', teams:[{id:'all',members:[me]}], scores:{all:0}, results:[] }); await settle(4);
+  ok(w.__SFX_LOG__.includes('0whoosh') && !w.__SFX_LOG__.includes('whoosh'), 'P2-14: telefon-pilot w salonie — whoosh wyciszony (gain 0) — '+w.__SFX_LOG__);
+  const css=aCss();
+  ok(/@keyframes mpDigit\{from\{transform:scale\(1\.15\);opacity:\.6\}/.test(css) && /@keyframes mpBarIn\{from\{[^}]*opacity:\.6\}/.test(css), 'P2-8: cyfra odliczania / pasek fazy bez opacity < .6');
+});
+await group('P2-13: menu ⋯ w grze — układ kolumny/czat bez cofania fazy (wpisy przechodzą), dźwięki wł/wył', async ()=>{
+  const w=window; const ws=await aFreshRoom();
+  ws.pushState(playState(ws, { playNonce:21101 })); await settle(8);
+  const st=$(w,'mpStage');
+  ok(st.querySelector('.mp-hd .mp-hd-more'), 'nagłówek gry: przycisk ⋯');
+  w.mpGoKombinuj(); await settle(3);
+  $(w,'mpProp_title').value='Take on Me';
+  w.mpGameMenu(); await settle(2);
+  const dlg=$(w,'mpGameMenu');
+  ok(dlg && dlg.classList.contains('show') && /Układ/.test(dlg.textContent) && /Dźwięki/.test(dlg.textContent) && /Opuść pokój/.test(dlg.textContent), 'menu gry: Układ / Dźwięki / Opuść pokój');
+  ok(dlg.querySelector('[onclick="mpGameSkin(\'kolumny\')"]').classList.contains('on'), 'bieżący układ zaznaczony (kolumny)');
+  w.mpGameSkin('czat'); await settle(3);
+  ok($(w,'mpChatFeed') && st.querySelector('.mp-phbar').dataset.ph==='kombinuj' && !st.querySelector('.mp-gokomb'), 'czat: faza „kombinuj" zostaje (dawniej wracało „słuchaj")');
+  ok($(w,'mpTyp_title') && $(w,'mpTyp_title').value==='Take on Me', 'niewysłany wpis przeniesiony do pola czatu');
+  ok(w.localStorage.getItem('stacjaUI')==='czat' && w.document.querySelector('#skinSeg button[data-skin="czat"]').classList.contains('on'), 'preferencja zapisana + menu główne w zgodzie');
+  ok(dlg.querySelector('[onclick="mpGameSkin(\'czat\')"]').classList.contains('on'), 'menu odświeżone (czat zaznaczony)');
+  w.mpGameSfx('off'); await settle(1);
+  ok(w.localStorage.getItem('bbSfx')==='off' && w.document.querySelector('#sfxSeg button[data-sfx="off"]').classList.contains('on'), 'dźwięki wył. (+ menu główne)');
+  w.mpGameSfx('on'); w.mpGameMenuClose(); await settle(1);
+  ok(!dlg.classList.contains('show'), 'Zamknij');
+  w.mpSetSkin('kolumny'); await settle(3);
+  ok($(w,'mpProp_title') && st.querySelector('.mp-phbar').dataset.ph==='kombinuj', 'powrót do kolumn — nadal „kombinuj"');
+});
+await group('P2-5/P2-7: kolumny — pusty stan, 1 slot wyśrodkowany, „słowo N"; słuchaj — status zwykłą czcionką, lektor = mikrofon', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws.pushState(playState(ws, { playNonce:21201, mode:'quiz', prompt:'Jedna litera różnicy', answerSlots:[{key:'a',label:'1'},{key:'b',label:'2'}] })); await settle(8);
+  w.mpGoKombinuj(); await settle(3);
+  const st=$(w,'mpStage');
+  ok(st.querySelector('.mp-slots-empty') && /Wpisz pierwszy typ/.test(st.querySelector('.mp-slots-empty').textContent), 'P2-5: pusty stan „Wpisz pierwszy typ" (1-osobowa drużyna)');
+  ok($(w,'mpProp_a').getAttribute('placeholder')==='słowo 1' && $(w,'mpProp_b').getAttribute('placeholder')==='słowo 2', 'P2-5: placeholdery łamigłówek „słowo 1/2"');
+  ws.pushState(playState(ws, { playNonce:21202, mode:'year', answerSlots:[{key:'year',label:'rok'}], teams:[{id:'all',name:'Drużyna',members:[me,'O']}],
+    byTeam:{ all:{ proposals:[{id:'p',by:'O',byName:'Ola',values:{year:'1984'}}], votes:{ year:{ O:'1984' } }, sure:[], passed:[] } } })); await settle(8);
+  w.mpGoKombinuj(); await settle(3);
+  const sl=st.querySelector('.mp-slots');
+  ok(sl && sl.classList.contains('one') && /repeat\(1,/.test(sl.getAttribute('style')), 'P2-5: rok = 1 kolumna wyśrodkowana');
+  ws.pushState(playState(ws, { playNonce:21203, mode:'lektor', lyric:'Opis utworu', preview:'' })); await settle(8);
+  ok($(w,'mpKnob') && $(w,'mpKnob').classList.contains('mp-lektor') && !$(w,'mpKnob').classList.contains('vinyl'), 'P2-7: lektor — ikona mikrofonu zamiast płyty');
+  ok(/#mpPlayStatus\{text-transform:none/.test(aCss()), 'P2-7: status „gra…" zwykłą czcionką (bez kapitalików)');
+});
+await group('P2-6/P2-11: odsłona pudła (czerwona ramka, bez „na półce: 0"), wynik — skala, lista utworów z ▶/❤️, udostępnianie', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  w.__MP_CHECK_MS__=5; w.__SFX_LOG__=[];
+  try{
+    const slots=[{round:1,cat:'d80',mode:'music'}];
+    ws.pushState({ phase:'reveal', round:1, rounds:1, si:0, qi:0, slots, qpc:1, mode:'music', catKey:'d80', catLabel:'80s', hostId:me, preview:'https://x/p.m4a',
+      teams:[{id:'all',name:'Drużyna',members:[me]}], scores:{all:0}, answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+      reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:'https://x/a.jpg', okTitle:false, okArtist:false, teamOk:false, gained:0, pewniacy:[], locked:{} },
+      playNonce:21301, results:[{track:'Hey Jude',artist:'Beatles',ok:false}] }); await settle(4);
+    ok(w.__SFX_LOG__.includes('drum'), 'P2-14: werbel pod „Sprawdzamy…" — '+w.__SFX_LOG__);
+    await new Promise(r=>setTimeout(r,30)); await settle(4);
+    const card=$(w,'mpStage').querySelector('.rv-card');
+    ok(card && card.classList.contains('miss'), 'P2-6: pudło → .rv-card.miss (czerwona ramka zamiast zielonej)');
+    const n=$(w,'mpStage').querySelector('[data-taste-shelfn]'), hearts=+((n&&n.textContent)||'').replace(/\D/g,'');
+    ok(n && n.hidden===(hearts===0), 'P2-6: „na półce: N" ukryte przy 0 (widoczne przy > 0) — '+(n&&n.textContent)+' hidden='+(n&&n.hidden));
+    w.mpAdvance(); await settle(2);
+    ws.pushState({ phase:'done', format:'coop', teams:[{id:'all',name:'Drużyna',members:[me]}], scores:{all:150}, tallyList:[{name:'Ja',correct:1}], mvp:{name:'Ja',correct:1}, beerTally:{}, playNonce:21301,
+      results:[{track:'Hey Jude',artist:'Beatles',ok:false},{track:'Stolica?',artist:'',ok:true,mode:'quiz'}] }); await settle(6);
+    const st=$(w,'mpStage');
+    ok(/\/ 200/.test(st.querySelector('.dn-hero .sc').textContent) && st.querySelector('.dn-hero .scn'), 'P2-11: skala „150 / 200" (2 pytania × 100 bez premii) — '+st.querySelector('.dn-hero .sc').textContent);
+    const rows=st.querySelectorAll('.dn-pl-row');
+    ok(rows.length===1 && /Hey Jude/.test(rows[0].textContent) && /1968/.test(rows[0].textContent) && rows[0].querySelector('img.dn-pl-art'), 'P2-11: lista utworów (quiz bez utworu pominięty), okładka/rok z historii klienta');
+    ok(rows[0].querySelector('[data-pl-play]') && rows[0].querySelector('[data-taste-heart][data-taste-compact]'), 'P2-11: ▶ zajawka + ❤️ „na półkę" przy utworze');
+    const pb=rows[0].querySelector('[data-pl-play]'); pb.click(); await settle(6);
+    ok(pb.textContent!=='▶' || pb.getAttribute('aria-pressed')==='true', 'P2-11: ▶ startuje odsłuch (…/■) — '+pb.textContent);
+    pb.click(); await settle(2);
+    const r=await w.mpShareResult(st.querySelector('.dn-share'));
+    ok(r && /150 \/ 200 pkt/.test(r.text) && /Hey Jude|mecz ze znajomymi/.test(r.text+' mecz ze znajomymi'), 'P2-11: udostępnianie — tekst „150 / 200 pkt" (obrazek: canvas; jsdom bez canvas → fallback) — '+(r&&r.how)+' '+(r&&r.text));
+  } finally { w.__MP_CHECK_MS__=0; }
+});
+await group('P2-12: pierwsze wejście z linku bez ksywy — arkusz „Jak Cię wołać?" → od razu do pokoju', async ()=>{
+  const w=window;
+  if($(w,'mpRoom').style.display!=='none'){ w.mpLeaveConfirmed('room'); await settle(6); }
+  const mpMod=await import('../app/mp.js');
+  mpMod.mpDeepAsk('ZXCV'); await settle(2);
+  const dlg=$(w,'mpDeepDlg');
+  ok(dlg && dlg.classList.contains('show') && /Dołączasz do pokoju ZXCV/.test(dlg.textContent) && $(w,'mpDeepName').value.length>0, 'arkusz z kodem i proponowaną ksywą');
+  $(w,'mpDeepName').value='Nowy Gracz';
+  const n=wsInstances.length;
+  await w.mpDeepJoin(); await settle(10);
+  ok(wsInstances.length===n+1 && wsInstances[n].url.includes('ZXCV'), '„Wchodzę" → od razu do pokoju ZXCV (bez „DOŁĄCZ")');
+  ok(w.localStorage.getItem('stacjaHandle')==='Nowy Gracz' && !dlg.classList.contains('show'), 'ksywa zapamiętana, arkusz zamknięty');
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('ranking: TV — imię do 3 linii (status/punkty kompaktowe); telefon — zawijanie zamiast ucinania', async ()=>{
+  const css=aCss();
+  ok(/\.tv-tm-nm\{white-space:normal;[^}]*-webkit-line-clamp:3/.test(css) && /\.tv-team\{grid-template-columns:auto minmax\(0,1fr\) auto auto/.test(css), 'TV: .tv-tm-nm zawijane, kolumna imienia = reszta szerokości');
+  ok(/\.rv-stand-row \.nm\{white-space:normal/.test(css) && /\.wk-row \.nm\{white-space:normal;[^}]*-webkit-line-clamp:2/.test(css), 'telefon: ranking odsłony/wyniku zawija imiona');
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);
