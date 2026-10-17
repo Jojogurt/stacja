@@ -1235,5 +1235,39 @@ await group('P1-7: krótki mecz (5 pytań) — 5 slotów z różnych kategorii, 
   }
   eq(n, 5, 'zagrano dokładnie 5 pytań');
 });
+/* ===== etap B (P1-8): ABCD w MP = kafle — tap = `propose` {slot: litera}; odpowiedź drużyny = najczęstsza litera.
+ * Serwer bez zmian protokołu (zwykły propose → reducer: jedna odpowiedź na gracza + auto-głos); test pilnuje kontraktu. */
+const mcPools=()=>({ q1:{ label:'Quiz', kind:'quiz', questions:[{ prompt:'Ile to 1+1?\nA) 1\nB) 2\nC) 3\nD) 4', slots:[{key:'a',label:'litera lub odpowiedź'}], answers:{a:['B','2']} }] } });
+await group('P1-8: ABCD (kafle) — najczęstsza litera drużyny wygrywa; treść z opcjami jawna dopiero w PLAY', async ()=>{
+  const { room } = await makeRoom();
+  room.allDoneGraceMs=20;
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo'), c=await room.connect('C','Cela');
+  await room.msg(a, { t:'start', config:CONFIG({ format:'coop', pools:mcPools() }) });
+  eq(room.game.phase, MP.ARMING, 'ARMING');
+  eq(b.last('state').game.prompt, '', 'ARMING: opcje ukryte (kafle dopiero w PLAY)');
+  await readyAll(room, a, b, c);
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  const prompt=b.last('state').game.prompt;
+  ok(/\nA\) /.test(prompt) && /\nD\) /.test(prompt), 'PLAY: treść z opcjami A–D (źródło kafli u klienta)');
+  const ok_=room.current.mc.correct, wrong=['A','B','C','D'].find(l=>l!==ok_);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:wrong } } });
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:ok_ } } });
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:ok_ } } });   // A zmienia zdanie (tap w inny kafel)
+  eq(room.game.byTeam.all.proposals.filter(p=>p.by==='A').length, 1, 'jedna odpowiedź na gracza (zmiana zastępuje)');
+  await room.msg(c, { t:'action', action:{ type:'propose', values:{ a:wrong } } });
+  await sleep(50);   // komplet tapów → auto-zamknięcie (P1-3)
+  eq(room.game.phase, MP.REVEAL, 'wszyscy tapnęli → odsłona');
+  eq(room.game.reveal.locked.a, ok_, 'odpowiedź drużyny = najczęstsza litera (2:1)');
+  ok(room.game.reveal.teamOk, 'najczęstsza litera poprawna → trafienie');
+});
+await group('P1-8: ABCD Solo — tap rywala niewidoczny w PLAY (tylko „answered")', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ format:'solo', pools:mcPools() }) });
+  await readyAll(room, a, b);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'C' } } });
+  const vb=b.last('state').game.byTeam.A;
+  eq([vb.proposals.length, Object.keys(vb.votes).length, vb.answered], [0, 0, ['A']], 'B widzi tylko, że A odpowiedział');
+});
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

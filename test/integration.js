@@ -759,7 +759,7 @@ await group('FIX odpowiedzi gościa: Solo — host widzi, KTO odpowiedział (bez
       ranking:[{teamId:'G',name:'Gosc',score:100,teamOk:true,gained:100},{teamId:me,name:'Ja',score:0,teamOk:false,gained:0}] } });
   await settle(6);
   const r=$(w,'mpRoom').innerHTML;
-  ok(/RANKING DRUŻYN/.test(r) && r.includes('„The Look · Roxette"'), 'odsłona Solo: ranking pokazuje odpowiedź gościa');
+  ok(/RANKING GRACZY/.test(r) && !/RANKING DRUŻYN/.test(r) && r.includes('„The Look · Roxette"'), 'odsłona Solo: „RANKING GRACZY" (P1-9) z odpowiedzią gościa');
   ok(/bez odpowiedzi/.test(r), 'odsłona Solo: pusta odpowiedź = „bez odpowiedzi"');
 });
 await group('MP: odsłona (reveal) i wynik (done) renderują', async ()=>{
@@ -878,36 +878,50 @@ await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emot
   ok(!/undefined is not|Cannot read/.test(h), 'salon render bez wyjątku');
 });
 
-await group('MP: intro fazy zamiast paska faz (duża ikona na wejściu w scenę)', async ()=>{
+await group('MP (P1-1): intro = KARTA PYTANIA z odliczaniem 3-2-1 — nagłówek z ramą widoczny, bez nakładki z ikoną', async ()=>{
   const w = window;
   const ws = wsInstances[wsInstances.length-1];
-  // nowy playNonce → zmiana sceny → powinno odpalić intro (ikona „Słuchaj")
-  ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
-    answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
-    proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:91, timer:0, endsAt:null, beerTally:{}, results:[] });
-  await settle(6);
-  const stage=$(w,'mpStage');
-  // intro „zaangażowane": #mpStage dostaje klasę intra (overlay sam jest ulotny — fake-WS echo go zmiata,
-  // w realnej apce zostaje; klasa przeżywa re-render, więc to stabilny sygnał)
-  ok(/mp-intro(ing|done)/.test(stage.className), 'intro: #mpStage w trybie intra na wejściu w fazę');
-  ok(!/mp-rail/.test($(w,'mpRoom').innerHTML), 'pasek faz (mp-rail) usunięty z widoku');
-  ok(!/undefined is not|Cannot read/.test($(w,'mpRoom').innerHTML), 'render fazy z intrem bez wyjątku');
+  w.__MP_INTRO_MS__ = 240;   // LEAD > 0 → karta z odliczaniem (siatka domyślnie 0 = od razu faza)
+  try{
+    ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'year', catKey:'d80', catLabel:'1980–89',
+      slots:[{round:1,cat:'d80',mode:'year'},{round:1,cat:'d80',mode:'music'},{round:1,cat:'d80',mode:'music'}], qpc:1,
+      answerSlots:[{key:'year',label:'rok'}], proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'',
+      playNonce:91, playAt:Date.now(), timer:0, endsAt:null, beerTally:{}, results:[] });
+    await settle(4);
+    const stage=$(w,'mpStage');
+    const card=stage.querySelector('.mp-qcard');
+    ok(card && /PYTANIE\s*1\s*\/3/.test(card.textContent), 'karta: „PYTANIE 1/3" — '+(card&&card.textContent.replace(/\s+/g,' ').slice(0,80)));
+    ok(card && /1980–89/.test(card.querySelector('.mp-qc-cat').textContent) && /Zgadnij ROK wydania/.test(card.querySelector('.mp-qc-task').textContent), 'karta: chip kategorii + trybu z zadaniem');
+    ok(card && card.querySelector('.mp-qc-d') && /^[123]$/.test(card.querySelector('.mp-qc-d').textContent), 'karta: cyfra odliczania 3-2-1');
+    ok(stage.firstElementChild && stage.firstElementChild.classList.contains('mp-hd') && /Pyt\. 1\/3/.test(stage.firstElementChild.textContent), 'rama: nagłówek z „Pyt. 1/3" widoczny podczas karty');
+    ok(!stage.querySelector('.mp-intro') && !/mp-introing/.test(stage.className), 'bez dawnej nakładki z ikoną (treść nie jest ukrywana)');
+    ok(!$(w,'mpKnob'), 'pod kartą jeszcze bez winyla/audio');
+    const ann=$(w,'mpAnnounce');
+    ok(ann && ann.getAttribute('aria-live')==='assertive' && /Pytanie 1 z 3\. Kategoria 1980–89\. Zgadnij ROK wydania\..*Start za 3/.test(ann.textContent), 'a11y: aria-live assertive — '+(ann&&ann.textContent));
+    await new Promise(r=>setTimeout(r,320));
+    await settle(3);
+    ok(!stage.querySelector('.mp-qcard') && $(w,'mpKnob'), 'po LEAD: karta zwinięta, winyl fazy „słuchaj"');
+    const bar=stage.querySelector('.mp-hd .mp-phbar');
+    ok(bar && bar.dataset.ph==='sluchaj' && /Słuchaj/.test(bar.textContent) && /Zgadnij ROK wydania/.test(bar.textContent), 'krok 2: pasek fazy pod nagłówkiem „🎧 Słuchaj · Zgadnij ROK wydania"');
+    ok(/mp-fromcard/.test(stage.className), 'krok 2: przejście „zwinięcie karty" (klasa jednorazowa)');
+    ok(!/mp-rail/.test($(w,'mpRoom').innerHTML), 'pasek faz (mp-rail) usunięty z widoku');
+  } finally { w.__MP_INTRO_MS__ = 0; }
 });
 
-await group('MP: faza (audio+timer) startuje DOPIERO po intrze (gating)', async ()=>{
+await group('MP: faza (audio+timer) startuje DOPIERO po odliczaniu na karcie (gating)', async ()=>{
   const w = window;
   const ws = wsInstances[wsInstances.length-1];
   const realWait=ms=>new Promise(r=>setTimeout(r,ms));
-  w.__MP_INTRO_MS__ = 220;   // krótkie intro, ale > 0 → start fazy wstrzymany
+  w.__MP_INTRO_MS__ = 220;   // krótkie odliczanie, ale > 0 → start fazy wstrzymany
   try{
     ws.pushState({ phase:'play', round:1, rounds:4, si:0, qi:0, mode:'music', catKey:'d80', catLabel:'80s',
       answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
       proposals:[], votes:{}, passed:[], preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:95, timer:0, endsAt:null, beerTally:{}, results:[] });
     await settle(6);
     const statusNow=(($(w,'mpPlayStatus')||{}).textContent||'');
-    ok(!/ładowanie|gra/.test(statusNow), 'pod intrem audio NIE wystartowało (status nietknięty)');
-    await realWait(300);   // intro mija → begin() odpala mpStartListenWindow + mpPlayLocal
-    ok(/ładowanie|gra/.test((($(w,'mpPlayStatus')||{}).textContent||'')), 'po intrze audio wystartowało (status ustawiony)');
+    ok(!/ładowanie|gra/.test(statusNow) && $(w,'mpStage').querySelector('.mp-qcard'), 'pod kartą audio NIE wystartowało (karta z odliczaniem)');
+    await realWait(300);   // odliczanie mija → begin() buduje fazę + mpStartListenWindow + mpPlayLocal
+    ok(/ładowanie|gra/.test((($(w,'mpPlayStatus')||{}).textContent||'')), 'po odliczaniu audio wystartowało (status ustawiony)');
   } finally { w.__MP_INTRO_MS__ = 0; }
 });
 
@@ -1425,7 +1439,7 @@ await group('F6b (F8/U8c/F9/R8/U4): ZATWIERDŹ, wskaźnik faz, intro tylko przed
   ok(lb && /ZATWIERDŹ/.test(lb.textContent) && lb.getAttribute('aria-label'), 'F8: host ma pełny przycisk „ZATWIERDŹ" (opisany)');
   ok(!$(w,'mpStage').querySelector('.mp-lockmini'), 'F8: bez mini ✓ 36 px');
   // odsłona: stary serwer (bez credits) → kredyty z bucketu drużyny w stanie REVEAL; pudło → „bzzt"
-  ws.pushState(revealState(ws, { playNonce:6002, byTeam:{ all:{ proposals:[{id:'p',by:'k',byName:'kaśka',values:{title:'Yesterday'}}], votes:{title:{k:'Yesterday'}}, sure:[], passed:[] } },
+  ws.pushState(revealState(ws, { playNonce:6002, teams:[{id:'all',name:'Drużyna',members:[ws._id,'k']}], byTeam:{ all:{ proposals:[{id:'p',by:'k',byName:'kaśka',values:{title:'Yesterday'}}], votes:{title:{k:'Yesterday'}}, sure:[], passed:[] } },
     reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', okTitle:false, okArtist:false, teamOk:false, gained:0, pewniacy:[], locked:{title:'Yesterday',artist:''} } })); await settle(6);
   const rv=$(w,'mpRoom').innerHTML;
   ok(/rv-credits/.test(rv) && /kaśka<\/b> → tytuł/.test(rv), 'R8: „Złożona z głosów: kaśka → tytuł" (fallback z bucketu)');
@@ -1433,7 +1447,7 @@ await group('F6b (F8/U8c/F9/R8/U4): ZATWIERDŹ, wskaźnik faz, intro tylko przed
   ok($(w,'mpStage').querySelector('.mp-ph i.on').textContent==='👁', 'U8c: odsłona → 👁');
   w.mpAdvance(); await settle(3);
   // częściowe + credits z serwera
-  ws.pushState(revealState(ws, { playNonce:6003, reveal:{ kind:'music', track:'A', artist:'B', okTitle:true, okArtist:false, teamOk:false, gained:50, pewniacy:[],
+  ws.pushState(revealState(ws, { playNonce:6003, teams:[{id:'all',name:'Drużyna',members:[ws._id,'k']}], reveal:{ kind:'music', track:'A', artist:'B', okTitle:true, okArtist:false, teamOk:false, gained:50, pewniacy:[],
     locked:{title:'A',artist:'x'}, credits:[{key:'title',label:'tytuł',name:'<b>mati</b>'}] } })); await settle(6);
   ok(w.__SFX_LOG__.includes('ding'), 'U4: częściowe → „ding"');
   ok(/&lt;b&gt;mati&lt;\/b&gt;<\/b> → tytuł/.test($(w,'mpRoom').innerHTML), 'R8: credits z serwera (escapowane)');
@@ -1489,7 +1503,7 @@ await group('F6b (#6): TV salonu w formacie Solo — karty drużyn bez treści t
   ws.pushState(revealState(ws, { playNonce:7102, salon:true, format:'solo', teams:[{id:'t0',name:'Ala',members:['A']},{id:'t1',name:'Bo',members:['B']}],
     reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', byTeam:{}, ranking:[{teamId:'t0',name:'Ala',score:100,teamOk:true},{teamId:'t1',name:'Bo',score:0,teamOk:false}] } })); await settle(6);
   const r=$(w,'mpRoom').innerHTML;
-  ok(/Hey Jude/.test(r) && /RANKING DRUŻYN/.test(r) && !/rv-banner/.test(r), 'TV odsłona: utwór + ranking, bez banera „swojej" drużyny');
+  ok(/Hey Jude/.test(r) && /RANKING GRACZY/.test(r) && !/rv-banner/.test(r), 'TV odsłona: utwór + ranking (Solo: „graczy"), bez banera „swojej" drużyny');
   w.mpAdvance(); await settle(3);
 });
 await group('F6b (F6/F5): potwierdzenie wyjścia + „Wróć do pokoju" (30 min) + deep-link przy znanej ksywie', async ()=>{
@@ -3137,6 +3151,170 @@ await group('A P1-11: toasty ról hosta + ksywa po wyjściu (game.names) + ?name
     scores:{[me]:0,G:0}, byTeam:{ [me]:{ proposals:[], votes:{}, sure:[], passed:[] }, G:{ proposals:[], votes:{}, sure:[], passed:[], answered:['G'] } } })); await settle(6);
   w.mpGoKombinuj(); await settle(3);
   ok(/Gosia/.test(($(w,'mpStage').querySelector('[data-rival="G"]')||{}).textContent||''), 'P1-11: rywal po wyjściu z presence — ksywa z game.names (nie „gracz")');
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+
+/* ===================== Przegląd MP 2026-10 — etap B (P1-1, P1-4…P1-6, P1-8, P1-9, P1-12…P1-15) ===================== */
+const bPresence=(ws, extra=[{id:'O',name:'Ola'},{id:'K',name:'Kuba'}])=>ws._emit({ t:'presence', members:[{id:ws._id,name:'Ja'}, ...extra], hostId:ws._id });
+await group('B P1-1/P1-4: LOADING → ARMING → odliczanie = JEDNA karta (łatana w miejscu); awatary gotowości + „Czekamy na"', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  bPresence(ws); await settle(3);
+  const slots=[{round:1,cat:'d80',mode:'year'},{round:1,cat:'d80',mode:'music'}];
+  ws.pushState({ phase:'loading', round:1, rounds:1, si:0, qi:0, slots, qpc:1, mode:'year', catKey:'d80', catLabel:'1980–89', hostId:me, teams:[{id:'all',members:[me,'O','K']}], scores:{all:120}, results:[] }); await settle(4);
+  const st=$(w,'mpStage'); const card0=st.querySelector('.mp-qcard');
+  ok(card0 && /losuję pytanie/.test(card0.textContent) && /PYTANIE\s*1\s*\/2/.test(card0.textContent), 'LOADING: karta „PYTANIE 1/2" + „losuję pytanie…" (nie „host losuje utwór")');
+  ok(/Zgadnij ROK wydania/.test(card0.textContent), 'LOADING: chip trybu z zadaniem');
+  ws.pushState({ phase:'arming', armNonce:801, armMs:12000, round:1, rounds:1, si:0, qi:0, slots, qpc:1, mode:'year', catKey:'d80', catLabel:'1980–89', preview:'', lyric:'', prompt:'',
+    hostId:me, readyCount:2, readyTotal:3, readyIds:[me,'O'], teams:[{id:'all',members:[me,'O','K']}], scores:{all:120}, playNonce:0, results:[] }); await settle(4);
+  const card1=st.querySelector('.mp-qcard');
+  ok(card1===card0, 'ARMING: TA SAMA karta (bez podmiany/migotania)');
+  ok(!card1.classList.contains('enter') || card1===card0, 'karta nie wjeżdża drugi raz');
+  ok(/2\/3/.test(card1.textContent) && /gotowych/.test(card1.textContent), 'ARMING: „2/3 gotowych"');
+  ok(card1.querySelectorAll('.mp-qc-av.on').length===2 && card1.querySelectorAll('.mp-qc-av').length===3, 'awatary: zapalone gotowe (2 z 3)');
+  const wf=card1.querySelector('.mp-waitfor');
+  ok(wf && /Czekamy na: Kuba/.test(wf.textContent) && !/Ola/.test(wf.textContent), 'P1-4: „Czekamy na: Kuba" — '+(wf&&wf.textContent));
+  ok(card1.querySelector('#mpArmLeft') && card1.querySelector('.mp-qc-skip'), 'host: limit ARMING + „pomiń czekających"');
+  const hd=st.firstElementChild;
+  ok(hd.classList.contains('mp-hd') && hd.dataset.ph==='card' && /⭐\s*120/.test(hd.textContent), 'rama: nagłówek widoczny, ⭐ 120 (P1-5)');
+  w.__MP_INTRO_MS__=200;
+  try{
+    ws.pushState({ phase:'play', round:1, rounds:1, si:0, qi:0, slots, qpc:1, mode:'year', catKey:'d80', catLabel:'1980–89', answerSlots:[{key:'year',label:'rok'}],
+      preview:'https://x/p.m4a', lyric:'', prompt:'', playNonce:802, hostId:me, teams:[{id:'all',members:[me,'O','K']}], scores:{all:120},
+      byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } }, timer:0, endsAt:null, results:[] }); await settle(3);
+    const card2=st.querySelector('.mp-qcard');
+    ok(card2===card0 && card2.querySelector('.mp-qc-d'), 'PLAY w LEAD: ta sama karta + cyfra odliczania');
+    await new Promise(r=>setTimeout(r,280)); await settle(3);
+  } finally { w.__MP_INTRO_MS__=0; }
+  ok(!st.querySelector('.mp-qcard') && st.querySelector('.mp-hd .mp-phbar[data-ph="sluchaj"]'), 'po odliczaniu: pasek fazy „słuchaj"');
+  const task=$(w,'mpTask');
+  ok(task && task.textContent==='Zgadnij ROK wydania' && task.closest('.mp-deck') && task.closest('.mp-deck').querySelector('#mpKnob'), 'P1-13: polecenie pod winylem');
+  const css=aCss();
+  ok(/\.mp-qcard\.enter\{animation:mpCardUp \.28s/.test(css) && /@keyframes mpDigit/.test(css), 'CSS: wjazd karty 280 ms + pop cyfry');
+  ok(!/mp-introing/.test(css.replace(/\/\*[\s\S]*?\*\//g,'')), 'CSS: bez dawnego mp-introing (nie ukrywamy treści)');
+});
+await group('B P1-14: pasek fazy — podpis, 20 px, kolor ramy wg fazy (słuchaj/kombinuj/odsłona), tokeny dark', async ()=>{
+  const w=window; const ws=await f6bRoom();
+  ws.pushState(playState(ws, { playNonce:9501 })); await settle(6);
+  const hd=()=>$(w,'mpStage').querySelector('.mp-hd');
+  ok(hd().dataset.ph==='sluchaj' && hd().querySelector('.mp-ph-on .mp-ph-lab').textContent==='Słuchaj' && hd().querySelector('.mp-ph i.on').textContent==='🎧', 'słuchaj: niebieska rama, „🎧 Słuchaj"');
+  ok(/Tytuł \+ wykonawca/.test(hd().querySelector('.mp-phtask').textContent), 'zadanie w pasku');
+  w.mpGoKombinuj(); await settle(3);
+  ok(hd().dataset.ph==='kombinuj' && /Kombinujcie/.test(hd().querySelector('.mp-ph-lab').textContent), 'kombinuj: fioletowa rama, „🧠 Kombinujcie"');
+  ok(hd().classList.contains('ph-chg') && /--ph-from:var\(--ph-sluchaj\)/.test(hd().getAttribute('style')||''), 'przejście koloru 200 ms z niebieskiego (bez nakładki)');
+  ok(/mp-tokomb/.test($(w,'mpStage').className), 'pola wjeżdżają od dołu (klasa przejścia)');
+  ws.pushState(revealState(ws, { playNonce:9501, scores:{all:50}, reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', okTitle:true, okArtist:true, teamOk:true, gained:50, pewniacy:[], locked:{title:'Hey Jude',artist:'Beatles'} } })); await settle(6);
+  ok(hd().dataset.ph==='odslona' && /Odsłona/.test(hd().textContent), 'odsłona: zielona rama');
+  const css=aCss();
+  ok(/\.mp-ph\{[^}]*font-size:20px/.test(css) && !/\.mp-ph i\{[^}]*opacity:\.38/.test(css), 'rail 20 px, bez opacity .38');
+  ok(/html\.dark\{[^}]*--ph-kombinuj:/.test(css) && /\.mp-hd\[data-ph="kombinuj"\]\{background:var\(--ph-kombinuj\)/.test(css), 'tokeny kolorów faz z wariantem dark');
+  w.mpAdvance(); await settle(3);
+});
+await group('B P1-5/P1-6/P1-1 krok 4: „Sprawdzamy…" → karta; ⭐ i „+N"; CTA „DALEJ" sticky; ranking top-3 + „pokaż wszystkich"; kredyty tylko coop ≥ 2', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  w.__MP_CHECK_MS__=80;
+  try{
+    const teams=[{id:me,name:'Ja',members:[me]},{id:'A',name:'Ala',members:['A']},{id:'B',name:'Bo',members:['B']},{id:'C',name:'Cela',members:['C']},{id:'D',name:'Dyzio',members:['D']}];
+    const ranking=[{teamId:'A',name:'Ala',score:300,teamOk:true,gained:100},{teamId:'B',name:'Bo',score:200,teamOk:true,gained:100},{teamId:'C',name:'Cela',score:150,teamOk:false,gained:0},
+      {teamId:'D',name:'Dyzio',score:120,teamOk:false,gained:0},{teamId:me,name:'Ja',score:90,teamOk:true,gained:40}];
+    ws.pushState(revealState(ws, { playNonce:9601, format:'solo', teams, scores:{[me]:90,A:300,B:200,C:150,D:120},
+      reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', ranking, byTeam:{ [me]:{ okTitle:true, okArtist:false, teamOk:false, gained:40, locked:{title:'Hey Jude',artist:''}, credits:[{key:'title',label:'tytuł',name:'Ja'}] } } } }));
+    await settle(3);
+    const st=$(w,'mpStage');
+    ok(st.querySelector('.mp-checking') && /Sprawdzamy…/.test(st.textContent) && !st.querySelector('.rv-card'), 'krok 4: „Sprawdzamy…" przed kartą utworu');
+    ok(st.querySelector('.mp-hd[data-ph="odslona"]'), 'rama nagłówka widoczna w „Sprawdzamy…"');
+    ok(/⭐\s*50/.test(st.querySelector('#mpScore').textContent), '„Sprawdzamy…": ⭐ jeszcze POPRZEDNI wynik (50) — nie zdradza trafienia');
+    await new Promise(r=>setTimeout(r,130)); await settle(3);
+    ok(st.querySelector('.rv-card'), 'po ~600 ms (tu 80) — karta utworu');
+    const sc=st.querySelector('#mpScore');
+    ok(sc && /⭐/.test(sc.textContent) && sc.getAttribute('aria-label')==='punkty: 90', 'P1-5: ⭐ w nagłówku (cel 90)');
+    ok(/\+40/.test(st.querySelector('.rv-banner .pts').textContent), 'P1-5: „+40" w banerze');
+    const cta=st.querySelector('.rv-cta');
+    ok(cta && cta.querySelector('.mp-next') && /DALEJ/.test(cta.textContent) && cta===st.lastElementChild, 'P1-6: CTA „DALEJ" w przyklejonej stopce (ostatni element)');
+    ok(/\.rv-cta\{position:sticky/.test(aCss()), 'CSS: .rv-cta sticky');
+    const rows=[...st.querySelectorAll('.rv-standings > .rv-stand-row')].map(r=>r.querySelector('.nm').firstChild.textContent);
+    eq2(rows.join(','), 'Ala,Bo,Cela,Ja (Ty)', 'P1-6: top-3 + moja pozycja');
+    const more=st.querySelector('.rv-standings details.rv-more');
+    ok(more && /pokaż wszystkich \(5\)/.test(more.querySelector('summary').textContent) && /Dyzio/.test(more.textContent), '„pokaż wszystkich (5)" chowa resztę');
+    ok(/RANKING GRACZY/.test(st.textContent) && /\+100/.test(st.querySelector('.rv-standings').textContent), 'P1-9 „Ranking graczy" + „+100" przy nicku');
+    ok(!st.querySelector('.rv-credits'), 'P1-6: Solo — bez „Złożona z głosów"');
+    ok(/Twoja odpowiedź: „Hey Jude · —"/.test(st.querySelector('.rv-locked').textContent), 'P1-9: „Twoja odpowiedź: …"');
+    w.mpAdvance(); await settle(3);
+    // coop 1-osobowa drużyna → bez kredytów
+    ws.pushState(revealState(ws, { playNonce:9602, reveal:{ kind:'music', track:'A', artist:'B', okTitle:true, okArtist:false, teamOk:false, gained:50, pewniacy:[], locked:{title:'A',artist:'x'}, credits:[{key:'title',label:'tytuł',name:'Ja'}] } }));
+    await new Promise(r=>setTimeout(r,130)); await settle(3);
+    ok(!st.querySelector('.rv-credits') && /odpowiedź drużyny/.test(st.querySelector('.rv-locked').textContent), 'coop 1 osoba: bez kredytów; „odpowiedź drużyny"');
+    w.mpAdvance(); await settle(3);
+  } finally { w.__MP_CHECK_MS__=0; }
+});
+await group('B P1-4: po „dalej" — „Czekamy na: Ola (host)…" (event advanced od każdego); host w kombinuj widzi maruderów', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws._emit({ t:'presence', members:[{id:'H',name:'Hania'},{id:me,name:'Ja'},{id:'K',name:'Kuba'}], hostId:'H' }); await settle(3);
+  ws.pushState(revealState(ws, { playNonce:9701, hostId:'H', teams:[{id:'all',name:'Drużyna',members:['H',me,'K']}] })); await settle(6);
+  const n0=ws.sent.length;
+  w.mpAdvance(); await settle(3);
+  const adv=ws.sent.slice(n0).filter(m=>m.t==='event' && m.event==='advanced');
+  ok(adv.length===1 && adv[0].payload.nonce===9701, 'gość wysyła `advanced` także poza salonem');
+  let wf=$(w,'mpStage').querySelector('.mp-waitfor');
+  ok(wf && /Czekamy na: Hania \(host\), Kuba/.test(wf.textContent), '„Czekamy na: Hania (host), Kuba" — '+(wf&&wf.textContent));
+  ws._emit({ t:'event', event:'advanced', from:'K', payload:{ by:'K', from:'K', nonce:9701 } }); await settle(3);
+  wf=$(w,'mpStage').querySelector('.mp-waitfor');
+  ok(wf && /Czekamy na: Hania \(host\)/.test(wf.textContent) && !/Kuba/.test(wf.textContent), 'Kuba kliknął „dalej" → zostaje host');
+  ok($(w,'mpStage').querySelectorAll('.mp-waitnext .mp-qc-av.on').length===2, 'awatary: ja + Kuba zapalone');
+  // host w kombinuj (coop): kto jeszcze nic nie dał
+  ws._emit({ t:'presence', members:[{id:me,name:'Ja'},{id:'O',name:'Ola'},{id:'K',name:'Kuba'}], hostId:me }); await settle(3);
+  ws.pushState(playState(ws, { playNonce:9702, teams:[{id:'all',name:'Drużyna',members:[me,'O','K']}],
+    byTeam:{ all:{ proposals:[{id:'p',by:'O',byName:'Ola',values:{title:'X'}}], votes:{ title:{ O:'X' } }, sure:[], passed:[] } } })); await settle(6);
+  w.mpGoKombinuj(); await settle(3);
+  const t=$(w,'mpTeam');
+  ok(/Czekamy na: Ty, Kuba/.test(t.textContent) && !/Ola/.test(t.querySelector('.mp-waitfor').textContent), 'host kombinuj: „Czekamy na: Ty, Kuba" — '+t.textContent);
+  ok(/przegłosujcie/.test(t.textContent) === false || /ODPOWIEDŹ DRUŻYNY/.test(t.textContent), 'coop 3 os.: odpowiedź drużyny');
+});
+await group('B P1-8: ABCD w MP — kafle .mc-opt; tap = propose litery; odpowiedź drużyny pokazuje „B) …"; bez pola „wpisz literę"', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const prompt='Jaki to utwór?\nA) Alfa — X\nB) Beta — Y\nC) Gamma — Z\nD) Delta — W';
+  ws.pushState(playState(ws, { playNonce:9801, mode:'abcd', prompt, answerSlots:[{key:'a',label:'litera (A–D)'}], teams:[{id:'all',name:'Drużyna',members:[me,'O']}] })); await settle(6);
+  const st=$(w,'mpStage');
+  ok(st.querySelectorAll('#mpMc .mc-opt').length===4 && $(w,'mpTask').textContent==='Wybierz A–D', 'słuchaj: 4 kafle od razu + „Wybierz A–D"');
+  ok(!/\nA\) Alfa/.test(st.querySelector('.lyric-box.quiz').textContent) && /stuknij kafel/.test(st.querySelector('.lyric-box.quiz').textContent), 'pudełko pytania bez linii opcji');
+  const n0=ws.sent.length;
+  ok(/mpMcPick\(this\.dataset\.letter\)/.test(st.querySelector('#mpMc .mc-opt[data-letter="B"]').getAttribute('onclick')), 'kafel → mpMcPick');
+  w.mpMcPick('B'); await settle(3);   // inline onclick nie biegnie w jsdom (runScripts: outside-only)
+  const pr=aSent(ws, n0, 'propose');
+  ok(pr.length===1 && JSON.stringify(pr[0].action.values)==='{"a":"B"}', 'tap B → propose {a:"B"} (propozycja + głos)');
+  ok(st.querySelector('#mpMc .mc-opt[data-letter="B"]').classList.contains('sel') && st.querySelector('#mpMc .mc-opt[data-letter="B"]').getAttribute('aria-pressed')==='true', 'kafel B zaznaczony (optymistycznie)');
+  w.mpGoKombinuj(); await settle(3);
+  ok(st.querySelectorAll('#mpMc .mc-opt').length===4 && !$(w,'mpBoard') && !$(w,'mpProp_a'), 'kombinuj kolumny: kafle zamiast kolumn i pola litery');
+  ok(/B\) Beta — Y/.test($(w,'mpTeam').textContent), 'odpowiedź drużyny: „B) Beta — Y"');
+  ws.pushState(playState(ws, { playNonce:9801, mode:'abcd', prompt, answerSlots:[{key:'a',label:'litera (A–D)'}], teams:[{id:'all',name:'Drużyna',members:[me,'O']}],
+    byTeam:{ all:{ proposals:[{id:'1',by:me,byName:'Ja',values:{a:'B'}},{id:'2',by:'O',byName:'Ola',values:{a:'C'}}], votes:{ a:{ [me]:'B', O:'C' } }, sure:[], passed:[] } } })); await settle(4);
+  ok(/●/.test(st.querySelector('#mpMc .mc-opt[data-letter="C"]').textContent), 'głos kolegi widoczny na kaflu C');
+  w.mpSetSkin('czat'); await settle(3); w.mpGoKombinuj(); await settle(3);
+  ok(st.querySelectorAll('#mpMc .mc-opt').length===4 && !$(w,'mpTyp_a') && $(w,'mpChatIn'), 'czat: kafle + composer tylko do czatu');
+  ok(/Stuknij kafel/.test($(w,'mpChatFeed').textContent) || $(w,'mpChatFeed').children.length>0, 'czat ABCD: podpowiedź w pustym feedzie');
+  w.mpSetSkin('kolumny'); await settle(2);
+});
+await group('B P1-9/P1-12/P1-15: copy Solo; lektor — opis zwijany w kombinuj; czat — pusty feed z podpowiedzią, 2 wiersze ≤ 375 px', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws.pushState(playState(ws, { playNonce:9901, format:'solo', teams:[{id:me,name:'Ja',members:[me]},{id:'G',name:'Gosia',members:['G']}], scores:{[me]:0,G:0},
+    byTeam:{ [me]:{ proposals:[], votes:{}, sure:[], passed:[] }, G:{ proposals:[], votes:{}, sure:[], passed:[] } } })); await settle(6);
+  w.mpGoKombinuj(); await settle(3);
+  const t=$(w,'mpTeam').textContent;
+  ok(/TWOJA ODPOWIEDŹ/.test(t) && !/przegłosujcie/.test(t) && !/ODPOWIEDŹ DRUŻYNY/.test(t), 'Solo: „Twoja odpowiedź", bez „przegłosujcie" — '+t);
+  ok(/Kombinuj\b/.test($(w,'mpStage').querySelector('.mp-ph-lab').textContent), 'Solo: „Kombinuj" (nie „Kombinujcie")');
+  ws.pushState(playState(ws, { playNonce:9902, mode:'lektor', preview:'', lyric:'Opis piosenki do zgadnięcia', teams:[{id:'all',name:'Drużyna',members:[me,'O']}] })); await settle(6);
+  ok(/Opis piosenki/.test($(w,'mpStage').textContent), 'lektor słuchaj: opis widoczny');
+  w.mpGoKombinuj(); await settle(3);
+  const fold=$(w,'mpStage').querySelector('details.lyric-fold');
+  ok(fold && fold.open && /Opis piosenki/.test(fold.textContent), 'P1-12: kombinuj — opis zwijany (otwarty)');
+  const h=$(w,'mpStage').innerHTML;
+  ok(h.indexOf('lyric-fold')>=0 && h.indexOf('lyric-fold')<h.indexOf('id="mpBoard"') && h.indexOf('lyric-fold')<h.indexOf('mpProp_title'), 'opis NAD polami — '+[h.indexOf('lyric-fold'),h.indexOf('id="mpBoard"'),h.indexOf('mpProp_title')]);
+  w.mpLyricToggle(false); w.mpSetSkin('czat'); await settle(3); w.mpGoKombinuj(); await settle(3);
+  ok(!$(w,'mpStage').querySelector('details.lyric-fold').open, 'zwinięcie zapamiętane przy przebudowie');
+  ok(/Wpisz typ — trafi do drużyny, nie na czat/.test($(w,'mpChatFeed').textContent), 'P1-15: pusty feed z podpowiedzią');
+  const css=aCss();
+  ok(/@media \(max-width:375px\)\{[^}]*\.mp-cwrap-typ\{flex-wrap:wrap/.test(css), 'P1-15: ≤ 375 px — tytuł/wykonawca w 2 wierszach');
+  ok(/\.mp-play \.mp-comp\{position:sticky/.test(css) && /\.mp-play \.mp-chatfeed\.fixed\{flex:1 1 0/.test(css), 'composer przyklejony na dole (feed flex)');
+  w.mpSetSkin('kolumny'); await settle(2);
   w.mpLeaveConfirmed('room'); await settle(6);
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

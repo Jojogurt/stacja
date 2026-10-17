@@ -23,6 +23,17 @@ export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak',
   timeline:'ułóż po roku', slowmo:'0.6× → 0.75×', fastmo:'1.5×'};
 /* Ekran „Nowy mecz" (app/matchSetup.js): tryby pogrupowane w RODZINY z krótkim opisem — czysta definicja,
  * każdy tryb z ALL_MODES dokładnie w jednej rodzinie (test w test/run.js). Kolejność = kolejność w UI. */
+/* P1-1/P1-13 (przegląd MP 2026-10): POLECENIE zadania per tryb — karta pytania, pasek fazy i podpis pod winylem
+ * („Zgadnij ROK wydania" zamiast samego chipa „♬ rok"). mc = pytanie ABCD (kafle) → „Wybierz A–D". */
+export const MODE_TASK={music:'Tytuł + wykonawca', lektor:'Z opisu: tytuł + wykonawca', reverse:'Od tyłu: tytuł + wykonawca',
+  snippet:'Fragment: tytuł + wykonawca', revsnip:'Od tyłu: tytuł + wykonawca', slowmo:'Zwolnione: tytuł + wykonawca',
+  fastmo:'Przyspieszone: tytuł + wykonawca', year:'Zgadnij ROK wydania', abcd:'Wybierz A–D', quiz:'Odpowiedz na pytanie',
+  intro:'Tytuł + wykonawca', medley:'Wykonawcy ze składanki', cover:'Album z okładki', piano:'Tytuł + wykonawca',
+  guitar:'Tytuł + wykonawca', timeline:'Ułóż na osi czasu'};
+export function modeTask(mode, { mc=false }={}){
+  if(mc) return MODE_TASK.abcd;
+  return MODE_TASK[mode] || MODE_TASK.music;
+}
 export const MODE_FAMILIES=[
   { id:'listen',  name:'Słuchaj',     desc:'rozpoznaj utwór',        modes:['music','intro','snippet','reverse','revsnip','slowmo','fastmo'] },
   { id:'combine', name:'Kombinuj',    desc:'inaczej niż wpisywanie', modes:['abcd','year','timeline','medley'] },

@@ -141,6 +141,23 @@ export function setupSummary({ cats, active, questions, allCats }){
   return { ok:true, text:`${s.count} ${s.unit} · ${s.cats} kat. · ${n} ${plPick(n, 'tryb', 'tryby', 'trybów')}${rep}`, summary:s };
 }
 export const FORMAT_LABEL = { coop:'Wspólna drużyna', solo:'Każdy sam', teams:'Drużyny' };
+/* P1-9 (przegląd MP 2026-10): copy per format — Solo mówi do gracza („Twoja odpowiedź", „Ranking graczy"), Drużyny
+ * i Wspólna — do drużyny; „przegłosujcie" tylko gdy w drużynie są ≥ 2 osoby. teamSize = liczba osób w MOJEJ drużynie. */
+export function formatCopy(format, teamSize = 1){
+  const f = MP_FORMATS.includes(format) ? format : 'coop';
+  const many = (Number(teamSize) || 0) >= 2;
+  const solo = f === 'solo';
+  return {
+    answerLabel: solo ? 'TWOJA ODPOWIEDŹ' : 'ODPOWIEDŹ DRUŻYNY',
+    emptyHint: solo || !many ? '— wpisz swój typ —' : '— wrzućcie typy i przegłosujcie —',
+    lockedLabel: solo ? 'Twoja odpowiedź' : 'odpowiedź drużyny',
+    typLabel: solo ? 'Twój typ' : 'drużyna',
+    rankingTitle: solo ? 'RANKING GRACZY' : 'RANKING DRUŻYN',
+    doneRanking: solo ? 'Ranking graczy' : 'Ranking drużyn',
+    winnerSub: solo ? 'zwycięzca · punkty' : f === 'teams' ? 'zwycięska drużyna · punkty' : 'punkty drużyny',
+    hitTitle: solo ? 'Trafione!' : 'Drużyna trafiła!',
+  };
+}
 export const timerLabel = (t) => { const s = clampTimer(t); return s ? `${s} s` : 'bez limitu'; };
 // jednolinijkowe podsumowanie zwiniętych „Ustawień meczu"
 export function settingsSummary({ ctx = 'solo', questions, trener = false, format = 'coop', timer = 0, salon = false }){

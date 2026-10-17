@@ -7,11 +7,11 @@ import { norm, quizKey, parseYear, quizListen } from '../core/scoring.js';
 import { listenStop, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie (start w mp-render: mpOnEnter)
 import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions, mpAvailableModes } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
-import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally, tvIdOf, allSettled, needsSureConfirm } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally, tvIdOf, allSettled, needsSureConfirm, mcOptions } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond, isTempoMode, mpTempoRate,
-  MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, phaseDeadlines, addClockSample, clockOffset, phaseClock, fmtClock, hostEndVisible } from '../core/timing.js';
+  MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, phaseDeadlines, addClockSample, clockOffset, phaseClock, fmtClock, hostEndVisible, introEndLocal } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
@@ -33,7 +33,7 @@ import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft, mpPickResetRoom, mpPickReady } from './mp-picker.js';
 import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla gości (ta sama sanityzacja co serwer)
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost } from './mp-render.js';
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpIntroLeadMs } from './mp-render.js';
 import { tableShelfPayload } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
 import { tasteStore, tasteVisibility } from './taste.js';
 
@@ -214,6 +214,8 @@ async function mpLeave(){
   S.ack=S.revealNonce=S.revealSnap=null;
   S.audioHostOnly=false; S.tickSec=null;
   S.clockSamples=[]; S.clockOff=0; S.netErr=null; S.sawMatch=false; S.lastHostId=undefined; S.pastHosts=new Set(); S.sureArmUntil=0;   // etap A
+  if(S.countTimer){ clearTimeout(S.countTimer); S.countTimer=null; } if(S.checkTimer){ clearTimeout(S.checkTimer); S.checkTimer=null; }   // etap B
+  S.introNonce=null; S.checkUntil=0; S.revealFx=null; S.cardHead=S.cardInner=null; S.hdPh=S.phFrom=null; S.countSaid=null; S.lyricFold=null;
   if(S.connTimer){ clearTimeout(S.connTimer); S.connTimer=null; }
   if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
   S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.draft=null; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
@@ -322,7 +324,7 @@ async function mpEnterRoom(code, asHost, groupId){
   S.ch.on('broadcast',{event:'say'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id){ mpClearTypingFor(by); mpPushChat(payload.byName, payload.text, false); mpFloatSay(payload.text, payload.byName); } });
   S.ch.on('broadcast',{event:'typing'},({payload})=>{ const by=mpSender(payload); if(by && by!==mpMe.id) mpMarkTyping(by); });
   S.ch.on('broadcast',{event:'draft'},({payload, from})=>mpOnDraft(payload, from || mpSender(payload)));   // szkic meczu od hosta (goście)
-  S.ch.on('broadcast',{event:'advanced'},({payload})=>{ const by=mpSender(payload); if(by) mpOnPlayerAdvanced({ ...payload, by }); });   // SALON: gracz kliknął „dalej" na odsłonie
+  S.ch.on('broadcast',{event:'advanced'},({payload})=>{ const by=mpSender(payload); if(by) mpOnPlayerAdvanced({ ...payload, by }); });   // gracz kliknął „dalej" (P1-4: „Czekamy na"; salon: auto-przejście TV)
   S.ch.on('status',{},(s)=>mpNetStatus(s));   // 5.6: wskaźnik reconnectu
   S.ch.on('presence',{event:'sync'},()=>{
     mpMaybeShareShelf();   // gust etap 3: serwer zna „Gust stołu" → dosyłam swoją półkę (raz na pokój; transport ponawia po reconnect)
@@ -470,12 +472,23 @@ function mpAfterSync(){
   // F2b #6: z NIEZAMKNIĘTĄ odsłoną start czeka na „dalej" (serwer mógł ruszyć bez nas po limicie ARMING) —
   // wtedy mpAdvance → mpAfterSync odpala fazę z audio „na dogonienie" (dawniej zajawka grała pod odsłoną).
   const startPlay = g && g.phase===MP.PLAY && g.playNonce!==S.lastNonce && !mpRevealPending();
-  if(startPlay){ S.lastNonce=g.playNonce; S.skipArm=false; }
-  mpRender();   // może odpalić INTRO fazy i ustawić S.introUntil (start fazy wstrzymany do końca animacji)
-  // CAŁA faza (okno czasu + audio) startuje DOPIERO po intrze — nic nie gra/tyka pod dużą ikoną fazy.
+  if(startPlay){
+    S.lastNonce=g.playNonce; S.skipArm=false;
+    /* P1-1: odliczanie 3-2-1 na karcie pytania w LEAD — termin z playAt SERWERA (core/timing.introEndLocal: playAt − offset
+     * zegara + LEAD, przycięty do [teraz, teraz+LEAD]); powrót w trakcie pytania → bez karty. Seam testowy __MP_INTRO_MS__. */
+    const now=Date.now(), lead=mpIntroLeadMs();
+    const seam = typeof window!=='undefined' && window.__MP_INTRO_MS__!=null;
+    const end = seam ? now+lead : introEndLocal({ playAt:g.playAt, clockOff:S.clockOff, serverClock:S.clockSamples.length>0, now, leadMs:lead });
+    S.introNonce=g.playNonce; S.introUntil = end-now>20 ? end : 0;
+    if(S.countTimer){ clearTimeout(S.countTimer); S.countTimer=null; }
+  }
+  mpRender();   // w LEAD: karta pytania z odliczaniem (scena „card"); po nim — scaffold fazy „słuchaj"
+  // CAŁA faza (okno czasu + audio) startuje DOPIERO po odliczaniu — nic nie gra/tyka pod kartą pytania.
   if(startPlay){
     // P0-7: okno słuchania wg terminu serwera — powrót w trakcie pytania nie daje pełnych 15 s; < 5 s → od razu „kombinuj" (bez audio)
-    const begin=()=>{ if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===S.lastNonce){ if(mpStartListenWindow(S.game)>0) mpPlayLocal(); } };
+    const begin=()=>{ if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===S.lastNonce){
+      S.introUntil=0; mpRender();   // P1-1 krok 2: karta „zwija się" do paska fazy, pod nią winyl + zegar fazy
+      if(mpStartListenWindow(S.game)>0) mpPlayLocal(); } };
     const wait=(S.introUntil||0)-Date.now();
     if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
     if(wait>20) S.startTimer=setTimeout(begin, wait); else begin();
@@ -506,13 +519,17 @@ function mpHostRetry(){
 // SALON: host (TV) zlicza, którzy GRACZE kliknęli „dalej" na bieżącej odsłonie, i przechodzi SAM,
 // gdy wszyscy gotowi — host nie gra, więc nie wymaga kliku na TV (klik na TV = ręczny „pomiń czekanie").
 let advancedSet=new Set(), advancedNonce=null;
+// P1-4: KAŻDY klient zbiera, kto kliknął „dalej" na bieżącej odsłonie („Czekamy na: Ola, Kuba" po moim „dalej")
 function mpOnPlayerAdvanced(payload){
-  if(!S.host || !S.game || !S.game.salon || S.game.phase!==MP.REVEAL) return;
+  if(!S.game || S.game.phase!==MP.REVEAL) return;
   if(!payload || payload.nonce!==S.game.playNonce) return;
   if(advancedNonce!==S.game.playNonce){ advancedSet=new Set(); advancedNonce=S.game.playNonce; }
+  if(advancedSet.has(payload.by)) return;
   advancedSet.add(payload.by);
-  mpRecountAdvance();
+  if(S.host && S.game.salon){ mpRecountAdvance(); return; }
+  if(!mpRevealPending()) mpRender();   // odśwież ekran czekania (nie przerysowuj cudzej, wciąż otwartej odsłony)
 }
+const mpAdvancedIds = (nonce)=> (advancedNonce!=null && advancedNonce===nonce) ? [...advancedSet] : [];
 // 1.8: przelicz komplet „dalej" (woła: mpOnPlayerAdvanced ORAZ presence-sync przy rozłączeniu gracza w REVEAL,
 // inaczej odejście ostatniego niegotowego gracza zawieszało salon — nikt już nie przyśle „advanced").
 function mpRecountAdvance(){
@@ -535,8 +552,9 @@ function mpAdvance(){
     if(mpIsSalonHost()) S.skipArm=true;   // P0-1: tylko TV (nie awansowany gracz)
     mpHostNextReveal(); return;                         // host → następne pytanie
   }
-  // SALON: zgłoś hostowi „kliknąłem dalej" — TV przejdzie samo, gdy wszyscy klikną (host nie gra)
-  if(!S.host && S.game.salon && S.game.phase===MP.REVEAL && S.ch){
+  // „kliknąłem dalej" do stołu: SALON — TV przejdzie samo, gdy wszyscy klikną; P1-4 — reszta widzi, na kogo czeka.
+  // (stary serwer/relay przepuszcza `advanced` — event istniał dla salonu; stary klient ignoruje go poza salonem)
+  if(!S.host && S.game.phase===MP.REVEAL && S.ch){
     S.ch.send({type:'broadcast',event:'advanced',payload:{by:mpMe.id, nonce:S.game.playNonce}});
   }
   // ARMING → zbrój się i zgłoś gotowość; PLAY ruszył bez nas (limit ARMING) → faza z audio na dogonienie
@@ -925,6 +943,18 @@ function mpPropose(){
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); if(el) el.value=''; });
 }
 function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
+/* P1-8: kafel ABCD — tap = propozycja + głos (`propose` {slot: litera}: jedna odpowiedź na gracza, auto-głos) →
+ * odpowiedź drużyny = najczęstsza litera. Działa ze STARYM serwerem (zwykły propose). TV-sędzia (coop) — nadpisanie głosem. */
+function mpMcPick(letter){
+  const g=S.game; const mc=mcOptions(g); if(!mc || !/^[A-D]$/.test(String(letter||''))) return;
+  if(!mc.options.some(o=>o.letter===letter)) return;
+  if(mpIsSalonHost()){ if((g.format||'coop')==='coop') mpSend({type:'vote', slot:mc.key, value:letter, set:true}); return; }
+  mpSend({type:'propose', values:{ [mc.key]:letter }});
+}
+// P1-12: rozwinięcie opisu lektora w „kombinuj" — pamiętane per pytanie
+function mpLyricToggle(open){ S.lyricFold={ nonce:S.game && S.game.playNonce, open:!!open }; }
+// czat skórki „czat" przy ABCD (composer tylko do wiadomości — odpowiedź to kafel)
+function mpChatSend(){ const el=$m('mpChatIn'); if(!el) return; mpDoSay(el.value); el.value=''; }
 // P0-3: pewniak ×2 przy PUSTEJ odpowiedzi drużyny = pewna przegrana → pierwszy tap pyta „×2 — na pewno?" (3 s), drugi stawia
 function mpSureTap(){
   if(!S.game) return;
@@ -978,7 +1008,7 @@ function mpTickTimer(){
   const sub = (S.playRound===S.game.playNonce) ? S.sub : 'sluchaj';
   const c=phaseClock({ sub, listenEnd, endsAt:endsLocal, now });
   if(el){
-    el.textContent = c ? `${c.icon} ${fmtClock(c.ms)}` : '';
+    el.textContent = c ? `${c.phase==='sluchaj' && S.game.mode==='quiz' ? '📖' : c.icon} ${fmtClock(c.ms)}` : '';   // etap B: quiz „czytaj” — 📖, nie 🎧
     el.classList.toggle('low', !!(c && c.low && c.ms>0));
     el.dataset.phase = c ? c.phase : '';
     el.setAttribute('aria-label', c ? (c.phase==='sluchaj' ? 'czas słuchania' : 'czas na odpowiedź') : '');
@@ -1125,8 +1155,9 @@ Object.assign(window, {
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
   mpConfirmLeave, mpLeaveCancel, mpLeaveConfirmed, mpRejoinLast,   // F6b (F6)
   mpRetryRoom, mpRematch, mpSureTap, mpPropKey,                     // przegląd MP 2026-10 (etap A)
+  mpMcPick, mpLyricToggle, mpChatSend,                               // etap B (P1-8, P1-12, ABCD w czacie)
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
-initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });
+initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds });
 
 export { mpMe };

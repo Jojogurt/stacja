@@ -281,6 +281,25 @@ export function phaseClock({ sub, listenEnd, endsAt, now }){
   }
   return null;
 }
+/* P1-1 (przegląd MP 2026-10): karta pytania — odliczanie 3-2-1 w LEAD liczone od playAt SERWERA (nie od odbioru stanu),
+ * więc cyfry i start audio są równe u wszystkich. Lokalny koniec intra = playAt − offset zegara + LEAD, przycięty do
+ * [now, now+LEAD] (spóźniony odbiór skraca odliczanie; powrót w trakcie pytania → 0 = bez karty). Bez zegara serwera
+ * (stary serwer bez serverNow / relay) → jak dawniej: now + LEAD. LEAD bez zmian (MP_INTRO_MS) — budżet czasu ten sam. */
+export const MP_COUNT_STEPS = 3;
+export function introEndLocal({ playAt, clockOff = 0, serverClock = false, now, leadMs = MP_INTRO_MS } = {}){
+  const lead = Math.max(0, Number(leadMs) || 0), n = Number(now) || 0;
+  const t = Number(playAt);
+  if(!serverClock || !Number.isFinite(t) || t <= 0) return n + lead;
+  const end = t - (Number(clockOff) || 0) + lead;
+  return Math.max(n, Math.min(n + lead, end));
+}
+// cyfra odliczania (3 → 2 → 1) dla pozostałego czasu intra; 0 = start (koniec odliczania)
+export function introDigit(remMs, leadMs = MP_INTRO_MS, steps = MP_COUNT_STEPS){
+  const r = Number(remMs);
+  if(!(r > 0)) return 0;
+  const step = Math.max(1, (Number(leadMs) || 0) / steps);
+  return Math.min(steps, Math.max(1, Math.ceil(r / step)));
+}
 /* P1-10: Solo/Drużyny — „Zakończ pytanie" hosta dopiero po połowie czasu pytania (host jest też graczem — nie
  * kończy „w ciemno" przed innymi). Bez limitu czasu → od razu (inaczej AFK zablokowałby stół; P1-3 domyka resztę). */
 export function hostEndVisible({ playAt, endsAt, now }){

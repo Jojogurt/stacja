@@ -22,7 +22,7 @@
  *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult } from './scoring.js';
+import { textMatch, norm, parseMC, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult } from './scoring.js';
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -189,6 +189,7 @@ export function playerSettled(game, playerId){
   const bkt = readBucket(game, tid);
   if((bkt.passed||[]).some(p=>p.id===playerId)) return true;
   if((bkt.proposals||[]).some(p=>p.by===playerId)) return true;
+  if(Array.isArray(bkt.answered) && bkt.answered.includes(playerId)) return true;   // P1-4: rywal w widoku okrojonym (KTO dał typ)
   return Object.values(bkt.votes||{}).some(sv=>sv && Object.prototype.hasOwnProperty.call(sv, playerId));
 }
 /* P1-3: auto-zamknięcie pytania — WSZYSCY obecni gracze (`presentIds`, bez TV) przypisani do drużyn skończyli.
@@ -197,6 +198,51 @@ export function allSettled(game, presentIds){
   if(!game || game.phase!==MP.PLAY) return false;
   const ids = (presentIds||[]).filter(id=>id && teamOf(game, id) && id!==tvIdOf(game));
   return ids.length>0 && ids.every(id=>playerSettled(game, id));
+}
+/* P1-4 (przegląd MP 2026-10): „Czekamy na: Ola, Kuba" — kogo jeszcze brakuje.
+ * pendingIds: oczekiwani bez potwierdzenia (gotowość ARMING = readyIds, „dalej" na odsłonie = kto kliknął).
+ * unsettledIds: kto w PLAY nie dał typu/pasa/głosu (widok hosta; rywale z okrojonego bucketu przez `answered`). */
+export function pendingIds(expectedIds, doneIds){
+  const done = new Set(Array.isArray(doneIds) ? doneIds : []);
+  return [...new Set((expectedIds||[]).filter(id=>id && !done.has(id)))];
+}
+export function unsettledIds(game, presentIds){
+  if(!game || game.phase!==MP.PLAY) return [];
+  const tv = tvIdOf(game);
+  return [...new Set((presentIds||[]).filter(id=>id && id!==tv && teamOf(game, id) && !playerSettled(game, id)))];
+}
+/* P1-8 (przegląd MP 2026-10): ABCD w MP = KAFLE. Pytanie ABCD = jeden slot + opcje „A) …" w treści (quiz i tryb „abcd").
+ * mcOptions → {question, options:[{letter,text}], key} albo null (pytanie otwarte). Tap w kafel = `propose` {key: litera}
+ * (jedna odpowiedź na gracza + auto-głos) → odpowiedź drużyny = NAJCZĘSTSZA litera (górka głosów, teamAnswer).
+ * mcTally: ile głosów drużyny na każdą literę (wartość „b) Beta" / „B" → „B"; tekst opcji → jej litera). */
+export function mcOptions(game){
+  if(!game || typeof game.prompt!=='string' || !game.prompt) return null;
+  const slots = slotsOf(game);
+  if(slots.length!==1 || !['quiz','abcd'].includes(game.mode)) return null;
+  const mc = parseMC(game.prompt);
+  return mc ? { ...mc, key:slots[0].key } : null;
+}
+export function mcLetterOf(value, options){
+  const v = String(value==null?'':value).trim();
+  const m = v.match(/^([A-Da-d])(?:\s*[).:]|$)/);
+  if(m) return m[1].toUpperCase();
+  const o = (options||[]).find(x=>norm(x.text)===norm(v));
+  return o ? o.letter : null;
+}
+export function mcTally(game, teamId, mc){
+  const out = {}; if(!mc) return out;
+  mc.options.forEach(o=>{ out[o.letter]=[]; });
+  const sv = (readBucket(game, teamId).votes||{})[mc.key] || {};
+  Object.entries(sv).forEach(([voter, val])=>{ const l=mcLetterOf(val, mc.options); if(l && out[l]) out[l].push(voter); });
+  return out;
+}
+/* P1-5: wynik MOJEJ drużyny na żywo (nagłówek „⭐ 270") i przyrost w odsłonie („+50" leci do nagłówka).
+ * reveal (opcjonalnie) → gained mojej drużyny (byTeam albo spłaszczony coop); prev = score − gained. */
+export function teamScoreLine(game, teamId, reveal){
+  const score = Number(game && game.scores && game.scores[teamId]) || 0;
+  let gained = 0;
+  if(reveal){ const r = (reveal.byTeam && reveal.byTeam[teamId]) || reveal; gained = Math.max(0, Number(r && r.gained) || 0); }
+  return { score, gained, prev: Math.max(0, score - gained) };
 }
 /* P0-3: pewniak „×2" bez odpowiedzi drużyny = pewna przegrana („stawia kolejkę") → klient prosi o potwierdzenie.
  * true = włączam pewniaka, a odpowiedź mojej drużyny jest pusta. */

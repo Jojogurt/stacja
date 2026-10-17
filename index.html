@@ -720,37 +720,9 @@
   .mp-chint b{color:var(--blue-d)}
 
   /* ---- PR4: pasek faz + legenda + bąbel systemowy + composer @odp z chipami ---- */
-  /* INTRO fazy (zastępuje pasek faz): duża ikona na środku → pop → zmniejsza się i fade do 0;
-     treść w tym czasie UKRYTA (opacity 0, nie biały ekran), potem wchodzi ze staggerem. */
+  /* P1-1 (etap B): dawne INTRO (nakładka z ikoną „SŁUCHAJ", #mpStage.mp-introing) zastąpione KARTĄ PYTANIA (.mp-qcard) — niżej */
   #mpStage{position:relative}
-  .mp-intro{position:absolute;inset:0;z-index:30;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px;pointer-events:none}
-  /* F6b (F9): 1.34s: wejście (~0.19s) → krótka PAUZA → wyjście (~0.44s) od MP_INTRO_MS (900 ms, core/timing.js). Zsynchronizowane z timerami JS. */
-  .mp-intro .mp-intro-ic{color:var(--blue);animation:mpIntroIc 1.34s cubic-bezier(.2,.7,.2,1) forwards}
-  .mp-intro .mp-intro-ic svg{width:96px;height:96px;display:block}
-  .mp-intro .mp-intro-lb{font-family:var(--display);font-weight:900;font-size:22px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink);animation:mpIntroLb 1.34s ease forwards}
-  @keyframes mpIntroIc{0%{transform:scale(.5);opacity:0}14%{transform:scale(1.12);opacity:1}22%{transform:scale(1);opacity:1}67%{transform:scale(1);opacity:1}100%{transform:scale(.34);opacity:0}}
-  @keyframes mpIntroLb{0%{opacity:0;transform:translateY(12px)}14%{opacity:1;transform:none}67%{opacity:1}100%{opacity:0;transform:translateY(-8px)}}
-  /* !important + animation:none — bije własne animacje treści (np. odsłona „jSlam"), które inaczej
-     przykrywają statyczne opacity:0 (w kaskadzie animacja > zwykła reguła) i wjeżdżają pod intrem */
-  #mpStage.mp-introing > *:not(.mp-intro){opacity:0 !important;animation:none !important}
-  #mpStage.mp-introdone > *:not(.mp-intro){animation:mpReveal .44s cubic-bezier(.2,.8,.2,1) both}
-  #mpStage.mp-introdone > *:not(.mp-intro):nth-child(2){animation-delay:.06s}
-  #mpStage.mp-introdone > *:not(.mp-intro):nth-child(3){animation-delay:.12s}
-  #mpStage.mp-introdone > *:not(.mp-intro):nth-child(4){animation-delay:.18s}
-  #mpStage.mp-introdone > *:not(.mp-intro):nth-child(n+5){animation-delay:.24s}
-  #mpStage.mp-introdone > .mp-play > *{animation:mpReveal .44s cubic-bezier(.2,.8,.2,1) both}
-  #mpStage.mp-introdone > .mp-play > *:nth-child(2){animation-delay:.07s}
-  #mpStage.mp-introdone > .mp-play > *:nth-child(3){animation-delay:.14s}
-  #mpStage.mp-introdone > .mp-play > *:nth-child(n+4){animation-delay:.2s}
-  /* odsłona ma WŁASNE wejście „jSlam" — po intrze graj je (a nie mpReveal), żeby przy cleanup (zmiana
-     nazwy animacji) karta nie odpaliła się drugi raz; !important bije generyczny mpReveal + delay staggera */
-  #mpStage.mp-introdone > .rv-card{animation:jSlam .34s cubic-bezier(.2,.8,.2,1) both !important}
   @keyframes mpReveal{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:none}}
-  /* reduced-motion: intro BEZ ruchu (statyczna ikona+etykieta), ale TEN SAM LEAD — równy start audio u wszystkich */
-  @media (prefers-reduced-motion: reduce){
-    .mp-intro .mp-intro-ic, .mp-intro .mp-intro-lb,
-    #mpStage.mp-introdone > *:not(.mp-intro), #mpStage.mp-introdone > .mp-play > *{animation:none !important}
-  }
   .mp-rail{display:flex;align-items:center;justify-content:space-between;margin:0 0 14px}
   .mp-rnode{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
   .mp-rdot{width:30px;height:30px;border-radius:50%;display:grid;place-items:center;font-size:14px;background:var(--panel);border:2px solid var(--line);color:var(--muted)}
@@ -803,7 +775,7 @@
   .mp-listenbar i{display:block;height:100%;width:100%;background:var(--blue);border-radius:6px}
 
   /* ===== DESIGN v2 (STACJA.dc.html) — Fala 1: górny pas ekranu gry ===== */
-  .mp-hd{background:var(--blue);color:#fff;border-radius:18px;padding:13px 15px;margin-bottom:14px;box-shadow:0 4px 0 var(--blue-d)}
+  .mp-hd{background:var(--ph-sluchaj);color:#fff;border-radius:18px;padding:13px 15px;margin-bottom:14px;box-shadow:0 4px 0 var(--ph-sluchaj-d)}
   .mp-hd-r1{display:flex;align-items:center;gap:10px}
   .mp-hd-back{font-family:var(--display);font-weight:800;font-size:18px;color:rgba(255,255,255,.85);cursor:pointer;flex:0 0 auto}
   .mp-hd-title{font-family:var(--display);font-weight:900;font-size:16px;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -1201,10 +1173,9 @@
   .mp-hd-r1{min-width:0}
   .mp-hd-title{min-width:0;flex:1 1 auto}
   .mp-hd-title small{font-size:var(--fs-sm);font-weight:800;opacity:.85}   /* F6b: numer pytania ważniejszy niż kod — ucina się kod, nie numer */
-  .mp-ph{flex:0 0 auto;margin-left:auto;display:inline-flex;align-items:center;gap:2px;background:rgba(0,0,0,.12);border-radius:10px;padding:2px 4px;font-size:15px;line-height:1}
-  .mp-ph i{font-style:normal;opacity:.38;padding:3px 4px;border-radius:7px}
-  .mp-ph i.on{opacity:1;background:#fff;box-shadow:0 2px 0 rgba(0,0,0,.15)}
-  .mp-ph b{color:rgba(255,255,255,.6);font-weight:900;font-size:12px}
+  /* P1-14 (etap B): rail faz w pasku fazy — 20 px, aktywna faza z podpisem, bez opacity .38 (reguły w bloku „etap B") */
+  .mp-ph{flex:0 0 auto;display:inline-flex;align-items:center;gap:5px;font-size:20px;line-height:1}
+  .mp-ph i{font-style:normal;opacity:.82;padding:2px}
   .mp-hd-chips span{max-width:100%;overflow:hidden;text-overflow:ellipsis}
   .mp-dlg{position:fixed;inset:0;z-index:80;display:none;align-items:flex-end;justify-content:center;background:rgba(10,8,20,.45);padding:16px}
   .mp-dlg.show{display:flex}
@@ -1822,12 +1793,131 @@
     background:var(--ink);color:var(--bg);font-family:var(--display);font-weight:900;font-size:var(--fs-sm);padding:10px 16px;border-radius:14px;
     box-shadow:0 6px 18px rgba(0,0,0,.25);transition:transform .28s cubic-bezier(.2,.8,.2,1);pointer-events:none;text-align:center}
   .mp-toast.show{transform:translate(-50%,0)}
+  .mp-toast:not(.show){box-shadow:none}   /* etap B: schowany toast nie rzuca cienia nad nagłówek */
   @media (prefers-reduced-motion: reduce){ .mp-toast{transition:none} }
   /* P1-17: rewanż 1 tap + „Zmień ustawienia" */
   .dn-btns{flex-wrap:wrap}
   .dn-change{flex:1 1 100%;background:var(--surface);border:2px solid var(--line);border-bottom-width:4px;border-radius:18px;padding:12px;font-family:var(--display);font-weight:900;font-size:14px;color:var(--ink);cursor:pointer}
   .dn-again{min-width:0}
   .dn-again small{display:block;font-size:12px;font-weight:800;letter-spacing:0;opacity:.9;margin-top:2px}
+
+  /* ===== Przegląd MP 2026-10 — etap B (P1-1 karta pytania, P1-4…P1-6, P1-8, P1-9, P1-12…P1-15) ===== */
+  /* P1-14: kolor fazy w ramie nagłówka: niebieski słuchaj / fiolet kombinuj / zielony odsłona (+ wariant dark) */
+  :root{ --ph-card:#1899D6; --ph-card-d:#12709E; --ph-sluchaj:#1899D6; --ph-sluchaj-d:#12709E;
+    --ph-kombinuj:#9B4DDB; --ph-kombinuj-d:#7434AE; --ph-odslona:#46A302; --ph-odslona-d:#347A02; --qc-task-ink:#7434AE }
+  html.dark{ --ph-card:#1478AE; --ph-card-d:#0E5680; --ph-sluchaj:#1478AE; --ph-sluchaj-d:#0E5680;
+    --ph-kombinuj:#7A3DB8; --ph-kombinuj-d:#57298A; --ph-odslona:#3B8A06; --ph-odslona-d:#2A6404; --qc-task-ink:#E0B8FF }
+  .mp-hd[data-ph="card"]{background:var(--ph-card);box-shadow:0 4px 0 var(--ph-card-d)}
+  .mp-hd[data-ph="kombinuj"]{background:var(--ph-kombinuj);box-shadow:0 4px 0 var(--ph-kombinuj-d)}
+  .mp-hd[data-ph="odslona"]{background:var(--ph-odslona);box-shadow:0 4px 0 var(--ph-odslona-d)}
+  .mp-hd.ph-chg{animation:mpPhChg .2s ease both}
+  @keyframes mpPhChg{from{background-color:var(--ph-from)}}
+  /* pasek fazy (w ramie nagłówka) — w niego „zwija się" karta pytania */
+  .mp-phbar{display:flex;align-items:center;margin-top:10px;padding:6px 8px;border-radius:13px;background:rgba(0,0,0,.16)}
+  .mp-phbar .mp-ph{flex:1 1 auto;min-width:0;display:flex}
+  .mp-ph-on{flex:1 1 auto;min-width:0;display:inline-flex;align-items:center;gap:6px;background:#fff;border-radius:10px;padding:4px 10px 4px 6px;box-shadow:0 2px 0 rgba(0,0,0,.18);overflow:hidden}
+  .mp-ph-on i.on{opacity:1;padding:0;flex:0 0 auto}
+  .mp-ph-lab{flex:0 0 auto;font-family:var(--display);font-weight:900;font-size:14px;letter-spacing:.03em;text-transform:uppercase;color:var(--ph-sluchaj-d)}
+  .mp-hd[data-ph="kombinuj"] .mp-ph-lab{color:var(--ph-kombinuj-d)} .mp-hd[data-ph="odslona"] .mp-ph-lab{color:var(--ph-odslona-d)}
+  html.dark .mp-ph-on{background:#F4F1FA}
+  .mp-ph-sep{color:rgba(255,255,255,.75);font-weight:900;font-size:14px}
+  .mp-phtask{flex:1 1 auto;min-width:0;font-family:var(--display);font-weight:800;font-size:13px;color:#4b4b4b;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .mp-phtask::before{content:'· ';color:#9a9a9a}
+  @media (max-width:360px){ .mp-ph-lab{font-size:13px} .mp-phtask{font-size:12px} }
+  /* P1-5: „⭐ 270" — punkty na żywo w nagłówku */
+  .mp-hd-score{flex:0 0 auto;font-family:var(--display);font-weight:900;font-size:14px;color:#fff;background:rgba(0,0,0,.16);padding:5px 9px;border-radius:11px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .mp-hd-score.bump{animation:tickpop .42s ease}
+  .mp-ptsfly{position:fixed;z-index:400;pointer-events:none;font-family:var(--display);font-weight:900;font-size:24px;color:var(--green);
+    text-shadow:0 2px 0 rgba(0,0,0,.18);transition:transform .4s cubic-bezier(.5,0,.75,0),opacity .4s ease}
+  /* P1-1: KARTA PYTANIA — LOADING / ARMING / odliczanie 3-2-1 (jedna scena, łatana w miejscu) */
+  .mp-qcard{background:var(--panel);border:2px solid var(--line);border-bottom-width:5px;border-radius:22px;padding:22px 16px 18px;margin:0 0 14px;
+    display:flex;flex-direction:column;align-items:center;gap:12px;text-align:center}
+  .mp-qcard.enter{animation:mpCardUp .28s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes mpCardUp{from{opacity:0;transform:translateY(42px)}to{opacity:1;transform:none}}
+  .mp-qc-n{font-family:var(--display);font-weight:900;font-size:15px;letter-spacing:.08em;color:var(--muted)}
+  .mp-qc-n b{font-size:46px;letter-spacing:0;color:var(--ink);margin-left:8px}
+  .mp-qc-n span{font-size:22px;letter-spacing:0;color:var(--muted)}
+  .mp-qc-chips{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+  .mp-qc-chips span{font-family:var(--display);font-weight:900;font-size:var(--fs-sm);padding:6px 12px;border-radius:12px;border:2px solid}
+  .mp-qc-cat{background:var(--info-bg);border-color:var(--info-line)!important;color:var(--blue-d)}
+  .mp-qc-task{background:var(--purple-bg);border-color:var(--purple)!important;color:var(--qc-task-ink)}
+  html.dark .mp-qc-cat{color:#5CC5FF}
+  .mp-qc-prompt{font-family:var(--body);font-weight:800;font-size:17px;line-height:1.45;color:var(--ink);white-space:pre-line;max-width:100%}
+  .mp-qc-prompt .rebus-big{display:block;font-size:40px}
+  .mp-qc-ppl{display:flex;flex-wrap:wrap;justify-content:center;gap:8px}
+  .mp-qc-av{position:relative;width:38px;height:38px;border-radius:50%;display:grid;place-items:center;font-family:var(--display);font-weight:900;font-size:15px;
+    background:var(--rs-idle-bg);color:var(--rs-idle-fg);transition:background-color .2s,transform .2s}
+  .mp-qc-av.on{color:#fff;transform:scale(1.06)}
+  .mp-qc-av.you{outline:2px solid var(--ink);outline-offset:1px}
+  .mp-qc-av i{position:absolute;right:-4px;bottom:-4px;width:17px;height:17px;border-radius:50%;background:var(--green);color:#fff;font-style:normal;font-size:12px;display:grid;place-items:center;border:2px solid var(--panel)}
+  .mp-qc-st{display:flex;align-items:center;justify-content:center;gap:8px;font-family:var(--display);font-weight:800;font-size:var(--fs-sm);color:var(--muted)}
+  .mp-qc-st b{font-size:18px;color:var(--ink)}
+  .mp-qc-st .bb-loader{margin:0}
+  .mp-qc-note{display:block;font-weight:700;font-size:12px;color:var(--muted)}
+  .mp-qc-skip{padding:9px 16px;font-size:13px}
+  .mp-qc-count{height:96px;display:grid;place-items:center}
+  .mp-qc-d{display:block;font-family:var(--display);font-weight:900;font-size:84px;line-height:1;color:var(--ph-sluchaj);animation:mpDigit .3s cubic-bezier(.2,.8,.2,1) both}
+  html.dark .mp-qc-d{color:#5CC5FF}
+  @keyframes mpDigit{from{transform:scale(1.15);opacity:.35}to{transform:none;opacity:1}}
+  /* krok 2: karta „zwija się" do paska fazy; krok 3: słuchaj → kombinuj bez nakładki — pola wjeżdżają od dołu */
+  #mpStage.mp-fromcard .mp-phbar{animation:mpBarIn .24s cubic-bezier(.2,.8,.2,1) both;transform-origin:top center}
+  @keyframes mpBarIn{from{transform:translateY(26px) scaleY(2.6);opacity:.4}to{transform:none;opacity:1}}
+  #mpStage.mp-fromcard .mp-play > :not(.mp-hd){animation:mpReveal .32s cubic-bezier(.2,.8,.2,1) both .1s}
+  #mpStage.mp-tokomb .mp-phbar .mp-ph-on,#mpStage.mp-tokomb .mp-phtask{animation:mpFade .2s ease both}
+  #mpStage.mp-tokomb .mp-foot,#mpStage.mp-tokomb .mp-comp,#mpStage.mp-tokomb .mp-board,#mpStage.mp-tokomb .mp-mc{animation:mpFootUp .22s cubic-bezier(.2,.8,.2,1) both}
+  @keyframes mpFade{from{opacity:0}}
+  @keyframes mpFootUp{from{opacity:0;transform:translateY(22px)}to{opacity:1;transform:none}}
+  /* krok 4: „Sprawdzamy…" przed flipem karty utworu */
+  .mp-checking{display:flex;flex-direction:column;align-items:center;gap:10px;padding:44px 16px;margin:0 0 14px;background:var(--panel);
+    border:2px solid var(--line);border-radius:22px;text-align:center;animation:mpFade .18s ease both}
+  .mp-checking b{font-family:var(--display);font-weight:900;font-size:24px;color:var(--ink)}
+  .mp-chk-ic{font-size:44px;line-height:1;animation:mpDrum .15s ease-in-out infinite alternate}
+  @keyframes mpDrum{from{transform:rotate(6deg)}to{transform:rotate(-6deg) scale(1.06)}}
+  /* P1-4: „Czekamy na: Ola, Kuba" */
+  .mp-waitfor{display:flex;align-items:center;justify-content:center;gap:8px;flex-wrap:wrap;margin:8px 0 2px;font-family:var(--display);font-weight:800;font-size:var(--fs-sm);color:var(--muted);text-align:center}
+  .mp-waitfor b{color:var(--ink)}
+  .mp-wf-avs{display:inline-flex;padding-left:6px}
+  .mp-wf-av{width:24px;height:24px;margin-left:-6px;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-size:12px;font-weight:900;border:2px solid var(--panel)}
+  .mp-waitnext .mp-qc-ppl{margin:8px 0 4px}
+  /* P1-13: polecenie zadania pod winylem */
+  .mp-task{font-family:var(--display);font-weight:900;font-size:19px;line-height:1.25;color:var(--ink);margin-top:10px}
+  /* P1-8: ABCD w MP = kafle .mc-opt (jak solo) */
+  .mp-mc{display:flex;flex-direction:column;gap:9px;margin:12px 0}
+  .mp-mc .mc-opt{min-height:52px}
+  .mp-mc .mc-opt.top:not(.sel){border-color:var(--green)}
+  .mp-mc .mc-n{margin-left:auto;flex:0 0 auto;color:var(--blue-d);font-size:12px;letter-spacing:1px}
+  .mp-mc .mc-top{flex:0 0 auto;font-family:var(--display);font-weight:900;font-size:12px;color:#fff;background:var(--green);border-radius:6px;padding:2px 5px}
+  html.dark .mp-mc .mc-opt{background:var(--panel);color:var(--ink);border-color:var(--line)}
+  html.dark .mp-mc .mc-opt.sel{border-color:var(--blue);background:rgba(28,176,246,.16)}
+  /* P1-12: opis lektora zwijany w „kombinuj" */
+  .lyric-fold summary{cursor:pointer;list-style:none}
+  .lyric-fold summary::-webkit-details-marker{display:none}
+  .lyric-fold summary::after{content:' ▾'}
+  .lyric-fold:not([open]) summary::after{content:' ▸ pokaż'}
+  .lyric-fold:not([open]) .lyric-cap{margin-bottom:0}
+  .lyric-fold .lyric-tx{max-height:32vh;overflow:auto}
+  /* P1-6: odsłona mieści się na ekranie — CTA „DALEJ" przyklejone do dołu, ranking top-3 + „pokaż wszystkich" */
+  .rv-cta{position:sticky;bottom:calc(-1 * (env(safe-area-inset-bottom) + 18px));z-index:3;background:var(--bg);margin-top:6px;
+    padding:8px 0 calc(env(safe-area-inset-bottom) + 24px);box-shadow:0 -10px 12px -12px rgba(0,0,0,.45)}
+  .rv-cta .mp-next{margin-top:0}
+  .rv-cta .mp-autonext{margin:6px 0 0}
+  .rv-stand-row .pts .gain{display:block;font-size:12px;font-weight:900;color:var(--ok-ink);line-height:1}
+  .rv-stand-gap{text-align:center;color:var(--muted);font-weight:900;line-height:.8}
+  .rv-more summary{cursor:pointer;font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--blue-d);padding:6px 0 2px;text-align:center;list-style:none}
+  .rv-more summary::-webkit-details-marker{display:none}
+  .rv-more[open] summary{color:var(--muted)}
+  /* P1-15: skórka czat — pusty feed z podpowiedzią; composer na dole; tytuł/wykonawca w 2 wierszach na ≤ 375 px */
+  .mp-chint-empty{margin:auto 0;text-align:center;font-family:var(--display);font-weight:800;font-size:var(--fs-sm);color:var(--muted);
+    padding:14px 10px;border:2px dashed var(--line);border-radius:14px}
+  .mp-composer.chat-only{grid-template-columns:1fr auto}
+  @media (max-width:375px){
+    .mp-cwrap-typ{flex-wrap:wrap;row-gap:6px}
+    .mp-cwrap-typ .mp-slotchip{flex:1 1 calc(100% - 22px)}
+    .mp-cwrap-typ .mp-sep{display:none}
+    .mp-cwrap-typ .mp-slotchip ~ .mp-slotchip{margin-left:19px}
+  }
+  /* salon (TV): karta pytania większa */
+  #mpStage.salon .mp-qc-n b{font-size:72px} #mpStage.salon .mp-qc-d{font-size:140px} #mpStage.salon .mp-qc-chips span{font-size:20px}
 </style>
 <script>/* motyw przed renderem — bez mignięcia. F6a (R-U7): brak wyboru / 'system' → prefers-color-scheme */try{var _t=localStorage.getItem('stacjaTheme');if(_t==='dark'||(_t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');}catch(e){try{if(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark');}catch(_e){}}</script>
 </head>

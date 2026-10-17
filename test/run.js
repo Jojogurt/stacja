@@ -2906,5 +2906,97 @@ group('P1-2: answerTiming — limit szybkości = całe okno pytania (playAt → 
   eq(answerTiming({ timer:30, playAt:1000, endsAt:null }, 2000).limitMs, 30000, 'bez endsAt → sam timer (jak dotąd)');
 });
 }
+/* ===================== Przegląd MP 2026-10 — etap B (P1-1, P1-4, P1-5, P1-6, P1-8, P1-9, P1-13) ===================== */
+{
+const T = await import('../core/timing.js');
+const R = await import('../core/mpReducer.js');
+const TM = await import('../core/teams.js');
+const M = await import('../core/match.js');
+const MS = await import('../core/matchSetup.js');
+group('P1-1: introEndLocal — odliczanie z playAt SERWERA, przycięte do [teraz, teraz+LEAD]', ()=>{
+  const L=T.MP_INTRO_MS;
+  eq(T.introEndLocal({ playAt:5000, clockOff:0, serverClock:true, now:5000, leadMs:900 }), 5900, 'odbiór w chwili go → pełny LEAD');
+  eq(T.introEndLocal({ playAt:5000, clockOff:0, serverClock:true, now:5300, leadMs:900 }), 5900, 'spóźniony odbiór (300 ms) → krótsze odliczanie, ten sam koniec');
+  eq(T.introEndLocal({ playAt:5000, clockOff:2000, serverClock:true, now:3100, leadMs:900 }), 3900, 'offset zegara: serwer +2 s → koniec w czasie lokalnym');
+  eq(T.introEndLocal({ playAt:5000, clockOff:0, serverClock:true, now:9000, leadMs:900 }), 9000, 'powrót w trakcie pytania → bez karty (koniec = teraz)');
+  eq(T.introEndLocal({ playAt:5000, clockOff:0, serverClock:true, now:4000, leadMs:900 }), 4900, 'zegar „z przyszłości" → max teraz+LEAD');
+  eq(T.introEndLocal({ playAt:5000, serverClock:false, now:7000, leadMs:900 }), 7900, 'bez zegara serwera (stary serwer/relay) → teraz+LEAD (jak dawniej)');
+  eq(T.introEndLocal({ playAt:null, serverClock:true, now:100 }), 100+L, 'brak playAt → teraz+MP_INTRO_MS');
+  eq(L, 900, 'LEAD bez zmian (budżet czasu = etap A, serwer liczy ten sam)');
+});
+group('P1-1: introDigit — 3 → 2 → 1 co LEAD/3', ()=>{
+  eq([900, 899, 601, 600, 301, 300, 1, 0, -5].map(r=>T.introDigit(r, 900)), [3,3,3,2,2,1,1,0,0], 'cyfry wg pozostałego czasu');
+  eq(T.introDigit(5000, 900), 3, 'ponad LEAD → 3 (clamp)');
+});
+group('P1-13: modeTask — polecenie zadania per tryb', ()=>{
+  eq(M.modeTask('year'), 'Zgadnij ROK wydania', 'rok');
+  eq(M.modeTask('music'), 'Tytuł + wykonawca', 'muzyka');
+  eq(M.modeTask('abcd'), 'Wybierz A–D', 'ABCD');
+  eq(M.modeTask('quiz'), 'Odpowiedz na pytanie', 'quiz otwarty');
+  eq(M.modeTask('quiz', { mc:true }), 'Wybierz A–D', 'quiz ABCD');
+  eq(M.modeTask('nieznany'), 'Tytuł + wykonawca', 'nieznany tryb → domyślne');
+  ok(M.MP_MODES.every(m=>typeof M.MODE_TASK[m]==='string'), 'każdy tryb MP ma polecenie');
+});
+group('P1-4: pendingIds / unsettledIds — „Czekamy na: Ola, Kuba"', ()=>{
+  eq(R.pendingIds(['a','b','c'], ['b']), ['a','c'], 'gotowość: bez b');
+  eq(R.pendingIds(['a','a',null,'b'], undefined), ['a','b'], 'brak listy → wszyscy (bez duplikatów/pustych)');
+  const g={ phase:MP.PLAY, format:'solo', answerSlots:[{key:'title'},{key:'artist'}],
+    teams:[{id:'A',members:['A']},{id:'B',members:['B']},{id:'C',members:['C']}],
+    byTeam:{ A:{ proposals:[{by:'A',values:{title:'x'}}], votes:{title:{A:'x'}}, sure:[], passed:[] },
+             B:{ proposals:[], votes:{}, sure:[], passed:[], answered:['B'] },   // rywal w widoku okrojonym
+             C:{ proposals:[], votes:{}, sure:[], passed:[] } } };
+  eq(R.unsettledIds(g, ['A','B','C','X']), ['C'], 'A dał typ, B „answered" (okrojony), X spoza drużyn → czekamy na C');
+  g.byTeam.C.passed=[{id:'C'}];
+  eq(R.unsettledIds(g, ['A','B','C']), [], 'pas też kończy');
+  eq(R.unsettledIds({ ...g, phase:MP.REVEAL }, ['C']), [], 'poza PLAY → nic');
+  ok(!R.allSettled({ phase:MP.PLAY, teams:[{id:'all',members:['a']}], byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } } }, ['a']), 'allSettled bez zmian dla pełnego bucketu');
+});
+group('P1-8: ABCD w MP — kafle: mcOptions / mcLetterOf / mcTally; tap = propose → najczęstsza litera', ()=>{
+  const prompt='Jaki to utwór?\nA) Alfa — X\nB) Beta — Y\nC) Gamma — Z\nD) Delta — W';
+  const base={ phase:MP.PLAY, mode:'abcd', prompt, answerSlots:[{key:'a',label:'litera (A–D)'}], format:'coop',
+    teams:[{id:'all',members:['p1','p2','p3']}], byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } } };
+  const mc=R.mcOptions(base);
+  eq([mc.key, mc.question, mc.options.map(o=>o.letter).join('')], ['a','Jaki to utwór?','ABCD'], 'opcje z treści');
+  eq(R.mcOptions({ ...base, prompt:'Stolica Polski?' }), null, 'pytanie otwarte → bez kafli');
+  eq(R.mcOptions({ ...base, mode:'music' }), null, 'tryb bez ABCD → bez kafli');
+  eq(R.mcOptions({ ...base, answerSlots:[{key:'s1'},{key:'s2'}] }), null, '2 sloty → bez kafli');
+  eq(R.mcOptions({ ...base, prompt:'' }), null, 'ARMING (treść ukryta) → bez kafli');
+  eq([R.mcLetterOf('b', mc.options), R.mcLetterOf('C) Gamma', mc.options), R.mcLetterOf('Delta — W', mc.options), R.mcLetterOf('zzz', mc.options)], ['B','C','D',null], 'litera z głosu');
+  const g=JSON.parse(JSON.stringify(base));
+  ok(R.reduceAction(g, { type:'propose', by:'p1', byName:'P1', values:{ a:'B' } }), 'tap B (p1)');
+  ok(R.reduceAction(g, { type:'propose', by:'p2', byName:'P2', values:{ a:'C' } }), 'tap C (p2)');
+  ok(R.reduceAction(g, { type:'propose', by:'p3', byName:'P3', values:{ a:'C' } }), 'tap C (p3)');
+  eq(R.teamAnswer(g, 'all').a, 'C', 'odpowiedź drużyny = najczęstsza litera (C×2)');
+  ok(R.reduceAction(g, { type:'propose', by:'p3', byName:'P3', values:{ a:'B' } }), 'p3 zmienia zdanie → B');
+  const t=R.mcTally(g, 'all', mc);
+  eq([t.A.length, t.B.length, t.C.length, t.D.length], [0,2,1,0], 'tally: jeden głos na gracza (zmiana zastępuje)');
+  eq(R.teamAnswer(g, 'all').a, 'B', 'teraz B×2');
+  eq(g.byTeam.all.proposals.length, 3, 'jedna propozycja na gracza');
+  const ev=R.evaluateAnswer(g, { prompt, slots:g.answerSlots, answers:{ a:['B','Beta — Y'] }, mc:{ ...mc, correct:'B' } });
+  ok(ev.reveal.teamOk && ev.reveal.locked.a==='B', 'ocena: najczęstsza litera B = poprawna');
+});
+group('P1-5: teamScoreLine — „⭐" i „+N" w odsłonie', ()=>{
+  eq(R.teamScoreLine({ scores:{ all:270 } }, 'all', { gained:50 }), { score:270, gained:50, prev:220 }, 'coop (spłaszczony reveal)');
+  eq(R.teamScoreLine({ scores:{ t1:90 } }, 't1', { byTeam:{ t1:{ gained:90 } }, gained:0 }), { score:90, gained:90, prev:0 }, 'Solo/Drużyny: byTeam');
+  eq(R.teamScoreLine({ scores:{ t1:40 } }, 't1'), { score:40, gained:0, prev:40 }, 'w trakcie gry (bez odsłony)');
+  eq(R.teamScoreLine({}, 'x', { gained:'zz' }), { score:0, gained:0, prev:0 }, 'śmieci → 0');
+});
+group('P1-6: rankingTop — top-3 + moja pozycja niżej', ()=>{
+  const rows=['a','b','c','d','e'].map((id,i)=>({ id, place:i+1 }));
+  const r1=TM.rankingTop(rows, 'b');
+  eq([r1.top.map(x=>x.id), r1.me, r1.more], [['a','b','c'], null, 2], 'jestem w top-3');
+  const r2=TM.rankingTop(rows, 'e');
+  eq([r2.top.map(x=>x.id), r2.me && r2.me.id, r2.more], [['a','b','c'], 'e', 2], 'jestem 5. → top-3 + ja');
+  eq(TM.rankingTop([{id:'a'}], 'a').more, 0, 'jedna pozycja');
+});
+group('P1-9: formatCopy — Solo „Twoja odpowiedź"/„Ranking graczy"; bez „przegłosujcie" przy 1 osobie', ()=>{
+  const so=MS.formatCopy('solo', 1), te=MS.formatCopy('teams', 3), t1=MS.formatCopy('teams', 1), co=MS.formatCopy('coop', 2);
+  eq([so.answerLabel, so.rankingTitle, so.lockedLabel, so.typLabel], ['TWOJA ODPOWIEDŹ','RANKING GRACZY','Twoja odpowiedź','Twój typ'], 'Solo');
+  eq([te.answerLabel, te.rankingTitle], ['ODPOWIEDŹ DRUŻYNY','RANKING DRUŻYN'], 'Drużyny');
+  ok(/przegłosujcie/.test(te.emptyHint) && /przegłosujcie/.test(co.emptyHint), '≥ 2 osoby → „przegłosujcie"');
+  ok(!/przegłosujcie/.test(t1.emptyHint) && !/przegłosujcie/.test(so.emptyHint), '1 osoba → bez „przegłosujcie"');
+  eq(MS.formatCopy('xyz').answerLabel, 'ODPOWIEDŹ DRUŻYNY', 'nieznany format → coop');
+});
+}
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

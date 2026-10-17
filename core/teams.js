@@ -122,3 +122,13 @@ export function standings(teams, scores){
   const tie = rows.length>1 && rows[0].score===rows[1].score;
   return { rows, tie, winner: rows.length && !tie ? rows[0] : null };
 }
+
+/* P1-5/P1-6 (przegląd MP 2026-10): odsłona mieści się na ekranie — ranking zwinięty do top-N (+ moja pozycja,
+ * gdy jestem niżej). rows z `standings` (z miejscem `place`); zwraca { top, me, more } — more = ilu ukrytych. */
+export function rankingTop(rows, myId, n = 3){
+  const all = Array.isArray(rows) ? rows : [];
+  const top = all.slice(0, n);
+  const me = myId && !top.some(r=>r.id===myId) ? (all.find(r=>r.id===myId) || null) : null;
+  return { top, me, more: Math.max(0, all.length - top.length) };
+}
+
