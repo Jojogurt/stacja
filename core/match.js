@@ -28,7 +28,7 @@ export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak',
 export const MODE_TASK={music:'Tytuł + wykonawca', lektor:'Z opisu: tytuł + wykonawca', reverse:'Od tyłu: tytuł + wykonawca',
   snippet:'Fragment: tytuł + wykonawca', revsnip:'Od tyłu: tytuł + wykonawca', slowmo:'Zwolnione: tytuł + wykonawca',
   fastmo:'Przyspieszone: tytuł + wykonawca', year:'Zgadnij ROK wydania', abcd:'Wybierz A–D', quiz:'Odpowiedz na pytanie',
-  intro:'Tytuł + wykonawca', medley:'Wykonawcy ze składanki', cover:'Album z okładki', piano:'Tytuł + wykonawca',
+  intro:'Tytuł + wykonawca', medley:'Wykonawcy ze składanki', cover:'Wykonawca z okładki (+ album)', piano:'Tytuł + wykonawca',
   guitar:'Tytuł + wykonawca', timeline:'Ułóż na osi czasu'};
 export function modeTask(mode, { mc=false }={}){
   if(mc) return MODE_TASK.abcd;
@@ -45,26 +45,33 @@ export const MODE_FAMILIES=[
 export const MODE_PICK_LABEL={music:'muzyka', intro:'intro 1–16 s', snippet:'fragment 2 s', reverse:'od tyłu', revsnip:'od tyłu krótko',
   slowmo:'zwolnione obroty', fastmo:'przyspieszone', abcd:'ABCD', year:'rok wydania', timeline:'oś czasu', medley:'składanka',
   piano:'fortepian', guitar:'gitara', cover:'okładka', quiz:'wiedza i łamigłówki', lektor:'lektor'};
-/* F8a: tryby tylko solo. „intro" w MP wymagałby etapu odsłony sterowanego przez hosta/serwer + ponownego
- * startu audio u wszystkich i przebudowy lokalnej fazy „słuchaj → kombinuj" — poza zakresem; picker MP go nie pokazuje,
- * a sanitizeMpConfig odrzuca. */
-/* EKSPERYMENT: „składanka" (4 zajawki buforowane i sklejane lokalnie) i „okładka" (etapy odsłony obrazu) — też tylko solo:
- * MP wymagałby rozwiązywania 4 utworów/albumu na serwerze i synchronizacji etapów odsłony. „od tyłu krótko" działa
- * w MP (offset okna od autorytetu jak „fragment", F2b). */
-/* EKSPERYMENT: „fortepian"/„gitara" też tylko solo — w MP wymagałby resolvera coveru na serwerze (Worker: iTunes często
- * zablokowany → Deezer), ścieżki relay-hosta i odsłony „cover: …" w mp-render; na razie poza zakresem. */
-/* EKSPERYMENT: „oś czasu" tylko solo — MP (co-op: jedna oś drużyny, głos na szczelinę) wymagałby: kotwicy rozwiązywanej
- * przez autorytet przy starcie meczu (per drużyna), trwałej osi drużyn w stanie gry (game.timeline[teamId], karty
- * jawne), slotu 'gap' z walidacją indeksu w reducerze, oceny gapOk w evaluateTeam + wstawienia karty w applyEvaluation,
- * nowego UI głosowania na szczeliny i odsłony 'timeline' w mp-render oraz tej samej ścieżki w hoście relay (app/mp.js).
- * „zwolnione obroty"/„przyspieszone" działają w MP: tempo lokalne u klienta (stałe 0.6× / 1.5×), serwer jak „muzyka". */
-export const SOLO_ONLY_MODES=['intro','medley','cover','piano','guitar','timeline'];
+/* F8a: „intro" (1-2-4-8-16 s) działa w MP TYLKO pod serwerem-autorytetem (AUTHORITY_ONLY_MODES): etapy odsłony prowadzi
+ * timer DO (core/timing.introStageOffsets: etap + przerwa na typ; starty etapów w game.stageStarts), każdy klient gra
+ * [0, introStageSecs(stage)] od wspólnego game.stageAt (z offsetem zegara serwera); „+ więcej" — dowolny gracz, serwer
+ * przesuwa harmonogram. Mnożnik introMult z etapu, w którym drużyna miała komplet (core/mpReducer). Relay — bez intro. */
+/* EKSPERYMENT: „od tyłu krótko" działa w MP (offset okna od autorytetu jak „fragment", F2b).
+ * Pozostałe tryby z etapami/rozwiązywaniem po stronie serwera działają w MP TYLKO pod serwerem-autorytetem
+ * (AUTHORITY_ONLY_MODES; relay-host gra takie pytanie jak „muzykę"):
+ *  • „okładka" — album wybiera DO (server/lib/resolve.resolveCoverServer), etapy 16 → 32 → 64 z timera DO, w stanie tylko
+ *    obraz w rozdzielczości etapu (coverStageUrl; pełny wyłącznie w odsłonie). Mnożnik z czasu propozycji (core/mpReducer).
+ *  • „składanka" — DO rozwiązuje 4 utwory wykonawcy (resolveMedleyServer) i losuje starty wycinków; klienci buforują
+ *    4 zajawki w ARMING i sklejają lokalnie 4 × 1,5 s (app/audio.loadMedley — ten sam kod co solo). Sekret = wykonawca.
+ *  • „fortepian"/„gitara" — DO szuka coveru instrumentalnego (resolveInstrumentalServer: iTunes + Deezer /search?q=);
+ *    brak → pytanie jak muzyka. Odpowiedź: tytuł + ORYGINALNY wykonawca; w odsłonie kto grał cover.
+ *  • „oś czasu" — każda drużyna ma własną, jawną oś (game.timeline[teamId]); kotwicę dostaje od DO przy pierwszym pytaniu
+ *    osi (także drużyna dołączająca później), slot 'gap' walidowany w reducerze (cleanGap), ocena gapOk w evaluateTeam,
+ *    wstawienie karty w applyEvaluation (core/mpReducer); UI szczelin w app/mp-render. */
+export const SOLO_ONLY_MODES=[];   // wszystkie tryby działają w MP (część tylko pod autorytetem — niżej)
 export const MP_MODES=ALL_MODES.filter(m=>!SOLO_ONLY_MODES.includes(m));
+// tryby MP wymagające serwera-autorytetu (etapy odsłony z timera DO) — relay-host ich nie obsługuje
+export const AUTHORITY_ONLY_MODES=['intro','cover','medley','piano','guitar','timeline'];
+export const RELAY_MP_MODES=MP_MODES.filter(m=>!AUTHORITY_ONLY_MODES.includes(m));
 // tryby, które zna serwer sprzed F8a (brak `modes` w presence → nowe tryby ukryte w MP pod autorytetem)
 export const LEGACY_MP_MODES=['music','lektor','reverse','snippet','quiz'];
-// tryby do pickera MP: relay (host liczy sam) → wszystkie MP_MODES; autorytet → przecięcie z tym, co zna serwer
+// tryby do pickera MP: relay (host liczy sam) → MP_MODES bez trybów tylko-autorytet; autorytet → przecięcie z tym, co zna
+// serwer (stary serwer nie ogłasza 'cover' w presence.modes → okładka ukryta)
 export function mpAvailableModes(serverModes, authority=true){
-  if(!authority) return MP_MODES.slice();
+  if(!authority) return RELAY_MP_MODES.slice();
   const known = Array.isArray(serverModes) && serverModes.length ? serverModes : LEGACY_MP_MODES;
   return MP_MODES.filter(m=>known.includes(m));
 }
@@ -228,7 +235,7 @@ export function clampRounds(r){
 }
 export const MP_FORMATS = ['coop','solo','teams'];
 /* F1 (#5): sanityzacja configu `start` od klienta (DO nie ufa hostowi). Zwraca TYLKO znane pola
- * z przyciętymi wartościami: rounds∈[1..MAX_ROUNDS], timer∈[0..MP_TIMER_MAX_S], modes⊂MP_MODES (F8a: bez 'intro')
+ * z przyciętymi wartościami: rounds∈[1..MAX_ROUNDS], timer∈[0..MP_TIMER_MAX_S], modes⊂MP_MODES (bez trybów tylko-solo)
  * (bez duplikatów), format∈MP_FORMATS (inaczej coop), salon:boolean, audioHostOnly:boolean (F6b). Pule/assignments/groupId
  * sanityzuje wołający (osobne capy).
  * F6a (R-F2): `questions` (długość meczu w pytaniach) ∈ [QPC..MAX_QUESTIONS]; brak → z `rounds` (stary klient:

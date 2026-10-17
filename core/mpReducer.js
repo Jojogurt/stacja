@@ -22,7 +22,9 @@
  *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, parseMC, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult } from './scoring.js';
+import { textMatch, norm, parseMC, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult, artistMatch, coverMult, introMult } from './scoring.js';
+import { stageIndexAt, coverStageBlocks, introStageSecs } from './timing.js';
+import { validGap, gapOk, correctGaps, insertCard } from './timeline.js';   // MP oś czasu: szczelina, ocena, wstawienie karty   // MP okładka/intro: etap odsłony z czasu propozycji
 import { MP } from './phases.js';
 import { COOP_TEAM } from './teams.js';
 
@@ -66,10 +68,23 @@ export function slotsFor(mode, cat, q){
   // pytanie z własnymi slotami (quiz, wiedza ogólna, F8a: ABCD muzyki) → użyj ich; inaczej domyślne tytuł+wykonawca
   if(q && Array.isArray(q.slots) && q.slots.length) return q.slots;
   if(mode==='year') return [ { ...YEAR_SLOT } ];
+  if(mode==='cover') return COVER_SLOTS.map(s=>({ ...s }));   // MP okładka: wykonawca (główny) + album (bonus)
+  if(mode==='medley') return [ { key:'artist', label:'wykonawca' } ];   // MP składanka: tylko wykonawca (jak solo)
+  if(mode==='timeline') return TIMELINE_SLOTS.map(s=>({ ...s }));   // MP oś czasu: szczelina + żetony tytuł/wykonawca
   return [ {key:'title', label:'tytuł'}, {key:'artist', label:'wykonawca'} ];
 }
+export const COVER_SLOTS = [ { key:'artist', label:'wykonawca' }, { key:'album', label:'album (bonus)' } ];
+// MP oś czasu: 'gap' = indeks szczeliny na osi DRUŻYNY (0 = przed pierwszą kartą … n = po ostatniej) — walidowany w reducerze
+export const TIMELINE_SLOTS = [ { key:'gap', label:'miejsce na osi' }, { key:'title', label:'tytuł (+20)' }, { key:'artist', label:'wykonawca (+20)' } ];
+// oś drużyny (karty jawne, posortowane po roku) — game.timeline[teamId]; brak → []
+export function teamTimeline(game, teamId){ const t=game && game.timeline && game.timeline[teamId]; return Array.isArray(t) ? t : []; }
+// wartość slotu 'gap' z sieci → poprawny indeks szczeliny osi drużyny (string liczby) albo null
+export function cleanGap(game, teamId, v){
+  const s=String(v==null?'':v).trim(); if(!/^\d{1,3}$/.test(s)) return null;
+  return validGap(teamTimeline(game, teamId), Number(s)) ? String(Number(s)) : null;
+}
 // mapowanie klucza slotu → pole w obiekcie utworu (current) do oceny
-export const SLOT_FIELD = { title:'track', artist:'artist', year:'year' };
+export const SLOT_FIELD = { title:'track', artist:'artist', year:'year', album:'album' };
 // F8a: pytanie „rok" = jedyny slot 'year' i brak wariantów odpowiedzi (quiz) — ocena yearScore, nie textMatch
 const isYearQ = (slots, hasAnswers)=> !hasAnswers && slots.length===1 && slots[0].key==='year';
 const DEFAULT_SLOTS = slotsFor();
@@ -89,9 +104,13 @@ export function reduceAction(game, a){
       const values = a.values || {};
       const clean = {};
       slots.forEach(s=>{ const v=String(values[s.key]||'').trim().slice(0,120); if(v) clean[s.key]=v; });   // 3.3: cap długości wejścia
+      if(clean.gap!=null){ const g=cleanGap(game, teamId, clean.gap); if(g==null) delete clean.gap; else clean.gap=g; }   // MP oś czasu: zła szczelina odpada
       if(!Object.keys(clean).length) return false;          // pusty typ odrzucony
       bkt.proposals = (bkt.proposals||[]).filter(p=>p.by!==a.by);   // JEDNA odpowiedź na gracza — nowa zastępuje poprzednią
-      bkt.proposals.push({ id:rid(), aid:a.aid, by:a.by, byName:a.byName, values:clean });
+      const p={ id:rid(), aid:a.aid, by:a.by, byName:a.byName, values:clean };
+      // MP okładka: czas zgłoszenia (epoch ms) WSTAWIA SERWER (authorityRoom nadpisuje a.at) — etap/mnożnik bez ufania klientowi
+      const at=Number(a.at); if(Number.isFinite(at) && at>0) p.at=at;
+      bkt.proposals.push(p);
       // auto-głos: wrzucając typ głosuję własną wartością w każdym wypełnionym slocie
       slots.forEach(s=>{ const v=clean[s.key]; if(v){ (bkt.votes[s.key]=bkt.votes[s.key]||{})[a.by]=v; } });
       return true;
@@ -103,7 +122,8 @@ export function reduceAction(game, a){
     }
     case 'vote': {                                           // głos na (slot, wartość); ponowny = wycofanie
       if(!a.slot || !slots.some(s=>s.key===a.slot)) return false;   // 3.5: slot musi istnieć w answerSlots
-      const val = String(a.value==null?'':a.value).slice(0,120);    // 3.3: cap długości wejścia
+      let val = String(a.value==null?'':a.value).slice(0,120);    // 3.3: cap długości wejścia
+      if(a.slot==='gap'){ val=cleanGap(game, teamId, val); if(val==null) return false; }   // MP oś czasu: tylko istniejąca szczelina
       const sv = bkt.votes[a.slot] = bkt.votes[a.slot] || {};
       // a.set = jawny WYBÓR (host „wybiera odpowiedź") → zawsze ustaw, bez przełączania.
       // Bez a.set → toggle (klik na własny głos = wycofanie), jak dotąd.
@@ -276,6 +296,47 @@ export function answerCredits(game, teamId, locked){
   return out;
 }
 
+/* ---- MP etapy odsłony (serwer-autorytet): okładka i intro — ocena + etap, na którym padła odpowiedź drużyny ----
+ * Okładka = tryb 'cover' bez wariantów quizu: wykonawca (artistMatch: też człon duetu / zapis iTunes artistAlt) = trafienie,
+ * album (textMatch) = bonus. Intro = tryb 'intro': tytuł + wykonawca jak muzyka, mnożnik introMult zamiast szybkości.
+ * Etap: chwila, w której odpowiedź drużyny była KOMPLETNA = max po niepustych slotach (okładka: sam wykonawca, a gdy
+ * pusty — album) z czasu NAJWCZEŚNIEJSZEJ obecnej propozycji z tą wartością; etap z RZECZYWISTYCH startów etapów ze stanu
+ * (game.stageStarts — serwer przesuwa je przy „+ więcej"/„wyraźniej"; core/timing.stageIndexAt). Brak czasu (wartość tylko
+ * z głosu / stary stan) → chwila zatwierdzenia; brak startów → bieżący etap ze stanu (ostrożnie: mniejszy mnożnik). */
+const isCoverQ = (game, hasAnswers)=> !hasAnswers && !!game && game.mode==='cover';
+const isIntroQ = (game, hasAnswers)=> !hasAnswers && !!game && game.mode==='intro';
+const isMedleyQ = (game, hasAnswers)=> !hasAnswers && !!game && game.mode==='medley';     // MP składanka: tylko wykonawca
+const isTimelineQ = (game, hasAnswers)=> !hasAnswers && !!game && game.mode==='timeline'; // MP oś czasu: szczelina + żetony
+function coverEval(vals, current, match){
+  const ga=String(vals.artist||''), gal=String(vals.album||'');
+  const okA = !!ga && (artistMatch(ga, current.artist||'') || (!!current.artistAlt && artistMatch(ga, current.artistAlt)));
+  const okAl = !!gal && !!current.album && match(gal, current.album);
+  return { ok:okA, bySlot:{ artist:okA, album:okAl } };
+}
+export function answerStage(game, teamId, locked, now, keys){
+  const bkt = readBucket(game, teamId);
+  const ks = (keys||[]).filter(k=>norm((locked && locked[k]) || ''));
+  let at = null, missing = !ks.length;
+  for(const key of ks){
+    const v = norm(locked[key]);
+    const ts = (bkt.proposals||[]).filter(p=>p && p.values && norm(p.values[key]||'')===v && Number.isFinite(p.at)).map(p=>p.at);
+    if(!ts.length){ missing = true; break; }
+    at = Math.max(at==null ? -Infinity : at, Math.min(...ts));
+  }
+  const t = !missing && at!=null ? at : (Number.isFinite(now) ? now : null);
+  const starts = Array.isArray(game && game.stageStarts) && game.stageStarts.length ? game.stageStarts : null;
+  const stage = (starts && t!=null) ? stageIndexAt(starts, t) : Math.max(0, Math.floor(Number(game && game.stage)) || 0);
+  return { stage, at: missing ? null : at };
+}
+// okładka: etap z czasu wykonawcy (a gdy pusty — albumu); album dopisany później nie obniża mnożnika
+export function coverAnswerStage(game, teamId, locked, now){
+  return answerStage(game, teamId, locked, now, norm((locked && locked.artist) || '') ? ['artist'] : ['album']);
+}
+// intro: etap, w którym drużyna miała komplet (tytuł i wykonawcę — te, które wpisała)
+export function introAnswerStage(game, teamId, locked, now){
+  return answerStage(game, teamId, locked, now, ['title','artist']);
+}
+
 /* ---- ocena JEDNEJ drużyny (dawne wnętrze mpLock) — czysta ----
  * locked = odpowiedź tej drużyny (górka głosów w jej buckecie). Zwraca per-drużyna wyliczenia. */
 function evaluateTeam(game, teamId, current, match, timing){
@@ -290,8 +351,16 @@ function evaluateTeam(game, teamId, current, match, timing){
   // zalicza tylko jeden (skojarzenie dwudzielne). MUZYKA: porównanie z polem utworu (SLOT_FIELD).
   const quizEval = (vals)=> evaluateQuiz(current, vals||{}, match, slots);
   const yearQ = isYearQ(slots, hasAnswers);
+  const coverQ = isCoverQ(game, hasAnswers), introQ = isIntroQ(game, hasAnswers), medleyQ = isMedleyQ(game, hasAnswers), tlQ = isTimelineQ(game, hasAnswers);
+  const cards = tlQ ? teamTimeline(game, teamId) : null, tlYear = tlQ ? (current.tlCard && current.tlCard.year) : null;
   const evalAll = (vals)=>{
     if(hasAnswers) return quizEval(vals);
+    if(coverQ || medleyQ) return coverEval(vals||{}, current, match);
+    if(tlQ){   // MP oś czasu: trafienie = dobra szczelina (rok między sąsiadami); tytuł/wykonawca = żetony
+      const gs=String((vals && vals.gap) || ''), place = /^\d{1,3}$/.test(gs) && gapOk(cards, Number(gs), tlYear);
+      const okT=match((vals&&vals.title)||'', current.track||''), okA=match((vals&&vals.artist)||'', current.artist||'');
+      return { ok:place, bySlot:{ gap:place, title:okT, artist:okA } };
+    }
     if(yearQ){ const ys=yearScore(vals && vals.year, current && current.year); return { ok: ys.points>=YEAR_OK_PTS, bySlot:{ year: ys.points>=YEAR_OK_PTS }, year:ys }; }
     const bySlot={}; slots.forEach(s=>{ bySlot[s.key]=match((vals&&vals[s.key])||'', current[SLOT_FIELD[s.key]] || ''); });
     return { ok: slots.every(s=>bySlot[s.key]), bySlot };
@@ -299,7 +368,7 @@ function evaluateTeam(game, teamId, current, match, timing){
   const ev = evalAll(locked);
   const okBySlot = {};
   slots.forEach(s=>{ okBySlot[s.key] = !!ev.bySlot[s.key]; });
-  const teamOk = slots.every(s=>okBySlot[s.key]);
+  const teamOk = (coverQ || medleyQ || tlQ) ? !!ev.ok : slots.every(s=>okBySlot[s.key]);   // okładka: album to bonus — trafienie = wykonawca; oś: szczelina
   const okTitle = !!okBySlot.title, okArtist = !!okBySlot.artist;
   // pewniacy = gracze drużyny, którzy postawili „pewniaka" (bkt.sure)
   const pewniacy = (bkt.sure||[]).map(p=>p.name);
@@ -310,8 +379,14 @@ function evaluateTeam(game, teamId, current, match, timing){
   const streak = teamOk ? prevStreak+1 : 0;
   // Łamigłówki (`partial:true`, „Jedna litera"): nie-pełne trafienie = ułamek trafionych słów (core/scoring.quizPartialFrac)
   const quizFrac = hasAnswers ? quizPartialFrac(current, ev) : null;
+  // MP okładka/intro: etap odsłony, na którym padła odpowiedź drużyny (czas propozycji od serwera) → mnożnik ZAMIAST szybkości
+  const stg = coverQ ? coverAnswerStage(game, teamId, locked, timing.now) : introQ ? introAnswerStage(game, teamId, locked, timing.now) : null;
   const sc = hasAnswers
     ? scoreRound({ quizOk:teamOk, quizFrac, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
+    : coverQ ? scoreRound({ okArtist, okAlbum:!!okBySlot.album, artistOnly:true, elapsedMs:null, streak, sure:anySure, mult:coverMult(stg.stage) })
+    : introQ ? scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:null, streak, sure:anySure, mult:introMult(stg.stage) })
+    : medleyQ ? scoreRound({ okArtist, artistOnly:true, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })   // jak solo: szybkość + seria
+    : tlQ ? scoreRound({ placeOk:teamOk, okTitle, okArtist, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })
     : yearQ ? scoreRound({ yearPts:ev.year.points, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure })   // F8a: rok
     // EKSPERYMENT: „zwolnione obroty"/„przyspieszone" — MP bez etapów (stałe 0.6× / 1.5×) → mnożnik etapu 0 (×1.5 / ×1.2)
     : scoreRound({ okTitle, okArtist, roundOk:teamOk, elapsedMs:timing.elapsedMs, limitMs:timing.limitMs, streak, sure:anySure, mult:tempoMult(game.mode, 0) });
@@ -328,7 +403,12 @@ function evaluateTeam(game, teamId, current, match, timing){
   const credits = answerCredits(game, teamId, lockedAll);   // F6b (R8): „złożona z głosów: kaśka → tytuł…"
   // F8a: odsłona „rok" (NIE `year` — coop spłaszcza pola drużyny na reveal, a reveal.year = rok utworu)
   const yearEval = yearQ ? { pts:ev.year.points, diff:ev.year.diff, tier:ev.year.tier } : undefined;
-  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits, yearEval,
+  // odsłona: etap i mnożnik drużyny (okładka: bloki; intro: sekundy etapu)
+  const stageEval = stg ? { stage:stg.stage, mult:sc.mult, ...(coverQ ? { blocks:coverStageBlocks(stg.stage) } : { secs:introStageSecs(stg.stage) }) } : undefined;
+  // MP oś czasu: szczelina drużyny, dobre szczeliny, karta i oś PRZED wstawieniem (odsłona); karta wstawiana w applyEvaluation
+  const timelineEval = tlQ ? { gap: /^\d{1,3}$/.test(String(locked.gap||'')) ? Number(locked.gap) : null, placeOk:teamOk,
+    good:correctGaps(cards, tlYear), card:current.tlCard || null, before:cards.slice() } : undefined;
+  return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits, yearEval, stageEval, timelineEval,
     pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
     streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult, mult:sc.mult } };
 }
@@ -341,7 +421,7 @@ export function answerTiming(game, now){
   const win = (game && Number.isFinite(game.endsAt) && Number.isFinite(game.playAt) && game.endsAt>game.playAt) ? game.endsAt-game.playAt : 0;
   const limitMs = win>0 ? win : (game && game.timer>0) ? game.timer*1000 : SPEED_CAP_MS;
   const elapsedMs = (game && Number.isFinite(game.playAt) && Number.isFinite(now)) ? Math.max(0, now-game.playAt) : null;
-  return { elapsedMs, limitMs };
+  return { elapsedMs, limitMs, now: Number.isFinite(now) ? now : null };
 }
 // `now` (ms) — chwila zatwierdzenia (lock); bez niej (albo bez game.playAt) punkty bez bonusu za szybkość
 export function evaluateAnswer(game, current, match=textMatch, now=null){
@@ -358,9 +438,16 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
   const isCoop = (game.format||'coop')==='coop';
   const flat = isCoop ? perTeam[teams[0].id] : {};   // coop: spłaszcz pola jedynej drużyny
   const yearQ = isYearQ(slots, hasAnswers);
+  const coverQ = isCoverQ(game, hasAnswers), medleyQ = isMedleyQ(game, hasAnswers), tlQ = isTimelineQ(game, hasAnswers);
   const reveal = {
     track:current.track, artist:current.artist, year:current.year, album:current.album, art:current.art,
-    kind: hasAnswers ? 'quiz' : (yearQ ? 'year' : 'music'), prompt: current.prompt || '',
+    kind: hasAnswers ? 'quiz' : (yearQ ? 'year' : coverQ ? 'cover' : medleyQ ? 'medley' : tlQ ? 'timeline' : 'music'), prompt: current.prompt || '',
+    // MP składanka: zagrane utwory (dopiero w odsłonie); fortepian/gitara: kto grał cover (🎹/🎸)
+    clips: medleyQ && Array.isArray(current.clips) ? current.clips.map(c=>({ track:String(c.track||''), artist:String(c.artist||''), year:String(c.year||''), art:String(c.art||'') })) : undefined,
+    coverArtist: !hasAnswers && current.coverArtist ? String(current.coverArtist).slice(0, 80) : '',
+    // MP okładka: utwór reprezentatywny albumu (❤️ „na półkę" — gust ocenia utwory), dopiero w odsłonie
+    rep: coverQ && current.rep && current.rep.title ? { title:String(current.rep.title).slice(0,200), artist:String(current.rep.artist||current.artist||'').slice(0,200), year:String(current.rep.year||''), art:String(current.rep.art||''), genre:String(current.rep.genre||'') } : undefined,
+    instrument: !hasAnswers && current.instrument ? String(current.instrument) : '',
     yearNote: yearQ && current.yearNote ? String(current.yearNote) : '',   // F8a: „rok wg wydania w iTunes"
     from: !hasAnswers && typeof current.from==='string' ? current.from.slice(0, 80) : '',   // gust etap 3: „Gust stołu" — z czyjej półki (dopiero w odsłonie)
     slots, answers: hasAnswers ? current.answers : null,
@@ -377,7 +464,7 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
   return {
     reveal, perTeam, ranking,
     result: { round:game.round, cat:game.catKey, mode:game.mode,
-      track: hasAnswers ? (current.track||current.prompt||'') : current.track,   // F8a: ABCD muzyki → tytuł utworu
+      track: hasAnswers ? (current.track||current.prompt||'') : coverQ ? (current.album||current.track) : current.track,   // F8a: ABCD muzyki → tytuł utworu; okładka → album
       artist: hasAnswers ? (current.artist||'') : current.artist, ok:anyOk },
   };
 }
@@ -392,6 +479,9 @@ export function applyEvaluation(game, ev, tally){
     game.streaks[t.id]=rr.streak||0;
     if(rr.firstById && tally){ tally[rr.firstById]=tally[rr.firstById]||{name:rr.firstBy,correct:0}; tally[rr.firstById].correct++; }
     if(!rr.teamOk && rr.anySure){ rr.pewniacy.forEach(n=>{ game.beerTally[n]=(game.beerTally[n]||0)+1; }); }
+    // MP oś czasu: dobra szczelina → karta zostaje na osi drużyny (pudło → odpada, jak w solo)
+    const te=rr.timelineEval;
+    if(te && te.placeOk && te.card){ game.timeline=game.timeline||{}; game.timeline[t.id]=insertCard(teamTimeline(game, t.id), te.card, te.gap).cards; }
   }
   (game.results = game.results || []).push(ev.result);
   game.reveal = ev.reveal;

@@ -5,7 +5,7 @@
 import { shareText, topList, APP_NAME, DECADE_LONG, GENRE_SHORT } from '../core/tasteProfile.js';
 
 export const CARD_W = 1080, CARD_H = 1350;
-export const CARD_FILE = 'moj-gust-uszy-muzk.png';
+export const CARD_FILE = 'moj-gust-uszy-mozg.png';
 // kolory karty stałe (obrazek wygląda tak samo niezależnie od motywu) — paleta design systemu (wariant ciemny)
 export const C = { bg:'#15121E', bg2:'#221C33', line:'#39314F', ink:'#ECE9F4', muted:'#A79FBD', green:'#58CC02', blue:'#1CB0F6', gold:'#FFC800', red:'#FF4B4B', track:'#2C2540' };
 const FONT = "'Nunito', system-ui, -apple-system, 'Segoe UI', sans-serif";
@@ -61,7 +61,7 @@ export function drawTasteCard(ctx, p, { handle='', url='' }={}){
   const w1=ctx.measureText('Uszy ').width, w2=ctx.measureText('& ').width;
   ctx.fillStyle=C.green; ctx.fillText('Uszy ', 60, 112);
   ctx.fillStyle=C.gold; ctx.fillText('& ', 60+w1, 112);
-  ctx.fillStyle=C.green; ctx.fillText('Muzk', 60+w1+w2, 112);
+  ctx.fillStyle=C.green; ctx.fillText('Mózg', 60+w1+w2, 112);
   ctx.fillStyle=C.muted; ctx.font=f(800, 30);
   ctx.fillText((handle ? 'GUST MUZYCZNY: '+handle : 'MÓJ GUST MUZYCZNY').toUpperCase().slice(0, 48), 60, 164);
   // karta archetypu

@@ -134,7 +134,8 @@ export async function loadMedley(cur, { onProgress, alive=()=>true }={}){
       if(!b) throw new Error('fetch');
       const dec=await ctx.decodeAudioData(b);
       if(!alive()) return 0;
-      const c=clips[i]; c.start=medleyClipStart(dec.duration);
+      // MP: start wycinka od serwera (równo u wszystkich), gdy mieści się w zajawce; inaczej losowo jak w solo
+      const c=clips[i]; c.start=(Number.isFinite(c.start) && c.start>=0 && c.start+MEDLEY_CLIP_S<=dec.duration) ? c.start : medleyClipStart(dec.duration);
       parts.push(sliceBuffer(ctx, dec, c.start, MEDLEY_CLIP_S)); c.ok=true;
     }catch(_e){ clips[i].ok=false; }
     done++; if(onProgress) onProgress(done, clips.length);

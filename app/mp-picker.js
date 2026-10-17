@@ -11,7 +11,8 @@ import { settingsSummary } from '../core/matchSetup.js';
 import { teamColor } from '../core/teams.js';
 import { createMatchSetup } from './matchSetup.js';
 import { ic } from './icons.js';
-import { TABLE_KEY, TABLE_LABEL, TABLE_MIN_SONGS } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
+import { TABLE_KEY, TABLE_LABEL, TABLE_MIN_SONGS } from '../core/tasteCompare.js';
+import { tableOptionState } from '../core/mpView.js';   // relay: „Gust stołu" ukryty z notką   // gust etap 3: „🎧 Gust stołu"
 import { S } from './mp-state.js';   // P2-2: kod pokoju w pasku „Nowego meczu"
 import { plural } from '../core/mpView.js';
 
@@ -37,7 +38,7 @@ function mpTablePrune(){
 }
 function mpTableHTML(){
   const t=mpTablePrune();
-  if(!t.cap) return '';   // stary serwer / relay → opcja ukryta
+  if(!t.cap){ const st=tableOptionState(t); return st.note ? `<p class="ms-gnote um-table-hint" data-mp-table-off>${escapeHtml(st.note)}</p>` : ''; }   // stary serwer → ukryta; relay → ukryta z notką
   const okN=(t.songs|0)>=TABLE_MIN_SONGS;
   const on=mpPickCats.has(TABLE_KEY);
   const sub=`półki od ${t.withShelf|0}/${t.players|0} graczy · ${t.songs|0} utw.`;
@@ -193,8 +194,9 @@ function mpDraft(){ return { ...setup.draft(), timer:mpPickTimer, format:mpPickF
 function mpPickRoomHTML(){
   if(!S.code) return '';
   const ps=mpGetPlayers(), shown=ps.slice(0, 6), more=ps.length-shown.length;
-  const avs=shown.map(p=>{ const nm=p.name||'?'; return `<b class="mp-pkr-av" style="background:${mpAvColor(nm)}" title="${escapeHtml(nm)}">${escapeHtml(nm.slice(0,1).toUpperCase())}</b>`; }).join('')+(more>0?`<b class="mp-pkr-av more">+${more}</b>`:'');
-  const who = ps.length ? `${ps.length} ${plural(ps.length, 'gracz', 'graczy', 'graczy')}${mpPickSalon?' + TV':''}` : 'czekamy na graczy';
+  const avs=shown.map(p=>{ const nm=p.name||'?'; return `<b class="mp-pkr-av${p.ready?' ready':''}" style="background:${mpAvColor(nm)}" title="${escapeHtml(nm)}${p.ready?' — gotowy':''}">${escapeHtml(nm.slice(0,1).toUpperCase())}</b>`; }).join('')+(more>0?`<b class="mp-pkr-av more">+${more}</b>`:'');
+  const nr=ps.filter(p=>p.ready).length;   // „Gotowy ✓" (serwer-autorytet) — informacja, start nie jest blokowany
+  const who = ps.length ? `${ps.length} ${plural(ps.length, 'gracz', 'graczy', 'graczy')}${mpPickSalon?' + TV':''}${nr?` · gotowi ${nr}/${ps.length}`:''}` : 'czekamy na graczy';
   return `<div class="mp-pkroom" role="status" aria-live="polite" aria-label="Pokój ${escapeHtml(S.code)}: ${escapeHtml(who)}">
       <span class="mp-pkr-code"><small>POKÓJ</small><b>${escapeHtml(S.code)}</b></span>
       <span class="mp-pkr-avs" aria-hidden="true">${avs}</span><span class="mp-pkr-n">${escapeHtml(who)}</span>
@@ -222,8 +224,10 @@ function mpBuildPools(cats, modes){
     if(c.table){ pools[k]={ label:c.label, kind:'playlist', table:true }; continue; }   // gust etap 3: pulę składa serwer z półek graczy
     const out={ label:c.label, range:c.range, kind:c.kind };
     if(c.listenSecs) out.listenSecs=c.listenSecs;   // P1-2: własne okno „słuchaj" kategorii (serwer liczy z niego endsAt)
-    if(wantLektor && c.lang) out.lang=c.lang;   // język opisów lektora (lyrics.js); serwer sanityzuje do 'pl'|'en'
+    if((wantLektor || modes.includes('piano') || modes.includes('guitar')) && c.lang) out.lang=c.lang;   // język opisów lektora (lyrics.js) / kategoria polska (covery: polishDominant); serwer sanityzuje do 'pl'|'en'
+    if(c.desc) out.desc=c.desc;   // MP covery: polishDominant (core/match) patrzy też w opis kategorii
     if(Array.isArray(c.artists) && c.artists.length) out.artists=c.artists.slice();
+    if(Array.isArray(c.noModes) && c.noModes.length) out.noModes=c.noModes.slice();   // np. „unplugged": bez okładki (serwer: core/match.modesFor)
     if(Array.isArray(c.songs) && c.songs.length){
       out.songs=c.songs.slice(0, MP_POOL_SONG_CAP).map(s=>{
         const o={ title:s.title, artist:s.artist };

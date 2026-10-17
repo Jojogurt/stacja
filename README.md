@@ -1,4 +1,4 @@
-# STACJA — trener pubquizu muzycznego
+# Uszy & Mózg (STACJA) — trener pubquizu muzycznego
 
 Webowy trener do nauki tytułów i wykonawców piosenek przed muzycznym pubquizem
 (np. **Spin the Beat**). Czysty HTML/JS, bez budowania.

@@ -255,9 +255,9 @@ export function revsnipMult(stage){
   const i=Math.floor(Number(stage));
   return REVSNIP_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(REVSNIP_MULTS.length-1, i)) : 0];
 }
-/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 32 → 64 bloki → pełna):
- * ×2.0 na pierwszym widocznym etapie, malejąco do ×1.0 przy pełnej okładce (bez bonusu za szybkość — jak intro). */
-export const COVER_MULTS = [2.0, 1.6, 1.3, 1.0];
+/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 32 → 64 bloki; pełna tylko
+ * w odsłonie): ×2.0 przy 16×16, ×1.5 przy 32×32, ×1.0 przy 64×64 (bez bonusu za szybkość — jak intro). */
+export const COVER_MULTS = [2.0, 1.5, 1.0];
 export function coverMult(stage){
   const i = Math.floor(Number(stage));
   return COVER_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(COVER_MULTS.length-1, i)) : COVER_MULTS.length-1];

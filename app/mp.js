@@ -5,13 +5,13 @@
 import { shuffle, escapeHtml } from '../core/util.js';
 import { norm, quizKey, parseYear, quizListen } from '../core/scoring.js';
 import { listenStop, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie (start w mp-render: mpOnEnter)
-import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions, mpAvailableModes } from '../core/match.js';
+import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions, mpAvailableModes, AUTHORITY_ONLY_MODES } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally, tvIdOf, allSettled, needsSureConfirm, mcOptions } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond, isTempoMode, mpTempoRate,
-  MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, phaseDeadlines, addClockSample, clockOffset, phaseClock, fmtClock, hostEndVisible, introEndLocal } from '../core/timing.js';
+  MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, phaseDeadlines, addClockSample, clockOffset, phaseClock, fmtClock, hostEndVisible, introEndLocal, introStageSecs, medleyLabel, MEDLEY_CLIP_S, MEDLEY_GAP_S, MEDLEY_LEAD_S } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
@@ -22,7 +22,7 @@ import { authorityChannel } from '../adapters-web/roomTransport.js';
 import { ensureSession, setHandle, recordMatch } from '../adapters-web/cf.js';
 import { resolveTrack, resolveDistractors } from '../adapters-web/itunesRepository.js';
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
-import { stopAudio } from './audio.js';
+import { stopAudio, loadMedley } from './audio.js';   // MP składanka: to samo sklejanie wycinków co solo
 import { stopSpeech, lektorStop, lektorPlay, isSpeaking } from './lektor.js';
 import { lektorLang, catLektorLang } from '../core/lektorVoice.js';
 import { initSocial, showScreen, renderDruzyna, renderProfil, ensureHandle, saveHandle, knownHandle } from './social.js';
@@ -37,7 +37,7 @@ import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S)
 import { tvSetMode } from './mp-tv.js';   // P1-16: scena TV (html.tv + motyw)
 import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpIntroLeadMs, mpTvLobbyOn, mpPhaseSfx } from './mp-render.js';
 import { tableShelfPayload } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
-import { tasteStore, tasteVisibility } from './taste.js';
+import { tasteStore, tasteVisibility, onTaste } from './taste.js';
 
 initMpPicker(mpRender, ()=>mpPlayers(), ()=>mpAvailableModes(S.ch && S.ch.serverModes, SERVER_AUTH), ()=>mpDraftChanged(), ()=>mpTableInfo(), (n)=>mpAvatarColor(n));   // F8a: + tryby znane serwerowi; szkic dla gości; gust etap 3: „Gust stołu" (capability + licznik półek)   // picker re-renderuje widok pokoju + czyta listę graczy (przypisanie do drużyn)
 // initMpRender(...) — wstrzyknięcie back-calls do renderu — na KOŃCU pliku (mpSkin to const, nie hoisted)
@@ -327,7 +327,7 @@ async function mpEnterRoom(code, asHost, groupId){
   if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
   if(S.code!==code) mpPickResetRoom();   // P0-9: salon/format/podział z poprzedniego pokoju nie przechodzą do nowego
-  S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null; S.shelfSent=false;   // MVP-3: tag drużyny (host)
+  S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null; S.shelfSent=null;   // MVP-3: tag drużyny (host)
   S.enterArgs={ code, asHost:!!asHost, groupId:groupId||null }; S.netErr=null;
   lastRoomSave(code); mpSyncRoomBack();   // F6b (F6): przeładowanie karty w meczu → „Wróć do pokoju" w menu
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
@@ -396,19 +396,35 @@ async function mpRetryRoom(){
 /* gust etap 3: „🎧 Gust stołu" — półka gracza (top 20 ❤️: tytuł/wykonawca/rok) do serwera-autorytetu.
  * Tylko gdy serwer ogłasza capability 'tableTaste' (stary serwer / relay → nic nie wysyłamy), gracz ma ≥ 5 ❤️
  * i NIE ukrył gustu (tableShelfPayload → null). Serwer trzyma półki w stanie pokoju (nie D1). */
+/* Dług gustu: ukrycie gustu (albo zmiana półki) W TRAKCIE pobytu w pokoju → aktualizacja: pusta półka {t:'shelf', items:[]}
+ * WYCOFUJE wysłaną (serwer kasuje wpis). S.shelfSent = ostatnio wysłana zawartość (JSON) — wysyłamy tylko zmianę. */
 function mpMaybeShareShelf(){
-  if(!SERVER_AUTH || !S.ch || !S.ch.shareShelf || S.shelfSent) return;
+  if(!SERVER_AUTH || !S.ch || !S.ch.shareShelf || !S.code) return;
   if(!(S.ch.serverCaps||[]).includes('tableTaste')) return;
-  S.shelfSent=true;
-  const items=tableShelfPayload(tasteStore(), { visibility:tasteVisibility() });
-  if(items) S.ch.shareShelf(items);
+  const items=tableShelfPayload(tasteStore(), { visibility:tasteVisibility() }) || [];
+  const key=JSON.stringify(items);
+  if(S.shelfSent===key) return;
+  if(S.shelfSent==null && !items.length){ S.shelfSent=key; return; }   // nic nie wysłano i nie ma czego — bez wiadomości
+  S.shelfSent=key;
+  S.ch.shareShelf(items);
 }
+let shelfT=null;   // debounce: seria ❤️ = jedna wiadomość (serwer limituje meta 1/s)
+onTaste(()=>{ if(shelfT) clearTimeout(shelfT); shelfT=setTimeout(()=>{ shelfT=null; try{ mpMaybeShareShelf(); }catch(_e){} }, MP_SHELF_DEBOUNCE_MS); });   // ❤️ / ukrycie gustu w trakcie pobytu w pokoju
+export const MP_SHELF_DEBOUNCE_MS = 600;
 // licznik dla pickera hosta: „półki od 3/4 graczy" (n = utwory przed usunięciem duplikatów — serwer i tak liczy sam)
 function mpTableInfo(){
   const cap=!!(SERVER_AUTH && S.ch && (S.ch.serverCaps||[]).includes('tableTaste'));
   const ids=new Set(mpMembers().map(m=>m.id));
   const sh=(cap && Array.isArray(S.ch.shelves) ? S.ch.shelves : []).filter(x=>ids.has(x.id));
-  return { cap, players:ids.size, withShelf:sh.length, songs:sh.reduce((a,x)=>a+(x.n|0), 0) };
+  return { cap, relay:!SERVER_AUTH, players:ids.size, withShelf:sh.length, songs:sh.reduce((a,x)=>a+(x.n|0), 0) };
+}
+/* „Gotowy ✓" w lobby / przy rewanżu — toggle gracza (serwer-autorytet z capability 'lobbyReady'; relay: brak przycisku).
+ * Informacja dla hosta („gotowi 3/4") — start NIE jest blokowany. Stan w presence (reset przy starcie i wyjściu). */
+const mpLobbyReadyCap = ()=> !!(SERVER_AUTH && S.ch && (S.ch.serverCaps||[]).includes('lobbyReady'));
+function mpLobbyReadyToggle(){
+  if(!mpLobbyReadyCap() || !S.ch.lobbyReady) return;
+  const me=mpMembers().find(m=>m.id===mpMe.id);
+  S.ch.lobbyReady(!(me && me.ready));
 }
 // F1 (#4): nadawca ulotnego eventu — `from` (serwer, z tokenu) ma pierwszeństwo przed `by` (klient)
 function mpSender(p){ return (p && typeof p==='object' && (p.from || p.by)) || null; }
@@ -416,7 +432,8 @@ function mpMembers(){
   if(!S.ch) return [];
   const st=S.ch.presenceState(); const out=[];
   const names=(S.game && S.game.names) || {};   // P1-11: ksywa ze stanu gry, gdy presence jeszcze bez niej
-  Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||names[k]||'?'}); });
+  const ready=new Set(Array.isArray(S.ch.readyIds) ? S.ch.readyIds : []);   // „Gotowy ✓" (presence.ready; relay/stary serwer → brak)
+  Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||names[k]||'?', adv:meta.adv===true, ready:ready.has(k)}); });
   return out;
 }
 // GRACZE = członkowie pokoju; w trybie salonowym TV (host) jest tylko prowadzącym, więc poza listą.
@@ -461,7 +478,26 @@ function mpRenderMembers(){
 
 /* ---- broadcast / sync ---- */
 function mpBroadcast(){ if(S.host&&S.ch&&S.game){ S.ch.send({type:'broadcast',event:'sync',payload:S.game}); } }
+/* MP oś czasu: typ gracza = szczelina (tap na osi) + opcjonalne żetony tytuł/wykonawca. Jedna propozycja na gracza
+ * (nowa zastępuje starą) → do każdej dołączamy ostatnio wybraną szczelinę i wpisane wcześniej żetony (to pytanie). */
+function mpTlMerge(act){
+  const g=S.game; if(!g || g.mode!=='timeline' || !act || act.type!=='propose') return;
+  const nonce=g.playNonce, v=act.values=act.values||{};
+  const mine=(S.tlMine && S.tlMine.nonce===nonce) ? S.tlMine.values : {};
+  ['title','artist'].forEach(k=>{ if(!v[k] && mine[k]) v[k]=mine[k]; });
+  if(v.gap==null && S.tlPick && S.tlPick.nonce===nonce) v.gap=String(S.tlPick.gap);
+  S.tlMine={ nonce, values:{ ...v } };
+}
+// tap w szczelinę osi (data-gap) — gracz: typ z tą szczeliną; TV-sędzia (coop): nadpisanie głosem drużyny
+function mpTlPick(gap){
+  const g=S.game; if(!g || g.mode!=='timeline' || g.phase!==MP.PLAY) return;
+  const k=Number(gap); if(!Number.isInteger(k) || k<0 || k>99) return;
+  if(mpIsSalonHost()){ if((g.format||'coop')==='coop') mpSend({type:'vote', slot:'gap', value:String(k), set:true}); return; }
+  S.tlPick={ nonce:g.playNonce, gap:k };
+  mpSend({type:'propose', values:{ gap:String(k) }});
+}
 function mpSend(act){
+  mpTlMerge(act);
   act.by=mpMe.id; act.byName=mpMe.name; act.aid=mpMe.id+'-'+Math.random().toString(36).slice(2);
   // RELAY: host stosuje OD RAZU (bez round-tripu → brak laga); 'act' obsługuje tylko host.
   // AUTORYTET: każdy (też host) wysyła akcję do DO — DO jest źródłem prawdy.
@@ -525,6 +561,7 @@ function mpAfterSync(){
     if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
     if(wait>20) S.startTimer=setTimeout(begin, wait); else begin();
   }
+  mpIntroSync();   // MP intro: odsłuch bieżącego etapu od wspólnego stageAt (nowy etap = nowy stan)
 }
 // czy ten klient ma jeszcze nie zamkniętą („dalej") odsłonę
 function mpRevealPending(){ return !!S.revealSnap && S.ack!==S.revealNonce; }
@@ -654,6 +691,14 @@ function mpArm(){
   // lektor / brak zajawki — nic do buforowania, gotów od razu.
   // F6b (tryb #6): pilot (dźwięk tylko u hosta) nie buforuje zajawki — gotów od razu (oszczędza transfer)
   if(S.game.mode==='lektor' || !S.game.preview || !playsAudioLocally(S.game, mpMe.id)){ report(); return; }
+  // MP składanka: gotowość dopiero, gdy WSZYSTKIE wycinki pobrane i sklejone (loadMedley — ten sam kod co solo)
+  if(S.game.mode==='medley' && Array.isArray(S.game.medley) && S.game.medley.length){
+    S.armPending=armNonce;
+    let done=false; const fin=()=>{ if(done) return; done=true; clearTimeout(t); if(S.lastArmNonce===armNonce) report(); };
+    const t=setTimeout(fin, MP_MEDLEY_BUFFER_MS);   // bezpiecznik (serwer i tak rusza po twardym limicie ARMING)
+    mpMedleyLoad(S.game, armNonce).then(fin, fin);
+    return;
+  }
   const a=mpEnsureAudio(); mpClearSnip(a); mpClearArmWait(a);   // listenery poprzedniej rundy precz (bez kumulacji)
   setElementRate(a, 1);   // EKSPERYMENT: trwały element — tempo z poprzedniej rundy (zapas „obrotów") wraca do 1.0×
   if(a.src!==S.game.preview) a.src=S.game.preview;
@@ -671,6 +716,58 @@ function mpPlayBlocked(err){
   if(err && err.name==='NotAllowedError') mpSetPlayStatus('stuknij ▶, by odtworzyć');   // gest wymagany
   else { mpSetKnob('error'); mpSetPlayStatus('brak zajawki — kombinujcie bez niej'); }  // 404/CORS/uszkodzona
 }
+/* MP składanka: 4 zajawki (game.medley: URL + start wycinka od serwera) → app/audio.loadMedley skleja 4 × 1,5 s z przerwą
+ * i „tikiem" (ten sam bufor co solo) — raz na pytanie (klucz armNonce); spóźniony klient ładuje w PLAY. */
+const MP_MEDLEY_BUFFER_MS = 11000;
+function mpMedleyLoad(g, nonce){
+  if(S.medleyCur && S.medleyCur.nonce===nonce) return S.medleyCur.p;
+  const cur={ nonce, clips:(g.medley||[]).map(c=>({ preview:c.preview, start:Number(c.start) })) };
+  cur.p=loadMedley(cur, { alive:()=>!!S.game && S.game.armNonce===nonce }).catch(()=>0);
+  S.medleyCur=cur;
+  return cur.p;
+}
+async function mpPlayMedley(){
+  const g=S.game; if(!g) return;
+  mpStopRev(); if(S.audio){ try{ S.audio.pause(); }catch(e){} }
+  mpSetKnob('wait'); mpSetPlayStatus('ładuję składankę…');
+  await mpMedleyLoad(g, g.armNonce);
+  const cur=S.medleyCur;
+  if(!S.game || S.game.armNonce!==cur.nonce || S.game.phase!==MP.PLAY) return;   // runda zmieniła się w trakcie ładowania
+  if(!cur.medleyBuf){ mpPlayMedleyEl(cur); return; }   // WebAudio/CORS padło → zapas na trwałym elemencie (jak solo)
+  const ctx=await ensureCtxResumed();
+  if(!S.game || S.game.armNonce!==cur.nonce) return;
+  const n=(cur.clips||[]).filter(c=>c.ok).length || cur.clips.length, buf=cur.medleyBuf;
+  let last='';
+  mpStopRev();
+  S.revSrc=playBuffer(ctx, buf, {
+    onProgress:f=>{ mpVinyl.setProgress(f); const tx=medleyLabel(f*(buf.duration||0), n); if(tx!==last && !/^koniec/.test(tx)){ last=tx; mpSetPlayStatus(tx); } },
+    onEnded:()=>{ S.revSrc=null; mpSetKnob('play'); mpSetPlayStatus('koniec składanki · ↻ stuknij'); },
+  });
+  sfxDuck(); mpSetKnob('pause'); mpSetPlayStatus(medleyLabel(0, n));
+}
+/* ZAPAS składanki (jak solo app/audio startMedleyEl): kolejne wycinki na TRWAŁYM elemencie — seek do startu od serwera,
+ * 1,5 s gry, przerwa 3 s — mniej precyzyjnie niż sklejony bufor, ale gra. Token rundy: nowa składanka/stop przerywa. */
+function mpPlayMedleyEl(cur){
+  const clips=(cur.clips||[]).filter(c=>c && c.preview); if(!clips.length){ mpSetKnob('error'); mpSetPlayStatus('składanka niedostępna — kombinujcie bez niej'); return; }
+  const a=mpEnsureAudio(); mpClearSnip(a); setElementRate(a, 1);
+  const tok=S.medleyElTok={}; const alive=()=>S.medleyElTok===tok && S.game && S.game.armNonce===cur.nonce && S.game.phase===MP.PLAY;
+  const wait=ms=>new Promise(r=>setTimeout(r, ms));
+  audioSession('playback'); sfxDuck(); mpSetKnob('pause');
+  (async()=>{
+    await wait(MEDLEY_LEAD_S*1000);
+    for(let i=0;i<clips.length && alive();i++){
+      const c=clips[i];
+      if(a.src!==c.preview) a.src=c.preview;
+      const seek=()=>{ try{ a.currentTime=Number(c.start)||10; }catch(_e){} };
+      if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
+      try{ await a.play(); }catch(_e){ mpPlayBlocked(_e); return; }
+      setTimeout(()=>{ if(alive()) mpSetPlayStatus(`fragment ${i+1}/${clips.length}…`); }, 0);   // po statusie „gra…" elementu
+      await wait(MEDLEY_CLIP_S*1000); try{ a.pause(); }catch(_e){}
+      if(i<clips.length-1){ if(!alive()) return; mpSetPlayStatus(`przerwa · zaraz fragment ${i+2}/${clips.length}`); await wait(MEDLEY_GAP_S*1000); }
+    }
+    if(alive()){ mpSetKnob('play'); mpSetPlayStatus('koniec składanki · ↻ stuknij'); }
+  })();
+}
 // gałka = TOGGLE: gra → pauza; pauza → wznów; koniec/świeże → od nowa (#bug2: dotąd zawsze restart)
 function mpKnobTap(){
   if(!S.game) return mpPlayLocal();
@@ -681,7 +778,7 @@ function mpKnobTap(){
     if(speaking){ lektorStop(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }
     return mpPlayLocal();
   }
-  if(mode==='reverse' || mode==='revsnip' || isTempoMode(mode)){   // EKSPERYMENT: + „od tyłu krótko", + obroty (bufor WebAudio)
+  if(mode==='reverse' || mode==='revsnip' || isTempoMode(mode) || mode==='medley'){   // EKSPERYMENT: + „od tyłu krótko", + obroty, + składanka (bufor WebAudio)
     if(S.revSrc){ mpStopRev(); mpSetKnob('play'); mpSetPlayStatus('pauza · ▶ stuknij'); return; }   // od tyłu: stop (replay od nowa)
     return mpPlayLocal();
   }
@@ -706,6 +803,7 @@ function mpPlayLocal(){
   if(S.game.mode==='lektor'){ sfxDuck(); mpSetKnob('pause'); mpSetPlayStatus('lektor czyta…'); if(S.game.lyric) lektorPlay(S.game.lyric, S.game.ttsUrl, ()=>{}, { lang:lektorLang(S.game.lyricLang) }); return; }
   if(!S.game.preview){ mpSetPlayStatus('brak zajawki'); return; }
   if(S.game.mode==='reverse' || S.game.mode==='revsnip'){ return mpPlayReverse(); }   // EKSPERYMENT: + od tyłu krótko
+  if(S.game.mode==='medley' && Array.isArray(S.game.medley)){ return mpPlayMedley(); }   // MP składanka: 4 × 1,5 s sklejone lokalnie
   if(isTempoMode(S.game.mode) && S.game.phase!==MP.REVEAL){ return mpPlayTempo(); }   // EKSPERYMENT: zwolnione / przyspieszone obroty
   // music / snippet — trwały, odblokowany element; src ustawiony już w fazie gotowości
   const a=mpEnsureAudio(); mpClearSnip(a);
@@ -768,6 +866,56 @@ async function mpPlayTempo(){
     try{ a.currentTime=0; }catch(e){}
     a.play().catch(mpPlayBlocked);
   }
+}
+/* ---- MP intro (serwer-autorytet): etap k gra [0, game.stageSecs] zajawki od WSPÓLNEGO startu game.stageAt ----
+ * Termin z zegara serwera (− offset S.clockOff) — bez lokalnych timerów odsłony: każdy nowy etap przychodzi w stanie.
+ * Spóźniony klient (reconnect/odbiór po starcie) wchodzi w trakcie okna; po jego końcu — cisza do następnego etapu.
+ * Salon / „Jeden głośnik": gra tylko TV/host (playsAudioLocally). Zajawka zbuforowana w ARMING (pełny plik, mpArm). */
+function mpIntroClear(){ const t=S.introAud; if(t){ clearTimeout(t.start); clearTimeout(t.stop); } S.introAud=null; }
+function mpIntroSync(){
+  const g=S.game;
+  if(!g || g.mode!=='intro' || g.phase!==MP.PLAY || mpRevealPending() || !Number.isFinite(g.stageAt)){ if(S.introAud) mpIntroClear(); return; }
+  const key=`${g.playNonce}:${g.stage}:${g.stageAt}`;
+  if(S.introAud && S.introAud.key===key) return;
+  mpIntroClear();
+  const aud={ key }; S.introAud=aud;
+  if(!g.preview || !playsAudioLocally(g, mpMe.id)) return;
+  const secs=Number(g.stageSecs)>0 ? Number(g.stageSecs) : introStageSecs(g.stage);
+  const startLocal=g.stageAt-(S.clockOff||0);
+  const fire=()=>{ if(S.introAud===aud) mpIntroPlay(secs, Math.max(0, Date.now()-startLocal)); };
+  const wait=startLocal-Date.now();
+  if(wait>20) aud.start=setTimeout(fire, wait); else fire();
+}
+// zagraj [from, secs] s od początku zajawki (trwały element — odblokowany gestem, zbuforowany w ARMING)
+function mpIntroPlay(secs, fromMs=0){
+  const g=S.game; if(!g || !g.preview) return;
+  const from=Math.max(0, fromMs/1000); if(from>=secs) return;   // spóźnienie dłuższe niż etap — cisza do następnego
+  const a=mpEnsureAudio(); mpClearSnip(a); setElementRate(a, 1);
+  if(a.src!==g.preview) a.src=g.preview;
+  audioSession('playback'); sfxDuck();
+  const seek=()=>{ try{ a.currentTime=from; }catch(e){} };
+  if(a.readyState>=1) seek(); else a.addEventListener('loadedmetadata', seek, {once:true});
+  const stop=()=>{ if(a.currentTime>=secs){ a.pause(); mpClearSnip(a); } };   // zapas: timeupdate (≈4 Hz) za timerem
+  a._snipStop=stop; a.addEventListener('timeupdate', stop);
+  const aud=S.introAud || (S.introAud={ key:'replay' });
+  clearTimeout(aud.stop); aud.stop=setTimeout(()=>{ try{ a.pause(); }catch(e){} mpClearSnip(a); }, (secs-from)*1000);
+  a.play().catch(()=>{ const el=$m('mpStgSt'); if(el) el.textContent='🔇 stuknij „↻ odsłuchaj", by słyszeć'; });
+}
+// „↻ odsłuchaj" — bieżący etap od początku, tylko u mnie (gest odblokowuje audio na iOS)
+function mpIntroReplay(){
+  const g=S.game; if(!g || g.mode!=='intro' || g.phase!==MP.PLAY || !playsAudioLocally(g, mpMe.id)) return;
+  mpUnlockAudio();
+  mpIntroPlay(Number(g.stageSecs)>0 ? Number(g.stageSecs) : introStageSecs(g.stage), 0);
+}
+// „+ więcej" (intro) / „wyraźniej" (okładka) — dowolny gracz prosi serwer o następny etap wcześniej (nonce + etap)
+function mpMoreStage(){
+  const g=S.game;
+  if(!SERVER_AUTH || !g || g.phase!==MP.PLAY || !Array.isArray(g.stageStarts) || !(g.stage+1<g.stageStarts.length)) return;
+  const key=`${g.playNonce}:${g.stage}`; if(S.moreSent===key) return;
+  if(g.mode==='intro') mpUnlockAudio();   // gest → następny etap zagra też na iOS
+  S.moreSent=key;
+  if(S.ch && S.ch.more) S.ch.more(g.playNonce, g.stage);
+  mpRender();
 }
 // host: wszyscy gotowi (lub timeout) → równoczesny start u wszystkich
 function mpGo(){
@@ -864,6 +1012,8 @@ async function mpHostNewRound(){
   S.game.listenEndsAt=null; S.game.allDoneAt=null; if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
   mpBroadcast(); mpRender();
   const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
+  // MP okładka tylko pod serwerem-autorytetem (core/match.AUTHORITY_ONLY_MODES) — relay-host gra takie pytanie jak muzykę
+  if(AUTHORITY_ONLY_MODES.includes(S.game.mode)){ S.game.mode='music'; S.game.answerSlots=null; }
   if(S.game.mode==='quiz'){
     // F3 #5: host (relay) losuje po stronie klienta → ten sam trwały seen-set co solo (+ hostSeen w obrębie meczu)
     const all=((ALL_CATS[catKey]&&ALL_CATS[catKey].questions)||[]).filter(q=>q.prompt&&!S.hostSeen.has(quizKey(q)));
@@ -1004,7 +1154,7 @@ function mpGameSfx(v){
 // Esc zamyka menu gry (telefon z klawiaturą / desktop)
 document.addEventListener('keydown', (e)=>{ if(e.key==='Escape'){ const el=$m('mpGameMenu'); if(el && el.classList.contains('show')){ e.preventDefault(); mpGameMenuClose(); } } });
 // audio gra TYLKO w fazie słuchania — wyjście do „kombinuj" zatrzymuje dźwięk
-function mpStopAudio(){ lektorStop(); mpStopRev(); if(S.audio){ try{S.audio.pause();}catch(e){} } audioSession('ambient'); }
+function mpStopAudio(){ lektorStop(); mpStopRev(); S.medleyElTok=null; if(S.audio){ try{S.audio.pause();}catch(e){} } audioSession('ambient'); }
 function mpGoKombinuj(){ if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; } mpStopAudio(); S.sub='kombinuj'; mpRender(); }
 
 /* mpRender = dyspozytor po fazie FSM; każdą fazę renderuje osobny helper */
@@ -1235,8 +1385,9 @@ Object.assign(window, {
   mpRetryRoom, mpRematch, mpSureTap, mpPropKey,                     // przegląd MP 2026-10 (etap A)
   mpMcPick, mpLyricToggle, mpChatSend,                               // etap B (P1-8, P1-12, ABCD w czacie)
   mpGameMenu, mpGameMenuClose, mpGameSkin, mpGameSfx, mpDeepJoin,    // P2-13 (menu gry), P2-12 (pierwsze wejście z linku)
+  mpMoreStage, mpIntroReplay, mpTlPick, mpLobbyReadyToggle,                              // MP okładka/intro: „wyraźniej"/„+ więcej", ↻ etapu; oś czasu: szczelina
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
-initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds, mpServerAuth:()=>SERVER_AUTH });
+initMpRender({ mpLobbyReadyCap, mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf, mpAdvancedIds, mpServerAuth:()=>SERVER_AUTH });
 
 export { mpMe, mpDeepAsk };   // mpDeepAsk — seam testowy P2-12 (pierwsze wejście z linku bez ksywy)

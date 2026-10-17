@@ -1,6 +1,6 @@
 /* app/cover.js — EKSPERYMENT: tryb „okładka" (solo). Okładka albumu odsłaniana ETAPAMI rozdzielczości
- * (core/timing.COVER_STAGES: 16 → 32 → 64 bloki na bok → pełna), auto co COVER_STEP_MS (6 s) albo przyciskiem
- * „wyraźniej" (app/solo.js).
+ * (core/timing.COVER_STAGES: 16 → 32 → 64 bloki na bok), auto co COVER_STEP_MS (6 s) albo przyciskiem
+ * „wyraźniej" (app/solo.js). PEŁNA okładka (często z nazwą zespołu) dopiero w odsłonie — coverStop(true).
  *
  * CORS: obraz z iTunes CDN (mzstatic) ładujemy BEZ crossOrigin i NIGDY nie czytamy pikseli (getImageData/toDataURL).
  * Rysowanie obcego obrazu na canvasie jest dozwolone — „tainted" blokuje tylko odczyt, nie wyświetlanie. Dzięki temu
@@ -8,10 +8,10 @@
  * (64 → 32 → 16, z wygładzaniem = uśrednianie bloków), potem powiększenie na canvasie widoku z
  * imageSmoothingEnabled=false (+ CSS image-rendering: pixelated jako zapas). Pełny etap = zwykły <img>.
  * Rozpikselowanie na starcie ukrywa też nazwę zespołu na okładce (bez OCR). */
-import { coverStageBlocks, coverNextStage, COVER_STEP_MS, COVER_STAGES } from '../core/timing.js';
+import { coverStageBlocks, coverNextStage, COVER_STEP_MS } from '../core/timing.js';
 
 const VIEW = 320;            // wewnętrzna rozdzielczość canvasu widoku (CSS skaluje do szerokości pudełka)
-let img = null, stage = 0, timer = null, onStageCb = null, token = 0;
+let img = null, stage = 0, timer = null, onStageCb = null, token = 0, fullShown = false;
 const $ = id => document.getElementById(id);
 
 function ctx2d(c){ try{ return c && c.getContext ? c.getContext('2d') : null; }catch(_e){ return null; } }
@@ -23,24 +23,62 @@ function draw(){
   if(!box || !view || !full) return;
   const blocks=coverStageBlocks(stage);
   box.dataset.stage=String(stage);
-  box.dataset.blocks=String(blocks);
-  if(!blocks){ view.hidden=true; full.hidden=false; return; }   // pełna okładka
+  box.dataset.blocks=String(fullShown ? 0 : blocks);
+  if(fullShown){ view.hidden=true; full.hidden=false; return; }   // pełna okładka — tylko odsłona
   full.hidden=true; view.hidden=false;
   if(!img || !img.complete || !img.naturalWidth) return;      // jeszcze się wczytuje → narysuje onload
-  // zmniejszanie połówkami: 64 → … → blocks (każdy krok uśrednia 2×2 — bez migotania przy dużej redukcji)
-  let src=img, size=64;
-  let small=canvas(size), c=ctx2d(small); if(!c) return;
+  coverDrawPixels(view, img, blocks);
+}
+/* WSPÓLNE (solo + MP): narysuj obraz `src` pikselowo — `blocks` bloków na bok, powiększone do `px` bez wygładzania.
+ * Zmniejszanie połówkami: min(64, rozmiar źródła) → … → blocks (każdy krok uśrednia 2×2 — bez migotania przy dużej
+ * redukcji). MP: serwer przysyła obraz JUŻ w rozdzielczości etapu (np. 16×16) → rysowany 1:1 i powiększany. */
+export function coverDrawPixels(view, src, blocks, px=VIEW){
+  const b=Math.floor(Number(blocks));
+  if(!view || !src || !src.naturalWidth || !(b>0)) return false;
+  let size=Math.max(b, Math.min(64, src.naturalWidth));
+  let small=canvas(size), c=ctx2d(small); if(!c) return false;
   c.imageSmoothingEnabled=true; c.drawImage(src, 0, 0, size, size);
-  while(size>blocks){
-    const next=Math.max(blocks, size/2), nc=canvas(next), x=ctx2d(nc); if(!x) return;
+  while(size>b){
+    const next=Math.max(b, Math.floor(size/2)), nc=canvas(next), x=ctx2d(nc); if(!x) return false;
     x.imageSmoothingEnabled=true; x.drawImage(small, 0, 0, next, next);
     small=nc; size=next;
   }
-  const v=ctx2d(view); if(!v) return;
-  view.width=VIEW; view.height=VIEW;
+  const v=ctx2d(view); if(!v) return false;
+  view.width=px; view.height=px;
   v.imageSmoothingEnabled=false;                               // twarde bloki przy powiększeniu
-  v.clearRect(0,0,VIEW,VIEW);
-  v.drawImage(small, 0, 0, VIEW, VIEW);
+  v.clearRect(0,0,px,px);
+  v.drawImage(small, 0, 0, px, px);
+  return true;
+}
+/* MP okładka: odmaluj pudełka `.mp-cover[data-art]` (telefon i TV) — to, co przyszło od serwera (game.coverArt
+ * w rozdzielczości etapu, data-blocks). Bez własnych timerów odsłony: etap zmienia tylko nowy stan. Obrazy w małym
+ * cache (ten sam URL = bez ponownego pobrania; po przebudowie DOM rysuje od razu). Pełny etap (blocks 0) = zwykły <img>. */
+const mpImgs=new Map();
+function mpImg(url){
+  let im=mpImgs.get(url);
+  if(!im){
+    im=document.createElement('img'); im.decoding='async';
+    try{ im.referrerPolicy='no-referrer'; }catch(_e){}
+    im.src=url; mpImgs.set(url, im);
+    while(mpImgs.size>8) mpImgs.delete(mpImgs.keys().next().value);
+  }
+  return im;
+}
+export function coverPaintBoxes(root=document){
+  if(!root || !root.querySelectorAll) return;
+  root.querySelectorAll('.mp-cover[data-art]').forEach(box=>{
+    const url=box.dataset.art||'', blocks=Math.floor(Number(box.dataset.blocks))||0;
+    const key=url+'|'+blocks;
+    if(box.dataset.painted===key) return;
+    const cv=box.querySelector('canvas'), full=box.querySelector('img');
+    if(!url){ box.classList.add('broken'); box.dataset.painted=key; return; }   // brak obrazu → placeholder (CSS)
+    if(!blocks){ if(cv) cv.hidden=true; if(full){ full.hidden=false; if(full.getAttribute('src')!==url) full.src=url; } box.dataset.painted=key; return; }
+    if(full) full.hidden=true; if(cv) cv.hidden=false;
+    const im=mpImg(url);
+    const draw=()=>{ if(box.dataset.art!==url || !box.isConnected) return; if(coverDrawPixels(cv, im, blocks)){ box.dataset.painted=key; box.classList.remove('broken'); } };
+    if(im.complete && im.naturalWidth) draw();
+    else { im.addEventListener('load', draw, { once:true }); im.addEventListener('error', ()=>{ if(box.dataset.art===url) box.classList.add('broken'); }, { once:true }); }
+  });
 }
 function arm(){
   clearTimeout(timer); timer=null;
@@ -59,7 +97,7 @@ function arm(){
 export function coverShow(cur, { onStage }={}){
   token++; clearTimeout(timer); timer=null;
   stage=Math.max(0, Math.floor(Number(cur && cur.coverStage)) || 0);
-  onStageCb=onStage || null;
+  onStageCb=onStage || null; fullShown=false;
   const box=$('coverBox'), full=$('coverImg');
   if(!box || !full) return;
   box.hidden=false; box.classList.remove('broken');
@@ -78,16 +116,16 @@ export function coverStage(n){
   stage=Math.max(0, Math.floor(Number(n)) || 0);
   draw(); arm();
 }
-// zatrzymaj auto-odsłonę; full → pokaż pełną okładkę (odsłona po „Sprawdź")
+// zatrzymaj auto-odsłonę; full → pokaż pełną okładkę (odsłona po „Sprawdź"/pominięciu)
 export function coverStop(full){
   token++; clearTimeout(timer); timer=null; onStageCb=null;
-  if(full){ stage=COVER_STAGES.length-1; draw(); }
+  if(full){ fullShown=true; draw(); }
 }
 // schowaj pudełko okładki (nowe pytanie / koniec meczu)
 export function coverHide(){
   coverStop(false);
   const box=$('coverBox'); if(box){ box.hidden=true; box.classList.remove('broken'); }
-  img=null;
+  img=null; fullShown=false;
 }
 // do testów (siatka jsdom)
-export const _coverDebug = () => ({ stage, timer: !!timer, img });
+export const _coverDebug = () => ({ stage, timer: !!timer, img, fullShown });

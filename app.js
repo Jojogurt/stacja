@@ -10,7 +10,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v69';   // MP: ekran TV jako scena (QR, dwie kolumny, sterowanie klawiaturą) + P2 dopracowanie wizualne
+const APP_VERSION = 'v70';   // Uszy & Mózg; MP: okładka, intro, składanka, fortepian/gitara, oś czasu (serwer-autorytet); iTunes+Deezer; tekst do lektora; Gotowy ✓
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).

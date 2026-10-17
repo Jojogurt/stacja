@@ -7,6 +7,7 @@
  * „Co znasz" (trafienia z gry) liczone OSOBNO i pokazywane obok — nie miesza się z „co lubisz".
  * Archetyp: pierwsza pasująca reguła z listy ARCHETYPES (deterministycznie, kolejność = priorytet). */
 import { norm } from './scoring.js';
+import { APP_NAME } from './util.js';
 import { activeRatings, decadeOf } from './taste.js';
 import { parseRange } from './trackSelect.js';
 
@@ -238,7 +239,7 @@ export function buildTasteProfile(src, { cats={}, byCat=null }={}){
 }
 
 /* ---------- tekst do udostępnienia (bez danych osobowych; ksywa tylko na życzenie) ---------- */
-export const APP_NAME = 'Uszy & Muzk';
+export { APP_NAME } from './util.js';   // re-eksport (dawni importerzy)
 export function topList(v, n=3, label=DECADE_LONG){ return v.filter(x=>x.share>0).sort((a,b)=>b.share-a.share).slice(0, n).map(x=>`${label[x.key]} ${x.pct}%`); }
 export function shareText(p, { handle='', url='' }={}){
   const a=p.archetype, lines=[];

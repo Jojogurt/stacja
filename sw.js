@@ -8,12 +8,12 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v69';
+const CACHE = 'stacja-v70';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
-  './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
-  './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
+  './core/util.js', './core/lyricCheck.js', './core/scoring.js', './core/match.js', './core/phases.js',
+  './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js', './core/sources.js',
   './core/timing.js', './core/timeline.js', './core/picker.js', './core/matchSetup.js', './core/guitarCovers.js', './core/chatFeed.js', './core/teams.js', './core/handles.js', './core/daily.js', './core/lektorVoice.js', './core/qr.js', './core/tvStage.js',
   './app/dom.js', './app/lektor.js', './app/audioCtx.js', './app/audio.js',
   './app/catalog.js', './app/solo.js', './app/social.js', './app/catEditor.js',
@@ -27,7 +27,7 @@ const SHELL = [
   './core/mpView.js', './app/mpResultCard.js',          // MP P2: copy/wynik meczu/dźwięki faz, karta PNG wyniku
   './core/tasteCompare.js',                              // „Twój gust" etap 3: porównanie, półki do gry
   './click.wav', './clapping.wav',
-  './adapters-web/webAudio.js', './adapters-web/itunesRepository.js',
+  './adapters-web/webAudio.js', './adapters-web/itunesRepository.js', './adapters-web/translator.js',
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',
   './manifest.webmanifest',
   './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',

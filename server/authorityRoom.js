@@ -17,7 +17,11 @@
  *   DO → klient:  {t:'state', game, serverNow}  (BEZ sekretu — pełny utwór tylko w game.reveal przy REVEAL;
  *                 P1-2: serverNow = zegar serwera do korekty skew klienta; game.listenEndsAt/endsAt w czasie serwera;
  *                 P1-3: game.allDoneAt = termin auto-zamknięcia, gdy wszyscy obecni dali typ/pas;
- *                 P0-1: game.tvId = TV salonu (osobna rola, nie aktualny host); P1-11: game.names = {id: ksywa})
+ *                 P0-1: game.tvId = TV salonu (osobna rola, nie aktualny host); P1-11: game.names = {id: ksywa};
+ *                 MP okładka/intro: game.stage/stageAt/stageNextAt/stageStarts = etap odsłony z timera DO; okładka:
+ *                 game.coverStage + game.coverArt = URL obrazu W ROZDZIELCZOŚCI ETAPU (pełny wyłącznie w REVEAL);
+ *                 intro: game.stageSecs = długość odsłuchu etapu)
+ *   klient → DO:  {t:'more', playNonce, stage} — „+ więcej"/„wyraźniej": dowolny gracz, następny etap wcześniej (rate-limit)
  *                 {t:'presence', members, hostId, modes}  (F8a: `modes` = tryby, które ten serwer zna —
  *                 capability dla pickera MP; stary serwer bez pola → klient ukrywa nowe tryby)
  *                 + `caps:['tableTaste']` i `shelves:[{id,n}]` (gust etap 3: kto z OBECNYCH dosłał półkę i ile utworów)
@@ -32,19 +36,22 @@
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
-import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf, tvIdOf, allSettled } from '../core/mpReducer.js';
+import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf, tvIdOf, allSettled, teamTimeline } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, joinTeam } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
-import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES } from '../core/match.js';
+import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES, ALL_MODES } from '../core/match.js';
 import { isSlotKey, clipText } from '../core/util.js';
 import { REACTIONS } from '../core/chatFeed.js';
 import { sanitizeDraft, DRAFT_PAYLOAD_MAX } from '../core/matchSetup.js';   // szkic meczu dla gości (lobby)
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm, quizKey, shuffleMC, parseYear, clampQuizTrack, quizListen } from '../core/scoring.js';
-import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
+import { buildTrackMC, yearReliable, displayTitle, MEDLEY_MIN } from '../core/trackSelect.js';
+import { pickTimelineTrack } from '../core/timeline.js';   // MP oś czasu: kotwica + karta pytania (wiarygodny rok)
 import { lektorLang, catLektorLang } from '../core/lektorVoice.js';   // język lektora (pl|en) z puli
-import { mpSnipOffset, MP_ARM_TIMEOUT_MS, MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, listenSecs, phaseDeadlines } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING; P1-2/P1-3
-import { resolveTrackServer, resolveDistractorsServer } from './lib/resolve.js';
+import { mpSnipOffset, MP_ARM_TIMEOUT_MS, MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, listenSecs, phaseDeadlines,
+  COVER_STEP_MS, coverStageOffsets, coverRevealMs, coverStageUrl, coverFullUrl, coverStageable, stageStartsFrom, stageIndexAt, stageShift,
+  INTRO_GAP_MS, introStageOffsets, introRevealMs, introStageSecs, medleyClipStart } from '../core/timing.js';   // MP okładka/intro: etapy odsłony z timera DO   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING; P1-2/P1-3
+import { resolveTrackServer, resolveDistractorsServer, resolveCoverServer, resolveMedleyServer, resolveInstrumentalServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 import { sanitizeTableShelf, buildTablePool, tablePoolCategory, TABLE_KEY, TABLE_MIN_SONGS } from '../core/tasteCompare.js';
 
@@ -76,9 +83,11 @@ const RATE = {
   start:  { rate:0.2, burst:3 },   // start (host) — buildMatch + pełny broadcast; lock/next/retry są
                                    // strzeżone fazą (no-op poza PLAY/REVEAL/NETERR) → bez limitu
   draft:  { rate:2,   burst:6 },   // szkic meczu (host w pickerze; klient i tak debounce'uje)
+  more:   { rate:0.5, burst:2 },   // MP okładka/intro: „+ więcej"/„wyraźniej" (dowolny gracz) — przesuwa harmonogram etapów
 };
 const SLOT_LABEL_MAX = 40;
-export const CAPS = ['tableTaste'];   // gust etap 3: capability w presence (stary serwer bez pola → klient chowa „Gust stołu")
+export const CAPS = ['tableTaste', 'lobbyReady'];   // gust etap 3: capability w presence (stary serwer bez pola → klient chowa „Gust stołu"); + „Gotowy ✓" w lobby
+export const HOST_GRACE_MS = 10000;   // karencja nieobecnego hosta (przeładowanie TV/karty) — dopiero po niej awans gracza
 const SHELVES_MAX = 32;               // max półek w pamięci pokoju (anty-flood: tyle co rozsądny pokój)
 const CAT_TEXT_MAX = 80;             // label/range/kind kategorii
 const SONG_TEXT_MAX = 200;           // title/artist/album/year utworu
@@ -131,9 +140,11 @@ function clampPools(pools){
     const c=pools[k]; if(!c || typeof c!=='object') continue;
     // F1: wszystko z hosta jako TEKST z capem (catLabel/utwór lecą do stanu u wszystkich)
     const o={ label:clipText(c.label, CAT_TEXT_MAX), range:clipText(c.range, CAT_TEXT_MAX), kind:clipText(c.kind, 16) };
+    if(c.desc) o.desc=clipText(c.desc, CAT_TEXT_MAX);   // MP covery: polishDominant patrzy w etykietę + opis
     if(c.lang!=null) o.lang=lektorLang(c.lang);   // język opisów lektora: tylko 'pl' | 'en'
     { const ls=Math.floor(Number(c.listenSecs)); if(ls>=5 && ls<=60) o.listenSecs=ls; }   // P1-2: własne okno „słuchaj" kategorii
     if(Array.isArray(c.artists)) o.artists=c.artists.slice(0, POOL_MAX_SONGS).map(a=>clipText(a, SONG_TEXT_MAX)).filter(Boolean);
+    if(Array.isArray(c.noModes)) o.noModes=c.noModes.filter(m=>ALL_MODES.includes(m));   // tryby wyłączone w kategorii (np. okładka w „unplugged")
     if(Array.isArray(c.songs)) o.songs=c.songs.slice(0, POOL_MAX_SONGS).filter(s=>s && typeof s==='object').map(s=>{
       const r={ title:clipText(s.title, SONG_TEXT_MAX), artist:clipText(s.artist, SONG_TEXT_MAX) };
       if(okPreview(s.preview)) r.preview=s.preview;
@@ -159,7 +170,11 @@ export class GameAuthority extends Server {
   ready = new Set();      // id graczy zgłaszających gotowość w bieżącym armNonce
   hostSeen = new Set();   // anty-powtórki tytułów
   recent = [];            // anty-powtórki artystów
+  tlYears = [];           // MP oś czasu: lata ostatnich kart (anty-seria tego samego roku) — nie w stanie (sekret pytania)
   shelves = new Map();    // gust etap 3: id gracza → półka [{title,artist,year}] (≤ 20) — „Gust stołu"
+  lobbyReady = new Set(); // „Gotowy ✓" w lobby/przy rewanżu (ulotne; reset przy starcie meczu i wyjściu gracza)
+  hostGraceMs = HOST_GRACE_MS;   // testy podmieniają (0 = awans od razu, dawne zachowanie)
+  hostAwayUntil = 0; _hostGrace = null;
   _autoLock = null;       // serwerowy timer auto-locka (koniec czasu pytania)
   _allDone = null;        // P1-3: timer karencji „wszyscy gotowi" → lock
   allDoneGraceMs = MP_ALL_DONE_GRACE_MS;   // P1-3: karencja (testy podmieniają)
@@ -171,13 +186,20 @@ export class GameAuthority extends Server {
   // W ARMING rozsyłamy tylko to, co trzeba buforować (URL zajawki — bez niego nie ma równego startu).
   armHidden = null;
   // F8a: sieć rozwiązywania utworu/dystraktorów — pole instancji (testy podmieniają bez fetch)
-  resolver = { track: resolveTrackServer, distractors: resolveDistractorsServer };
+  resolver = { track: resolveTrackServer, distractors: resolveDistractorsServer, cover: resolveCoverServer, medley: resolveMedleyServer, instrumental: resolveInstrumentalServer };
+  // MP okładka/intro: krok etapu, przerwa na typ (intro), ms na „sekundę" etapu intro i LEAD — pola instancji, testy
+  // skracają; harmonogram trafia do stanu jako rzeczywiste starty (game.stageStarts)
+  coverStepMs = COVER_STEP_MS;
+  introGapMs = INTRO_GAP_MS;
+  introUnitMs = 1000;
+  stageLeadMs = MP_INTRO_MS;
+  _stageTimer = null;
 
   constructor(ctx, env){
     super(ctx, env);
     // wczytaj stan z trwałego magazynu (po eviccie/restarcie DO) zanim obsłużymy żądania
     ctx.blockConcurrencyWhile(async () => {
-      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden','shelves']);
+      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden','shelves','tlYears']);
       this.game = s.get('game') || null;
       this.current = s.get('current') || null;
       this.pools = s.get('pools') || null;
@@ -185,6 +207,7 @@ export class GameAuthority extends Server {
       this.starterId = s.get('starterId') || null;
       this.hostSeen = new Set(s.get('hostSeen') || []);
       this.recent = s.get('recent') || [];
+      this.tlYears = s.get('tlYears') || [];
       this.ready = new Set(s.get('ready') || []);
       this.armDeadline = s.get('armDeadline') || null;
       this.armHidden = s.get('armHidden') || null;
@@ -201,6 +224,10 @@ export class GameAuthority extends Server {
       if(this.game && this.game.phase===MP.ARMING && this.armDeadline){
         this.scheduleArmTimer(Math.max(0, this.armDeadline - Date.now()));
       }
+      // MP okładka: wznów podbijanie etapów odsłony (termin następnego etapu w stanie)
+      if(this.game && this.game.phase===MP.PLAY && this.game.stageNextAt){
+        this.scheduleStageTimer(Math.max(0, this.game.stageNextAt - Date.now()));
+      }
     });
   }
 
@@ -208,7 +235,7 @@ export class GameAuthority extends Server {
     await this.ctx.storage.put({
       game:this.game, current:this.current, pools:this.pools,
       hostId:this.hostId, starterId:this.starterId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
-      armDeadline:this.armDeadline, armHidden:this.armHidden, shelves:[...this.shelves],
+      armDeadline:this.armDeadline, armHidden:this.armHidden, shelves:[...this.shelves], tlYears:this.tlYears,
     });
   }
 
@@ -227,12 +254,16 @@ export class GameAuthority extends Server {
     // F2b #3: host NIEOBECNY (wyszedł, gdy nie było kogo awansować) → pierwszy łączący przejmuje
     // (jak dawniej przy hostId=null). Sam host po powrocie ma hostId===id → nic się nie zmienia.
     const hostHere = !!this.hostId && this.idPresent(this.hostId, conn);
-    if(!this.hostId || (!hostHere && this.hostId!==id)){                      // pierwszy obecny = host (przenoszalny)
+    // karencja: nieobecny host (np. przeładowanie TV) wraca — nikt w tym czasie nie przejmuje roli
+    if(id===this.hostId) this.clearHostGrace();
+    const inGrace = this.hostAwayUntil > Date.now();
+    if(!this.hostId || (!hostHere && this.hostId!==id && !inGrace)){          // pierwszy obecny = host (przenoszalny)
       this.hostId=id; if(this.game) this.game.hostId=id; await this.persist();
     }
     // STABILNOŚĆ HOSTA: starter meczu wraca po reconnect → odzyskuje hosta (a nie zostaje przy
     // tym, kto został awansowany promote'em w jego nieobecności). Działa w trakcie aktywnego meczu.
-    if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && this.game.phase!==MP.DONE){
+    // + SALON: TV (starter) odzyskuje hosta także po meczu (DONE → rewanż ustawia TV, nie awansowany gracz)
+    if(this.starterId && id===this.starterId && this.hostId!==id && this.game && this.game.phase!=null && (this.game.phase!==MP.DONE || this.game.salon)){
       this.hostId=id; this.game.hostId=id; await this.persist();
     }
     // F2b #7: powrót (albo wejście) w trakcie pytania → dołącz do drużyny OD RAZU (dawniej skład liczony tylko
@@ -252,15 +283,12 @@ export class GameAuthority extends Server {
     // F2b #3: promote TYLKO gdy host nie ma już ŻADNEGO innego połączenia (druga karta / nowy socket
     // po reconnect, a stary half-open zamknięty później) — dawniej awansował innego mimo obecnego hosta.
     if(left && left===this.hostId && !this.idPresent(left, conn)){     // promote: awansuj najstarszego obecnego
-      const others=[...this.getConnections()].filter(c=>c!==conn).map(c=>c.state).filter(s=>s&&s.id&&s.id!==left);
-      // nikogo do awansu → hostId ZOSTAJE (pokój czeka na powrót hosta; inny łączący przejmie w onConnect).
-      // Dawniej null → klient hosta po powrocie nie dostawał roli, a serwer odrzucał lock/next → zamrożenie.
-      if(others.length){
-        this.hostId = others[0].id;
-        if(this.game) this.game.hostId=this.hostId;
-        await this.persist();
-      }
+      // TV/host przeładowuje stronę → najpierw KARENCJA (hostGraceMs): wraca w niej → zostaje hostem (i TV), gracz nie
+      // przejmuje ekranu. Awans dopiero po karencji (scheduleHostGrace). hostGraceMs 0 → awans od razu (dawniej).
+      if(this.hostGraceMs>0){ this.hostAwayUntil=Date.now()+this.hostGraceMs; this.scheduleHostGrace(left); }
+      else await this.promoteFrom(left, conn);
     }
+    if(left && !this.idPresent(left, conn)) this.lobbyReady.delete(left);   // „Gotowy ✓" znika z wyjściem gracza
     this.pushPresence();
     await this.maybeGoArming();   // ktoś wyszedł w ARMING → jeśli reszta gotowa, startuj (nie blokuj na nieobecnym)
     await this.checkAllDone(conn); // P1-3: wyszedł ostatni niegotowy → reszta ma typy → zamknij po karencji
@@ -269,6 +297,25 @@ export class GameAuthority extends Server {
       try{ await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS); }catch(_e){}
     }
   }
+  // awans najstarszego obecnego (poza `left`); nikogo → hostId ZOSTAJE (pokój czeka na powrót; inny łączący przejmie
+  // w onConnect). Dawniej null → klient hosta po powrocie nie dostawał roli, a serwer odrzucał lock/next → zamrożenie.
+  async promoteFrom(left, except){
+    const others=[...this.getConnections()].filter(c=>c!==except).map(c=>c.state).filter(s=>s&&s.id&&s.id!==left);
+    if(!others.length) return false;
+    this.hostId = others[0].id;
+    if(this.game) this.game.hostId=this.hostId;
+    await this.persist();
+    return true;
+  }
+  scheduleHostGrace(left){
+    this.clearHostGrace(true);
+    this._hostGrace=setTimeout(async ()=>{
+      this._hostGrace=null; this.hostAwayUntil=0;
+      if(this.hostId!==left || this.idPresent(left)) return;   // wrócił / już ktoś inny
+      if(await this.promoteFrom(left)){ this.pushPresence(); this.broadcastState(); }
+    }, this.hostGraceMs);
+  }
+  clearHostGrace(keepDeadline=false){ if(this._hostGrace){ clearTimeout(this._hostGrace); this._hostGrace=null; } if(!keepDeadline) this.hostAwayUntil=0; }
   onError(){ this.pushPresence(); }
   // czy id ma jeszcze jakieś połączenie poza `except` (wiele kart / reconnect przed zamknięciem starego)
   idPresent(id, except){
@@ -291,8 +338,8 @@ export class GameAuthority extends Server {
     if([...this.getConnections()].length > 0) return;          // ktoś wrócił — nie kasuj
     await this.ctx.storage.deleteAll();                        // kasuje też alarm
     this.game=null; this.current=null; this.pools=null; this.hostId=null; this.starterId=null;
-    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null; this.draft=null; this.shelves=new Map();
-    this.clearAutoLock(); this.clearArmTimer(); this.clearAllDone();
+    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.tlYears=[]; this.armDeadline=null; this.armHidden=null; this.draft=null; this.shelves=new Map();
+    this.clearAutoLock(); this.clearArmTimer(); this.clearAllDone(); this.clearStageTimer(); this.clearHostGrace(); this.lobbyReady=new Set();
   }
 
   async onMessage(conn, raw){
@@ -302,18 +349,20 @@ export class GameAuthority extends Server {
     if(!me) return;                                   // połączenie bez tożsamości (odrzucone w onConnect)
     // F1 (#14): token bucket per połączenie — flood dowolnym typem nie wzmacnia broadcastów/persist
     const kind = msg.t==='event' ? (msg.event==='draft' ? 'draft' : 'event') : msg.t==='action' ? 'action'
-      : (msg.t==='hello' || msg.t==='track' || msg.t==='shelf') ? 'meta' : msg.t==='start' ? 'start' : null;
+      : (msg.t==='hello' || msg.t==='track' || msg.t==='shelf' || msg.t==='lobbyReady') ? 'meta' : msg.t==='start' ? 'start' : msg.t==='more' ? 'more' : null;
     if(kind && !this.allowRate(conn, kind)) return;
 
     switch(msg.t){
       case 'hello':
+        // pokój mieszany: nowy klient ogłasza, że wysyła `advanced` poza salonem („Czekamy na" po „dalej") — stary nie
+        if(Array.isArray(msg.caps) && msg.caps.includes('adv') && conn.state && !conn.state.adv) conn.setState({ ...conn.state, adv:true });
         conn.send(this.stateMsg(me));   // 3.1: okrojony widok
         if(this.draft && this.idle() && me!==this.hostId) conn.send(JSON.stringify({ t:'event', event:'draft', payload:{ ...this.draft, from:this.hostId, by:this.hostId }, from:this.hostId }));
         this.pushPresence();
         return;
 
       case 'track':                                   // aktualizacja nicka obecności (jak relay)
-        conn.setState({ id:(conn.state&&conn.state.id)||null, name:clipText(msg.name, NAME_MAX)||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
+        conn.setState({ ...(conn.state||{}), id:(conn.state&&conn.state.id)||null, name:clipText(msg.name, NAME_MAX)||(conn.state&&conn.state.name)||'', verified:conn.state&&conn.state.verified });
         this.pushPresence();
         // Solo: drużyna = gracz. Gość dołączający w trakcie dostaje drużynę w onConnect, ZANIM klient przyśle ksywę
         // (track po otwarciu socketu) → nazwa „gracz" w rankingu. Ksywa z track nadpisuje nazwę jego 1-os. drużyny.
@@ -322,6 +371,12 @@ export class GameAuthority extends Server {
           const t=(this.game.teams||[]).find(x=>x.id===me && (x.members||[]).length===1 && x.members[0]===me);
           if(t && t.name!==conn.state.name){ t.name=conn.state.name; this.broadcastState(); await this.persist(); }
         }
+        return;
+
+      case 'lobbyReady':                              // „Gotowy ✓" (toggle) — tylko w lobby / po meczu; NIE blokuje startu
+        if(!this.idle()) return;
+        if(msg.on===true) this.lobbyReady.add(me); else this.lobbyReady.delete(me);
+        this.pushPresence();
         return;
 
       case 'shelf': {                                 // gust etap 3: półka gracza do „Gust stołu" (tylko własna — id z tokenu)
@@ -366,7 +421,7 @@ export class GameAuthority extends Server {
         const cfg=(msg.config && typeof msg.config==='object') ? msg.config : {};
         // P0-9: salon bez ani jednego gracza (TV samo w pokoju) — nikt by nie grał → odrzuć; host dostaje stan (koniec „ładowania")
         if(cfg.salon===true && !this.members().some(m=>m.id!==me)){ conn.send(this.stateMsg(me)); return; }
-        this.starterId=me; this.draft=null; this.pushPresence();
+        this.starterId=me; this.draft=null; this.lobbyReady=new Set(); this.pushPresence();   // start → „Gotowy ✓" od zera (rewanż)
         await this.startMatch(cfg);
         return;
       }
@@ -377,6 +432,7 @@ export class GameAuthority extends Server {
         const a = { ...msg.action };
         a.by = me;                                    // WYMUSZONE z tożsamości połączenia (anty-spoof)
         a.byName = (conn.state && conn.state.name) || clipText(a.byName, NAME_MAX);
+        a.at = Date.now();                            // MP okładka: czas zgłoszenia WYMUSZONY z zegara serwera (etap/mnożnik)
         if(a.type==='ready'){ await this.onReady(me, a.armNonce); return; }
         if(reduceAction(this.game, a)){ this.broadcastState(); await this.persist(); await this.checkAllDone(); }
         return;
@@ -392,6 +448,10 @@ export class GameAuthority extends Server {
 
       case 'retry':                                   // tylko host, tylko w NETERR/NOLYRIC (1.3)
         if(me && me===this.hostId) await this.retry();
+        return;
+
+      case 'more':                                    // MP okładka/intro: następny etap wcześniej — dowolny gracz (nonce + etap)
+        await this.moreStage(msg.playNonce, msg.stage);
         return;
 
       case 'go':                                      // F2b #6: host „pomiń czekających" — tylko w ARMING (go() strzeże fazy)
@@ -440,8 +500,15 @@ export class GameAuthority extends Server {
   }
   // P1-2: ramka stanu z zegarem serwera (klient liczy offset — anty-skew)
   stateMsg(id){ return JSON.stringify({ t:'state', game:this.viewFor(id), serverNow:Date.now() }); }
-  pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId, modes:MP_MODES,
-    caps:CAPS, shelves:this.shelfInfo() })); }
+  pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.presenceMembers(), hostId:this.hostId, modes:MP_MODES,
+    caps:CAPS, shelves:this.shelfInfo(), ready:this.readyInfo() })); }
+  // presence: + `adv` (klient ogłosił, że wysyła „dalej" — pokój mieszany ze starym klientem)
+  presenceMembers(){
+    const adv=new Set([...this.getConnections()].filter(c=>c.state && c.state.adv).map(c=>c.state.id));
+    return this.members().map(m=>adv.has(m.id) ? { ...m, adv:true } : m);
+  }
+  // „Gotowy ✓": tylko obecni (kolejność pokoju)
+  readyInfo(){ return this.members().map(m=>m.id).filter(id=>this.lobbyReady.has(id)); }
   // gust etap 3: półki OBECNYCH (kolejność = kolejność w pokoju) — licznik dla hosta i źródło puli „Gust stołu"
   presentShelves(){ return this.members().filter(m=>this.shelves.has(m.id)).map(m=>({ id:m.id, name:m.name||'gracz', items:this.shelves.get(m.id) })); }
   shelfInfo(){ return this.presentShelves().map(s=>({ id:s.id, n:s.items.length })); }
@@ -491,7 +558,7 @@ export class GameAuthority extends Server {
     const catKeys = Object.keys(pools);
     const r = buildMatch(catKeys, modes, { questions }, pools);
     if(r.error || !r.slots) return;                 // klient waliduje przed wysłaniem — zignoruj zły config
-    this.pools = pools; this.hostSeen = new Set(); this.recent = [];
+    this.pools = pools; this.hostSeen = new Set(); this.recent = []; this.tlYears = [];
     const s0=r.slots[0];
     // DRUŻYNY wg formatu (coop=1, solo=N×1, teams=podział hosta z `assignments`). Stan odpowiedzi per-drużyna.
     const teams = buildTeams(format, this.playersOf(salon), assignments);
@@ -526,6 +593,8 @@ export class GameAuthority extends Server {
     this.game.phase=MP.LOADING; this.game.byTeam=emptyByTeam(this.game.teams);   // czyste buckety; scores kumulują się
     this.game.reveal=null; this.game.endsAt=null; this.game.playAt=null; this.current=null;
     this.game.listenEndsAt=null; this.game.allDoneAt=null; this.clearAllDone();
+    this.clearStageTimer(); this.clearStage();
+    this.game.medley=null;   // MP składanka: zajawki wycinków tylko w jej rundzie
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
     const hidden={ prompt:'', lyric:'', ttsUrl:'', lyricLang:'', snipStart:0 };   // F2b #11: odsłaniane w go()
@@ -533,7 +602,65 @@ export class GameAuthority extends Server {
     this.armHidden=null; this.armDeadline=null; this.clearArmTimer();
     if(!cat){ this.game.phase=MP.NETERR; this.game.netReason='nocat'; this.broadcastState(); await this.persist(); return; }
 
-    if(this.game.mode==='quiz'){
+    // MP okładka: album wybiera SERWER (pula wykonawców kategorii); sekret (wykonawca/album/rok/pełna okładka) w this.current.
+    // Brak albumu albo okładka spoza znanych CDN (nie da się wysłać obrazu w rozdzielczości etapu) → pytanie jak „muzyka".
+    let coverQ=null;
+    if(this.game.mode==='cover'){
+      let c=null; try{ c=await this.resolver.cover({ cat, seen:this.hostSeen, recent:this.recent }); }catch(_e){ c=null; }
+      if(c && !c.error && c.artist && c.album && coverStageable(c.art)) coverQ=c;
+      else { this.game.mode='music'; this.game.answerSlots=null; }
+    }
+    // MP składanka: 4 (min. 3) utwory wykonawcy z puli — SERWER wybiera utwory i starty wycinków (równo u wszystkich);
+    // w stanie tylko zajawki do buforowania (game.medley), wykonawca/tytuły = SEKRET do REVEAL. Brak → „muzyka".
+    let medleyQ=null;
+    if(this.game.mode==='medley'){
+      let m=null; try{ m=await this.resolver.medley({ cat, seen:this.hostSeen, recent:this.recent }); }catch(_e){ m=null; }
+      const clips=(m && !m.error && Array.isArray(m.clips)) ? m.clips.filter(c=>c && okPreview(c.preview)) : [];
+      if(clips.length>=MEDLEY_MIN && m.artist) medleyQ={ ...m, clips };
+      else { this.game.mode='music'; this.game.answerSlots=null; }
+    }
+    // MP fortepian/gitara: oryginał + cover instrumentalny (zapytania po utworze → Deezer /search?q=); brak → „muzyka"
+    let instQ=null;
+    if(this.game.mode==='piano' || this.game.mode==='guitar'){
+      let r=null; try{ r=await this.resolver.instrumental({ instrument:this.game.mode, cat, seen:this.hostSeen, recent:this.recent }); }catch(_e){ r=null; }
+      if(r && !r.error && r.coverArtist && okPreview(r.preview)) instQ=r;
+      else { this.game.mode='music'; this.game.answerSlots=null; }
+    }
+    // MP oś czasu: każda drużyna bez osi dostaje KOTWICĘ (pierwsze pytanie osi albo drużyna dołączająca później), potem
+    // karta pytania o wiarygodnym roku (core/timeline.pickTimelineTrack). Utwór bez wiarygodnego roku → gramy go jak „muzykę".
+    let tlQ=null, tlTrack=null;
+    if(this.game.mode==='timeline'){
+      const resolve=()=>this.resolver.track({ cat, seen:this.hostSeen, recent:this.recent });
+      const years=this.tlYears=(Array.isArray(this.tlYears) ? this.tlYears : []).slice(-6);   // lata kolejnych kart (anty-seria) — POZA stanem (rok pytania = sekret)
+      this.game.timeline=this.game.timeline||{};
+      for(const t of (this.game.teams||[])){
+        if(teamTimeline(this.game, t.id).length) continue;
+        const a=await pickTimelineTrack({ resolve, cat, recentYears:years });
+        if(a && a.card){ this.game.timeline[t.id]=[{ ...a.card, anchor:true }]; years.push(a.card.year); }
+      }
+      const q=await pickTimelineTrack({ resolve, cat, recentYears:years });
+      if(q && q.card){ tlQ=q; years.push(q.card.year); }
+      else if(q && q.track){ tlTrack=q.track; this.game.mode='music'; this.game.answerSlots=null; }
+      else { this.game.phase=MP.NETERR; this.game.netReason=(q && q.reason) || 'empty'; this.broadcastState(); await this.persist(); return; }
+    }
+    if(medleyQ){
+      const clips=medleyQ.clips;
+      this.current={ track:clips.map(c=>displayTitle(c.track)).join(' · '), artist:medleyQ.artist, artistAlt:medleyQ.artistAlt||'',
+        clips:clips.map(c=>({ track:c.track, artist:c.artist, year:c.year||'', art:c.art||'' })), year:'', album:'', art:clips[0].art||'', preview:'', lyric:'' };
+      // starty wycinków losuje serwer (okno 8–20 s zajawki) — każdy klient skleja te same 4 × 1,5 s
+      this.game.medley=clips.map(c=>({ preview:c.preview, start:Math.round(medleyClipStart(30)*100)/100 }));
+      this.game.answerSlots=slotsFor('medley'); this.game.preview=clips[0].preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt='';
+    } else if(instQ){
+      this.current={ ...instQ, lyric:'' };   // coverArtist/instrument = SEKRET do REVEAL (reveal.coverArtist)
+      this.game.preview=instQ.preview; this.game.answerSlots=null; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt='';
+    } else if(tlQ){
+      this.current={ ...tlQ.track, lyric:'', tlCard:tlQ.card };   // karta (rok) = SEKRET do REVEAL
+      this.game.preview=tlQ.track.preview; this.game.answerSlots=slotsFor('timeline'); this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt='';
+    } else if(coverQ){
+      this.current={ track:coverQ.album, artist:coverQ.artist, artistAlt:coverQ.artistAlt||'', album:coverQ.album, year:coverQ.year||'',
+        art:coverFullUrl(coverQ.art), preview:'', lyric:'', rep:coverQ.rep||null };   // rep: utwór reprezentatywny (❤️ w odsłonie)
+      this.game.answerSlots=slotsFor('cover'); this.game.preview=''; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt='';
+    } else if(this.game.mode==='quiz'){
       // WIEDZA OGÓLNA: wylosuj pytanie z puli (bez audio). answers = SEKRET (zostaje na serwerze).
       // F3 #5: seen-set tylko w obrębie meczu (hostSeen) — trwały seen-set jest per urządzenie (solo/relay-host)
       const qs=(cat.questions||[]).filter(q=>q && q.prompt && !this.hostSeen.has(quizKey(q)));
@@ -560,7 +687,7 @@ export class GameAuthority extends Server {
       hidden.lyric=x.lyric; hidden.ttsUrl=x.tts||'';   // F2b #11: tekst/TTS lektora dopiero w PLAY
       hidden.lyricLang=catLektorLang(cat);              // język głosu lektora (klient bez pola → 'pl')
     } else {
-      const t=await this.resolver.track({ cat, seen:this.hostSeen, recent:this.recent });
+      const t=tlTrack || await this.resolver.track({ cat, seen:this.hostSeen, recent:this.recent });
       if(t.error){ this.game.phase=MP.NETERR; this.game.netReason=t.reason; this.broadcastState(); await this.persist(); return; }
       this.current={ ...t, lyric:'' };
       this.game.preview=t.preview; this.game.lyric=''; this.game.ttsUrl=''; this.game.prompt=''; this.game.answerSlots=null;
@@ -649,11 +776,74 @@ export class GameAuthority extends Server {
     this.game.playAt=Date.now();                    // F6a: start PLAY → bonus za szybkość liczony do zatwierdzenia
     // P1-2: czas na odpowiedź liczony PO słuchaniu — endsAt = go + LEAD (intro) + okno „słuchaj" + timer
     const cat=this.pools && this.pools[this.game.catKey];
-    const dl=phaseDeadlines({ playAt:this.game.playAt, leadMs:MP_INTRO_MS, listenMs:listenSecs(this.game.mode, cat && cat.listenSecs)*1000, timerS:this.game.timer });
+    // MP etapy odsłony (okładka/intro): okno „patrz/słuchaj" = do ostatniego etapu (bez override'u kategorii) → czas na
+    // odpowiedź liczy się po nim; harmonogram jako RZECZYWISTE starty etapów (game.stageStarts, przesuwane „+ więcej")
+    const offsets=this.stageOffsetsFor(this.game.mode);
+    const listenMs = offsets ? this.stageListenMs(this.game.mode) : listenSecs(this.game.mode, cat && cat.listenSecs)*1000;
+    const dl=phaseDeadlines({ playAt:this.game.playAt, leadMs:MP_INTRO_MS, listenMs, timerS:this.game.timer });
     this.game.listenEndsAt=dl.listenEndsAt; this.game.endsAt=dl.endsAt; this.game.allDoneAt=null;
+    if(offsets){ this.game.stageStarts=stageStartsFrom({ playAt:this.game.playAt, leadMs:this.stageLeadMs, offsets }); this.setStage(0); }
     this.broadcastState(); await this.persist();
     if(this.game.endsAt) this.scheduleAutoLock(Math.max(0, this.game.endsAt-Date.now()));
+    if(this.game.stageNextAt) this.scheduleStageTimer(Math.max(0, this.game.stageNextAt-Date.now()));
   }
+
+  /* ---- MP ETAPY ODSŁONY prowadzone przez serwer (wspólne dla wszystkich): okładka (16 → 32 → 64) i intro (1-2-4-8-16 s) ----
+   * game.stageStarts = rzeczywiste starty etapów (epoch ms serwera; przyszłe planowane). Timer DO podbija game.stage
+   * (core/timing.stageIndexAt) i rozsyła stan z stageAt/stageNextAt. Okładka: w stanie TYLKO obraz w rozdzielczości etapu
+   * (coverStageUrl) — pełny (this.current.art) wyłącznie w REVEAL. Intro: game.stageSecs = długość odsłuchu etapu —
+   * każdy klient gra [0, stageSecs] od stageAt (z offsetem zegara). „+ więcej"/„wyraźniej" ({t:'more'}) — moreStage. */
+  stageOffsetsFor(mode){
+    if(mode==='cover') return coverStageOffsets(this.coverStepMs);
+    if(mode==='intro') return introStageOffsets(this.introGapMs, this.introUnitMs);
+    return null;
+  }
+  stageListenMs(mode){ return mode==='cover' ? coverRevealMs(this.coverStepMs) : introRevealMs(this.introGapMs, this.introUnitMs); }
+  setStage(k){
+    const g=this.game; if(!g) return;
+    const starts=Array.isArray(g.stageStarts) ? g.stageStarts : [], last=Math.max(0, starts.length-1);
+    const st=Math.max(0, Math.min(last, Math.floor(Number(k))||0));
+    g.stage=st;
+    g.stageAt=starts.length ? starts[st] : null;
+    g.stageNextAt=st<last ? starts[st+1] : null;
+    if(g.mode==='cover'){ g.coverStage=st; g.coverArt=coverStageUrl(this.current && this.current.art, st); }
+    if(g.mode==='intro') g.stageSecs=introStageSecs(st);
+  }
+  clearStage(){
+    const g=this.game; if(!g) return;
+    g.stage=null; g.stageAt=null; g.stageNextAt=null; g.stageStarts=null; g.stageSecs=null; g.coverStage=null; g.coverArt='';
+  }
+  async advanceStage(){
+    const g=this.game;
+    if(!g || g.phase!==MP.PLAY || !Array.isArray(g.stageStarts)) return;
+    const k=stageIndexAt(g.stageStarts, Date.now());
+    if(k>(g.stage||0)){ this.setStage(k); this.broadcastState(); await this.persist(); }
+    if(g.stageNextAt) this.scheduleStageTimer(Math.max(0, g.stageNextAt-Date.now()));
+  }
+  /* „+ więcej" (intro) / „wyraźniej" (okładka) — DOWOLNY gracz prosi o następny etap wcześniej. Tylko w PLAY, z nonce
+   * pytania i numerem bieżącego etapu (dwa kliknięcia naraz nie przeskakują dwóch etapów). Następny etap startuje TERAZ,
+   * kolejne przesunięte o tyle samo (core/timing.stageShift); okno odpowiedzi (listenEndsAt/endsAt) też wcześniej. */
+  async moreStage(playNonce, stage){
+    const g=this.game;
+    if(!g || g.phase!==MP.PLAY || !Array.isArray(g.stageStarts)) return;
+    if(playNonce!==g.playNonce || stage!==g.stage) return;
+    const r=stageShift(g.stageStarts, g.stage, Date.now()); if(!r) return;
+    g.stageStarts=r.starts;
+    if(Number.isFinite(g.listenEndsAt)) g.listenEndsAt-=r.shift;
+    if(Number.isFinite(g.endsAt)){ g.endsAt-=r.shift; this.scheduleAutoLock(Math.max(0, g.endsAt-Date.now())); }
+    this.setStage(r.stage);
+    this.broadcastState(); await this.persist();
+    if(g.stageNextAt) this.scheduleStageTimer(Math.max(0, g.stageNextAt-Date.now())); else this.clearStageTimer();
+  }
+  scheduleStageTimer(ms){
+    this.clearStageTimer();
+    const nonce=this.game && this.game.playNonce;
+    this._stageTimer=setTimeout(()=>{
+      this._stageTimer=null;
+      if(this.game && this.game.phase===MP.PLAY && this.game.playNonce===nonce) this.advanceStage().catch(()=>{});
+    }, ms);
+  }
+  clearStageTimer(){ if(this._stageTimer){ clearTimeout(this._stageTimer); this._stageTimer=null; } }
 
   /* ---- P1-3: auto-zamknięcie, gdy WSZYSCY obecni gracze dali typ albo pas (karencja allDoneGraceMs) ----
    * Woła: akcja gracza, wejście/wyjście z pokoju. Ktoś cofnie typ / dojdzie niegotowy → karencja zdjęta. */
@@ -684,12 +874,14 @@ export class GameAuthority extends Server {
   /* ---- zatwierdzenie odpowiedzi (host albo serwerowy timer) ---- */
   async lock(){
     if(!this.game || this.game.phase!==MP.PLAY) return;
-    this.clearAutoLock(); this.clearAllDone();
+    this.clearAutoLock(); this.clearAllDone(); this.clearStageTimer();
     noteAnswerers(this.game);                       // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
     const ev=evaluateAnswer(this.game, this.current, undefined, Date.now());   // ocenia KAŻDĄ drużynę (ev.perTeam); F6a: punkty + szybkość
     applyEvaluation(this.game, ev, (this.game.tally=this.game.tally||{}));   // F6a: punkty/serie/tally/pewniaki/wynik/reveal — wspólne z hostem relay
     this.game.phase=assertMp(this.game.phase, MP.REVEAL, console.warn); this.game.endsAt=null;
     this.game.listenEndsAt=null; this.game.allDoneAt=null;
+    this.game.stageNextAt=null;
+    if(this.game.mode==='cover') this.game.coverArt=(this.current && this.current.art) || '';   // odsłona: PEŁNA okładka (też w reveal.art) — dopiero teraz
     this.broadcastState(); await this.persist();
   }
 

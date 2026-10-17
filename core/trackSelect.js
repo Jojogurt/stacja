@@ -592,6 +592,17 @@ export function albumsFromSongs(results){
   });
   return [...by.values()];
 }
+/* utwór reprezentatywny albumu (❤️ w odsłonie okładki): pierwszy (≈ najpopularniejszy) utwór tego wykonawcy z tym albumem
+ * (albumKey jak pickAlbum) → { title, artist, year, art, genre } albo null */
+export function coverRepTrack(results, key, artist){
+  for(const r of (Array.isArray(results) ? results : [])){
+    if(!r || !r.trackName || !r.collectionName || albumKey(r.collectionName)!==key) continue;
+    if(!sameArtist(r.artistName||'', artist) && !sameArtist(artist, r.artistName||'')) continue;
+    return { title:displayTitle(r.trackName), artist:r.artistName||artist, year:String(r.releaseDate||'').slice(0,4),
+      art:coverArtUrl(r.artworkUrl100||'', 300), genre:String(r.primaryGenreName||'').slice(0,60) };
+  }
+  return null;
+}
 /* Rozwiąż okładkę: kolejni wykonawcy z puli (≤ tries). `itunes(artist, {album:true})` → albumy; pusto/błąd →
  * albumy z wyników utworów (`itunes(artist)` — ten sam cache co muzyka). Brak → {error, reason}.
  * → { artist (z puli), artistAlt, album (tytuł do odsłony/oceny), albumRaw, year, art (600×600), tier } */
@@ -601,11 +612,12 @@ export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random,
   const deadline=Date.now()+capMs;
   let anyResponse=false;
   for(const artist of artistOrder(pool, recent, rnd, tries)){
-    let p=null;
+    let p=null, songs=null;
     for(const opts of [{ album:true }, undefined]){
       const remaining=deadline-Date.now(); if(remaining<=0) break;
       try{
         const res=await withTimeout(Promise.resolve(itunes(artist, opts)), remaining); anyResponse=true;
+        if(!opts) songs=res;
         p=pickAlbum(opts ? res : albumsFromSongs(res), artist, seen, rnd);
       }catch(_e){ /* błąd/timeout — następne źródło */ }
       if(p) break;
@@ -614,8 +626,12 @@ export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random,
     rememberArtist(recent, artist);
     if(seen) seen.add('album:'+p.key);
     const a=p.a;
+    // Gust (❤️ w odsłonie okładki): ocenia się UTWORY (core/taste.trackKey) — „utwór reprezentatywny" = najpopularniejszy
+    // utwór wykonawcy z tego albumu (te same wyniki/cache co „muzyka"); brak → odsłona bez ❤️
+    if(!songs){ const remaining=deadline-Date.now(); if(remaining>0){ try{ songs=await withTimeout(Promise.resolve(itunes(artist)), remaining); }catch(_e){ songs=null; } } }
+    const rep=coverRepTrack(songs, p.key, artist);
     return { artist, artistAlt:a.artistName || artist, album:albumTitle(a.collectionName), albumRaw:a.collectionName,
-      year:String(a.releaseDate||'').slice(0,4), art:coverArtUrl(a.artworkUrl100, 600), tier:p.tier };
+      year:String(a.releaseDate||'').slice(0,4), art:coverArtUrl(a.artworkUrl100, 600), tier:p.tier, ...(rep ? { rep } : {}) };
   }
   return { error:true, reason: anyResponse ? 'empty' : 'offline' };
 }

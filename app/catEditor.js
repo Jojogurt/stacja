@@ -6,13 +6,16 @@ import { searchTracks } from '../adapters-web/itunesRepository.js';
 import { plLoad, plSave, plMerge } from './catalog.js';
 import { norm } from '../core/scoring.js';
 import { escapeHtml } from '../core/util.js';
+import { LYRIC_MAX, clipLyric, lyricLeaks } from '../core/lyricCheck.js';
+import { translatorSupported, translateToPolish } from '../adapters-web/translator.js';
 
 const MIN_TRACKS = 10;     // mniej psuje mecz przy QPC=5 + anty-powtórkach
 const MAX_TRACKS = 100;
 const $ = (id)=>document.getElementById(id);
 
 let onSaved = ()=>{};      // callback do solo.js (odśwież ticki + dodaj do puli)
-let cart = [];             // [{trackId,title,artist,preview,art,year}]
+let cart = [];             // [{trackId,title,artist,preview,art,year,lyric?}] — lyric = przekład dla lektora (bez oryginału)
+let lyricIdx = -1;         // indeks utworu w koszyku, którego tekst edytujemy (-1 = zamknięte)
 let editKey = null;        // gdy edytujemy istniejącą kategorię (pl:xxxx), inaczej null
 let audio = null;          // element odsłuchu (jeden, współdzielony w edytorze)
 let playingUrl = null;
@@ -30,6 +33,7 @@ export function initCatEditor(opts={}){
   $('catCancel').onclick = closeEditor;
   $('catExport').onclick = exportJson;
   $('catImport').onclick = importJson;
+  initLyricEditor();
 }
 
 // otwórz edytor: pusty (nowa) albo z załadowaną kategorią (edycja)
@@ -37,7 +41,7 @@ export function openEditor(key){
   editKey = key || null;
   const pls = plLoad();
   const cat = editKey ? pls[editKey] : null;
-  cart = cat ? (cat.songs||[]).map(s=>({ trackId:s.trackId, title:s.title, artist:s.artist, preview:s.preview, art:s.art, year:s.year })) : [];
+  cart = cat ? (cat.songs||[]).map(s=>({ trackId:s.trackId, title:s.title, artist:s.artist, preview:s.preview, art:s.art, year:s.year, lyric:clipLyric(s.lyric) })) : [];
   $('catName').value = cat ? (cat.label||'') : '';
   $('catSearchIn').value=''; $('catResults').innerHTML=''; setStatus('');
   renderCart();
@@ -45,7 +49,7 @@ export function openEditor(key){
   $('catTitle').textContent = editKey ? 'Edytuj kategorię' : 'Nowa kategoria';
   $('catName').focus();
 }
-function closeEditor(){ stopPreview(); $('catPanel').classList.remove('show'); cart=[]; editKey=null; }
+function closeEditor(){ stopPreview(); closeLyric(); $('catPanel').classList.remove('show'); cart=[]; editKey=null; }
 
 function setStatus(msg, kind){ const s=$('catStatus'); if(!s) return; s.textContent=msg||''; s.className='pl-status'+(kind?' '+kind:''); }
 
@@ -85,7 +89,7 @@ function addToCart(t){
   cart.push({ trackId:t.trackId, title:t.title, artist:t.artist, preview:t.preview, art:t.art, year:t.year });
   renderCart();
 }
-function removeFromCart(i){ cart.splice(i,1); renderCart(); }
+function removeFromCart(i){ if(i===lyricIdx) closeLyric(); else if(i<lyricIdx) lyricIdx--; cart.splice(i,1); renderCart(); }
 
 function renderCart(){
   const el=$('catCart'); if(!el) return;
@@ -93,9 +97,10 @@ function renderCart(){
   $('catCount').textContent = `${cart.length} / min ${MIN_TRACKS}`;
   $('catCount').className = 'ce-count'+(ok?' ok':'');
   $('catSave').disabled = !ok;
-  el.innerHTML = cart.map((c,i)=>`<span class="ce-chip"><b>${escapeHtml(c.title)}</b> <span>· ${escapeHtml(c.artist)}</span><button data-i="${i}" aria-label="Usuń">×</button></span>`).join('')
+  el.innerHTML = cart.map((c,i)=>`<span class="ce-chip"><b>${escapeHtml(c.title)}</b> <span>· ${escapeHtml(c.artist)}</span><button class="ce-ly${c.lyric?' on':''}" data-ly="${i}" title="tekst do lektora" aria-label="Tekst do lektora">${c.lyric?'📝':'+📝'}</button><button data-i="${i}" aria-label="Usuń">×</button></span>`).join('')
     || '<span class="ce-empty">koszyk pusty — wyszukaj i dodaj utwory</span>';
   el.querySelectorAll('button[data-i]').forEach(b=> b.onclick=()=> removeFromCart(+b.dataset.i));
+  el.querySelectorAll('button[data-ly]').forEach(b=> b.onclick=()=> openLyric(+b.dataset.ly));
 }
 
 /* ——— odsłuch (jeden element; toggle; nowy klik zatrzymuje poprzedni) ——— */
@@ -115,7 +120,7 @@ function save(){
   const name=$('catName').value.trim().slice(0,60);
   if(!name){ setStatus('Nadaj nazwę kategorii.', 'err'); $('catName').focus(); return; }
   if(cart.length<MIN_TRACKS){ setStatus(`Dodaj min. ${MIN_TRACKS} utworów.`, 'err'); return; }
-  const songs = cart.map(c=>({ title:String(c.title).slice(0,120), artist:String(c.artist).slice(0,120), preview:c.preview, trackId:c.trackId, art:c.art, year:c.year }));
+  const songs = cart.map(c=>({ title:String(c.title).slice(0,120), artist:String(c.artist).slice(0,120), preview:c.preview, trackId:c.trackId, art:c.art, year:c.year, ...(c.lyric ? { lyric:clipLyric(c.lyric) } : {}) }));
   const pls=plLoad();
   const key = editKey || ('pl:'+Math.random().toString(36).slice(2,8));
   pls[key] = { label:name, songs, kind:'playlist' };
@@ -128,7 +133,7 @@ function save(){
 /* ——— eksport / import JSON (udostępnianie bez backendu) ——— */
 function exportJson(){
   const name=$('catName').value.trim() || 'kategoria';
-  const payload={ name, tracks:cart.map(c=>({ title:c.title, artist:c.artist, trackId:c.trackId, preview:c.preview })) };
+  const payload={ name, tracks:cart.map(c=>({ title:c.title, artist:c.artist, trackId:c.trackId, preview:c.preview, ...(c.lyric ? { lyric:c.lyric } : {}) })) };
   const json=JSON.stringify(payload);
   try{ navigator.clipboard?.writeText(json); setStatus('✓ JSON skopiowany do schowka.', 'ok'); }
   catch(_e){ setStatus(json, ''); }
@@ -141,7 +146,7 @@ function importJson(){
   const seen=new Set(cart.map(dedupKey));
   let added=0;
   for(const t of tracks){
-    const row={ trackId:t.trackId, title:String(t.title||'').slice(0,120), artist:String(t.artist||'').slice(0,120), preview:t.preview, art:t.art, year:t.year };
+    const row={ trackId:t.trackId, title:String(t.title||'').slice(0,120), artist:String(t.artist||'').slice(0,120), preview:t.preview, art:t.art, year:t.year, lyric:clipLyric(t.lyric) };
     if(!row.title || !row.artist) continue;
     const k=dedupKey(row); if(seen.has(k)) continue;
     seen.add(k); cart.push(row); added++;
@@ -150,4 +155,46 @@ function importJson(){
   if(d && d.name && !$('catName').value.trim()) $('catName').value=String(d.name).slice(0,60);
   renderCart();
   setStatus(added? `✓ Zaimportowano ${added} utw. (bez zajawek odśwież wyszukiwarką).` : 'Nic nowego do dodania.', added?'ok':'err');
+}
+
+/* ——— tekst do lektora (przekład; oryginał NIE jest zapisywany) ———
+ * Wszystko lokalnie: tłumaczy wbudowany tłumacz przeglądarki, zapis tylko w localStorage.
+ * Eksport JSON świadomie zawiera przekłady (udostępnianie na własną odpowiedzialność). */
+function initLyricEditor(){
+  const box=$('catLyric'); if(!box) return;
+  const sup=translatorSupported();
+  $('catLyTr').hidden=!sup;
+  $('catLyOrigWrap').hidden=!sup;
+  $('catLyNoTr').hidden=sup;
+  $('catLyTr').onclick=doTranslate;
+  $('catLyOut').addEventListener('input', updateLyricMeta);
+  $('catLyOk').onclick=()=>{ const c=cart[lyricIdx]; if(c){ c.lyric=clipLyric($('catLyOut').value); } closeLyric(); renderCart(); };
+  $('catLyClear').onclick=()=>{ const c=cart[lyricIdx]; if(c) delete c.lyric; closeLyric(); renderCart(); };
+  $('catLyCancel').onclick=closeLyric;
+}
+function openLyric(i){
+  const c=cart[i]; const box=$('catLyric'); if(!c || !box) return;
+  lyricIdx=i;
+  $('catLyFor').textContent=`${c.title} · ${c.artist}`;
+  $('catLyOrig').value=''; $('catLyOut').value=c.lyric||''; $('catLyOut').maxLength=LYRIC_MAX;
+  $('catLyErr').textContent='';
+  updateLyricMeta();
+  box.hidden=false; $('catLyOut').focus();
+}
+function closeLyric(){ lyricIdx=-1; const box=$('catLyric'); if(box){ box.hidden=true; $('catLyOrig').value=''; } }
+function updateLyricMeta(){
+  const c=cart[lyricIdx]; if(!c) return;
+  const v=$('catLyOut').value;
+  $('catLyCount').textContent=`${v.length} / ${LYRIC_MAX}`;
+  const leaks=lyricLeaks(v, c.title, c.artist);
+  $('catLyWarn').textContent = leaks.length
+    ? `Uwaga: przekład zawiera ${leaks.includes('title')&&leaks.includes('artist')?'tytuł i wykonawcę':(leaks.includes('title')?'tytuł':'wykonawcę')} — gracze będą mieli za łatwo.`
+    : '';
+}
+async function doTranslate(){
+  const btn=$('catLyTr'); const src=$('catLyOrig').value;
+  $('catLyErr').textContent=''; btn.disabled=true; btn.textContent='Tłumaczę…';
+  try{ const out=await translateToPolish(src); $('catLyOut').value=clipLyric(out); updateLyricMeta(); }
+  catch(e){ $('catLyErr').textContent=(e&&e.message)||'Tłumaczenie nie powiodło się.'; }
+  finally{ btn.disabled=false; btn.textContent='Przetłumacz na polski'; }
 }

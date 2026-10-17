@@ -286,7 +286,7 @@ async function startArtistQuestion(r, eraKey, gen){
     if(gen!==soloGen) return;
   } else {
     cur={ track:r.album, album:r.album, artist:r.artist, artistAlt:r.artistAlt, year:r.year||'', art:r.art, preview:'',
-      era:eraKey, lyric:'', coverStage:0 };
+      era:eraKey, lyric:'', coverStage:0, rep:r.rep||null };   // rep = utwór reprezentatywny albumu (❤️ w odsłonie)
   }
   busy=false;
   current=cur;
@@ -311,7 +311,7 @@ function syncIntroBtn(){
   const qm=qMode(), live=!!current && !roundDone;
   let nx=null, label='+ więcej';
   if(qm==='revsnip'){ nx=current ? revsnipNextStage(current.revStage||0) : null; label = nx!=null ? '+ dłużej ('+revsnipStageSecs(nx)+' s)' : 'dłużej ✓'; }
-  else if(qm==='cover'){ nx=current ? coverNextStage(current.coverStage||0) : null; label = nx!=null ? 'wyraźniej' : 'pełna okładka'; }
+  else if(qm==='cover'){ nx=current ? coverNextStage(current.coverStage||0) : null; label='wyraźniej'; }   // pełna okładka dopiero w odsłonie (po ostatnim 64×64 przycisk nieaktywny)
   else if(qm==='slowmo'){ nx=current ? tempoNextStage('slowmo', current.tempoStage||0) : null;   // EKSPERYMENT: 0.6× → 0.75×
     label = nx!=null ? 'szybciej ('+fmtRate(tempoRate('slowmo', nx))+')' : 'tempo '+fmtRate(tempoRate('slowmo', current ? current.tempoStage||0 : 0))+' ✓'; }
   else { nx = current && mode==='intro' ? introNextStage(current.introStage) : null; label = nx!=null ? '+ więcej ('+introStageSecs(nx)+' s)' : '+ więcej'; }
@@ -1127,11 +1127,12 @@ function checkArtistQ(){
     r.appendChild(guessLine(okAlbum, 'Album', current.album, gal, okAlbum && norm(gal)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
     if(current.year) r.appendChild(noteLine('rok', String(current.year)));
     const bl=coverStageBlocks(stage);
-    r.appendChild(noteLine('okładka', (bl ? `odpowiedź przy ${bl}×${bl} pikselach` : 'odpowiedź przy pełnej okładce')+` · mnożnik ×${String(sc.mult).replace('.',',')}`));
+    r.appendChild(noteLine('okładka', `odpowiedź przy ${bl}×${bl} pikselach · mnożnik ×${String(sc.mult).replace('.',',')}`));
+    if(current.rep) revealTaste(r, [current.rep]);   // „Twój gust": ❤️ na utwór reprezentatywny albumu (ocenia się utwory)
   } else {
     const played=(current.playedClips || current.clips.filter(c=>c.ok)).length ? (current.playedClips || current.clips.filter(c=>c.ok)) : current.clips;
     r.appendChild(noteLine('zagrały', played.map((c,i)=>(i+1)+'. '+displayTitle(c.track)).join(' · ')));
-    revealTaste(r, played);   // „Twój gust": ❤️ per zagrany utwór składanki (okładka = album, bez utworu → bez ❤️)
+    revealTaste(r, played);   // „Twój gust": ❤️ per zagrany utwór składanki
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   const img=document.getElementById('art');

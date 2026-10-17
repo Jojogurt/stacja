@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#58CC02">
 <meta name="robots" content="noindex">
-<title>Uszy & Muzk — trener pubquizu</title>
+<title>Uszy & Mózg — trener pubquizu</title>
 <!-- PWA -->
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" type="image/svg+xml" href="icons/icon.svg">
@@ -13,7 +13,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Uszy & Muzk">
+<meta name="apple-mobile-web-app-title" content="Uszy & Mózg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -173,6 +173,14 @@
   .mini button,.sess-end,.voice-toggle,.mp-cf,.mp-seg,.seg button{min-height:44px;min-width:44px}
   .ce-chip button{width:16px;height:16px;border-radius:50%;border:none;background:var(--red);color:#fff;font-size:10px;line-height:14px;cursor:pointer}
   .ce-empty{font-size:var(--fs-xs);color:var(--muted)}
+  .ce-chip .ce-ly{width:auto;height:16px;padding:0 4px;border-radius:8px;background:var(--panel2);color:var(--ink);border:1px solid var(--line);font-size:10px}
+  .ce-chip .ce-ly.on{background:var(--blue);color:#fff;border-color:var(--blue)}
+  .ce-lyric{display:flex;flex-direction:column;gap:6px;margin-top:10px;padding:10px;border:2px dashed var(--line);border-radius:12px}
+  .ce-lyric[hidden],.ce-lyric [hidden]{display:none}
+  .ce-lyric small{font-size:var(--fs-xs);color:var(--muted)}
+  .ce-lyric textarea{background:var(--panel);border:2px solid var(--line);border-radius:12px;color:var(--ink);font-family:var(--body);font-weight:600;font-size:16px;padding:10px;width:100%;resize:vertical;outline:none;box-sizing:border-box}
+  .ce-lyric textarea:focus{border-color:var(--blue)}
+  .ce-lycount{font-family:var(--mono);font-size:12px;color:var(--muted);text-align:right}
   .ce-actions{display:flex;justify-content:space-between;gap:8px;margin-top:10px}
 
   /* ---- play deck / gałka ---- */
@@ -315,6 +323,49 @@
   .cover-box canvas[hidden],.cover-box img[hidden]{display:none}
   .cover-box.broken::after{content:'okładka niedostępna';position:absolute;inset:0;display:grid;place-items:center;
     font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase}
+  /* MP okładka (serwer-autorytet): to samo pudełko + podpis etapu i legenda punktów; TV — duża okładka */
+  .mp-cover-fig{margin:6px 0 4px;text-align:center}
+  .mp-cover-fig .cover-box{margin:0 auto}
+  .mp-cover-cap{margin-top:6px;font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase}
+  .mp-cover-legend{margin-top:2px;font-size:var(--fs-xs);color:var(--muted)}
+  .tv-coverfig .cover-box{width:min(34rem,38vh);border-radius:1.2rem}
+  .tv-coverfig .mp-cover-cap,.tv-coverfig .mp-cover-legend{font-size:1rem}
+  .mp-cover-fig .mp-more{margin:6px auto 0;display:block}
+  /* MP intro: pasek etapów 1·2·4·8·16 s (minione ✓, bieżący podświetlony) + „↻ odsłuchaj" / „+ więcej" */
+  .mp-stages{margin:6px 0 4px;text-align:center}
+  .mp-stg-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px}
+  .mp-stg{min-width:2.6em;padding:4px 8px;border-radius:999px;border:2px solid var(--line);font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted)}
+  .mp-stg.done{color:var(--ink);opacity:.7}
+  .mp-stg.done::before{content:'✓ '}
+  .mp-stg.on{border-color:var(--green);color:var(--ink);background:var(--panel2)}
+  .mp-stg-sep{color:var(--muted);font-style:normal}
+  .mp-stg-cap{margin-top:6px;font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase}
+  .mp-stg-btns{display:flex;gap:8px;justify-content:center;margin-top:6px}
+  .tv-stages .mp-stg{font-size:1.4rem;padding:.4rem 1rem}
+  .tv-stages .mp-stg-cap,.tv-stages .mp-cover-legend{font-size:1rem}
+  /* MP oś czasu: oś drużyny — karty (rok duży) i szczeliny ▼ do stuknięcia (kropki = głosy drużyny, TOP = odpowiedź) */
+  .mp-tl{margin:6px 0 4px}
+  .mp-tl-h,.mp-tl-cap{font-family:var(--display);font-weight:800;font-size:var(--fs-xs);color:var(--muted);text-transform:uppercase;text-align:center}
+  .mp-tl-row{display:flex;align-items:stretch;gap:4px;overflow-x:auto;padding:6px 2px;-webkit-overflow-scrolling:touch}
+  .mp-tl-card{flex:0 0 auto;min-width:78px;max-width:110px;padding:6px 8px;border-radius:var(--r-md);border:2px solid var(--line);background:var(--panel);display:flex;flex-direction:column;gap:2px}
+  .mp-tl-card b{font-family:var(--display);font-size:20px}
+  .mp-tl-card small{font-size:var(--fs-xs);line-height:1.2;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .mp-tl-card small.a{color:var(--muted)}
+  .mp-tl-card.anchor{border-style:dashed}
+  .mp-tl-gap{flex:0 0 auto;min-width:40px;min-height:44px;border-radius:999px;border:2px dashed var(--line);background:transparent;color:var(--muted);font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px 6px}
+  .mp-tl-gap.sel{border-style:solid;border-color:var(--green);color:var(--ink)}
+  .mp-tl-gap.top{background:var(--panel2);color:var(--ink)}
+  .mp-tl-n{font-size:var(--fs-xs);letter-spacing:1px}
+  .mp-tl-sum{list-style:none;margin:6px 0;padding:0;text-align:center}
+  .tv-tl .mp-tl-card{min-width:8rem;max-width:12rem}
+  .tv-tl .mp-tl-card b{font-size:2rem}
+  .tv-tl .mp-tl-h,.tv-tl .mp-tl-cap{font-size:1rem}
+  /* „Gotowy ✓" w lobby / przy rewanżu (informacja dla hosta — start nie jest blokowany) */
+  .pcz-ready{color:var(--green);font-weight:900}
+  .pcz-readybtn{display:block;width:100%;margin:0 0 8px;min-height:44px;border-radius:var(--r-md);border:2px solid var(--green);background:transparent;color:var(--ink);font-family:var(--display);font-weight:800}
+  .pcz-readybtn.on{background:var(--green);color:#fff}
+  .dn-ready{text-align:center;margin-top:6px;font-weight:800;color:var(--muted)}
+  .mp-pkr-av.ready{box-shadow:0 0 0 2px var(--green)}
   #quizForm .yr-row{display:flex;gap:8px;align-items:stretch}
   #quizForm .yr-row input{flex:1;text-align:center;font-size:22px;font-weight:800}
   #quizForm .yr-step{flex:0 0 56px;min-height:44px;border-radius:12px;font-weight:800;cursor:pointer}
@@ -1345,7 +1396,7 @@
   @keyframes jGrow{0%{transform:scaleX(0)}100%{transform:scaleX(1)}}
   @keyframes jRise{0%{opacity:0;transform:translateY(12px)}100%{opacity:1;transform:translateY(0)}}
 
-  /* LOADER „Uszy & Muzk": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
+  /* LOADER „Uszy & Mózg": 3 kropki (zielona/niebieska/złota). Statyczne; odbijanie pod no-preference. */
   .bb-loader{display:flex;gap:8px;justify-content:center;align-items:flex-end;height:20px;margin:4px 0 10px}
   .bb-loader i{width:12px;height:12px;border-radius:50%;background:var(--green)}
   .bb-loader i:nth-child(2){background:var(--blue)}
@@ -2250,8 +2301,8 @@
 
   <section id="menu">
     <div class="mh-hero">
-      <div class="mh-logo">Uszy <b>&amp;</b> Muzk</div>
-      <div class="mh-sub">Sprawdź czy masz uszy i muzk</div>
+      <div class="mh-logo">Uszy <b>&amp;</b> Mózg</div>
+      <div class="mh-sub">Sprawdź czy masz uszy i mózg</div>
       <div class="mh-ver" id="appVer"></div>
     </div>
     <!-- F6b (F6): „Wróć do pokoju ABCD" — 30 min po wyjściu z pokoju MP (sessionStorage) -->
@@ -2378,6 +2429,23 @@
             <button class="ce-ghost" id="catImport">Wklej JSON</button>
           </div>
           <div class="ce-cart" id="catCart"></div>
+          <!-- Tekst do lektora: przekład fragmentu piosenki; zostaje tylko na tym urządzeniu -->
+          <div class="ce-lyric" id="catLyric" hidden>
+            <b>📝 Tekst do lektora: <span id="catLyFor"></span></b>
+            <small>Teksty zostają tylko na tym urządzeniu (zapisujemy sam przekład; „Kopiuj JSON" dołącza go świadomie).</small>
+            <div id="catLyOrigWrap"><textarea id="catLyOrig" rows="3" aria-label="Oryginał tekstu" placeholder="oryginał (wklej fragment — nie jest zapisywany)"></textarea></div>
+            <button type="button" class="ce-ghost" id="catLyTr">Przetłumacz na polski</button>
+            <small id="catLyNoTr">Twoja przeglądarka nie tłumaczy — wpisz przekład ręcznie.</small>
+            <textarea id="catLyOut" rows="4" aria-label="Co przeczyta lektor" placeholder="co przeczyta lektor (po polsku, możesz edytować)"></textarea>
+            <div class="ce-lycount"><span id="catLyCount">0</span></div>
+            <div class="pl-status err" id="catLyWarn" role="status"></div>
+            <div class="pl-status err" id="catLyErr" role="status"></div>
+            <div class="ce-actions">
+              <button type="button" class="ce-ghost" id="catLyClear">Usuń tekst</button>
+              <button type="button" class="ce-ghost" id="catLyCancel">Anuluj</button>
+              <button type="button" class="ce-ghost" id="catLyOk">Gotowe</button>
+            </div>
+          </div>
           <div class="pl-status" id="catStatus"></div>
           <div class="ce-actions">
             <button class="ce-ghost" id="catCancel">Anuluj</button>

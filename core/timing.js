@@ -9,6 +9,7 @@ export const MP_SNIP_WINDOW_S = 16;       // okno losowania startu fragmentu (mu
 // F8a (#1 „Heardle"): tryb „intro" — zajawka odsłaniana etapami OD POCZĄTKU utworu (sekundy na etap).
 // Etap 0 = 1 s … etap 4 = 16 s; „+ więcej" przechodzi do następnego i gra od początku do nowej długości.
 export const INTRO_STAGES = [1, 2, 4, 8, 16];
+export const INTRO_GAP_MS = 3000;          // MP intro: przerwa na typ po każdym etapie (przed następnym, dłuższym)
 // długość odsłony etapu (s) — etap przycinany do [0..ostatni]; śmieci → etap 0
 export function introStageSecs(stage){
   const i = Math.floor(Number(stage));
@@ -112,11 +113,14 @@ export function medleyLabel(t, n){
   return at.playing ? `fragment ${at.index+1}/${k}…` : `przerwa · zaraz fragment ${at.index+1}/${k}`;
 }
 
-/* EKSPERYMENT: „okładka" (cover) — okładka albumu odsłaniana etapami rozdzielczości (bloki na bok; 0 = pełna).
+/* EKSPERYMENT: „okładka" (cover) — okładka albumu odsłaniana etapami rozdzielczości (bloki na bok).
  * Auto-odsłona co COVER_STEP_MS albo przycisk „wyraźniej". Mnożnik punktów: core/scoring.coverMult (COVER_MULTS).
- * Poprawki po testach: etap 8×8 usunięty (praktycznie nie do zgadnięcia) — start od 16×16; etap trwa 6 s (było 3 s). */
-export const COVER_STAGES = [16, 32, 64, 0];
+ * Poprawki po testach: etap 8×8 usunięty (praktycznie nie do zgadnięcia) — start od 16×16; etap trwa 6 s (było 3 s).
+ * Dług z TODO: pełna okładka często pokazuje nazwę zespołu → w trakcie zgadywania TYLKO 16 → 32 → 64 bloki; PEŁNA
+ * okładka wyłącznie w odsłonie (solo po „Sprawdź"/pominięciu, MP w REVEAL — coverFullUrl). */
+export const COVER_STAGES = [16, 32, 64];
 export const COVER_STEP_MS = 6000;
+// bloki etapu — przycinane do [0..ostatni] (NIGDY pełna: ta tylko w odsłonie); śmieci → etap 0
 export function coverStageBlocks(stage){
   const i = Math.floor(Number(stage));
   return COVER_STAGES[Number.isFinite(i) ? Math.max(0, Math.min(COVER_STAGES.length-1, i)) : 0];
@@ -125,6 +129,91 @@ export function coverNextStage(stage){
   const i = Math.max(0, Math.floor(Number(stage)) || 0);
   return i+1 < COVER_STAGES.length ? i+1 : null;
 }
+// czas od startu odsłony do OSTATNIEGO etapu (64×64) — MP: okno „patrz" przed czasem na odpowiedź
+export const coverRevealMs = (stepMs = COVER_STEP_MS) => (COVER_STAGES.length-1) * Math.max(0, Number(stepMs) || 0);
+
+/* ===== MP (serwer-autorytet): ETAPY ODSŁONY prowadzone przez serwer, wspólne dla wszystkich (okładka, intro) =====
+ * Harmonogram = `offsets[k]` (ms od startu odsłony = playAt + LEAD do początku etapu k; offsets[0] = 0, niemalejące).
+ * W stanie gry serwer trzyma RZECZYWISTE starty etapów `stageStarts` (epoch ms): minione są faktyczne, przyszłe —
+ * planowane; „+ więcej"/„wyraźniej" (stageShift) przesuwa przyszłe od bieżącej chwili. Etap w chwili t = stageIndexAt
+ * (mnożnik „na którym etapie padła odpowiedź" w core/mpReducer liczy się z tych samych startów, więc przesunięcia są
+ * uwzględnione). Funkcje offsetowe (stageAt/stageStartsAt) = harmonogram bez przesunięć. */
+export function stageAt({ playAt, now, leadMs = MP_INTRO_MS, offsets } = {}){
+  return stageIndexAt(stageStartsFrom({ playAt, leadMs, offsets }), now);
+}
+// epoch ms początku etapu `stage` wg offsetów (null = brak takiego etapu / śmieci)
+export function stageStartsAt({ playAt, stage, leadMs = MP_INTRO_MS, offsets } = {}){
+  const k = Math.floor(Number(stage)), st = stageStartsFrom({ playAt, leadMs, offsets });
+  return Number.isInteger(k) && k >= 0 && k < st.length ? st[k] : null;
+}
+// starty etapów (epoch ms) z harmonogramu; śmieci → []
+export function stageStartsFrom({ playAt, leadMs = MP_INTRO_MS, offsets } = {}){
+  const t0 = Number(playAt), offs = Array.isArray(offsets) && offsets.length ? offsets.map(Number) : [0];
+  if(!Number.isFinite(t0) || !offs.every(Number.isFinite)) return [];
+  const base = t0 + Math.max(0, Number(leadMs) || 0);
+  return offs.map(o => base + o);
+}
+// etap w chwili t: ostatni k ze starts[k] ≤ t (przed startem 0. etapu → 0); bez startów → 0
+export function stageIndexAt(starts, t){
+  const st = Array.isArray(starts) ? starts.map(Number) : [], x = Number(t);
+  if(!Number.isFinite(x)) return 0;
+  let k = 0;
+  for(let i = 1; i < st.length; i++){ if(Number.isFinite(st[i]) && x >= st[i]) k = i; else break; }
+  return k;
+}
+/* „+ więcej" / „wyraźniej": następny etap (k+1) startuje TERAZ, kolejne przesunięte o tyle samo (odstępy zachowane).
+ * null = nie wolno (ostatni etap, bieżący etap jeszcze nie ruszył, następny i tak już trwa, śmieci).
+ * → { starts (nowa tablica), stage: k+1, shift (ms, o ile wcześniej) } */
+export function stageShift(starts, stage, now){
+  const st = Array.isArray(starts) ? starts.map(Number) : [], k = Math.floor(Number(stage)), t = Number(now);
+  if(!Number.isInteger(k) || k < 0 || k+1 >= st.length || !Number.isFinite(t) || !st.every(Number.isFinite)) return null;
+  if(t < st[k] || st[k+1] <= t) return null;
+  const shift = st[k+1] - t;
+  return { starts: st.map((x, i) => i > k ? x - shift : x), stage: k+1, shift };
+}
+// okładka: etap k od k × stepMs po starcie odsłony
+export const coverStageOffsets = (stepMs = COVER_STEP_MS) => COVER_STAGES.map((_, k) => k * Math.max(0, Number(stepMs) || 0));
+export function mpCoverStageAt(playAt, now, leadMs = MP_INTRO_MS, stepMs = COVER_STEP_MS){
+  return stageAt({ playAt, now, leadMs, offsets: coverStageOffsets(stepMs) });
+}
+export function mpCoverStageStartsAt(playAt, stage, leadMs = MP_INTRO_MS, stepMs = COVER_STEP_MS){
+  return stageStartsAt({ playAt, stage, leadMs, offsets: coverStageOffsets(stepMs) });
+}
+/* MP intro: etap k gra [0, INTRO_STAGES[k]] s zajawki, potem przerwa INTRO_GAP_MS na typ, potem etap k+1 (od początku,
+ * dłużej). offsets[k+1] = offsets[k] + INTRO_STAGES[k]·unit + gap. `unitMs` (ms na „sekundę" etapu) — tylko testy serwera. */
+export function introStageOffsets(gapMs = INTRO_GAP_MS, unitMs = 1000){
+  const g = Math.max(0, Number(gapMs) || 0), u = Math.max(0, Number(unitMs) || 0), out = [0];
+  for(let k = 0; k+1 < INTRO_STAGES.length; k++) out.push(out[k] + INTRO_STAGES[k]*u + g);
+  return out;
+}
+// koniec ostatniego etapu (16 s) od startu odsłony — MP: okno „słuchaj" przed czasem na odpowiedź
+export function introRevealMs(gapMs = INTRO_GAP_MS, unitMs = 1000){
+  const o = introStageOffsets(gapMs, unitMs);
+  return o[o.length-1] + INTRO_STAGES[INTRO_STAGES.length-1] * Math.max(0, Number(unitMs) || 0);
+}
+/* anty-podglądanie: URL obrazu w rozdzielczości ETAPU (klient nie dostaje pełnej okładki w trakcie zgadywania).
+ * iTunes (mzstatic): „…/600x600bb.jpg" → „…/16x16bb.jpg"; Deezer (dzcdn): „/images/cover/<hash>/250x250-000000-80-0-0.jpg"
+ * → „…/16x16-000000-80-0-0.jpg". Etap przycinany do 16/32/64 — NIGDY pełny. Nieznany format → '' (serwer gra wtedy
+ * pytanie jak „muzyka"). Pełna okładka (odsłona) → coverFullUrl: COVER_FULL_PX dla znanych CDN, inaczej oryginał. Tylko https. */
+export const COVER_FULL_PX = 600;
+const COVER_ITUNES = /^(https:\/\/[a-z0-9.-]*mzstatic\.com\/.+\/)\d+x\d+(\w*)(\.[a-z]+)$/i;
+const COVER_DEEZER = /^(https:\/\/[a-z0-9.-]*dzcdn\.net\/images\/cover\/[0-9a-f]+\/)\d+x\d+((?:-[0-9a-z]+)*)(\.[a-z]+)$/i;
+function coverSized(art, px){
+  const u = String(art || '');
+  if(!/^https:\/\//.test(u) || u.length > 500) return null;
+  let m = u.match(COVER_ITUNES);
+  if(m) return `${m[1]}${px}x${px}${m[2] || 'bb'}${m[3]}`;
+  m = u.match(COVER_DEEZER);
+  if(m) return `${m[1]}${px}x${px}${m[2]}${m[3]}`;
+  return '';
+}
+export function coverStageUrl(art, stage){ return coverSized(art, coverStageBlocks(stage)) || ''; }
+export function coverFullUrl(art){
+  const r = coverSized(art, COVER_FULL_PX);
+  return r === null ? '' : (r || String(art));
+}
+// czy okładkę da się odsłaniać etapami bez wycieku (znany CDN)
+export const coverStageable = (art) => !!coverStageUrl(art, 0);
 
 /* EKSPERYMENT: „zwolnione obroty" (slowmo) / „przyspieszone" (fastmo) — zajawka jak płyta na złych obrotach
  * (zmiana tempa I wysokości). slowmo: etap 0 = 0.6×, „szybciej" → 0.75× (bez 0.9× — za blisko oryginału);
@@ -157,7 +246,7 @@ export function vinylTurnSecs(rate){
 }
 
 // ile sekund trwa faza „słuchaj" per tryb (gdy kategoria nie nadpisuje listenSecs)
-export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:16, abcd:15, year:15, revsnip:12, medley:18, cover:15, slowmo:18, fastmo:12, timeline:15 };
+export const LISTEN_SECS = { lektor:22, music:15, reverse:15, snippet:12, intro:introRevealMs()/1000, abcd:15, year:15, revsnip:12, medley:18, cover:coverRevealMs()/1000, slowmo:18, fastmo:12, timeline:15 };
 
 export const MP_BUFFER_TIMEOUT_MS = 6000; // bezpiecznik klienta: zgłoś „ready" mimo zawieszenia
 // F2b (#6): twardy limit fazy gotowości (ARMING) po stronie serwera — po nim pytanie rusza z tymi,

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "wrangler dev",
     "deploy": "wrangler deploy",
-    "test": "node --import ./test/register.mjs test/authority.test.js && node --no-warnings test/taste.test.js"
+    "test": "node --import ./test/register.mjs test/authority.test.js && node --no-warnings test/taste.test.js && node --no-warnings test/sources.test.js"
   },
   "dependencies": {
     "partyserver": "^0.0.71"

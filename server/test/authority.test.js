@@ -8,6 +8,7 @@ import { signToken, verifyToken } from '../lib/auth.js';
 import { validateMatchRecord, handleApi } from '../lib/api.js';
 import { GameRoom } from '../gameRoom.js';
 import { MAX_ROUNDS, CPR } from '../../core/match.js';
+import { stageIndexAt } from '../../core/timing.js';
 
 let pass=0, fail=0;
 const ok=(c,m)=>{ if(c){pass++;} else {fail++; console.error('  ✗ '+m);} };
@@ -40,7 +41,7 @@ async function makeRoom(env={}){
   const conns=[];
   room.getConnections=()=>conns;
   room.broadcast=(s)=>conns.forEach(c=>c.send(s));
-  room.name='TEST';
+  room.name='TEST'; room.hostGraceMs=0;   // dawne zachowanie (awans od razu); testy karencji ustawiają własną
   room.join=(id,name)=>{ const c=new FakeConn(id,name); conns.push(c);
     if(!room.hostId) room.hostId=id; room.pushPresence(); return c; };
   room.drop=async(c)=>{ conns.splice(conns.indexOf(c),1); await room.onClose(c); };
@@ -779,18 +780,12 @@ const TRACK={ track:'Africa', artist:'Toto', year:'1982', album:'Toto IV', previ
 function stubResolver(room, { track=TRACK, distractors=[{track:'Jump',artist:'Van Halen'},{track:'Take On Me',artist:'a-ha'},{track:'Radio Ga Ga',artist:'Queen'}] }={}){
   room.resolver={ track: async()=>({ ...track }), distractors: async()=>distractors.slice() };
 }
-await group('F8a: presence niesie `modes` (capability) — bez „intro"', async ()=>{
+await group('F8a: presence niesie `modes` (capability) — z „intro" (MP pod autorytetem), bez trybów tylko-solo', async ()=>{
   const { room } = await makeRoom();
   const a=room.join('A','Ala');
   const pr=a.last('presence');
   ok(Array.isArray(pr.modes) && pr.modes.includes('abcd') && pr.modes.includes('year'), 'presence.modes zawiera nowe tryby MP');
-  ok(!pr.modes.includes('intro'), 'intro tylko solo — serwer go nie ogłasza');
-});
-await group('F8a: start z samym „intro" → zignorowany (tryb tylko solo)', async ()=>{
-  const { room } = await makeRoom();
-  const a=room.join('A','Ala'); stubResolver(room);
-  await room.msg(a, { t:'start', config:{ questions:5, modes:['intro'], format:'coop', pools:audioPools() } });
-  ok(!room.game || room.game.phase==null, 'brak meczu (sanitizeMpConfig wycina intro → buildMatch error)');
+  ok(['intro','medley','piano','guitar','timeline','cover'].every(m=>pr.modes.includes(m)), 'tryby tylko-autorytet ogłaszane (intro, składanka, covery, oś czasu, okładka)');
 });
 await group('F8a: ABCD muzyki — opcje od autorytetu, prompt dopiero w PLAY, litera sekretem do REVEAL', async ()=>{
   const { room } = await makeRoom();
@@ -848,15 +843,6 @@ await group('F8a: tryb „rok" — brak roku (np. Deezer) → pytanie jak muzyka
   eq(room.game.mode, 'music', 'fallback muzyka'); eq(room.game.answerSlots, null, 'sloty domyślne');
 });
 /* ==================== EKSPERYMENT: „od tyłu krótko" w MP; składanka/okładka tylko solo ==================== */
-await group('EKSP.: presence ogłasza „od tyłu krótko", bez składanki/okładki; start z samymi trybami solo → brak meczu', async ()=>{
-  const { room } = await makeRoom();
-  const a=room.join('A','Ala'); stubResolver(room);
-  const pr=a.last('presence');
-  ok(pr.modes.includes('revsnip'), 'presence.modes: revsnip');
-  ok(!pr.modes.includes('medley') && !pr.modes.includes('cover'), 'składanka/okładka tylko solo');
-  await room.msg(a, { t:'start', config:{ questions:5, modes:['medley','cover'], format:'coop', pools:audioPools() } });
-  ok(!room.game || room.game.phase==null, 'start tylko z trybami solo → zignorowany');
-});
 await group('EKSP.: „od tyłu krótko" — offset okna od autorytetu, ukryty do PLAY, odpowiedź jak muzyka', async ()=>{
   const { room } = await makeRoom();
   const a=room.join('A','Ala'), b=room.join('B','Bo'); stubResolver(room);
@@ -876,15 +862,6 @@ await group('EKSP.: „od tyłu krótko" — offset okna od autorytetu, ukryty d
   eq(r.kind, 'music', 'odsłona jak muzyka'); ok(r.teamOk && r.gained>=100, 'trafienie tytuł+wykonawca punktuje jak muzyka');
 });
 /* ==================== EKSPERYMENT: „zwolnione obroty"/„przyspieszone" w MP (tempo lokalne), „oś czasu" tylko solo ==================== */
-await group('EKSP.: presence ogłasza obroty (bez osi czasu); start z samą osią czasu → brak meczu', async ()=>{
-  const { room } = await makeRoom();
-  const a=room.join('A','Ala'); stubResolver(room);
-  const pr=a.last('presence');
-  ok(pr.modes.includes('slowmo') && pr.modes.includes('fastmo'), 'presence.modes: slowmo + fastmo');
-  ok(!pr.modes.includes('timeline'), 'oś czasu tylko solo');
-  await room.msg(a, { t:'start', config:{ questions:5, modes:['timeline'], format:'coop', pools:audioPools() } });
-  ok(!room.game || room.game.phase==null, 'start z samą osią czasu → zignorowany');
-});
 await group('EKSP.: „zwolnione obroty" — flaga trybu w stanie, pytanie jak muzyka, mnożnik ×1.5 (fastmo ×1.2)', async ()=>{
   for(const [mode, mult] of [['slowmo',1.5],['fastmo',1.2]]){
     const { room } = await makeRoom();
@@ -1009,7 +986,7 @@ await group('gust3: presence niesie caps tableTaste + licznik półek obecnych g
   const { room } = await makeRoom();
   const a=room.join('A','Ala'), b=room.join('B','Bo'), c=room.join('C','Cy');
   let p=a.last('presence');
-  eq(p.caps, ['tableTaste'], 'capability tableTaste w presence');
+  ok(p.caps.includes('tableTaste'), 'capability tableTaste w presence');
   eq(p.shelves, [], 'na starcie brak półek');
   await room.msg(a, { t:'shelf', items:SHELF('a') });
   await room.msg(b, { t:'shelf', items:SHELF('b', 30) });
@@ -1268,6 +1245,359 @@ await group('P1-8: ABCD Solo — tap rywala niewidoczny w PLAY (tylko „answere
   await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'C' } } });
   const vb=b.last('state').game.byTeam.A;
   eq([vb.proposals.length, Object.keys(vb.votes).length, vb.answered], [0, 0, ['A']], 'B widzi tylko, że A odpowiedział');
+});
+/* ==================== MP okładka (autorytet): album od serwera, etapy z timera DO, URL etapu, mnożnik z czasu propozycji ==================== */
+const COVER_ART='https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/bb/x.jpg/600x600bb.jpg';
+const COVER={ artist:'Toto', artistAlt:'Toto', album:'Toto IV', albumRaw:'Toto IV (Remastered)', year:'1982', art:COVER_ART, tier:0 };
+function stubCover(room, cover=COVER){
+  stubResolver(room);
+  room.resolver.cover=async({ seen })=>{ if(cover && cover.error) return cover; if(seen) seen.add('album:toto iv'); return { ...cover }; };
+  room.coverStepMs=150; room.stageLeadMs=30;   // krótki harmonogram w teście (prod: 6 s, LEAD = MP_INTRO_MS)
+}
+const until=async(fn, ms=1500)=>{ const t0=Date.now(); while(!fn() && Date.now()-t0<ms) await sleep(5); return fn(); };
+await group('MP okładka: runda cover → ARMING bez audio → PLAY etap 0 (16×16) → podbicia etapów (do 64×64) → mnożnik → REVEAL z pełną okładką', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubCover(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['cover'], format:'coop', pools:audioPools() } });
+  let g=b.last('state').game;
+  eq([g.phase, g.mode], [MP.ARMING, 'cover'], 'ARMING, tryb okładka');
+  eq(g.preview, '', 'bez zajawki — klient zgłasza gotowość od razu');
+  eq((g.answerSlots||[]).map(s=>s.key), ['artist','album'], 'sloty: wykonawca + album');
+  ok(!g.coverArt, 'ARMING: bez obrazu');
+  eq([room.current.artist, room.current.album, room.current.year, room.current.art], ['Toto','Toto IV','1982',COVER_ART], 'sekret w this.current (pełna okładka 600×600)');
+  ok(!JSON.stringify(g).includes('Toto') && !JSON.stringify(g).includes('600x600'), 'stan ARMING bez wykonawcy/albumu/pełnej okładki');
+  await readyAll(room, a, b);
+  g=b.last('state').game;
+  eq(g.phase, MP.PLAY, 'PLAY');
+  eq([g.stage, g.coverStage], [0, 0], 'etap 0');
+  ok(/\/16x16bb\.jpg$/.test(g.coverArt), 'etap 0: obraz 16×16 — '+g.coverArt);
+  ok(!JSON.stringify(g).includes('600x600'), 'PLAY etap 0: pełny URL nie trafia do stanu');
+  eq(g.stageStarts.map(t=>t-g.playAt), [30,180,330], 'rzeczywiste starty etapów w stanie (LEAD 30 + krok 150 ms w teście)');
+  eq([g.stageAt, g.stageNextAt], [g.playAt+30, g.playAt+180], 'stageAt / stageNextAt');
+  eq(g.listenEndsAt-g.playAt, 900+300, 'okno „patrz" do ostatniego etapu → czas na odpowiedź po nim');
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ artist:'toto', album:'Toto IV' }, at:1 } });
+  const p=room.game.byTeam.all.proposals[0];
+  ok(p.at>=g.playAt && p.at<=Date.now(), 'czas propozycji z zegara serwera (klientowe at:1 zignorowane)');
+  ok(await until(()=>room.game.stage>=1), 'timer DO podbił etap');
+  const g1=b.last('state').game;
+  ok(g1.stage>=1 && /\/(32x32|64x64)bb\.jpg$/.test(g1.coverArt), 'broadcast etapu z nowym URL — '+g1.coverArt);
+  ok(await until(()=>room.game.stage===2), 'etap 2 (64×64)');
+  const g2=b.last('state').game;
+  ok(/\/64x64bb\.jpg$/.test(g2.coverArt) && !JSON.stringify(g2).includes('600x600'), 'ostatni etap 64×64 — pełny URL dalej ukryty');
+  eq(room.game.stageNextAt, null, 'po ostatnim etapie brak kolejnego terminu');
+  await sleep(30);
+  ok(!room._stageTimer, 'timer etapów zatrzymany po ostatnim');
+  ok(!JSON.stringify(b.last('state').game).includes('600x600'), 'PLAY po ostatnim etapie: nadal bez pełnej okładki');
+  await room.msg(a, { t:'lock' });
+  const st=b.last('state').game, r=st.reveal;
+  eq(st.phase, MP.REVEAL, 'REVEAL');
+  eq(st.coverArt, COVER_ART, 'REVEAL: pełna okładka w stanie — dopiero teraz');
+  eq([r.kind, r.artist, r.album, r.year, r.art], ['cover','Toto','Toto IV','1982',COVER_ART], 'odsłona: pełna okładka + wykonawca/album/rok');
+  eq([r.teamOk, r.stageEval.stage, r.stageEval.blocks, r.stageEval.mult, r.okBySlot.album], [true, 0, 16, 2, true], 'mnożnik etapu, na którym padła odpowiedź (16×16 → ×2) + album');
+  eq(r.gained, 240, '(wykonawca 100 + album 20) × 2 — bez bonusu za szybkość');
+  eq(room.game.results[0].track, 'Toto IV', 'wynik do ligi: album');
+});
+await group('MP okładka: „wyraźniej" (dowolny gracz) — następny etap od razu, nonce/etap, rate-limit, okno odpowiedzi wcześniej', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo'), c=await room.connect('C','Cy');
+  stubCover(room); room.coverStepMs=5000;
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['cover'], format:'coop', timer:30, pools:audioPools() } });
+  await readyAll(room, a, b, c);
+  await sleep(40);   // etap 0 ruszył (LEAD 30 ms)
+  const g0=JSON.parse(JSON.stringify(room.game));
+  await room.msg(c, { t:'more', playNonce:g0.playNonce+1, stage:0 });
+  eq(room.game.stage, 0, 'zły nonce → bez zmian');
+  await room.msg(c, { t:'more', playNonce:g0.playNonce, stage:1 });
+  eq(room.game.stage, 0, 'nie ten etap → bez zmian');
+  await room.msg(b, { t:'more', playNonce:g0.playNonce, stage:0 });   // gość (nie host)
+  const g1=b.last('state').game;
+  eq([g1.stage, g1.coverStage], [1, 1], 'gracz (nie host) → etap 1 od razu');
+  ok(/\/32x32bb\.jpg$/.test(g1.coverArt), 'od razu obraz 32×32');
+  ok(Math.abs(g1.stageStarts[1]-Date.now())<50 && g1.stageStarts[0]===g0.stageStarts[0], 'start etapu 1 = teraz; miniony bez zmian');
+  const shift=g0.stageStarts[1]-g1.stageStarts[1];
+  ok(shift>4000, 'przesunięcie ~ krok etapu — '+shift);
+  eq(g1.stageStarts[2]-g1.stageStarts[1], g0.stageStarts[2]-g0.stageStarts[1], 'odstęp do kolejnego etapu zachowany');
+  eq([g0.listenEndsAt-g1.listenEndsAt, g0.endsAt-g1.endsAt], [shift, shift], 'okno „patrz" i czas na odpowiedź też wcześniej');
+  await room.msg(a, { t:'more', playNonce:g0.playNonce, stage:0 });   // spóźniony duplikat (A kliknął na etapie 0)
+  eq(room.game.stage, 1, 'duplikat „wyraźniej" dla etapu 0 → nie przeskakuje dwóch etapów');
+  await room.msg(a, { t:'more', playNonce:g0.playNonce, stage:1 });
+  eq(room.game.stage, 2, 'etap 2 (64×64)');
+  await room.msg(b, { t:'more', playNonce:g0.playNonce, stage:2 });
+  eq(room.game.stage, 2, 'ostatni etap — dalej nie ma (pełna tylko w odsłonie)');
+  ok(!b.last('state').game.coverArt.includes('600x600'), 'nadal bez pełnej okładki');
+  // rate-limit (bucket 'more': burst 2) — flood nie przesuwa harmonogramu w nieskończoność
+  const d=await room.connect('D','Dee'); let sent=0;
+  for(let i=0;i<10;i++) if(room.allowRate(d, 'more')) sent++;
+  ok(sent<=2, 'rate-limit „more": burst ≤ 2 — '+sent);
+  room.clearAutoLock(); room.clearStageTimer();
+});
+await group('MP okładka: wszyscy odpowiedzieli → auto-lock jak dziś; timer etapów zatrzymany', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubCover(room); room.coverStepMs=5000; room.allDoneGraceMs=20;
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['cover'], format:'solo', pools:audioPools() } });
+  await readyAll(room, a, b);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ artist:'Toto' } } });
+  await room.msg(b, { t:'action', action:{ type:'pass' } });
+  ok(await until(()=>room.game.phase===MP.REVEAL, 500), 'komplet → odsłona po karencji');
+  ok(!room._stageTimer, 'timer etapów wyczyszczony przy lock');
+  eq([room.game.reveal.byTeam.A.stageEval.mult, room.game.reveal.byTeam.A.gained], [2, 200], 'Solo: odpowiedź na etapie 0 → ×2');
+  eq(room.game.coverArt, COVER_ART, 'REVEAL: pełna okładka w stanie');
+});
+await group('MP okładka: brak albumu / nieznany CDN okładki → pytanie jak muzyka; wznowienie timera po evikcji', async ()=>{
+  for(const [cov, why] of [[{ error:true, reason:'empty' }, 'brak albumu'], [{ ...COVER, art:'https://example.com/x/600x600bb.jpg' }, 'okładka spoza znanych CDN (bez wersji etapów)']]){
+    const { room } = await makeRoom();
+    const a=room.join('A','Ala'); stubCover(room, cov);
+    await room.msg(a, { t:'start', config:{ questions:5, modes:['cover'], format:'coop', pools:audioPools() } });
+    eq([room.game.mode, room.game.answerSlots, room.game.preview], ['music', null, TRACK.preview], why+' → muzyka (tytuł + wykonawca, zajawka)');
+  }
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'); stubCover(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['cover'], format:'coop', pools:audioPools() } });
+  await readyAll(room, a);
+  room.clearStageTimer();   // „evikcja" — timer ginie
+  let init=null;
+  const ctx={ storage:room.ctx.storage, blockConcurrencyWhile:(fn)=>{ init=fn(); return init; } };
+  const r2=new GameAuthority(ctx, { TOKEN_SECRET:'x' }); await init;
+  const conns=[]; r2.getConnections=()=>conns; r2.broadcast=()=>{};
+  ok(!!r2._stageTimer, 'konstruktor wznawia timer etapów (stageNextAt w stanie)');
+  ok(await until(()=>r2.game.stage>=1), 'wznowiony timer podbija etap (wg stageStarts ze stanu)');
+  r2.clearStageTimer(); room.clearAutoLock(); r2.clearAutoLock();
+});
+/* ==================== MP intro (autorytet): etapy 1-2-4-8-16 s z timera DO, „+ więcej", introMult z czasu propozycji ==================== */
+function stubIntro(room){
+  stubResolver(room);
+  room.introGapMs=40; room.introUnitMs=20; room.stageLeadMs=30;   // etapy 20/40/80/160/320 ms + przerwa 40 ms (prod: s + 3 s)
+}
+await group('MP intro: presence ogłasza intro; ARMING buforuje zajawkę; PLAY etap 0 = 1 s; podbicia; mnożnik etapu; REVEAL', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  ok(a.last('presence').modes.includes('intro'), 'presence.modes: intro (MP pod autorytetem)');
+  stubIntro(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['intro'], format:'coop', pools:audioPools() } });
+  let g=b.last('state').game;
+  eq([g.phase, g.mode, g.preview, g.answerSlots], [MP.ARMING, 'intro', TRACK.preview, null], 'ARMING: zajawka do buforowania (pełny plik), sloty tytuł + wykonawca');
+  eq(g.stageStarts, null, 'ARMING: bez harmonogramu');
+  await readyAll(room, a, b);
+  g=b.last('state').game;
+  eq([g.phase, g.stage, g.stageSecs], [MP.PLAY, 0, 1], 'PLAY: etap 0 — klient gra [0, 1 s]');
+  eq(g.stageStarts.map(t=>t-g.playAt), [30, 90, 170, 290, 490], 'starty etapów: LEAD + (etap + przerwa) — wspólne dla wszystkich');
+  eq(g.stageAt, g.stageStarts[0], 'stageAt = wspólny start odsłuchu (zegar serwera; klient koryguje offsetem)');
+  eq(g.listenEndsAt-g.playAt, 900+460+320, 'okno „słuchaj" = do końca ostatniego etapu (16 s)');
+  ok(await until(()=>room.game.stage>=1), 'timer DO podbił etap');
+  eq(b.last('state').game.stageSecs, [1,2,4,8,16][room.game.stage], 'stageSecs = długość odsłuchu etapu');
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ title:'Africa', artist:'Toto' } } });
+  const stageAtProposal=stageIndexAt(room.game.stageStarts, room.game.byTeam.all.proposals[0].at);   // z rzeczywistych startów (bez wyścigu z timerem)
+  ok(await until(()=>room.game.stage===4, 2000), 'ostatni etap (16 s)');
+  eq(room.game.stageNextAt, null, 'po ostatnim — bez terminu');
+  await room.msg(a, { t:'lock' });
+  const r=b.last('state').game.reveal;
+  eq([r.kind, r.teamOk, r.stageEval.stage, r.stageEval.secs], ['music', true, stageAtProposal, [1,2,4,8,16][stageAtProposal]], 'odsłona: etap, na którym padła odpowiedź (nie zatwierdzenia)');
+  eq(r.stageEval.mult, [2,1.6,1.3,1.1,1][stageAtProposal], 'introMult etapu propozycji');
+  eq(r.gained, Math.round(100*r.stageEval.mult), 'punkty: (50 + 50) × mnożnik etapu, bez bonusu za szybkość');
+  ok(!room._stageTimer, 'timer etapów zatrzymany');
+});
+await group('MP intro: „+ więcej" — dowolny gracz, etap od razu, wyższy mnożnik dla szybkiego typu przed prośbą', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubIntro(room); room.introUnitMs=1000; room.introGapMs=3000;   // pełny harmonogram (bez czekania — „+ więcej")
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['intro'], format:'solo', pools:audioPools() } });
+  await readyAll(room, a, b);
+  await sleep(40);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ title:'Africa', artist:'Toto' } } });   // A na etapie 0
+  await sleep(5);   // prośba później niż typ A (ten sam ms = już nowy etap)
+  const n=room.game.playNonce;
+  await room.msg(b, { t:'more', playNonce:n, stage:0 });
+  eq([room.game.stage, room.game.stageSecs], [1, 2], 'gracz B → etap 1 (2 s) od razu');
+  await room.msg(b, { t:'more', playNonce:n, stage:1 });
+  eq(room.game.stage, 2, 'kolejna prośba (limit burst 2) → etap 2 (4 s)');
+  await sleep(5);
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ title:'Africa', artist:'Toto' } } });   // B na etapie 2
+  await room.msg(a, { t:'lock' });
+  const r=room.game.reveal;
+  eq([r.byTeam.A.stageEval.mult, r.byTeam.B.stageEval.mult, r.byTeam.A.gained, r.byTeam.B.gained], [2, 1.3, 200, 130], 'A (1 s) ×2.0, B (po „+ więcej", 4 s) ×1.3');
+  await room.msg(b, { t:'more', playNonce:n, stage:2 });
+  eq(room.game.phase, MP.REVEAL, '„+ więcej" poza PLAY ignorowane');
+});
+/* ==================== MP składanka / fortepian-gitara / oś czasu (autorytet) ==================== */
+await group('presence: „od tyłu krótko" i obroty nadal ogłaszane (regresja)', async ()=>{
+  const { room } = await makeRoom();
+  const pr=room.join('A','Ala').last('presence');
+  ok(['revsnip','slowmo','fastmo'].every(m=>pr.modes.includes(m)), 'presence.modes: revsnip + slowmo + fastmo');
+});
+const MEDLEY={ artist:'Toto', artistAlt:'TOTO', clips:['Africa','Rosanna','Hold the Line','Pamela'].map((t,i)=>({ track:t, artist:'Toto', year:'198'+i, album:'', preview:'https://p/m'+i+'.m4a', art:'https://a/'+i+'.jpg' })) };
+await group('MP składanka: serwer rozwiązuje 4 utwory, ARMING z 4 zajawkami + startami od serwera, sekret = wykonawca, REVEAL z utworami', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubResolver(room); room.resolver.medley=async()=>JSON.parse(JSON.stringify(MEDLEY));
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['medley'], format:'coop', pools:audioPools() } });
+  let g=b.last('state').game;
+  eq([g.phase, g.mode, (g.answerSlots||[]).map(s=>s.key)], [MP.ARMING, 'medley', ['artist']], 'ARMING, slot: wykonawca');
+  eq(g.medley.map(c=>c.preview), MEDLEY.clips.map(c=>c.preview), '4 zajawki do buforowania (gotowość dopiero po wszystkich)');
+  ok(g.medley.every(c=>c.start>=8 && c.start<=20), 'starty wycinków od serwera (8–20 s) — równo u wszystkich');
+  eq(g.preview, MEDLEY.clips[0].preview, 'preview = 1. zajawka (zgodność: gałka/odtwarzacz)');
+  ok(!JSON.stringify(g).includes('Toto') && !JSON.stringify(g).includes('Africa'), 'w stanie bez wykonawcy i tytułów (SEKRET)');
+  await readyAll(room, a, b);
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ artist:'toto' } } });
+  await room.msg(a, { t:'lock' });
+  const r=b.last('state').game.reveal;
+  eq([r.kind, r.teamOk, r.artist], ['medley', true, 'Toto'], 'odsłona składanki: trafiony wykonawca');
+  eq(r.clips.map(c=>c.track), ['Africa','Rosanna','Hold the Line','Pamela'], 'zagrane utwory w odsłonie');
+  ok(r.gained>=100, 'punkty: wykonawca 100 + szybkość');
+  eq(room.game.medley, MEDLEY.clips.map(c=>({ preview:c.preview, start:room.game.medley[MEDLEY.clips.indexOf(c)].start })), 'zajawki zostają do odsłony');
+});
+await group('MP składanka: < 3 utworów / błąd → pytanie jak muzyka; następna runda bez game.medley', async ()=>{
+  const { room } = await makeRoom();
+  const a=room.join('A','Ala'); stubResolver(room);
+  room.resolver.medley=async()=>({ ...MEDLEY, clips:MEDLEY.clips.slice(0,2) });
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['medley'], format:'coop', pools:audioPools() } });
+  eq([room.game.mode, room.game.answerSlots, room.game.medley, room.game.preview], ['music', null, null, TRACK.preview], '2 utwory → muzyka (tytuł + wykonawca)');
+});
+const COVERQ={ ...TRACK, origPreview:TRACK.preview, preview:'https://c/piano.m4a', coverArtist:'Pianovus', coverTrack:'Africa (Piano Version)', instrument:'piano' };
+await group('MP fortepian/gitara: serwer znajduje cover, klient gra zajawkę coveru, odpowiedź = oryginał, w odsłonie kto grał', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubResolver(room); let asked=null;
+  room.resolver.instrumental=async({ instrument })=>{ asked=instrument; return { ...COVERQ, instrument }; };
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['guitar'], format:'coop', pools:audioPools() } });
+  let g=b.last('state').game;
+  eq([g.phase, g.mode, g.preview, g.answerSlots, asked], [MP.ARMING, 'guitar', COVERQ.preview, null, 'guitar'], 'ARMING: zajawka COVERU, sloty tytuł + wykonawca');
+  ok(!JSON.stringify(g).includes('Pianovus') && !JSON.stringify(g).includes('Toto'), 'kto grał cover i oryginał = SEKRET');
+  await readyAll(room, a, b);
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ title:'Africa', artist:'Toto' } } });
+  await room.msg(a, { t:'lock' });
+  const r=b.last('state').game.reveal;
+  eq([r.kind, r.teamOk, r.coverArtist, r.instrument, r.artist], ['music', true, 'Pianovus', 'guitar', 'Toto'], 'odsłona: oryginał + „🎸 Pianovus"');
+  ok(r.gained>=100, 'punkty jak muzyka');
+});
+await group('MP fortepian/gitara: brak coveru → muzyka; kategoria polska → tryb niedostępny (polishDominant)', async ()=>{
+  let { room } = await makeRoom();
+  let a=room.join('A','Ala'); stubResolver(room); room.resolver.instrumental=async()=>({ error:true, reason:'empty' });
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['piano'], format:'coop', pools:audioPools() } });
+  eq([room.game.mode, room.game.preview], ['music', TRACK.preview], 'brak coveru → zwykła muzyka (jak solo)');
+  ({ room } = await makeRoom());
+  a=room.join('A','Ala'); stubResolver(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['piano'], format:'coop', pools:{ 'rock-pl':{ label:'rock PL', artists:['Perfect','Lady Pank'] } } } });
+  ok(!room.game || room.game.phase==null, 'tylko fortepian + kategoria polska → brak meczu (instrumentalCapable)');
+});
+// utwory o kolejnych latach z dekady 80s (wiarygodny rok → karta osi)
+function stubYears(room, years=[1984,1981,1987,1983,1989,1982,1986]){
+  stubResolver(room); let i=0;
+  room.resolver.track=async()=>{ const y=years[i%years.length]; i++; return { ...TRACK, track:'T'+i, artist:'A'+i, year:String(y), preview:'https://p/t'+i+'.m4a' }; };
+}
+await group('MP oś czasu (coop): kotwica od serwera, slot szczeliny, walidacja, dobra szczelina → karta na osi drużyny', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubYears(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['timeline'], format:'coop', pools:audioPools() } });
+  let g=b.last('state').game;
+  eq([g.phase, g.mode, (g.answerSlots||[]).map(s=>s.key)], [MP.ARMING, 'timeline', ['gap','title','artist']], 'ARMING, sloty: szczelina + tytuł + wykonawca');
+  eq(g.timeline.all.map(c=>[c.year, !!c.anchor]), [[1984, true]], 'kotwica (karta jawna) na osi drużyny');
+  ok(!JSON.stringify(g).includes('1981'), 'rok karty pytania = SEKRET');
+  eq(room.current.tlCard.year, 1981, 'karta pytania w this.current');
+  await readyAll(room, a, b);
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ gap:'5', title:'T2' } } });
+  eq(room.game.byTeam.all.proposals[0].values, { title:'T2' }, 'zła szczelina odrzucona przez reducer (serwer)');
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ gap:'0', title:'T2', artist:'A2' } } });   // 1981 przed 1984 → dobrze
+  await room.msg(a, { t:'lock' });
+  const st=b.last('state').game, r=st.reveal;
+  eq([r.kind, r.teamOk, r.timelineEval.gap, r.year], ['timeline', true, 0, '1981'], 'odsłona osi: dobre miejsce');
+  ok(r.gained>=140, 'punkty: 100 + żetony 20/20 (+ szybkość)');
+  eq(st.timeline.all.map(c=>c.year), [1981, 1984], 'karta wstawiona na oś drużyny (stan jawny)');
+  await room.msg(a, { t:'next' });
+  g=room.game;
+  eq([g.mode, g.timeline.all.length], ['timeline', 2], 'następne pytanie: ta sama oś (bez nowej kotwicy)');
+  ok(room.current.tlCard && room.current.tlCard.year===1987, 'karta kolejnego pytania');
+});
+await group('MP oś czasu (Solo): kotwica per gracz, oceny na własnych osiach; utwór bez wiarygodnego roku → muzyka', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  stubYears(room);
+  await room.msg(a, { t:'start', config:{ questions:5, modes:['timeline'], format:'solo', pools:audioPools() } });
+  const tl=room.game.timeline;
+  eq([tl.A.length, tl.B.length, tl.A[0].year, tl.B[0].year], [1, 1, 1984, 1981], 'każdy gracz ma własną kotwicę');
+  eq(room.current.tlCard.year, 1987, 'karta pytania');
+  await readyAll(room, a, b);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ gap:'1' } } });   // A: po 1984 → dobrze
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ gap:'0' } } });   // B: przed 1981 → źle
+  await room.msg(a, { t:'lock' });
+  const r=room.game.reveal;
+  eq([r.byTeam.A.teamOk, r.byTeam.B.teamOk, room.game.timeline.A.length, room.game.timeline.B.length], [true, false, 2, 1], 'karta tylko u gracza, który trafił');
+  // poza dekadą (rok z iTunes = remaster) → bez karty; po próbach gramy jak muzykę
+  const { room:r2 } = await makeRoom();
+  const c=r2.join('C','Cy'); stubYears(r2, [2011]);
+  await r2.msg(c, { t:'start', config:{ questions:5, modes:['timeline'], format:'coop', pools:audioPools() } });
+  eq([r2.game.mode, r2.game.answerSlots], ['music', null], 'brak wiarygodnego roku → pytanie jak muzyka');
+});
+/* ==================== dług MP: „Gotowy ✓", karencja hosta (przeładowanie TV), pokój mieszany (adv) ==================== */
+await group('„Gotowy ✓" w lobby: toggle, presence.ready, tylko poza meczem, reset przy starcie i wyjściu, start NIE blokowany', async ()=>{
+  const { room } = await makeRoom();
+  const h=await room.connect('H','Host'), a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  ok(h.last('presence').caps.includes('lobbyReady'), 'capability lobbyReady w presence');
+  eq(h.last('presence').ready, [], 'na start nikt gotowy');
+  await room.msg(a, { t:'lobbyReady', on:true });
+  eq(h.last('presence').ready, ['A'], 'A gotowa — wszyscy widzą');
+  await room.msg(b, { t:'lobbyReady', on:true }); await room.msg(b, { t:'lobbyReady', on:false });
+  eq(h.last('presence').ready, ['A'], 'toggle: B cofa gotowość');
+  await room.msg(b, { t:'lobbyReady', on:true });
+  await room.drop(b);
+  eq(h.last('presence').ready, ['A'], 'wyjście gracza → znika z gotowych');
+  await room.msg(h, { t:'start', config:CONFIG() });   // host startuje mimo niegotowych (nie blokuje)
+  eq(room.game.phase, MP.ARMING, 'start bez kompletu gotowych — NIE blokowany');
+  eq(h.last('presence').ready, [], 'start meczu → reset gotowości');
+  await room.msg(a, { t:'lobbyReady', on:true });
+  eq(room.lobbyReady.size, 0, 'w trakcie meczu „Gotowy" ignorowany');
+  room.clearArmTimer(); room.clearAutoLock();
+});
+await group('karencja hosta: TV (salon) przeładowuje się i wraca w karencji → hostId i tvId zostają przy TV', async ()=>{
+  const { room } = await makeRoom(); room.hostGraceMs=80;
+  const tv=await room.connect('TV','TV'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba');
+  // lobby (przed meczem): przeładowanie TV
+  await room.drop(tv);
+  eq(room.hostId, 'TV', 'lobby: TV wyszła → w karencji host zostaje TV (bez awansu gracza)');
+  const p3=await room.connect('P3','Ewa');   // ktoś dołącza w karencji — nie przejmuje
+  eq(room.hostId, 'TV', 'dołączający w karencji nie przejmuje hosta');
+  let tv2=await room.connect('TV','TV');
+  eq([room.hostId, tv2.last('presence').hostId], ['TV','TV'], 'TV wraca w karencji → nadal host');
+  await sleep(120);
+  eq(room.hostId, 'TV', 'po upływie karencji (TV obecna) bez zmian');
+  // mecz salonowy: przeładowanie TV w trakcie
+  await room.msg(tv2, { t:'start', config:CONFIG({ salon:true }) });
+  eq([room.game.tvId, room.hostId], ['TV','TV'], 'salon: TV = host i tvId');
+  await room.drop(tv2);
+  eq([room.hostId, room.game.hostId, room.game.tvId], ['TV','TV','TV'], 'w karencji: gracz NIE przejmuje hosta ani ekranu');
+  const tv3=await room.connect('TV','TV');
+  eq([room.hostId, room.game.tvId, tv3.last('state').game.tvId], ['TV','TV','TV'], 'TV po reloadzie w karencji: host + TV');
+  // nie wraca → po karencji awans gracza (pokój nie zamarza), tvId zostaje (P0-1)
+  await room.drop(tv3);
+  await sleep(130);
+  eq([room.hostId, room.game.tvId], ['P1','TV'], 'TV nie wraca → po karencji awans najstarszego gracza; tvId bez zmian');
+  const tv4=await room.connect('TV','TV');
+  eq(room.hostId, 'TV', 'starter-TV wraca później → odzyskuje hosta (reclaim)');
+  room.clearArmTimer(); room.clearAutoLock(); room.clearHostGrace();
+  void p1; void p2; void p3; void tv4;
+});
+await group('karencja hosta: po meczu (DONE) w salonie TV odzyskuje hosta po reloadzie (rewanż ustawia TV)', async ()=>{
+  const { room } = await makeRoom();   // hostGraceMs 0 → awans od razu (najgorszy przypadek)
+  const tv=await room.connect('TV','TV'), p=await room.connect('P','Ola');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true, questions:5 }) });
+  room.game.phase=MP.DONE;
+  await room.drop(tv);
+  eq(room.hostId, 'P', 'bez karencji: awans gracza');
+  await room.connect('TV','TV');
+  eq(room.hostId, 'TV', 'DONE + salon: TV (starter) odzyskuje hosta');
+  room.clearArmTimer(); room.clearAutoLock(); void p;
+});
+await group('pokój mieszany: presence.members[].adv tylko dla klientów ogłaszających `adv` w hello (stary klient — bez)', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Nowy'), b=await room.connect('B','Stary');
+  await room.msg(a, { t:'hello', caps:['adv'] });
+  await room.msg(b, { t:'hello' });
+  const ms=a.last('presence').members;
+  eq(ms.map(m=>[m.id, !!m.adv]), [['A',true],['B',false]], 'adv przy nowym kliencie, brak przy starym');
+  await room.msg(a, { t:'track', name:'Nowy2' });
+  ok(a.last('presence').members.find(m=>m.id==='A').adv, '`track` (zmiana ksywy) nie gubi flagi adv');
 });
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

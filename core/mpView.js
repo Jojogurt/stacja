@@ -16,7 +16,7 @@ export const typCountText = (n) => countText(n, 'typ', 'typy', 'typów');   // P
 
 /* P2-9: kto losuje — przy serwerze-autorytecie „serwer losuje…" (dawniej „host losuje" — nieprawda), relay: host sam / gość czeka */
 export function loadingText({ authority = false, host = false, mode = '' } = {}){
-  const what = mode === 'quiz' ? 'pytanie' : 'utwór';
+  const what = mode === 'quiz' ? 'pytanie' : mode === 'cover' ? 'okładkę' : 'utwór';   // MP okładka: serwer losuje album
   if(authority) return `serwer losuje ${what}…`;
   return host ? `losuję ${what}…` : `host losuje ${what}…`;
 }
@@ -91,3 +91,27 @@ export function phaseSfxGain(name, role = 'normal'){
 }
 // rola ekranu: TV salonu / telefon w salonie (pilot) / zwykły
 export function sfxRole({ tv = false, salon = false } = {}){ return tv ? 'tv' : (salon ? 'remote' : 'normal'); }
+
+/* ---- „Gotowy ✓" w lobby / przy rewanżu (serwer-autorytet: presence.ready) ----
+ * Liczymy GRACZY bez hosta (host startuje — nie musi się zgłaszać; w salonie host = TV). Start NIE jest blokowany:
+ * to tylko informacja dla hosta („gotowi 3/4"). members: [{id}], readyIds: [id], hostId. */
+export function lobbyReadyCount({ members = [], readyIds = [], hostId = null } = {}){
+  const ready = new Set(Array.isArray(readyIds) ? readyIds : []);
+  const ids = [...new Set((Array.isArray(members) ? members : []).map(m => m && m.id).filter(id => id && id !== hostId))];
+  const n = ids.filter(id => ready.has(id)).length;
+  return { n, total: ids.length, all: ids.length > 0 && n === ids.length, text: ids.length ? `gotowi ${n}/${ids.length}` : '' };
+}
+/* ---- pokój mieszany (stary klient): „Czekamy na" po „dalej" ----
+ * Stary klient wysyła `advanced` TYLKO w salonie → poza salonem czekalibyśmy na niego do zmiany fazy. Nowy serwer
+ * oznacza w presence klientów, którzy go wysyłają (`adv`); gdy ktokolwiek ma flagę — czekamy tylko na nich.
+ * Stary serwer (nikt nie ma flagi) → wszyscy (dawne zachowanie). */
+export function advanceWaitIds(players, { salon = false } = {}){
+  const list = (Array.isArray(players) ? players : []).filter(p => p && p.id);
+  if(salon || !list.some(p => p.adv === true)) return list.map(p => p.id);
+  return list.filter(p => p.adv === true).map(p => p.id);
+}
+/* ---- „🎧 Gust stołu" w relay: opcja ukryta z notką (pulę składa serwer-autorytet z półek graczy) ---- */
+export function tableOptionState({ cap = false, relay = false } = {}){
+  if(cap) return { show:true, note:'' };
+  return { show:false, note: relay ? '🎧 Gust stołu działa tylko z serwerem pokoju — w trybie zgodności niedostępny.' : '' };
+}

@@ -9,6 +9,7 @@ import { REACTIONS } from '../core/chatFeed.js';
 import { reduceAction, countReady, evaluateAnswer, applyEvaluation, answerTiming, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, slotsFor, teamOf,
   answerCredits, audioHostOnly, playsAudioLocally } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, joinTeam, COOP_TEAM, sanitizeAssignments, teamColor } from '../core/teams.js';
+import { LYRIC_MAX, clipLyric, lyricLeaks } from '../core/lyricCheck.js';
 import { escapeHtml, safeColor, isSlotKey, num, clipText } from '../core/util.js';
 import { clampRounds, sanitizeMpConfig, MAX_ROUNDS, clampQuestions, roundsForQuestions, MAX_QUESTIONS, DEFAULT_QUESTIONS, QUICK_QUESTIONS, MATCH_LENGTHS, matchProgress } from '../core/match.js';
 import { clampTimer, MP_TIMER_MAX_S, secsLeft, MP_ARM_TIMEOUT_MS, MP_REVEAL_AUTO_MS, MP_BUFFER_TIMEOUT_MS } from '../core/timing.js';
@@ -1389,7 +1390,7 @@ group('F8a trackSelect: wiarygodność roku', ()=>{
 group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
   ok(['intro','abcd','year'].every(m=>ALL_MODES.includes(m) && MODE_LABEL[m]), 'nowe tryby w ALL_MODES + etykiety');
   eq(MODE_LABEL.intro,'⏱ intro','etykieta intro');
-  eq(SOLO_ONLY_MODES,['intro','medley','cover','piano','guitar','timeline'],'intro (EKSP.: + składanka, okładka, fortepian) tylko solo'); ok(!MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
+  eq(SOLO_ONLY_MODES,[],'brak trybów tylko-solo — wszystkie w MP (część tylko pod autorytetem)'); ok(MP_MODES.includes('intro') && MP_MODES.includes('abcd') && MP_MODES.includes('year'), 'MP_MODES');
   const C={ dek:{label:'80', range:'1980–89', artists:['A','B','C']}, pl:{label:'pl', songs:[1,2,3,4,5].map(i=>({title:'t'+i,artist:'a'+i,year:'199'+i}))},
     pl2:{label:'pl2', songs:[{title:'x',artist:'y'},{title:'z',artist:'w'}]}, lyr:{label:'l', kind:'lyrics', songs:[{title:'d'}]}, q:{label:'q', kind:'quiz', questions:[]},
     solo1:{label:'s', artists:['Only']} };
@@ -1399,11 +1400,11 @@ group('F8a match: tryby, modesFor, MP_MODES, capabilities', ()=>{
   eq(modesFor('solo1',C),['music','reverse','snippet','intro','revsnip','year','medley','cover','piano','guitar','slowmo','fastmo'],'1 wykonawca: bez ABCD (brak dystraktorów z kategorii)');
   eq(modesFor('lyr',C),['lektor'],'teksty bez audio — bez nowych trybów'); eq(modesFor('q',C),['quiz'],'quiz bez nowych trybów');
   const mi=buildMatch(['dek'],['intro'],{questions:5},C); ok(!mi.error && mi.slots[0].mode==='intro', 'buildMatch: mecz intro');
-  eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','zzz'] }).modes,['music','abcd','year'],'MP config: intro odrzucone (tylko solo)');
+  eq(sanitizeMpConfig({ modes:['music','intro','abcd','year','medley','zzz'] }).modes,['music','intro','abcd','year','medley'],'MP config (autorytet): intro/składanka zostają, nieznane odrzucone');
   eq(mpAvailableModes(null,true),LEGACY_MP_MODES,'stary serwer (brak modes w presence) → tylko dawne tryby');
   eq(mpAvailableModes(MP_MODES,true),MP_MODES,'nowy serwer → wszystkie MP');
   eq(mpAvailableModes(['music','abcd'],true),['music','abcd'],'przecięcie z tym, co zna serwer');
-  eq(mpAvailableModes(null,false),MP_MODES,'relay (host liczy sam) → wszystkie MP');
+  eq(mpAvailableModes(null,false),MP_MODES.filter(m=>!['intro','cover','medley','piano','guitar','timeline'].includes(m)),'relay (host liczy sam) → wszystkie MP bez trybów tylko-autorytet');
   for(let k=0;k<30;k++){ const r=randomPools(Object.keys(C), C, ['music','reverse']); ok(r.modes.every(m=>['music','reverse'].includes(m)), 'randomPools: tylko dozwolone tryby'); }
   ok(pickSummary(new Set(['dek']), new Set(['year']), {questions:5}, C).unit==='utworów', 'picker: rok = utwory');
 });
@@ -1533,9 +1534,9 @@ group('F8b daily: siatka emoji + tekst udostępniania (bez danych osobowych)', (
   eq(resultGrid(res.slice(0,3),10),'🟩🟩🟨⬜⬜⬜⬜⬜⬜⬜','przerwany mecz → ⬜ za nierozegrane');
   eq(countHits(res),6,'trafione (pełne)');
   const t=dailyShareText({ n:7, hits:7, total:10, streak:3, grid:'🟩🟩🟨⬛🟩🟩⬛🟩🟩🟨', url:'https://x.pl/stacja/' });
-  eq(t,'STACJA #7 🎧 7/10 · 🔥3\n🟩🟩🟨⬛🟩🟩⬛🟩🟩🟨\nhttps://x.pl/stacja/','tekst Stacji dnia (format z briefu)');
-  eq(dailyShareText({ n:1, hits:0, total:10, streak:0, grid:'⬛', url:'' }),'STACJA #1 🎧 0/10\n⬛','bez serii i linku');
-  eq(matchShareText({ points:452.4, hits:3, total:5, grid:'🟩🟩🟩⬛🟨', url:'https://x.pl/' }),'STACJA 🎧 452 pkt · 3/5\n🟩🟩🟩⬛🟨\nhttps://x.pl/','tekst zwykłego meczu');
+  eq(t,'Uszy & Mózg #7 🎧 7/10 · 🔥3\n🟩🟩🟨⬛🟩🟩⬛🟩🟩🟨\nhttps://x.pl/stacja/','tekst Stacji dnia (format z briefu)');
+  eq(dailyShareText({ n:1, hits:0, total:10, streak:0, grid:'⬛', url:'' }),'Uszy & Mózg #1 🎧 0/10\n⬛','bez serii i linku');
+  eq(matchShareText({ points:452.4, hits:3, total:5, grid:'🟩🟩🟩⬛🟨', url:'https://x.pl/' }),'Uszy & Mózg 🎧 452 pkt · 3/5\n🟩🟩🟩⬛🟨\nhttps://x.pl/','tekst zwykłego meczu');
 });
 group('F8b daily: rekord dnia, sanityzacja magazynu, status karty', ()=>{
   const res=[{track:'T1',artist:'A1',okTitle:true,okArtist:true,points:120},{track:'T2',artist:'A2',okTitle:true,okArtist:false,points:50}];
@@ -1656,12 +1657,12 @@ group('EKSP. timing: okno „od tyłu krótko", wycinki składanki, etapy okład
   eq(T8.medleyClipAt(99,4).done,true,'po końcu → done'); eq(T8.medleyClipAt(NaN,4).index,0,'śmieci → początek'); eq(T8.medleyClipAt(1,0).done,true,'0 wycinków → done');
   eq(T8.medleyLabel(5.2,4),'fragment 2/4…','licznik w trakcie'); eq(T8.medleyLabel(7,4),'przerwa · zaraz fragment 3/4','licznik w przerwie');
   ok(/^koniec/.test(T8.medleyLabel(20,4)),'po końcu: koniec składanki');
-  eq(T8.COVER_STAGES,[16,32,64,0],'okładka: 16 → 32 → 64 → pełna (bez etapu 8×8)');
+  eq(T8.COVER_STAGES,[16,32,64],'okładka: 16 → 32 → 64 (bez 8×8; pełna tylko w odsłonie — nazwa zespołu na okładce)');
   eq(T8.coverStageBlocks(0),16,'pierwszy etap = 16 bloków'); eq(T8.coverStageBlocks(-3),16,'ujemny → etap 0');
-  eq(T8.coverStageBlocks(3),0,'etap 3 = pełna'); eq(T8.coverStageBlocks(99),0,'poza zakresem → pełna');
-  eq(T8.coverNextStage(2),3,'następny'); eq(T8.coverNextStage(3),null,'koniec');
+  eq(T8.coverStageBlocks(2),64,'etap 2 = 64×64'); eq(T8.coverStageBlocks(99),64,'poza zakresem → 64 (nigdy pełna)');
+  eq(T8.coverNextStage(1),2,'następny'); eq(T8.coverNextStage(2),null,'koniec na 64×64');
   eq(T8.COVER_STEP_MS,6000,'etap okładki trwa 6 s (było 3 s)');
-  eq(T8.COVER_STEP_MS*(T8.COVER_STAGES.length-1),18000,'pełna okładka po 18 s auto-odsłony (mieści się w czasie pytania)');
+  eq(T8.COVER_STEP_MS*(T8.COVER_STAGES.length-1),12000,'ostatni etap (64×64) po 12 s auto-odsłony');
 });
 group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etapów, legenda', ()=>{
   const hit=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:null, streak:1 });
@@ -1673,11 +1674,11 @@ group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etap�
   eq(S8.scoreRound({ okArtist:false, okAlbum:true, artistOnly:true, streak:5 }).streakMult,1,'bez wykonawcy — bez serii');
   const sp=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:0 }); eq(sp.points,150,'szybkość jak quiz (+50%)');
   eq(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, mult:S8.coverMult(0) }).points,240,'okładka etap 0: ×2');
-  eq(S8.COVER_MULTS,[2,1.6,1.3,1],'mnożniki okładki: ×2.0 → ×1.6 → ×1.3 → ×1.0');
+  eq(S8.COVER_MULTS,[2,1.5,1],'mnożniki okładki: ×2.0 → ×1.5 → ×1.0 (3 etapy)');
   eq(S8.COVER_MULTS.length,T8.COVER_STAGES.length,'mnożnik na każdy etap odsłony');
   ok(S8.COVER_MULTS.every((m,i,a)=>i===0 || m<a[i-1]),'mnożniki maleją');
-  eq(S8.coverMult(3),1,'pełna okładka ×1'); eq(S8.coverMult(99),1,'poza zakresem → ×1'); eq(S8.coverMult('x'),1,'śmieci → ×1');
-  eq(S8.coverMult(1),1.6,'etap 32×32 ×1.6');
+  eq(S8.coverMult(2),1,'64×64 ×1'); eq(S8.coverMult(99),1,'poza zakresem → ×1'); eq(S8.coverMult('x'),1,'śmieci → ×1');
+  eq(S8.coverMult(1),1.5,'etap 32×32 ×1.5');
   eq(S8.REVSNIP_MULTS,[1,0.8],'od tyłu krótko: 3 s ×1, 5 s ×0,8');
   eq(S8.scoreRound({ okTitle:true, okArtist:true, mult:S8.revsnipMult(1) }).points,80,'„dłużej" → 100 × 0,8');
   ok(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, elapsedMs:0, streak:9, mult:2 }).points<=S8.SCORE_MAX_PER_Q,'limit ligi bez zmian');
@@ -1688,8 +1689,8 @@ group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etap�
 group('EKSP. match: tryby, etykiety, MP (revsnip tak, składanka/okładka tylko solo), modesFor', ()=>{
   ok(['revsnip','medley','cover'].every(m=>M8.ALL_MODES.includes(m) && M8.MODE_LABEL[m] && M8.MODE_SHORT[m]),'nowe tryby + etykiety');
   eq([M8.MODE_LABEL.medley,M8.MODE_LABEL.revsnip,M8.MODE_LABEL.cover],['🎛 składanka','⏪ od tyłu krótko','🖼 okładka'],'etykiety');
-  ok(M8.MP_MODES.includes('revsnip') && !M8.MP_MODES.includes('medley') && !M8.MP_MODES.includes('cover'),'MP_MODES');
-  eq(M8.sanitizeMpConfig({ modes:['revsnip','medley','cover','music'] }).modes,['revsnip','music'],'MP config: składanka/okładka odrzucone');
+  ok(M8.MP_MODES.includes('revsnip') && M8.MP_MODES.includes('medley') && M8.MP_MODES.includes('cover'),'MP_MODES (składanka/okładka pod autorytetem)');
+  eq(M8.sanitizeMpConfig({ modes:['revsnip','medley','cover','music'] }).modes,['revsnip','medley','cover','music'],'MP config (autorytet): składanka i okładka zostają');
   ok(!M8.mpAvailableModes(null,true).includes('revsnip'),'stary serwer → bez „od tyłu krótko"');
   const C={ pl3:{label:'p', songs:[{title:'a',artist:'A'},{title:'b',artist:'B feat. C'},{title:'c',artist:'A'}]},
     pl4:{label:'p', songs:['A','B feat. X','C','D'].map((a,i)=>({title:'t'+i,artist:a}))} };
@@ -1782,8 +1783,8 @@ await (async ()=>{
 /* ===== EKSPERYMENT „fortepian" (piano): wybór coveru fortepianowego, reguła kategorii polskich, fallback ===== */
 group('EKSP. fortepian: tryb, modesFor (bez kategorii polskich), pickPianoCover', ()=>{
   ok(M8.ALL_MODES.includes('piano') && M8.MODE_LABEL.piano && M8.MODE_SHORT.piano && M8.MODE_SUB.piano,'tryb + etykiety');
-  ok(!M8.MP_MODES.includes('piano') && M8.SOLO_ONLY_MODES.includes('piano'),'tylko solo');
-  eq(M8.sanitizeMpConfig({ modes:['piano','music'] }).modes,['music'],'MP config: fortepian odrzucony');
+  ok(M8.MP_MODES.includes('piano') && M8.AUTHORITY_ONLY_MODES.includes('piano') && !M8.RELAY_MP_MODES.includes('piano'),'MP tylko pod autorytetem');
+  eq(M8.sanitizeMpConfig({ modes:['piano','music'] }).modes,['piano','music'],'MP config (autorytet): fortepian przyjęty');
   const C={ '80s':{label:'lata 80', range:'1980–89', artists:['Maanam','Madonna']}, 'pop-world':{label:'pop świat', desc:'wielkie gwiazdy', artists:['Adele']},
     'rock-pl':{label:'rock PL', desc:'polski rock', artists:['Dżem']}, 'rap-pl':{label:'rap PL', artists:['Mata']}, 'disco-polo':{label:'disco polo', artists:['Akcent']},
     'evergreen-pl':{label:'evergreeny PL', desc:'polskie złoto', artists:['Anna German']}, 'pl:abc':{label:'Polskie hity 2024', songs:[{title:'a',artist:'b'}]},
@@ -1933,7 +1934,8 @@ group('Nowy mecz: resolvePreset / presetsFor / presetMatches', ()=>{
   eq(hity.modes, ['music','intro','abcd'], 'hity: tryby (solo)');
   eq(hity.sub, '15 pyt · muzyka, intro, ABCD', 'podpis z trybów');
   const mp=MS.resolvePreset(MS.PRESETS[0], MS_CATS, MM.MP_MODES);
-  eq(mp.modes, ['music','abcd'], 'MP: intro (solo-only) wycięte');
+  eq(mp.modes, ['music','intro','abcd'], 'MP (autorytet): intro zostaje');
+  eq(MS.resolvePreset(MS.PRESETS[0], MS_CATS, MM.RELAY_MP_MODES).modes, ['music','abcd'], 'MP relay: intro (tylko autorytet) wycięte');
   const legacy=MS.resolvePreset(MS.PRESETS[2], MS_CATS, MM.LEGACY_MP_MODES);
   eq(legacy.modes, ['music'], 'stary serwer: oś czasu wycięta → zostaje muzyka');
   const lam=MS.resolvePreset(MS.PRESETS[3], MS_CATS);
@@ -1968,9 +1970,9 @@ group('Nowy mecz: modeStates — wyszarzenie wg kategorii, MP solo-only/serwer, 
   eq(st.active, ['lektor'], 'wybrana-ale-wyszarzona muzyka się nie liczy'); eq(st.reasons, ['cats'], 'powody');
   st=MS.modeStates({ cats:new Set(['80s','rebusy']), modes:new Set(['music','quiz']), allCats:MS_CATS, available:MM.mpAvailableModes(null, true) });
   f=flat(st);
-  ok(f.intro.disabled && f.intro.reason==='solo' && f.abcd.reason==='server' && f.quiz.auto && f.quiz.on, 'MP stary serwer: intro=solo, ABCD=server, quiz auto włączony');
+  ok(f.timeline.disabled && f.timeline.reason==='server' && f.intro.reason==='server' && f.abcd.reason==='server' && f.quiz.auto && f.quiz.on, 'MP stary serwer: oś czasu/intro/ABCD=server, quiz auto włączony');
   eq(st.active, ['music','quiz'], 'aktywne w MP');
-  ok(/tylko solo/.test(MS.modeNote(st.reasons)) && /serwer pokoju/.test(MS.modeNote(st.reasons)), 'modeNote: wyjaśnienie solo + serwer');
+  ok(/serwer pokoju/.test(MS.modeNote(st.reasons)) && /tylko solo/.test(MS.modeNote(['solo'])), 'modeNote: wyjaśnienie serwer (+ solo, gdy dotyczy)');
   eq(MS.modeNote([]), '', 'bez powodów — bez notki');
 });
 group('Nowy mecz: setupSummary / settingsSummary', ()=>{
@@ -2020,8 +2022,8 @@ group('EKSP. gitara: guitarCoverVerdict — znacznik w tytule / lista wykonawcó
 /* ===== EKSPERYMENT „gitara" (guitar): cover gitarowy — wspólna ścieżka z fortepianem (resolveInstrumentalCover) ===== */
 group('EKSP. gitara: tryb, modesFor (bez kategorii polskich), pickInstrumentalCover(guitar)', ()=>{
   ok(M8.ALL_MODES.includes('guitar') && M8.MODE_LABEL.guitar==='🎸 gitara' && M8.MODE_SHORT.guitar && M8.MODE_SUB.guitar,'tryb + etykiety „🎸 gitara"');
-  ok(!M8.MP_MODES.includes('guitar') && M8.SOLO_ONLY_MODES.includes('guitar'),'tylko solo');
-  eq(M8.sanitizeMpConfig({ modes:['guitar','music'] }).modes,['music'],'MP config: gitara odrzucona');
+  ok(M8.MP_MODES.includes('guitar') && M8.AUTHORITY_ONLY_MODES.includes('guitar') && !M8.RELAY_MP_MODES.includes('guitar'),'MP tylko pod autorytetem');
+  eq(M8.sanitizeMpConfig({ modes:['guitar','music'] }).modes,['guitar','music'],'MP config (autorytet): gitara przyjęta');
   const C={ '80s':{label:'lata 80', range:'1980–89', artists:['Maanam','Madonna']}, 'rock-pl':{label:'rock PL', desc:'polski rock', artists:['Dżem']},
     'disco-polo':{label:'disco polo', artists:['Akcent']}, 'pl:abc':{label:'Polskie hity 2024', songs:[{title:'a',artist:'b'}]}, 'pl:def':{label:'Top 50 Global', songs:[{title:'a',artist:'b'}]},
     ak:{label:'akustycznie / unplugged', noModes:['piano','guitar','cover','medley'], songs:[1,2,3,4].map(i=>({ title:'T'+i, artist:'A'+i, year:'199'+i, album:'MTV Unplugged', match:'unplugged' }))} };
@@ -2338,8 +2340,8 @@ group('EKSP. oś czasu: punkty (100 + żetony 20/20, seria tylko przy dobrym mie
   eq(S9.scoreRound({ okTitle:true, okArtist:true, elapsedMs:null }).parts.place, undefined, 'muzyka bez parts.place (format bez zmian)');
   ok(/dobre miejsce na osi 100/.test(S9.scoreLegend('timeline')) && /tytuł \+20/.test(S9.scoreLegend('timeline')), 'legenda osi — '+S9.scoreLegend('timeline'));
   ok(M9.ALL_MODES.includes('timeline') && M9.MODE_LABEL.timeline==='🕰 oś czasu' && M9.MODE_SHORT.timeline && M9.MODE_SUB.timeline, 'tryb + etykiety');
-  ok(!M9.MP_MODES.includes('timeline') && M9.SOLO_ONLY_MODES.includes('timeline'), 'oś czasu tylko solo');
-  eq(M9.sanitizeMpConfig({ modes:['music','timeline','slowmo','fastmo'] }).modes, ['music','slowmo','fastmo'], 'MP config: oś czasu odrzucona, tempo przyjęte');
+  ok(M9.MP_MODES.includes('timeline') && M9.AUTHORITY_ONLY_MODES.includes('timeline'), 'oś czasu w MP tylko pod autorytetem');
+  eq(M9.sanitizeMpConfig({ modes:['music','timeline','slowmo','fastmo'] }).modes, ['music','timeline','slowmo','fastmo'], 'MP config (autorytet): oś czasu i tempo przyjęte');
   const C={ dek:{ label:'80', range:'1980–89', artists:['A','B','C'] }, sty:{ label:'rock', artists:['A','B'] } };
   ok(M9.modesFor('dek',C).includes('timeline') && !M9.modesFor('sty',C).includes('timeline'), 'modesFor: dekada tak, styl bez zakresu nie');
   const m=M9.buildMatch(['dek','sty'],['timeline'],{questions:5},C); ok(!m.error && m.slots.every(s=>s.cat==='dek' && s.mode==='timeline'), 'buildMatch: oś tylko z kategorii z rokiem');
@@ -2666,7 +2668,7 @@ group('gust2: shareText — archetyp, top dekady/gatunki, top 3 artystów, link;
   ok(/Mój gust muzyczny — 💿 Dziecko lat 90\./.test(t), 'nagłówek z archetypem');
   ok(/Dekady: lata 90\. \d+% · lata 80\. \d+%/.test(t) && /Gatunki: pop \d+% · rock \d+%/.test(t), 'top dekady i gatunki z %');
   ok(/Na mojej półce: Britney, Kult/.test(t), 'top artyści');
-  ok(/https:\/\/x\.test\//.test(t) && /Uszy & Muzk/.test(t), 'link + nazwa aplikacji');
+  ok(/https:\/\/x\.test\//.test(t) && /Uszy & Mózg/.test(t), 'link + nazwa aplikacji');
   ok(!/gracz|@/.test(t), 'bez ksywy domyślnie');
   ok(/Gust muzyczny: Zbyszek/.test(shareText(p, { handle:'Zbyszek' })), 'ksywa na życzenie');
   const low=shareText(buildTasteProfile([]));
@@ -3110,7 +3112,7 @@ group('P2-11 core/mpView: lista zagranych utworów + skala + tekst udostępnieni
   eq(MV.matchTally({ results:[], history }), { played:3, hits:2 }, 'tally z historii (bez results)');
   eq(MV.matchTally({ results:results.slice(0,3), history }), { played:3, hits:2 }, 'pełna historia → MOJE trafienia (nie drużyny prowadzącej)');
   eq(MV.matchTally({ results, history:history.slice(0,1) }), { played:4, hits:2 }, 'niepełna historia (dołączył w trakcie) → results');
-  const tx=MV.resultShareText({ appName:'Uszy & Muzk', score:320, scale:500, hits:4, played:5, comp:true, winner:'Ola', url:'https://k/s/' });
+  const tx=MV.resultShareText({ appName:'Uszy & Mózg', score:320, scale:500, hits:4, played:5, comp:true, winner:'Ola', url:'https://k/s/' });
   ok(/320 \/ 500 pkt · 4\/5 trafionych/.test(tx) && /Ola wygrywa/.test(tx) && /https:\/\/k\/s\//.test(tx), 'share: „320 / 500 pkt · 4/5 trafionych" + zwycięzca + link — '+tx);
   ok(/Remis!/.test(MV.resultShareText({ comp:true, tie:true })) && !/wygrywa/.test(MV.resultShareText({ comp:false, winner:'X' })), 'share: remis / coop bez zwycięzcy');
 });
@@ -3120,5 +3122,321 @@ group('P2-14 core/mpView: głośność dźwięków faz wg roli (TV głośniej, p
   eq([MV.phaseSfxGain('sting'), MV.phaseSfxGain('ding','tv'), MV.phaseSfxGain('tick','remote')], [1,1,1], 'zwykły telefon 1×; inne dźwięki bez zmian');
   eq([MV.sfxRole({tv:true,salon:true}), MV.sfxRole({salon:true}), MV.sfxRole({})], ['tv','remote','normal'], 'rola ekranu');
 });
+group('core/lyricCheck: limit przekładu + ostrzeżenie o wycieku tytułu/wykonawcy', ()=>{
+  eq(clipLyric('  abc  '), 'abc', 'trim');
+  eq(clipLyric('x'.repeat(LYRIC_MAX+50)).length, LYRIC_MAX, 'przycięcie do LYRIC_MAX');
+  eq(clipLyric(null), '', 'null → pusty');
+  eq(lyricLeaks('Dziś wieczorem śpiewam Yesterday', 'Yesterday', 'The Beatles'), ['title'], 'tytuł w przekładzie');
+  eq(lyricLeaks('piosenka zespołu the beatles', 'Help', 'The Beatles'), ['artist'], 'wykonawca (bez względu na wielkość liter)');
+  eq(lyricLeaks('Wczoraj wszystkie kłopoty były daleko', 'Yesterday', 'The Beatles'), [], 'brak wycieku');
+  eq(lyricLeaks('moja miłość', 'Mi', 'U2'), [], 'zbyt krótkie nazwy nie alarmują');
+  eq(lyricLeaks('Helpful words', 'Help', 'X Y'), [], 'tylko całe słowa (Help ≠ Helpful)');
+  eq(lyricLeaks('', 'A title', 'B'), [], 'pusty tekst');
+});
+/* ===================== MP okładka/intro pod serwerem-autorytetem: etapy, URL etapu, „+ więcej", mnożnik z czasu propozycji ===================== */
+{
+const T = await import('../core/timing.js');
+const R = await import('../core/mpReducer.js');
+const M = await import('../core/match.js');
+const MS = await import('../core/matchSetup.js');
+const SC = await import('../core/scoring.js');
+group('MP etapy: harmonogram (stageAt/stageStartsFrom/stageIndexAt) + okładka (mpCoverStageAt)', ()=>{
+  const offs=[0,1000,3000];
+  eq([-5,0,499,500,1499,1500,3499,3500,99999].map(dt=>T.stageAt({ playAt:1000, now:1000+dt, leadMs:500, offsets:offs })), [0,0,0,0,0,1,1,2,2], 'etapy od playAt+LEAD wg offsets (przed startem → 0, po ostatnim → ostatni)');
+  eq(T.stageAt({ playAt:NaN, now:5 , offsets:offs }), 0, 'śmieci → 0'); eq(T.stageAt({ playAt:0, now:9e9 }), 0, 'bez offsets → jeden etap');
+  eq([0,1,2,3].map(k=>T.stageStartsAt({ playAt:1000, stage:k, leadMs:500, offsets:offs })), [1500,2500,4500,null], 'początek etapu (poza zakresem → null)');
+  eq(T.stageStartsFrom({ playAt:1000, leadMs:500, offsets:offs }), [1500,2500,4500], 'rzeczywiste starty etapów (epoch ms)');
+  eq(T.stageStartsFrom({ playAt:'x', offsets:offs }), [], 'śmieci → []');
+  eq([0,1500,2499,2500,4500,1e9].map(t=>T.stageIndexAt([1500,2500,4500], t)), [0,0,0,1,2,2], 'stageIndexAt: ostatni start ≤ t');
+  eq([T.stageIndexAt(null, 5), T.stageIndexAt([1,2], NaN)], [0,0], 'stageIndexAt: śmieci → 0');
+  eq(T.coverStageOffsets(), [0,6000,12000], 'okładka: etap k od k × 6 s (3 etapy)');
+  eq(T.coverRevealMs(), 12000, 'ostatni etap (64×64) po 12 s'); eq(T.LISTEN_SECS.cover, 12, 'MP: okno „patrz" = do ostatniego etapu → endsAt po nim');
+  const L=T.MP_INTRO_MS;
+  eq([0, L-1, L+5999, L+6000, L+12000, L+60000].map(dt=>T.mpCoverStageAt(10000, 10000+dt)), [0,0,0,1,2,2], 'mpCoverStageAt: 16 → 32 → 64, wspólne od playAt (+ LEAD)');
+  eq(T.mpCoverStageAt(0, 250, 0, 100), 2, 'krok i LEAD parametryzowane (testy serwera)');
+  eq([T.mpCoverStageStartsAt(10000, 1), T.mpCoverStageStartsAt(10000, 2), T.mpCoverStageStartsAt(10000, 3)], [10000+L+6000, 10000+L+12000, null], 'termin następnego etapu (timer DO)');
+});
+group('MP etapy: „+ więcej"/„wyraźniej" — stageShift przesuwa przyszłe etapy od teraz', ()=>{
+  const st=[1000, 5000, 9000, 20000];
+  eq(T.stageShift(st, 0, 2000), { starts:[1000,2000,6000,17000], stage:1, shift:3000 }, 'następny etap TERAZ, kolejne o tyle samo wcześniej (odstępy zachowane)');
+  eq(T.stageShift(st, 1, 6000), { starts:[1000,5000,6000,17000], stage:2, shift:3000 }, 'minione starty bez zmian');
+  eq(T.stageShift(st, 3, 30000), null, 'ostatni etap → null');
+  eq(T.stageShift(st, 0, 500), null, 'bieżący etap jeszcze nie ruszył (intro/LEAD) → null');
+  eq(T.stageShift(st, 0, 5000), null, 'następny i tak już trwa → null (timer)');
+  eq([T.stageShift(null, 0, 1), T.stageShift(st, 'x', 1), T.stageShift(st, -1, 2000)], [null,null,null], 'śmieci → null');
+  ok(T.stageShift(st, 0, 2000).starts!==st && st[1]===5000, 'czysta (nowa tablica)');
+});
+group('MP intro: introStageOffsets (etap + przerwa na typ), introRevealMs, LISTEN_SECS.intro', ()=>{
+  eq(T.INTRO_GAP_MS, 3000, 'przerwa na typ 3 s');
+  eq(T.introStageOffsets(), [0, 4000, 9000, 16000, 27000], 'etap k+1 = etap k + jego długość (1/2/4/8 s) + przerwa');
+  eq(T.introStageOffsets(20, 10), [0, 30, 70, 130, 230], 'parametry (testy serwera: ms na „sekundę" etapu)');
+  eq(T.introRevealMs(), 27000+16000, 'koniec ostatniego etapu (16 s) = 43 s');
+  eq(T.LISTEN_SECS.intro, 43, 'MP: okno „słuchaj" intro = do końca ostatniego etapu');
+  eq(T.introStageOffsets().length, T.INTRO_STAGES.length, 'offset na każdy etap');
+});
+group('MP okładka: coverStageUrl / coverFullUrl — anty-podglądanie (iTunes / Deezer / nieznany CDN)', ()=>{
+  const it='https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/ab/cd/ef/x.jpg/600x600bb.jpg';
+  eq([0,1,2,3,99].map(k=>T.coverStageUrl(it,k).split('/').pop()), ['16x16bb.jpg','32x32bb.jpg','64x64bb.jpg','64x64bb.jpg','64x64bb.jpg'], 'iTunes: rozmiar = rozdzielczość etapu; poza zakresem → 64 (NIGDY pełna)');
+  eq(T.coverFullUrl(it).split('/').pop(), '600x600bb.jpg', 'pełna okładka tylko przez coverFullUrl (odsłona)');
+  eq(T.coverStageUrl('https://is3-ssl.mzstatic.com/image/thumb/a/b.jpg/100x100bb.jpg', 0), 'https://is3-ssl.mzstatic.com/image/thumb/a/b.jpg/16x16bb.jpg', 'iTunes 100×100 → 16×16');
+  const dz='https://e-cdns-images.dzcdn.net/images/cover/0a1b2c3d4e5f60718293a4b5c6d7e8f9/250x250-000000-80-0-0.jpg';
+  eq([0,1,2].map(k=>T.coverStageUrl(dz,k).split('/').pop()), ['16x16-000000-80-0-0.jpg','32x32-000000-80-0-0.jpg','64x64-000000-80-0-0.jpg'], 'Deezer: ten sam wzór rozmiaru');
+  eq(T.coverFullUrl(dz).split('/').pop(), '600x600-000000-80-0-0.jpg', 'Deezer: pełna 600×600');
+  ok(T.coverStageUrl(dz,0).startsWith('https://e-cdns-images.dzcdn.net/images/cover/0a1b2c3d4e5f60718293a4b5c6d7e8f9/'), 'Deezer: hash/host bez zmian');
+  const unk='https://example.com/covers/100x100bb.jpg';
+  eq([0,1,2,9].map(k=>T.coverStageUrl(unk,k)), ['','','',''], 'nieznany CDN: każdy etap → \'\' (NIGDY pełny obraz)');
+  eq(T.coverFullUrl(unk), unk, 'nieznany CDN: odsłona → oryginał');
+  eq([T.coverFullUrl('http://is1-ssl.mzstatic.com/a/600x600bb.jpg'), T.coverFullUrl('javascript:x'), T.coverStageUrl(null,0)], ['','',''], 'tylko https');
+  eq([T.coverStageable(it), T.coverStageable(dz), T.coverStageable(unk), T.coverStageable('')], [true,true,false,false], 'coverStageable: tylko znane CDN (serwer: inaczej pytanie jak muzyka)');
+  eq([SC.coverMult(0), SC.coverMult(1), SC.coverMult(2), SC.coverMult(9)], [2, 1.5, 1, 1], 'mnożniki 3 etapów: ×2.0 → ×1.5 → ×1.0');
+  ok(/×2\.0 → ×1\.0/.test(SC.scoreLegend('cover')), 'legenda okładki (od ×2.0 do ×1.0)');
+});
+group('MP okładka/intro: dostępność (autorytet tak, relay nie), ekran „Nowy mecz"', ()=>{
+  ok(!M.SOLO_ONLY_MODES.includes('cover') && !M.SOLO_ONLY_MODES.includes('intro') && M.MP_MODES.includes('cover') && M.MP_MODES.includes('intro'), 'okładka i intro w MP_MODES');
+  eq(M.AUTHORITY_ONLY_MODES, ['intro','cover','medley','piano','guitar','timeline'], 'intro/okładka/składanka/covery/oś czasu tylko pod autorytetem');
+  ok(!M.mpAvailableModes(null, false).some(m=>['cover','intro'].includes(m)) && !M.RELAY_MP_MODES.includes('intro'), 'relay → bez intro/okładki');
+  ok(!M.mpAvailableModes(null, true).includes('cover') && !M.mpAvailableModes(null, true).includes('intro'), 'stary serwer (brak presence.modes) → bez');
+  ok(!M.mpAvailableModes(['music','abcd'], true).includes('intro'), 'serwer, który nie ogłasza intro → bez');
+  ok(M.mpAvailableModes(M.MP_MODES, true).includes('cover') && M.mpAvailableModes(M.MP_MODES, true).includes('intro'), 'nowy serwer ogłasza → są');
+  const cats={ d80:{ label:'80s', range:'1980–89', artists:['A','B','C','D'] }, ak:{ label:'unplugged', noModes:['cover'], artists:['A','B','C','D'] } };
+  const flat=(st)=>Object.fromEntries(st.families.flatMap(f=>f.modes).map(m=>[m.mode,m]));
+  let f=flat(MS.modeStates({ cats:new Set(['d80']), modes:new Set(['cover','intro']), allCats:cats, available:M.mpAvailableModes(M.MP_MODES, true) }));
+  ok(!f.cover.disabled && f.cover.on && !f.intro.disabled && f.intro.on, 'MP (nowy serwer): okładka („Bez dźwięku") i intro („Słuchaj") aktywne');
+  ok(M.MODE_FAMILIES.find(x=>x.id==='silent').modes.includes('cover'), 'rodzina silent = okładka + wiedza');
+  f=flat(MS.modeStates({ cats:new Set(['d80']), modes:new Set(['cover']), allCats:cats, available:M.mpAvailableModes(null, false) }));
+  ok(f.cover.disabled && f.cover.reason==='server' && f.intro.reason==='server', 'relay: okładka/intro wyszarzone (serwer pokoju)');
+  ok(!M.modesFor('ak', cats).includes('cover'), 'noModes kategorii (unplugged) wyłącza okładkę także w MP');
+  eq(M.modeTask('cover'), 'Wykonawca z okładki (+ album)', 'polecenie zadania');
+  ok(!/intro/.test(MS.modeNote(['solo'])), 'notka „tylko solo" bez intro');
+});
+const L=500, P=100000;
+const mkG=(mode, format='coop', offsets)=>{
+  const teams = format==='coop' ? [{ id:'all', name:'D', members:['A','B'] }] : [{ id:'A', name:'Ala', members:['A'] }, { id:'B', name:'Bo', members:['B'] }];
+  return { phase:'play', mode, format, teams, byTeam:{}, scores:{}, streaks:{}, answerSlots:R.slotsFor(mode),
+    playAt:P, stageStarts:T.stageStartsFrom({ playAt:P, leadMs:L, offsets }), stage:0, timer:0, endsAt:null, round:1, catKey:'d80' };
+};
+group('MP okładka: sloty, czas propozycji od serwera, mnożnik etapu zamiast szybkości, odsłona', ()=>{
+  eq(R.slotsFor('cover').map(s=>s.key), ['artist','album'], 'sloty: wykonawca + album');
+  const offs=T.coverStageOffsets(1000);   // krok 1 s (test) — etap k od P+L+k·1000
+  const mk=(format)=>mkG('cover', format||'coop', offs);
+  const cur={ track:'Toto IV', album:'Toto IV', artist:'Toto', artistAlt:'TOTO', year:'1982', art:'https://is1-ssl.mzstatic.com/a/600x600bb.jpg' };
+  let g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'toto' }, at:P+L+200 });   // etap 0
+  eq(g.byTeam.all.proposals[0].at, P+L+200, 'propozycja niesie czas (wstawiony przez serwer)');
+  let ev=R.evaluateAnswer(g, cur, undefined, P+L+2500);   // zatwierdzenie dopiero na etapie 2
+  eq([ev.reveal.kind, ev.reveal.teamOk, ev.reveal.stageEval.stage, ev.reveal.stageEval.blocks, ev.reveal.stageEval.mult], ['cover', true, 0, 16, 2], 'etap z czasu PROPOZYCJI (16×16 → ×2), nie z zatwierdzenia');
+  eq(ev.reveal.gained, 200, 'wykonawca 100 × 2 (bez bonusu za szybkość)');
+  eq(ev.result.track, 'Toto IV', 'wynik do ligi: album');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Toto', album:'Hydra' }, at:P+L+1200 });   // etap 1
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+1300);
+  eq([ev.reveal.okBySlot.artist, ev.reveal.okBySlot.album, ev.reveal.stageEval.stage, ev.reveal.gained], [true, false, 1, 150], 'etap 32×32 ×1.5; album bez dopasowania');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'TOTO', album:'Toto IV' }, at:P+L+2100 });   // etap 2
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+2200);
+  eq([ev.reveal.stageEval.stage, ev.reveal.gained], [2, 120], 'etap 64×64 ×1.0; wykonawca (zapis iTunes) + album +20');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ album:'Toto IV' }, at:P+L+100 });
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+200);
+  eq([ev.reveal.teamOk, ev.reveal.gained], [false, 40], 'sam album: bonus 20 × 2, bez trafienia (seria/statystyki = wykonawca)');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Toto' } });   // bez czasu (np. stary serwer)
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+2100);
+  eq(ev.reveal.stageEval.stage, 2, 'brak czasu propozycji → etap w chwili zatwierdzenia (ostrożnie)');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Queen' }, at:P+L+100 });
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Toto' }, at:P+L+2500 });
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+2600);
+  eq(ev.reveal.stageEval.stage, 2, 'poprawka typu → etap nowej propozycji');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'B', byName:'Bo', values:{ artist:'toto' }, at:P+L+2500 });
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Toto' }, at:P+L+1500 });
+  eq(R.evaluateAnswer(g, cur, undefined, P+L+2600).reveal.stageEval.stage, 1, 'najwcześniejsza propozycja z wartością odpowiedzi drużyny');
+  g=mk('solo');
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Toto' }, at:P+L+100 });
+  R.reduceAction(g, { type:'propose', by:'B', byName:'Bo', values:{ artist:'Toto' }, at:P+L+2200 });
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+2300);
+  eq([ev.perTeam.A.stageEval.mult, ev.perTeam.B.stageEval.mult, ev.perTeam.A.gained, ev.perTeam.B.gained], [2, 1, 200, 100], 'Solo: szybszy gracz ×2, wolniejszy (64×64) ×1');
+  ok(R.coverAnswerStage(mk(), 'all', {}, null).stage===0, 'pusta odpowiedź bez czasu → bieżący etap ze stanu');
+  // „wyraźniej" przesunęło etap 1 wcześniej → propozycja po nowym starcie liczy się już do etapu 1 (rzeczywiste starty)
+  g=mk(); g.stageStarts=T.stageShift(g.stageStarts, 0, P+L+300).starts; g.stage=1;
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Toto' }, at:P+L+400 });
+  eq(R.evaluateAnswer(g, cur, undefined, P+L+500).reveal.stageEval.stage, 1, 'etap z RZECZYWISTYCH startów (po „wyraźniej")');
+});
+group('MP intro: introAnswerStage (komplet tytuł+wykonawca), introMult zamiast szybkości, odsłona', ()=>{
+  const offs=T.introStageOffsets(100, 100);   // [0, 200, 500, 1000, 1900] — skrócony harmonogram
+  const mk=(format)=>mkG('intro', format||'coop', offs);
+  const cur={ track:'Africa', artist:'Toto', year:'1982', album:'Toto IV', art:'', preview:'https://p/a.m4a' };
+  eq(R.slotsFor('intro').map(s=>s.key), ['title','artist'], 'sloty jak muzyka');
+  let g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Africa', artist:'Toto' }, at:P+L+50 });   // etap 0 (1 s)
+  let ev=R.evaluateAnswer(g, cur, undefined, P+L+1400);
+  eq([ev.reveal.kind, ev.reveal.teamOk, ev.reveal.stageEval.stage, ev.reveal.stageEval.secs, ev.reveal.stageEval.mult], ['music', true, 0, 1, 2], 'etap 0 (1 s) → ×2.0');
+  eq(ev.reveal.gained, 200, '(tytuł 50 + wykonawca 50) × 2 — bez bonusu za szybkość');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Africa' }, at:P+L+50 });
+  R.reduceAction(g, { type:'propose', by:'B', byName:'Bo', values:{ artist:'Toto' }, at:P+L+520 });   // etap 2 (4 s)
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+600);
+  eq([ev.reveal.stageEval.stage, ev.reveal.stageEval.secs, ev.reveal.gained], [2, 4, 130], 'komplet dopiero na etapie 2 (4 s) → ×1.3');
+  g=mk();
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Africa' }, at:P+L+250 });   // etap 1 — tylko tytuł
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+1400);
+  eq([ev.reveal.teamOk, ev.reveal.stageEval.stage, ev.reveal.gained], [false, 1, 80], 'sam tytuł na etapie 1 (2 s): 50 × 1.6');
+  g=mk('solo');
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Africa', artist:'Toto' }, at:P+L+10 });
+  R.reduceAction(g, { type:'propose', by:'B', byName:'Bo', values:{ title:'Africa', artist:'Toto' }, at:P+L+1950 });
+  ev=R.evaluateAnswer(g, cur, undefined, P+L+2000);
+  eq([ev.perTeam.A.stageEval.mult, ev.perTeam.B.stageEval.mult, ev.perTeam.B.stageEval.secs], [2, 1, 16], 'Solo: 1 s ×2.0, 16 s ×1.0');
+  // „+ więcej" na etapie 0 → etap 1 od razu; propozycja tuż po — już etap 1
+  g=mk(); g.stageStarts=T.stageShift(g.stageStarts, 0, P+L+60).starts; g.stage=1;
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Africa', artist:'Toto' }, at:P+L+70 });
+  eq(R.evaluateAnswer(g, cur, undefined, P+L+80).reveal.stageEval.mult, SC.introMult(1), '„+ więcej" → etap z przesuniętych startów (×1.6)');
+  eq(SC.scoreLegend('intro'), 'im wcześniej, tym więcej: ×2.0 → ×1.0', 'legenda intro');
+});
+}
+import { deezerRows, mergeSources, DEEZER_GENRES } from '../core/sources.js';
+group('core/sources: deezerRows — mapowanie, rok i gatunek z albumu, brak preview', ()=>{
+  const tracks=[
+    { title:'Bohemian Rhapsody', preview:'https://cdn/x.mp3', rank:9, album:{ id:7, title:'A Night At The Opera', cover_medium:'https://c/250.jpg' }, artist:{ name:'Queen' } },
+    { title:'Bez zajawki', preview:'', album:{ id:7 }, artist:{ name:'Queen' } },
+    { title:'Nieznany album', preview:'https://cdn/y.mp3', album:{ id:99, title:'X' }, artist:{ name:'Queen' } },
+  ];
+  const albums=[{ id:7, release_date:'1975-11-21', genre_id:152 }];
+  const r=deezerRows({ tracks, albums });
+  eq(r.length, 2, 'utwór bez preview odfiltrowany');
+  eq([r[0].trackName, r[0].artistName, r[0].collectionName, r[0].previewUrl, r[0].artworkUrl100],
+     ['Bohemian Rhapsody','Queen','A Night At The Opera','https://cdn/x.mp3','https://c/250.jpg'], 'kształt wiersza iTunes');
+  eq([r[0].releaseDate, r[0].primaryGenreName, r[0].src], ['1975-11-21','Rock','deezer'], 'rok i gatunek z albumu');
+  eq([r[1].releaseDate, r[1].primaryGenreName], ['',''], 'album spoza listy → puste rok/gatunek');
+  eq(deezerRows({}), [], 'puste wejście');
+  ok(profileGenre(DEEZER_GENRES[116])==='hiphop' && profileGenre(DEEZER_GENRES[165])==='rnb' && profileGenre(DEEZER_GENRES[464])==='metal'
+    && profileGenre(DEEZER_GENRES[132])==='pop' && profileGenre(DEEZER_GENRES[152])==='rock' && profileGenre(DEEZER_GENRES[113])==='dance'
+    && profileGenre(DEEZER_GENRES[85])==='alt', 'nazwy gatunków trafiają w grupy profilu');
+});
+group('core/sources: mergeSources — dedup, kolejność, uzupełnianie, brak mutacji', ()=>{
+  const it=[{ trackName:'Under Pressure', artistName:'Queen', releaseDate:'1981-10-26', primaryGenreName:'Rock', previewUrl:'i1', artworkUrl100:'' },
+            { trackName:'Radio Ga Ga (Remastered 2011)', artistName:'Queen', releaseDate:'', primaryGenreName:'', previewUrl:'i2', artworkUrl100:'' }];
+  const dz=[{ trackName:'Radio Ga Ga', artistName:'Queen', releaseDate:'1984-01-23', primaryGenreName:'Rock', previewUrl:'d2', artworkUrl100:'art', src:'deezer' },
+            { trackName:'Under Pressure', artistName:'QUEEN', releaseDate:'1999', primaryGenreName:'Pop', previewUrl:'d1', artworkUrl100:'a1', src:'deezer' },
+            { trackName:'Innocent Lies', artistName:'Queen', releaseDate:'', primaryGenreName:'', previewUrl:'d3', artworkUrl100:'', src:'deezer' }];
+  const snap=JSON.stringify([it,dz]);
+  const m=mergeSources(it, dz);
+  eq(m.map(x=>x.previewUrl), ['i1','i2','d3'], 'najpierw primary, potem brakujące z secondary; duplikaty zdeduplikowane');
+  eq([m[0].releaseDate, m[0].primaryGenreName], ['1981-10-26','Rock'], 'niepuste pola primary wygrywają');
+  eq([m[1].releaseDate, m[1].primaryGenreName, m[1].artworkUrl100, m[1].previewUrl], ['1984-01-23','Rock','art','i2'], 'puste pola primary uzupełnione z duplikatu');
+  ok(!('src' in m[1]), 'src secondary nie wycieka do wiersza primary');
+  eq(JSON.stringify([it,dz]), snap, 'wejście nie zmutowane');
+  eq(mergeSources([], dz).length, 3, 'puste primary → secondary');
+  eq(mergeSources(it, null).length, 2, 'brak secondary → primary');
+  eq(mergeSources([it[0], it[0]], []).length, 2, 'primary nie jest deduplikowane (wersje/albumy zostają)');
+  const v=mergeSources([{ trackName:'Hello', artistName:'Adele', previewUrl:'a' }], [{ trackName:'Hello (Live)', artistName:'Adele', previewUrl:'b', src:'deezer' }, { trackName:'Hello', artistName:'Adele', previewUrl:'c', src:'deezer' }]);
+  eq(v.map(x=>x.previewUrl), ['a','b'], 'wersja live to inny utwór niż studyjna; ta sama wersja = duplikat');
+});
+/* ===================== MP składanka / fortepian-gitara / oś czasu pod serwerem-autorytetem (rdzeń) ===================== */
+{
+const R = await import('../core/mpReducer.js');
+const TL = await import('../core/timeline.js');
+const SC = await import('../core/scoring.js');
+const mk=(mode, format='coop', extra={})=>{
+  const teams = format==='coop' ? [{ id:'all', name:'D', members:['A','B'] }] : [{ id:'A', name:'Ala', members:['A'] }, { id:'B', name:'Bo', members:['B'] }];
+  return { phase:'play', mode, format, teams, byTeam:{}, scores:{}, streaks:{}, answerSlots:R.slotsFor(mode), playAt:1000, timer:0, endsAt:null, round:1, catKey:'d80', ...extra };
+};
+group('MP składanka: slot wykonawcy, ocena jak solo (artistMatch + zapis iTunes, szybkość), odsłona z utworami', ()=>{
+  eq(R.slotsFor('medley').map(s=>s.key), ['artist'], 'tylko wykonawca');
+  const cur={ track:'Raz · Dwa · Trzy · Cztery', artist:'Perfect', artistAlt:'PERFECT', clips:[{track:'Raz',artist:'Perfect',year:'1981',art:'https://a/1.jpg'},{track:'Dwa',artist:'Perfect',year:'',art:''}], year:'', album:'' };
+  let g=mk('medley');
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'perfect' } });
+  let ev=R.evaluateAnswer(g, cur, undefined, 1000);   // zatwierdzenie od razu → pełny bonus za szybkość
+  eq([ev.reveal.kind, ev.reveal.teamOk, ev.reveal.okBySlot.artist, ev.reveal.gained], ['medley', true, true, 150], 'wykonawca 100 × szybkość 1,5 (jak solo)');
+  eq(ev.reveal.clips.map(c=>c.track), ['Raz','Dwa'], 'zagrane utwory dopiero w odsłonie');
+  eq(ev.result.track, 'Raz · Dwa · Trzy · Cztery', 'wynik do ligi: tytuły składanki');
+  g=mk('medley');
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ artist:'Lady Pank' } });
+  eq(R.evaluateAnswer(g, cur, undefined, 1000).reveal.gained, 0, 'zły wykonawca → 0');
+});
+group('MP fortepian/gitara: punkty jak muzyka, w odsłonie kto grał cover', ()=>{
+  const cur={ track:'Wonderwall', artist:'Oasis', year:'1995', album:'Morning Glory', art:'', preview:'https://c/p.m4a', coverArtist:'Pianovus', instrument:'piano' };
+  const g=mk('piano'); g.answerSlots=null;
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Wonderwall', artist:'Oasis' } });
+  const ev=R.evaluateAnswer(g, cur);
+  eq([ev.reveal.kind, ev.reveal.teamOk, ev.reveal.gained, ev.reveal.coverArtist, ev.reveal.instrument], ['music', true, 100, 'Pianovus', 'piano'], 'tytuł + ORYGINALNY wykonawca (100, mnożnik 1), „🎹 Pianovus" w odsłonie');
+  eq(R.evaluateAnswer(mk('music'), { track:'X', artist:'Y' }).reveal.coverArtist, '', 'zwykła muzyka bez pola coveru');
+});
+group('MP oś czasu: slot szczeliny (walidacja), ocena gapOk + żetony, wstawienie karty w applyEvaluation (per drużyna)', ()=>{
+  eq(R.slotsFor('timeline').map(s=>s.key), ['gap','title','artist'], 'sloty: szczelina + żetony');
+  const anchor={ track:'A0', artist:'X', year:1985, art:'', anchor:true };
+  const cur={ track:'Take On Me', artist:'a-ha', year:'1985', tlCard:{ track:'Take On Me', artist:'a-ha', year:1987, art:'' } };
+  let g=mk('timeline', 'coop', { timeline:{ all:[anchor] } });
+  eq([R.cleanGap(g,'all','0'), R.cleanGap(g,'all','1'), R.cleanGap(g,'all','2'), R.cleanGap(g,'all','-1'), R.cleanGap(g,'all','1.5'), R.cleanGap(g,'all','x')], ['0','1',null,null,null,null], 'cleanGap: tylko istniejąca szczelina osi drużyny');
+  ok(R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ gap:'7', title:'Take On Me' } }), 'propozycja ze złą szczeliną przyjęta bez szczeliny');
+  eq(g.byTeam.all.proposals[0].values, { title:'Take On Me' }, 'zła szczelina wycięta (reducer)');
+  ok(!R.reduceAction(g, { type:'vote', by:'B', slot:'gap', value:'9' }), 'głos na nieistniejącą szczelinę odrzucony');
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ gap:'1', title:'Take On Me', artist:'a-ha' } });   // po 1985 → dobrze (1987)
+  let ev=R.evaluateAnswer(g, cur, undefined, 1000);
+  eq([ev.reveal.kind, ev.reveal.teamOk, ev.reveal.timelineEval.gap, ev.reveal.timelineEval.good, ev.reveal.gained], ['timeline', true, 1, [1], Math.round(140*1.5)], 'dobra szczelina + tytuł + wykonawca: (100+20+20) × szybkość');
+  R.applyEvaluation(g, ev, {});
+  eq(g.timeline.all.map(c=>c.year), [1985, 1987], 'karta wstawiona na oś drużyny');
+  // pudło: karta odpada; sam tytuł = żeton
+  g=mk('timeline', 'coop', { timeline:{ all:[anchor] } });
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ gap:'0', title:'Take On Me' } });
+  ev=R.evaluateAnswer(g, cur);
+  eq([ev.reveal.teamOk, ev.reveal.gained, ev.reveal.timelineEval.good], [false, 20, [1]], 'zła szczelina: 0 za miejsce, +20 za tytuł; „pasowało: po 1985"');
+  R.applyEvaluation(g, ev, {});
+  eq(g.timeline.all.length, 1, 'pudło → karta odpada');
+  // Solo: każda drużyna własna oś
+  g=mk('timeline', 'solo', { timeline:{ A:[anchor], B:[{ ...anchor, year:1990 }] } });
+  ok(R.cleanGap(g,'B','1')==='1' && R.cleanGap(g,'A','1')==='1', 'szczeliny per oś drużyny');
+  R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ gap:'1' } });   // A: po 1985 → dobrze
+  R.reduceAction(g, { type:'propose', by:'B', byName:'Bo', values:{ gap:'1' } });   // B: po 1990 → źle
+  ev=R.evaluateAnswer(g, cur);
+  eq([ev.perTeam.A.teamOk, ev.perTeam.B.teamOk], [true, false], 'ocena na osi własnej drużyny');
+  R.applyEvaluation(g, ev, {});
+  eq([g.timeline.A.length, g.timeline.B.length], [2, 1], 'wstawienie tylko u drużyny, która trafiła');
+  eq(SC.scoreRound({ placeOk:true, okTitle:true, okArtist:true }).points, 140, 'punktacja osi jak solo (100 + 20 + 20)');
+  eq(TL.gapLabel(g.timeline.A, 2), 'po 1987', 'opis szczeliny');
+});
+}
+/* ===================== dług MP/Gust (TODO §4): „Gotowy ✓", pokój mieszany, Gust stołu w relay, ❤️ okładki ===================== */
+{
+const MV = await import('../core/mpView.js');
+const TS = await import('../core/trackSelect.js');
+const R = await import('../core/mpReducer.js');
+group('„Gotowy ✓": lobbyReadyCount — gracze bez hosta, informacja (bez blokady)', ()=>{
+  const ms=[{id:'H'},{id:'A'},{id:'B'},{id:'C'}];
+  eq(MV.lobbyReadyCount({ members:ms, readyIds:['A','C','H'], hostId:'H' }), { n:2, total:3, all:false, text:'gotowi 2/3' }, 'host nie liczony; 2/3');
+  eq(MV.lobbyReadyCount({ members:ms, readyIds:['A','B','C'], hostId:'H' }).all, true, 'komplet');
+  eq(MV.lobbyReadyCount({ members:[{id:'H'}], readyIds:[], hostId:'H' }).text, '', 'sam host → bez licznika');
+  eq(MV.lobbyReadyCount({ members:[{id:'A'},{id:'A'},null], readyIds:'x' }).total, 1, 'duplikaty/śmieci');
+});
+group('pokój mieszany: advanceWaitIds — czekamy tylko na klientów wysyłających „dalej" (adv); stary serwer / salon → wszyscy', ()=>{
+  const ps=[{id:'A', adv:true},{id:'OLD'},{id:'B', adv:true}];
+  eq(MV.advanceWaitIds(ps), ['A','B'], 'stary klient (bez adv) pominięty — „Czekamy na" nie wisi do zmiany fazy');
+  eq(MV.advanceWaitIds([{id:'A'},{id:'B'}]), ['A','B'], 'stary serwer (nikt bez flagi) → wszyscy (dawniej)');
+  eq(MV.advanceWaitIds(ps, { salon:true }), ['A','OLD','B'], 'salon: stary klient też wysyła „dalej" → wszyscy');
+});
+group('„Gust stołu" w relay: opcja ukryta z notką; stary serwer — ukryta bez notki', ()=>{
+  eq(MV.tableOptionState({ cap:true }), { show:true, note:'' }, 'serwer-autorytet z capability → widoczna');
+  const r=MV.tableOptionState({ cap:false, relay:true });
+  ok(!r.show && /tylko z serwerem pokoju/.test(r.note), 'relay → notka');
+  eq(MV.tableOptionState({ cap:false, relay:false }), { show:false, note:'' }, 'stary serwer → bez notki');
+});
+const GUST_SONGS=[{ trackName:'Rosanna (Remastered)', artistName:'Toto', collectionName:'Toto IV (Deluxe)', releaseDate:'1982-04-08', artworkUrl100:'https://is1-ssl.mzstatic.com/x/100x100bb.jpg', primaryGenreName:'Rock' },
+    { trackName:'Africa', artistName:'Toto', collectionName:'Toto IV', releaseDate:'1982-04-08', artworkUrl100:'', primaryGenreName:'Rock' }];
+const GUST_ITUNES=async(term, opts)=> opts && opts.album ? [{ collectionName:'Toto IV', artistName:'Toto', artworkUrl100:'https://is1-ssl.mzstatic.com/a/100x100bb.jpg', releaseDate:'1982-01-01', trackCount:10 }] : GUST_SONGS;
+const GUST_COVER=await TS.resolveCover({ cat:{ artists:['Toto'] }, seen:new Set(), recent:[], itunes:GUST_ITUNES, rnd:()=>0 });
+group('Gust ❤️ okładki: utwór reprezentatywny albumu (coverRepTrack + resolveCover.rep), odsłona MP z rep', ()=>{
+  const songs=GUST_SONGS;
+  const rep=TS.coverRepTrack(songs, TS.albumKey('Toto IV'), 'Toto');
+  eq([rep.title, rep.artist, rep.year, rep.genre], ['Rosanna', 'Toto', '1982', 'Rock'], 'pierwszy (≈ najpopularniejszy) utwór z albumu, tytuł bez ozdobników');
+  eq(TS.coverRepTrack(songs, TS.albumKey('Hydra'), 'Toto'), null, 'brak utworu z albumu → null (odsłona bez ❤️)');
+  eq(TS.coverRepTrack([{ ...songs[1], artistName:'Inny' }], TS.albumKey('Toto IV'), 'Toto'), null, 'inny wykonawca → null');
+  const r=GUST_COVER;
+  eq([r.album, r.rep && r.rep.title], ['Toto IV', 'Rosanna'], 'resolveCover dokłada utwór reprezentatywny (te same wyniki co „muzyka")');
+  const g={ phase:'play', mode:'cover', format:'coop', teams:[{id:'all',name:'D',members:['A']}], byTeam:{}, scores:{}, streaks:{}, answerSlots:R.slotsFor('cover'), round:1 };
+  const ev=R.evaluateAnswer(g, { track:'Toto IV', album:'Toto IV', artist:'Toto', year:'1982', art:'', rep:r.rep });
+  eq(ev.reveal.rep && ev.reveal.rep.title, 'Rosanna', 'odsłona MP okładki niesie utwór reprezentatywny (❤️)');
+  eq(R.evaluateAnswer({ ...g, mode:'music', answerSlots:null }, { track:'X', artist:'Y', rep:r.rep }).reveal.rep, undefined, 'poza okładką — bez rep');
+});
+}
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

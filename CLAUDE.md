@@ -4,7 +4,7 @@ Wskazówki dla Claude Code (i ludzi) przy pracy w tym repo.
 
 ## Czym jest STACJA
 
-Webowy trener pubquizu muzycznego: losowanie utworów (30-s zajawki iTunes), zgadywanie
+Webowy trener pubquizu muzycznego **„Uszy & Mózg”** (nazwa robocza repo: STACJA): losowanie utworów (30-s zajawki iTunes), zgadywanie
 tytułu + wykonawcy, tryby **solo** / **lektor** (synteza mowy) / **multiplayer** (pokój online,
 gra jako jedna drużyna). Czysty **HTML/JS, bez budowania** — ES modules ładowane wprost
 (`<script type="module" src="app.js">`). Komentarze i UI po polsku — trzymaj tę konwencję.
@@ -40,7 +40,8 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   „co znasz" z byCat, pewność, archetypy, tekst karty), `tasteCompare.js` (etap 3: zgodność ze znajomym 0.6×cos(gatunki/dekady)+0.4×Jaccard
   z wygładzeniem, werdykt, wspólne/rekomendacje/różnice, songs[] „Zagraj z półki", półki i pula MP „Gust stołu"), `lektorVoice.js` (język lektora
   pl|en z `lang` kategorii lyrics.js + wybór głosu systemowego/Pipera), `handles.js` (pule ksyw),
-  `teams.js`, `matchRecord.js` (rekord meczu do ligi), `util.js` (+ walidatory safeColor/isSlotKey/num/clipText).
+  `teams.js`, `matchRecord.js` (rekord meczu do ligi), `sources.js` (scalanie iTunes+Deezer, gatunki Deezer), `lyricCheck.js`
+  (tekst do lektora we własnej kategorii: limit, wyciek), `util.js` (+ `APP_NAME`, walidatory safeColor/isSlotKey/num/clipText).
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
 - **`adapters-web/`** — webowe implementacje portów + transport (iTunes, Cloudflare, Realtime).
 - **`app.js`** — **entry point (~27 linii)**: montaż modułów + bootstrap (wersja, motyw). Bez logiki.

@@ -1,47 +1,50 @@
-# TODO — co zostało do zrobienia (stan: v69, 2026-10-17)
+# TODO — co zostało do zrobienia (stan: v70, 2026-10-17)
 
 Jedno miejsce z otwartymi sprawami. Szczegóły i historia w plikach obok:
 `audyt-2026-10.md` (+ `audyt-2026-10/WYDANIE.md`), `gust-muzyczny.md`, `przeglad-mp-2026-10.md` (+ zrzuty w `przeglad-mp-2026-10/`, poza gitem).
 
 Produkcja: klient v69 (GitHub Pages), Worker z v68 (wersja `32746a62…`), migracja D1 `0005_taste.sql` zastosowana.
-Wydawanie: najpierw Worker (`cd server && wrangler deploy` — token z `~/.zshrc` `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID=fb55a9a3ef0395e40a5af221b3d40aa1`), potem merge na `main` z podbitym `APP_VERSION` (app.js) i `CACHE` (sw.js). Lokalny serwer do testów MP: `wrangler dev --local --port 8787 --var TOKEN_SECRET:dev-secret-local` + klient `?rooms=http://127.0.0.1:8787` (działa tylko na localhost).
+**v70 czeka na wydanie** (lokalnie, niezacommitowane/niezdeployowane w chwili zapisu) — wymaga NAJPIERW deployu Workera (nowe tryby MP, `/tracks` iTunes+Deezer, `lobbyReady`, karencja hosta), potem klient.
+Wydawanie: najpierw Worker (`cd server && wrangler deploy` — token z `~/.zshrc` `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID=fb55a9a3ef0395e40a5af221b3d40aa1`; instrukcja w `server/README.md`), potem merge na `main` z podbitym `APP_VERSION` (app.js) i `CACHE` (sw.js). Lokalny serwer do testów MP: `wrangler dev --local --port 8787 --var TOKEN_SECRET:dev-secret-local` + klient `?rooms=http://127.0.0.1:8787` (działa tylko na localhost).
 
-## 1. Następne w kolejce (uzgodnione z właścicielem)
-- [ ] **Okładka w multiplayerze** — serwer musi wybierać album (dziś `server/lib/resolve.js` i proxy `/tracks` znają tylko utwory), etapy wyostrzania prowadzone przez serwer (wspólne dla wszystkich), anty-podglądanie: serwer wysyła na każdym etapie inny URL okładki (iTunes `16x16bb` → `32x32bb` → `64x64bb` → pełna), widok w `app/mp-render.js` + TV.
-- [ ] **Intro (1-2-4-8-16 s) w multiplayerze** — ten sam mechanizm etapów sterowanych przez serwer.
-- [ ] **Pozostałe tryby solo w MP**: składanka (medley), fortepian/gitara (cover resolver na serwerze), oś czasu (oś drużyny w stanie gry, głosowanie na szczelinę, odsłona — opis w komentarzu w `core/match.js` przy `SOLO_ONLY_MODES`).
+## Zrobione w v70
+- Nazwa aplikacji: **„Uszy & Mózg"** wszędzie (`APP_NAME` w `core/util.js`: TV, karty PNG, udostępnianie, manifest, tytuł).
+- MP pod serwerem-autorytetem (`AUTHORITY_ONLY_MODES`; relay gra je jak „muzykę"): **okładka** (etapy wyostrzania od serwera, inny URL na każdym etapie), **intro** 1-2-4-8-16 s (wspólny start audio, „+ więcej" dla każdego gracza), **składanka**, **fortepian/gitara** (covery z Deezera), **oś czasu** (oś drużyny, głos na szczelinę). Wspólny mechanizm etapów w `core/timing.js` (`stageStarts`), mnożnik z czasu propozycji liczony na serwerze.
+- Okładka (solo i MP): w trakcie zgadywania tylko 16 → 32 → 64 bloki, pełna dopiero w odsłonie (nie zdradza nazwy zespołu); mnożniki ×2,0/×1,5/×1,0.
+- Źródła: iTunes z Workera dostaje **429** (limit na wspólnym IP Cloudflare) → serwer: Deezer po wykonawcy (top + albumy z rokiem/gatunkiem) scalony z iTunes (`core/sources.js`, `server/lib/sources.js`); klient: bezpośredni iTunes z przeglądarki + proxy, scalone.
+- „Tłumaczenia tekstów" jako mechanika: we własnej kategorii „📝 tekst do lektora" — wbudowany tłumacz przeglądarki (Chrome Translator API) albo przekład ręczny; zapis tylko lokalnie, ostrzeżenie o wycieku tytułu/wykonawcy.
+- MP: „Gotowy ✓" w lobby i przy rewanżu (autorytet), TV po przeładowaniu zostaje hostem (karencja 10 s), „Czekamy na" w pokoju mieszanym, „Gust stołu" w relay ukryty z notką, szczelina osi słowami w czacie, zapas składanki bez WebAudio.
+- Gust: ❤️ w okładce (utwór reprezentatywny albumu), ukrycie gustu w pokoju wycofuje półkę, wylogowanie dosyła i czyści lokalne oceny.
+- `server/README.md`: deploy z tokenem z env (`.cf-token` tylko zapasowo — był nieważny).
 
-## 2. Decyzje właściciela
-- [ ] **Jedna nazwa aplikacji**: „STACJA" (TV, karta wyniku, link pokoju, docs) vs „Uszy & Muzk" (UI, manifest, title). Stała `APP_NAME` dla kart PNG.
-- [ ] Kategoria „tłumaczenia tekstów" — tylko jako mechanika wypełniana przez właściciela (własna kategoria: wklejony fragment → tłumaczenie w przeglądarce → lektor czyta przekład; prywatnie). NIE generować przekładów tekstów piosenek (prawa autorskie).
-
-## 3. Do sprawdzenia ręcznie (nie da się w jsdom/panelu)
-- [ ] iPhone (Safari/PWA): odtwarzanie solo bez dodatkowego stuknięcia, winyl, zwolnione/przyspieszone obroty, składanka (WebAudio), od tyłu, intro, lektor (głosy PL/EN).
-- [ ] Prawdziwy telewizor w trybie salonowym (TV 1920 px, QR skanowany telefonem, sterowanie klawiaturą/pilotem).
-- [ ] Pokój MP z 3–4 telefonami na produkcji (Drużyny, salon, rewanż, dołączanie w trakcie).
+## 1. Do sprawdzenia ręcznie (nie da się w jsdom/panelu)
+- [ ] **Nowe tryby MP na 2–3 telefonach + TV (lokalny Worker albo po deployu)**: okładka (etapy, „wyraźniej"), intro (równy start, „+ więcej", iOS autoplay), składanka (4 wycinki, salon), fortepian/gitara (gra cover), oś czasu (szczeliny, głosy, karta zostaje, 320 px).
+- [ ] Lobby: „Gotowy ✓" u gości, licznik u hosta/TV; przeładowanie TV w lobby/meczu/po meczu; stary klient w pokoju.
+- [ ] Tłumacz w Chrome (Translator API) w edytorze kategorii; wygląd panelu „tekst do lektora".
+- [ ] iPhone (Safari/PWA): odtwarzanie solo bez dodatkowego stuknięcia, winyl, obroty, składanka, od tyłu, intro, lektor (głosy PL/EN).
+- [ ] Prawdziwy telewizor w trybie salonowym (TV 1920 px, QR, pilot/klawiatura).
 - [ ] Porównanie gustu z prawdziwym znajomym (oboje ≥ 10 ocen), Gust stołu w MP.
 
-## 4. Znane problemy / dług
-- [ ] Proxy Workera `/tracks` zwraca wyniki z Deezera zamiast iTunes (iTunes blokuje IP Cloudflare?) → brak gatunku (`primaryGenreName`) i słabsze trafienia. Zbadać (np. inny endpoint/nagłówki, cache, fallback po stronie klienta na bezpośredni iTunes).
-- [ ] `server/.cf-token` ma nieważny token — podmienić na aktualny albo zaktualizować instrukcję deployu w `server/README.md`.
-- [ ] Okładka (solo): przy pełnym wyostrzeniu okładka często pokazuje nazwę zespołu → rozważyć koniec na etapie 64 bloków albo przycięcie.
-- [ ] MP: brak mechanizmu „Gotowy ✓" w lobby i przy rewanżu; przeładowanie TV → host przechodzi na gracza; „Gust stołu" nie działa w trybie relay; w pokoju mieszanym (stary klient) „Czekamy na" nie znika do zmiany fazy.
-- [ ] Gust: brak ❤️ w trybie okładki; ukrycie gustu w trakcie pobytu w pokoju nie wycofuje wysłanej półki; wylogowanie zostawia lokalne oceny.
-- [ ] Gitara: cover dla ~55% hitów; tytuły kolidujące (Wonderwall, Africa) blokowane przez ochronę kolizji — można rozszerzyć kuratorowaną listę `core/guitarCovers.js`.
+## 2. Znane problemy / dług
+- [ ] Karencja hosta (10 s) to timer w pamięci DO — po evikcji pokój odblokuje się dopiero przy kolejnym połączeniu.
+- [ ] Stary klient (PWA z cache) w pokoju z nowymi trybami: okładka bez obrazu, intro jako cała zajawka, szczelina osi jako pole tekstowe (serwer odrzuca złą wartość).
+- [ ] Gitara: cover dla ~55% hitów (badanie na iTunes; z Deezerem do ponownego pomiaru); tytuły kolidujące (Wonderwall, Africa) — można rozszerzyć `core/guitarCovers.js`.
+- [ ] Limity Deezera przy wielu pokojach naraz — niezmierzone.
 - [ ] Na produkcji zostały dane testowe z weryfikacji (anonimowa sesja + przerwany mecz solo 0/1) — nieszkodliwe.
 
-## 5. Treści
+## 3. Treści
 - [ ] Lektor `tlum-pl`: kilka atrybucji potwierdzonych tylko pośrednio (lista w `audyt-2026-10/paczki-E…md` i raport F7-M); `rap-pl-lektor` ma tylko 10 utworów.
 - [ ] Playlisty „top teraz" (`playlists.js`) to zrzut chartów — starzeją się; data na etykiecie albo regeneracja.
 - [ ] 6 par pytań o ten sam fakt w różnych paczkach (Hermaszewski, Deep Blue, Kilar, John Williams, prędkość dźwięku, umami) — do ewentualnego rozróżnienia.
 
-## 6. Pomysły na później (z audytu i rozmów)
+## 4. Pomysły na później (z audytu i rozmów)
 - [ ] Liga tygodniowa / Pub Night — API jest (`/api/league`), brak UI.
 - [ ] „Twoje pudła" — powtórki nietrafionych utworów rozłożone w czasie (trener działa dziś tylko dla quizu).
 - [ ] Ranking Stacji dnia (dziś wynik tylko lokalny).
 - [ ] Tryb „Ten sam tytuł" (3 różne utwory o tym samym tytule), jokery, nagła śmierć, playlist battle.
+- [ ] „Gotowy ✓" i „Gust stołu" w trybie relay (dziś tylko pod autorytetem).
 
-## 7. Porządki lokalne (opcjonalne)
+## 5. Porządki lokalne (opcjonalne)
 - [ ] Usunąć scalone gałęzie lokalne (`audyt-2026-10`, `eksperyment-tryby`, `gust`, `poprawki-trybow`, `wydanie-v66`, `fix-mp-odpowiedzi`, `mp-v68`, `mp-v69` — wszystkie są w `main`).
 - [ ] W `/Volumes/Lexar SSD/Projects/MusicQuiz/` foldery próbek `probki-lektora/`, `probki-obroty/`, `probki-akordy/` — do usunięcia, jeśli niepotrzebne.
 - [ ] Dysk systemowy ma mało miejsca — `/private/tmp/claude-501` zajmują głównie pliki innych projektów.

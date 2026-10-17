@@ -1,9 +1,10 @@
 /* adapters-web/itunesRepository.js — webowa warstwa SIECI dla wyboru utworu.
- * Sieć: proxy Workera (omija blokady) → bezpośredni fetch → JSONP. Czystą selekcję
+ * Sieć: bezpośredni iTunes (fetch → JSONP) RÓWNOLEGLE z proxy Workera (Deezer), wyniki scalane (core/sources). Czystą selekcję
  * (filtr coverów, anty-powtórki, normalizacja) trzyma `core/trackSelect.js`, wspólna
  * z serwerem; tu tylko wstrzykujemy webowy `itunes(term)`. */
 import { resolveTrack as coreResolveTrack, pickTrack, BAD, cachedFetcher, gatherDistractors, resolveMedley as coreResolveMedley,
   resolveCover as coreResolveCover, resolveInstrumentalCover as coreResolveInstrumental } from '../core/trackSelect.js';
+import { mergeSources } from '../core/sources.js';
 
 /* ---- sieć (iTunes) ----
  * opts.song=true (F5 #5) → wyszukiwanie „artysta tytuł" BEZ attribute=artistTerm (utwór spoza
@@ -37,10 +38,10 @@ function itunesJsonp(term, opts){
     document.body.appendChild(s);
   });
 }
-// proxy przez Worker (iTunes -> fallback Deezer); klient gada tylko z Workerem,
-// co omija blokady itunes.apple.com. Gdy padnie — bezpośredni fetch/JSONP.
+// proxy przez Worker (iTunes + Deezer scalone po stronie serwera). Worker na krawędzi Cloudflare dostaje od iTunes 429,
+// więc zwykle zwraca Deezer (z rokiem i gatunkiem z albumu) — dopełnia to, czego bezpośredni iTunes nie ma.
 // F5 #5: wyszukiwanie utworu idzie jako `/tracks?q=` (starszy Worker bez obsługi `q` zwróci puste
-// → spadamy na bezpośredni fetch, więc niezdeployowany serwer niczego nie psuje).
+// → zostaje bezpośredni iTunes, więc niezdeployowany serwer niczego nie psuje).
 function itunesProxy(term, cfg={}, opts){
   if(!cfg || !cfg.roomsBase) return Promise.reject(new Error('no-proxy'));
   const ctrl=new AbortController();
@@ -51,14 +52,23 @@ function itunesProxy(term, cfg={}, opts){
     .then(d=>(d.results||[]))
     .finally(()=>clearTimeout(to));
 }
+const PROXY_GRACE_MS=3000;   // bezpośredni iTunes już odpowiedział → proxy czekamy tylko chwilę (dopełnia, nie blokuje)
 // jedyne publiczne wejście do sieci — używane też bezpośrednio przez lektor/import
 export function itunes(term, cfg, opts){
   // EKSPERYMENT: proxy Workera nie zna wyszukiwania albumów (zwróciłby UTWORY) → albumy tylko wprost/JSONP;
   // gdy oba padną, core/resolveCover bierze albumy z wyników utworów (te idą przez proxy)
   if(opts && opts.album) return itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts));
-  return itunesProxy(term, cfg, opts)
-    .then(res=>res.length?res:itunesFetch(term, opts))   // proxy puste? spróbuj bezpośrednio
-    .catch(()=>itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts)));
+  // Przeglądarka użytkownika NIE jest limitowana jak Cloudflare → bezpośredni iTunes to główne źródło (rok, gatunek);
+  // równolegle proxy Workera (Deezer). Wynik = scalenie (iTunes pierwszy); gdy jedno padnie — drugie.
+  const direct=itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts));
+  const proxy=itunesProxy(term, cfg, opts);
+  proxy.catch(()=>{});   // nieobsłużone odrzucenie, gdy direct rzuci pierwszy
+  return direct.then(
+    it=>it.length
+      ? Promise.race([proxy.catch(()=>[]), new Promise(r=>setTimeout(()=>r([]),PROXY_GRACE_MS))]).then(px=>mergeSources(it, px))
+      : proxy.then(px=>px, ()=>it),
+    err=>proxy.then(px=>{ if(!px.length) throw err; return px; })
+  );
 }
 // F5 #6: wyniki per wykonawca/utwór cache'owane w obrębie sesji (mniej zapytań, szybszy start rundy).
 // Klucz = zapytanie (cfg praktycznie stałe w sesji — bierzemy aktualne z wywołania).

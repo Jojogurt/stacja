@@ -1,5 +1,8 @@
 /* core/util.js — czyste pomocnicze (zero DOM / Web API) */
 
+// nazwa aplikacji (decyzja właściciela 2026-10-17) — jedno źródło: karty PNG, udostępnianie, TV
+export const APP_NAME = 'Uszy & Mózg';
+
 // Fisher–Yates; nie mutuje wejścia. F8b: opcjonalny `rnd` (seedowany PRNG — Stacja dnia), domyślnie Math.random.
 export function shuffle(a, rnd=Math.random){
   a=[...a];

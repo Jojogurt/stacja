@@ -1029,6 +1029,33 @@ await group('CatEditor: search → koszyk → zapis tworzy kategorię w pickerze
   ok(r.querySelector('[data-ms-slot="twoje"] #catNew') && r.querySelector('[data-ms-slot="twoje"] #plImport'), '„+ nowa" i „+ ze Spotify" przeniesione do zakładki Twoje');
 });
 
+await group('CatEditor: tekst do lektora (📝) — ręczny przekład → lyric w localStorage → tryb lektor', async ()=>{
+  const w = window;
+  $(w,'catNew').click(); await settle(1);
+  for(let i=0;i<11;i++){
+    $(w,'catSearchIn').value='ly'+i; $(w,'catSearchGo').click(); await settle(4);
+    const add=$(w,'catResults').querySelector('.ce-add'); if(add) add.click();
+  }
+  await settle(2);
+  const lyBtn=$(w,'catCart').querySelector('button[data-ly="0"]');
+  ok(lyBtn, 'przy utworze w koszyku jest przycisk 📝');
+  lyBtn.click(); await settle(1);
+  ok(!$(w,'catLyric').hidden, 'mały edytor tekstu otwarty');
+  ok(!$(w,'catLyNoTr').hidden && $(w,'catLyTr').hidden, 'jsdom bez tłumacza: informacja „wpisz ręcznie", brak przycisku tłumaczenia');
+  const out=$(w,'catLyOut'); out.value='Wczoraj wszystkie kłopoty były tak daleko'; out.dispatchEvent(new w.Event('input'));
+  ok($(w,'catLyWarn').textContent==='', 'brak ostrzeżenia bez wycieku');
+  $(w,'catLyOk').click(); await settle(1);
+  ok($(w,'catLyric').hidden, 'edytor tekstu zamknięty po „Gotowe"');
+  ok(/📝/.test($(w,'catCart').querySelector('button[data-ly="0"]').textContent) && $(w,'catCart').querySelector('.ce-ly.on'), 'chip utworu z tekstem ma znaczek 📝');
+  $(w,'catName').value='Z lektorem';
+  $(w,'catSave').click(); await settle(3);
+  const pls=JSON.parse(w.localStorage.getItem('stacjaPlaylists')||'{}');
+  const key=Object.keys(pls).find(k=>pls[k].label==='Z lektorem');
+  ok(key && pls[key].songs[0].lyric==='Wczoraj wszystkie kłopoty były tak daleko', 'localStorage: songs[0].lyric zapisany');
+  ok(key && !('lyric' in pls[key].songs[1]), 'utwory bez tekstu nie dostają pola lyric');
+  ok(key && M8dom.modesFor(key, pls).includes('lektor'), 'modesFor: kategoria z lyric dostaje tryb „lektor"');
+});
+
 await group('CatEditor: import JSON — dedup, escape (XSS), błędny JSON nie wysypuje', async ()=>{
   const w = window;
   $(w,'catNew').click(); await settle(1);
@@ -1637,20 +1664,21 @@ await group('F8a solo: tryb „rok" — pole ±1 + suwak, punkty 100/70/50/20, o
     ok(inp.disabled, 'po Sprawdź pole roku zablokowane');
   });
 });
-await group('F8a MP: picker wg capabilities serwera — stary serwer bez ABCD/rok, nowy z; intro nigdy', async ()=>{
+await group('F8a MP: picker wg capabilities serwera — stary serwer bez ABCD/rok/intro, nowy z; oś czasu nigdy', async ()=>{
   const w=window; const ws=await f6bRoom();
   ws.pushState({ phase:null, hostId:ws._id }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   let html=$(w,'mpRoom').innerHTML;
   ok(/Tryby pytań/.test(html) && /muzyka/.test(html), 'picker MP wyrenderowany');
   ok(!mpModeOn(w,'abcd') && !mpModeOn(w,'year') && !mpModeOn(w,'intro') && mpModeOn(w,'music'), 'stary serwer (presence bez modes) → nowe tryby wyszarzone');
-  ok(/serwer/.test(mpModeWhy(w,'abcd')) && /solo/.test(mpModeWhy(w,'intro')), 'wyjaśnienie: ABCD „serwer pokoju…", intro „tylko w grze solo" — '+mpModeWhy(w,'abcd')+' | '+mpModeWhy(w,'intro'));
-  ok(/serwer pokoju jeszcze ich nie obsługuje/.test(txt(w,'ms-mp-mn')) && /tylko solo/.test(txt(w,'ms-mp-mn')), 'notka pod sekcją trybów — '+txt(w,'ms-mp-mn'));
+  ok(/serwer/.test(mpModeWhy(w,'abcd')) && /serwer/.test(mpModeWhy(w,'intro')) && /serwer/.test(mpModeWhy(w,'timeline')), 'wyjaśnienie: ABCD/intro/oś czasu „serwer pokoju…" — '+mpModeWhy(w,'abcd')+' | '+mpModeWhy(w,'timeline'));
+  ok(/serwer pokoju jeszcze ich nie obsługuje/.test(txt(w,'ms-mp-mn')) && !/tylko solo/.test(txt(w,'ms-mp-mn')), 'notka pod sekcją trybów (brak trybów „tylko solo") — '+txt(w,'ms-mp-mn'));
   ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','quiz'] }); await settle(4);
   w.mpLobbyStart(); await settle(4);
   html=$(w,'mpRoom').innerHTML;
   ok(mpModeOn(w,'abcd') && mpModeOn(w,'year'), 'nowy serwer → ABCD i rok aktywne');
-  ok(!mpModeOn(w,'intro') && /solo/.test(mpModeWhy(w,'intro')), 'intro tylko solo — wyszarzone w MP');
+  ok(!mpModeOn(w,'intro') && !/solo/.test(mpModeWhy(w,'intro')), 'intro: serwer bez „intro" w presence.modes → wyszarzone (serwer)');
+  ok(!mpModeOn(w,'timeline') && /serwer/.test(mpModeWhy(w,'timeline')), 'oś czasu: serwer jej nie ogłasza → wyszarzona (serwer)');
   // stan PLAY trybu „rok": pole liczbowe; ABCD: kafle w pudełku pytania
   ws.pushState(playState(ws, { playNonce:8101, mode:'year', answerSlots:[{key:'year',label:'rok'}] })); await settle(6);
   w.mpGoKombinuj(); await settle(3);
@@ -1719,7 +1747,7 @@ await group('F8b Stacja dnia: karta w menu → start (plan z seeda daty) → pr�
     const sb=$(w,'sumShare'); ok(sb && !sb.hidden && txt(w,'sumShare')==='Udostępnij', 'przycisk „Udostępnij"');
     sb.click(); await settle(4);
     const t=shared[shared.length-1]||'';
-    ok(/^STACJA #6 🎧 0\/10 · 🔥2\n⬛⬜⬜⬜⬜⬜⬜⬜⬜⬜\nhttps?:\/\/[^?#\s]+$/.test(t), 'tekst udostępniania (bez danych osobowych): '+JSON.stringify(t));
+    ok(/^Uszy & Mózg #6 🎧 0\/10 · 🔥2\n⬛⬜⬜⬜⬜⬜⬜⬜⬜⬜\nhttps?:\/\/[^?#\s]+$/.test(t), 'tekst udostępniania (bez danych osobowych): '+JSON.stringify(t));
     ok(/Skopiowano/.test(txt(w,'sumShareSt')), 'fallback do schowka → „Skopiowano"');
     const rec=JSON.parse(w.localStorage.getItem('stacjaDaily')).days['2026-10-20'];
     ok(rec && rec.played===1 && rec.grid==='⬛⬜⬜⬜⬜⬜⬜⬜⬜⬜' && !('name' in rec), 'zapis dnia: 1 rozegrane, siatka');
@@ -1732,7 +1760,7 @@ await group('F8b Stacja dnia: karta w menu → start (plan z seeda daty) → pr�
     ok(fetchCalls.length===nFetch, 'bez losowania utworów przy zablokowanej próbie');
     eq2(txt(w,'sumBig'), '0 / 10', 'wynik z zapisu'); ok(/kolejna jutro/.test(txt(w,'sumSub')), 'informacja „kolejna jutro"');
     $(w,'sumShare').click(); await settle(4);
-    ok(/^STACJA #6 🎧 0\/10 · 🔥2\n/.test(shared[shared.length-1]||''), 'udostępnianie z ekranu wyniku dnia');
+    ok(/^Uszy & Mózg #6 🎧 0\/10 · 🔥2\n/.test(shared[shared.length-1]||''), 'udostępnianie z ekranu wyniku dnia');
     // profil: najlepsza seria (lokalnie, także bez serwera)
     $(w,'toMenu').click(); await settle(2); $(w,'goProfil').click(); await settle(10);
     const pf=$(w,'pfDaily');
@@ -1763,7 +1791,7 @@ await group('F8b zwykły mecz solo: „Udostępnij wynik" (punkty + X/Y + siatka
     ok(txt(w,'sumShare')==='Udostępnij wynik' && !$(w,'sumShare').hidden, 'przycisk „Udostępnij wynik"');
     eq2(txt(w,'sumGrid'), '⬛', 'siatka rozegranych pytań');
     $(w,'sumShare').click(); await settle(4);
-    ok(/^STACJA 🎧 0 pkt · 0\/1\n⬛\nhttps?:\/\//.test(shared[shared.length-1]||''), 'tekst: punkty + X/Y + siatka + link — '+JSON.stringify(shared[shared.length-1]));
+    ok(/^Uszy & Mózg 🎧 0 pkt · 0\/1\n⬛\nhttps?:\/\//.test(shared[shared.length-1]||''), 'tekst: punkty + X/Y + siatka + link — '+JSON.stringify(shared[shared.length-1]));
   } finally { $(w,'sumAgain').click(); globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; repoMod.clearTrackCache(); }
 });
 await group('F8b stopka-legenda punktacji wg trybu pytania (rok / intro / ABCD)', async ()=>{
@@ -1783,7 +1811,8 @@ const eksFetch=(url)=>{
     const al=(n,extra={})=>({ collectionName:n, artistName:term, artworkUrl100:'https://x/c/'+encodeURIComponent(n)+'/100x100bb.jpg', releaseDate:'1984-05-01T00:00:00Z', trackCount:10, ...extra });
     return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:[ al('Greatest Hits'), al('Płyta '+term), al('Jakiś Singiel - Single',{trackCount:1}) ] }) });
   }
-  const r=(t,y)=>({ trackName:t, artistName:term, previewUrl:'https://x/'+encodeURIComponent(t)+'.m4a', collectionName:'Album '+term, releaseDate:y+'-01-01', artworkUrl100:'https://x/a100x100.jpg' });
+  // „Pięć" z albumu „Płyta <term>" — okładka: utwór reprezentatywny albumu (❤️ w odsłonie)
+  const r=(t,y)=>({ trackName:t, artistName:term, previewUrl:'https://x/'+encodeURIComponent(t)+'.m4a', collectionName:/^Pięć/.test(t) ? 'Płyta '+term : 'Album '+term, releaseDate:y+'-01-01', artworkUrl100:'https://x/a100x100.jpg' });
   return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ results:['Raz','Dwa','Trzy','Cztery','Pięć'].map((t,i)=>r(t+' '+term, 1980+i)) }) });
 };
 // minimalny WebAudio (dekodowanie/bufory/źródła) na prototypie FakeAudioContext — przywracany po grupie
@@ -1908,17 +1937,20 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
     ok(coverMod._coverDebug().timer, 'auto-odsłona uzbrojona (etap co 6 s)');
     more.click(); await settle(1);
     eq2(box.dataset.blocks, '32', '„wyraźniej" → 32×32');
+    ok(!more.disabled && /wyraźniej/.test(more.textContent), 'dalej „wyraźniej" (64×64 przed nami)');
     const src=decodeURIComponent($(w,'coverImg').getAttribute('src')||'');
     const who=(src.match(/Płyta (.+?)\//)||[])[1]||'';
     $(w,'qf_artist').value=who; $(w,'qf_album').value='Plyta '+who;
     click(w,'check'); await settle(2);
     const rm=txt(w,'rmeta').replace(/\s+/g,' ');
     ok(/Wykonawca/.test(rm) && /Album/.test(rm) && /1984/.test(rm), 'odsłona: wykonawca + album + rok — '+rm.slice(0,220));
-    ok(/32×32/.test(rm) && /mnożnik ×1,6/.test(rm), 'mnożnik etapu 32×32 = ×1,6');
-    eq2(+txt(w,'sPoints'), Math.round(120*1.6), 'punkty: (100 + album 20) × 1,6, bez bonusu za szybkość');
+    ok(/32×32/.test(rm) && /mnożnik ×1,5/.test(rm), 'mnożnik etapu 32×32 = ×1,5');
+    eq2(+txt(w,'sPoints'), Math.round(120*1.5), 'punkty: (100 + album 20) × 1,5, bez bonusu za szybkość');
     eq2(box.dataset.blocks, '0', 'po Sprawdź — pełna okładka');
     ok(/Dobrze!/.test(txt(w,'revealHead')), 'nagłówek: trafienie');
     ok(/wykonawca 100 · album \+20/.test(txt(w,'footLegend')), 'legenda okładki');
+    const th=$(w,'rmeta').querySelector('[data-taste-heart]');
+    ok(th && new RegExp('Pięć '+who).test(th.getAttribute('aria-label')||''), 'Gust: ❤️ na utwór reprezentatywny albumu (okładka ocenia utwór z płyty) — '+(th && th.getAttribute('aria-label')));
   });
   ok($(window,'coverBox').hidden && !window.document.body.classList.contains('cover-mode'), 'koniec meczu chowa okładkę i cover-mode');
 });
@@ -1932,7 +1964,15 @@ await group('EKSP. MP: picker — „od tyłu krótko" z nowym serwerem, składa
   w.mpLobbyStart(); await settle(4);
   html=$(w,'mpRoom').innerHTML;
   ok(mpModeOn(w,'revsnip') && /od tyłu krótko/.test(html), 'nowy serwer → „od tyłu krótko" aktywne');
-  ok(!mpModeOn(w,'medley') && !mpModeOn(w,'cover') && /solo/.test(mpModeWhy(w,'cover')), 'składanka/okładka tylko solo (wyszarzone)');
+  ok(!mpModeOn(w,'medley') && /serwer/.test(mpModeWhy(w,'medley')), 'składanka: serwer bez „medley" w presence.modes → wyszarzona (serwer)');
+  ok(!mpModeOn(w,'cover') && !/solo/.test(mpModeWhy(w,'cover')), 'okładka: serwer bez „cover" w presence.modes → wyszarzona (serwer, nie „tylko solo")');
+  ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','revsnip','cover','quiz'] }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  ok(mpModeOn(w,'cover'), 'MP okładka: serwer ogłasza „cover" → aktywna w „Nowym meczu" (rodzina „Bez dźwięku")');
+  ws._emit({ t:'presence', members:[{id:ws._id,name:'host'}], hostId:ws._id, modes:['music','lektor','reverse','snippet','abcd','year','revsnip','cover','medley','piano','guitar','timeline','intro','quiz'] }); await settle(4);
+  w.mpLobbyStart(); await settle(4);
+  ok(mpModeOn(w,'medley') && mpModeOn(w,'intro'), 'nowy serwer ogłasza składankę/intro → aktywne');
+  ok(['piano','guitar','timeline'].every(m=>mpModeOn(w,m) || !/solo/.test(mpModeWhy(w,m))), 'covery/oś czasu: nigdy „tylko solo" (najwyżej wyszarzone przez kategorie)');
   w.mpLeaveConfirmed('room'); await settle(4);
 });
 /* ===================== lektor: język opisu kategorii (lyrics.js `lang`) → głos ===================== */
@@ -2425,6 +2465,7 @@ await group('MP gość: „Mecz, który ustawia host" na żywo (szkic), bez szki
 await group('Twój gust: kafelek → ekran (sync z serwerem) → sesja 👍/❤️/👎/pomiń/gest/klawisz → półka → ❤️ w odsłonie', async ()=>{
   const w=window, d=w.document, prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
   const tasteMod=await import('../app/taste.js'), gustMod=await import('../app/gust.js');
+  (await import('../adapters-web/itunesRepository.js')).clearTrackCache();   // izolacja: wyniki wyszukiwań z poprzednich grup (scalanie iTunes+proxy trzyma zapytanie do 3 s)
   const realWait=(ms)=>new Promise(r=>setTimeout(r,ms));
   const until=async(fn, n=60)=>{ for(let i=0;i<n && !fn();i++) await settle(2); return fn(); };
   const srv={ posts:[], dels:[], gets:0 };
@@ -2479,7 +2520,7 @@ await group('Twój gust: kafelek → ekran (sync z serwerem) → sesja 👍/❤�
     await step(()=>d.querySelector('[data-gu-skip]').click());
     const swiped=ratingsLS().filter(x=>x.source==='swipe' && x.artist!=='Srv');
     eq2(swiped.map(x=>x.rating).join(','), '1,2,-1', 'localStorage: 👍=1, ❤️=2, 👎=-1 (pomiń bez oceny)');
-    ok(swiped.every(x=>x.genre==='Rock' && x.year==='1985' && x.trackKey && x.ts), 'ocena: gatunek, rok, klucz, ts');
+    ok(swiped.every(x=>x.genre==='Rock' && x.year==='1985' && x.trackKey && x.ts), 'ocena: gatunek, rok, klucz, ts '+JSON.stringify(swiped.map(x=>[x.title,x.artist,x.genre,x.year])));
     eq2(d.querySelector('[data-gu-pn]').textContent, '4/20', 'pomiń też przesuwa postęp (4/20)');
     // gest: przeciągnięcie w prawo (pointer events) → 👍
     const card=$(w,'guCard');
@@ -2637,9 +2678,9 @@ await group('Twój gust etap 2: Mój profil (pewność/CTA → archetyp, wykresy
     await until(()=>shareArg);
     ok(shareArg && shareArg.files && shareArg.files.length===1, 'navigator.share z 1 plikiem');
     const f=shareArg.files[0];
-    ok(f && f.name==='moj-gust-uszy-muzk.png' && f.type==='image/png', 'plik: moj-gust-uszy-muzk.png (image/png)');
+    ok(f && f.name==='moj-gust-uszy-mozg.png' && f.type==='image/png', 'plik: moj-gust-uszy-mozg.png (image/png)');
     eq2(cvSize, '1080x1350', 'canvas 1080×1350');
-    ok(texts.some(t=>/Dziecko lat 90/.test(t)) && texts.some(t=>/Muzk/.test(t)) && texts.some(t=>/TOP DEKADY/.test(t)), 'karta: archetyp, nazwa aplikacji, top dekady');
+    ok(texts.some(t=>/Dziecko lat 90/.test(t)) && texts.some(t=>/Mózg/.test(t)) && texts.some(t=>/TOP DEKADY/.test(t)), 'karta: archetyp, nazwa aplikacji, top dekady');
     ok(/Dziecko lat 90\./.test(shareArg.text) && /Na mojej półce: Backstreet Boys, Spice Girls/.test(shareArg.text) && /https:\/\/stacja\.test\//.test(shareArg.text), 'tekst: archetyp, top 3 z półki, link');
     ok(!/Zbyszek/.test(shareArg.text), 'bez ksywy domyślnie (brak danych osobowych)');
     await until(()=>/Udostępniono/.test(d.querySelector('[data-gu-share-msg]').textContent));
@@ -2651,8 +2692,8 @@ await group('Twój gust etap 2: Mój profil (pewność/CTA → archetyp, wykresy
     A.click=function(){ downloads.push({ download:this.getAttribute('download'), href:this.getAttribute('href') }); };
     d.querySelector('[data-gu-share]').click();
     await until(()=>clip.length && /skopiowany/.test(d.querySelector('[data-gu-share-msg]').textContent));
-    ok(downloads.some(x=>x.download==='moj-gust-uszy-muzk.png' && /^blob:/.test(x.href)), 'fallback: pobranie PNG (a[download])');
-    ok(clip.length===1 && /Uszy & Muzk/.test(clip[0]), 'fallback: tekst w schowku');
+    ok(downloads.some(x=>x.download==='moj-gust-uszy-mozg.png' && /^blob:/.test(x.href)), 'fallback: pobranie PNG (a[download])');
+    ok(clip.length===1 && /Uszy & Mózg/.test(clip[0]), 'fallback: tekst w schowku');
     ok(/PNG pobrany/.test(d.querySelector('[data-gu-share-msg]').textContent), 'komunikat fallbacku');
 
     // 5) widoczność gustu: „nikt" → lokalnie + POST /api/taste/visibility
@@ -3578,6 +3619,271 @@ await group('ranking: TV — imię do 3 linii (status/punkty kompaktowe); telefo
   const css=aCss();
   ok(/\.tv-tm-nm\{white-space:normal;[^}]*-webkit-line-clamp:3/.test(css) && /\.tv-team\{grid-template-columns:auto minmax\(0,1fr\) auto auto/.test(css), 'TV: .tv-tm-nm zawijane, kolumna imienia = reszta szerokości');
   ok(/\.rv-stand-row \.nm\{white-space:normal/.test(css) && /\.wk-row \.nm\{white-space:normal;[^}]*-webkit-line-clamp:2/.test(css), 'telefon: ranking odsłony/wyniku zawija imiona');
+});
+/* ===================== MP okładka (serwer-autorytet): pudełko okładki u gracza i na TV, pole albumu, „wyraźniej", odsłona ===================== */
+await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu), formularz z albumem, „wyraźniej", odsłona z pełną okładką', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const base='https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/x.jpg/';
+  const now=Date.now();
+  const cov=(over={})=>playState(ws, { mode:'cover', preview:'', answerSlots:[{key:'artist',label:'wykonawca'},{key:'album',label:'album (bonus)'}],
+    stage:0, coverStage:0, coverArt:base+'16x16bb.jpg', stageStarts:[now, now+6000, now+12000], stageAt:now, stageNextAt:now+6000, ...over });
+  ws.pushState(cov({ playNonce:9901 })); await settle(8);
+  let box=$(w,'mpStage').querySelector('.mp-cover');
+  ok(box && box.dataset.art===base+'16x16bb.jpg' && box.dataset.blocks==='16' && box.querySelector('canvas') && !box.querySelector('img'), 'gracz: pudełko okładki z obrazem 16×16 od serwera (sam canvas — pełnej w trakcie nie ma)');
+  ok(($(w,'mpProp_album') || $(w,'mpTyp_album')) && ($(w,'mpProp_artist') || $(w,'mpTyp_artist')), 'okładka bez audio → od razu odpowiadanie: pola wykonawca + album');
+  ok(/album \(bonus\)/.test(aStage()), 'pole albumu oznaczone jako bonus');
+  ok(/wykonawca 100 · album \+20/.test(aStage()) && /×2,0/.test(aStage()), 'legenda punktów jak w solo + mnożnik etapu');
+  ok(!$(w,'mpKnob'), 'bez płyty/gałki audio');
+  const more=$(w,'mpMore');
+  ok(more && !more.disabled && /wyraźniej/.test(more.textContent) && more.getAttribute('onclick')==='mpMoreStage()', 'przycisk „wyraźniej ›" (bez danych w onclick)');
+  const n0=ws.sent.length; w.mpMoreStage(); await settle(3);   // siatka: runScripts outside-only → handler wołany wprost
+  const req=ws.sent.slice(n0).find(m=>m.t==='more');
+  ok(req && req.playNonce===9901 && req.stage===0, '„wyraźniej" → {t:more, playNonce, stage} do serwera — '+JSON.stringify(req));
+  ok($(w,'mpMore').disabled, 'po prośbie przycisk wyszarzony (do nowego etapu)');
+  const inp=$(w,'mpProp_artist') || $(w,'mpTyp_artist'); inp.value='Toto';
+  ws.pushState(cov({ playNonce:9901, stage:2, coverStage:2, coverArt:base+'64x64bb.jpg' })); await settle(6);
+  box=$(w,'mpStage').querySelector('.mp-cover');
+  ok(box && box.dataset.art===base+'64x64bb.jpg' && box.dataset.blocks==='64', 'nowy etap ze stanu → nowy obraz (bez własnych timerów)');
+  ok($(w,'mpMore').disabled && /×1,0/.test(aStage()), 'ostatni etap (64×64, ×1,0): „wyraźniej" nieaktywne — pełna tylko w odsłonie');
+  eq2(($(w,'mpProp_artist') || $(w,'mpTyp_artist')).value, 'Toto', 'wpisany typ nie ginie przy zmianie etapu');
+  ws.pushState(cov({ playNonce:9902, coverArt:'javascript:alert(1)//"><b>x' })); await settle(8);
+  box=$(w,'mpStage').querySelector('.mp-cover');
+  ok(box && box.dataset.art==='' && !/javascript:|<b>x/.test(aStage()), 'URL spoza https odrzucony (escape, bez XSS)');
+  // TV salonu: duża okładka, bez przycisków
+  ws.pushState(cov({ playNonce:9903, salon:true, tvId:me, hostId:me, teams:[{id:'all',name:'Drużyna',members:['P2']}] })); await settle(8);
+  ok($(w,'mpStage').classList.contains('salon'), 'widok TV');
+  box=$(w,'mpStage').querySelector('.tv-coverfig .mp-cover');
+  ok(box && box.dataset.art===base+'16x16bb.jpg' && box.querySelector('canvas'), 'TV: duża okładka z obrazem etapu');
+  ok(!/mpProp_/.test(aStage()) && !$(w,'mpMore'), 'TV: bez pól odpowiedzi i bez „wyraźniej"');
+  // odsłona: pełna okładka, wykonawca, album, etap i mnożnik
+  ws.pushState(revealState(ws, { playNonce:9904, mode:'cover', slots:[{round:1,cat:'d80',mode:'cover'}], answerSlots:[{key:'artist',label:'wykonawca'},{key:'album',label:'album (bonus)'}],
+    reveal:{ kind:'cover', track:'Toto IV', artist:'Toto', album:'Toto IV', year:'1982', art:base+'600x600bb.jpg', okBySlot:{artist:true, album:false}, teamOk:true, gained:200,
+      locked:{artist:'Toto', album:''}, stageEval:{stage:0, blocks:16, mult:2} } })); await settle(8);
+  let rv=aStage();
+  ok(rv.includes(base+'600x600bb.jpg') && /Toto IV/.test(rv) && /ALBUM/.test(rv) && /1982/.test(rv), 'odsłona: pełna okładka + album + rok');
+  ok(/16×16 pikselach · mnożnik ×2,0/.test(rv) && /„Toto · —"/.test(rv), 'odsłona: etap odpowiedzi i mnożnik + odpowiedź drużyny');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+/* ===================== MP intro (serwer-autorytet): pasek etapów, „+ więcej", wspólny start odsłuchu, TV, odsłona ===================== */
+await group('MP intro: pasek etapów 1·2·4·8·16 s, „+ więcej" → {t:more}, odsłuch [0, stageSecs] od stageAt, TV, odsłona z etapem', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const plays=()=>audioInstances.reduce((n,x)=>n+x.plays,0);
+  const t0=Date.now();
+  const intro=(over={})=>playState(ws, { mode:'intro', preview:'https://x/intro.m4a', answerSlots:null, stage:0, stageSecs:1,
+    stageStarts:[t0, t0+4000, t0+9000, t0+16000, t0+27000], stageAt:t0, stageNextAt:t0+4000, ...over });
+  const p0=plays();
+  ws.pushState(intro({ playNonce:9911 })); await settle(8);
+  const st=$(w,'mpStage').querySelector('.mp-stages');
+  ok(st && [...st.querySelectorAll('.mp-stg')].map(x=>x.textContent).join(',')==='1 s,2 s,4 s,8 s,16 s', 'pasek etapów 1·2·4·8·16 s');
+  ok(st.querySelector('.mp-stg.on') && st.querySelector('.mp-stg.on').textContent==='1 s', 'bieżący etap podświetlony (1 s)');
+  ok(/teraz 1 s · ×2,0/.test(st.textContent) && /im wcześniej, tym więcej/.test(st.textContent), 'mnożnik teraz + legenda punktów');
+  ok(($(w,'mpProp_title') || $(w,'mpTyp_title')) && ($(w,'mpProp_artist') || $(w,'mpTyp_artist')), 'odpowiadanie od 1. etapu: tytuł + wykonawca');
+  ok(plays()>p0, 'odsłuch etapu 0 wystartował od wspólnego stageAt (gram u siebie)');
+  const a=audioInstances.find(x=>x.src && x.src.includes('intro.m4a'));
+  ok(a && a.currentTime<1, 'gra od początku zajawki (pozycja '+(a&&a.currentTime)+')');
+  const more=$(w,'mpMore');
+  ok(more && !more.disabled && /\+ więcej \(2 s\)/.test(more.textContent) && $(w,'mpIntroReplay'), '„+ więcej (2 s)" i „↻ odsłuchaj"');
+  const n0=ws.sent.length; w.mpMoreStage(); await settle(3);
+  const req=ws.sent.slice(n0).find(m=>m.t==='more');
+  ok(req && req.playNonce===9911 && req.stage===0, '„+ więcej" → {t:more, playNonce, stage} (dowolny gracz) — '+JSON.stringify(req));
+  // serwer przesunął harmonogram: etap 1 TERAZ → klient gra [0, 2 s] od nowa
+  const p1=plays(), t1=Date.now();
+  ws.pushState(intro({ playNonce:9911, stage:1, stageSecs:2, stageAt:t1, stageNextAt:t1+5000, stageStarts:[t0, t1, t1+5000, t1+12000, t1+23000] })); await settle(8);
+  ok(plays()>p1, 'nowy etap → nowy odsłuch od początku');
+  ok($(w,'mpStage').querySelector('.mp-stg.on').textContent==='2 s' && $(w,'mpStage').querySelectorAll('.mp-stg.done').length===1, 'etap 2 s podświetlony, 1 s ✓');
+  ok(!$(w,'mpMore').disabled && /\+ więcej \(4 s\)/.test($(w,'mpMore').textContent), 'nowy etap → „+ więcej (4 s)" znowu aktywne');
+  // ten sam stan ponownie (np. czyjś typ) → bez ponownego odtwarzania
+  const p2=plays();
+  ws.pushState(intro({ playNonce:9911, stage:1, stageSecs:2, stageAt:t1, stageNextAt:t1+5000, stageStarts:[t0, t1, t1+5000, t1+12000, t1+23000], byTeam:{ all:{ proposals:[{id:'x',by:'Q',byName:'Q',values:{title:'?'}}], votes:{}, sure:[], passed:[] } } })); await settle(6);
+  eq2(plays(), p2, 'ten sam etap (inny stan) → bez restartu odsłuchu');
+  // etap już minął (spóźniony odbiór) → cisza do następnego
+  const p3=plays();
+  ws.pushState(intro({ playNonce:9912, stage:0, stageSecs:1, stageAt:Date.now()-5000 })); await settle(8);
+  eq2(plays(), p3, 'spóźniony odbiór po końcu okna etapu → bez odtwarzania');
+  // „Jeden głośnik": nie-host nie gra
+  ws.pushState(intro({ playNonce:9913, audioHostOnly:true, hostId:'HOST', stageAt:Date.now() })); await settle(8);
+  eq2(plays(), p3, '„Jeden głośnik": nie-host nie odtwarza intro');
+  ok(!$(w,'mpIntroReplay') && /gra u hosta/.test($(w,'mpStage').querySelector('.mp-stages').textContent), 'pilot: bez „↻ odsłuchaj", info „gra u hosta"');
+  // TV salonu: duży pasek etapów, bez przycisków; TV gra
+  const p4=plays();
+  ws.pushState(intro({ playNonce:9914, salon:true, tvId:me, hostId:me, stageAt:Date.now(), teams:[{id:'all',name:'Drużyna',members:['P2']}] })); await settle(8);
+  ok($(w,'mpStage').querySelector('.tv-stages .mp-stg.on') && !$(w,'mpMore') && !$(w,'mpIntroReplay'), 'TV: pasek etapów 1·2·4·8·16 s bez przycisków');
+  ok(plays()>p4, 'TV (salon) gra odsłuch etapu');
+  // odsłona muzyki z etapem i mnożnikiem drużyny (telefon)
+  ws.pushState(revealState(ws, { playNonce:9915, mode:'intro', reveal:{ kind:'music', track:'Africa', artist:'Toto', year:'1982', album:'Toto IV', art:'', okTitle:true, okArtist:true, teamOk:true, gained:160,
+    locked:{ title:'Africa', artist:'Toto' }, stageEval:{ stage:1, secs:2, mult:1.6 } } })); await settle(8);
+  ok(/odpowiedź po 2 s · mnożnik ×1,6/.test(aStage()), 'odsłona: etap (2 s) i mnożnik drużyny');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+/* ===================== MP składanka / fortepian-gitara / oś czasu (serwer-autorytet): render, gotowość, szczeliny ===================== */
+await group('MP składanka: ARMING → gotowość po załadowaniu wycinków; PLAY: pole wykonawcy; odsłona z utworami', async ()=>{
+  const w=window; const ws=await aFreshRoom();
+  const medley=[0,1,2,3].map(i=>({ preview:'https://x/m'+i+'.m4a', start:10+i }));
+  const n0=ws.sent.length;
+  ws.pushState(playState(ws, { phase:'arming', armNonce:9921, mode:'medley', preview:medley[0].preview, medley, answerSlots:[{key:'artist',label:'wykonawca'}] })); await settle(12);
+  ok(ws.sent.slice(n0).some(m=>m.t==='action' && m.action && m.action.type==='ready' && m.action.armNonce===9921), 'gotowość zgłoszona po próbie załadowania wszystkich wycinków (loadMedley)');
+  ws.pushState(playState(ws, { playNonce:9922, armNonce:9921, mode:'medley', preview:medley[0].preview, medley, answerSlots:[{key:'artist',label:'wykonawca'}] })); await settle(8);
+  w.mpGoKombinuj(); await settle(3);
+  ok(($(w,'mpProp_artist') || $(w,'mpTyp_artist')) && !$(w,'mpProp_title') && !$(w,'mpTyp_title'), 'tylko pole wykonawcy (jak solo)');
+  ws.pushState(revealState(ws, { playNonce:9923, mode:'medley', reveal:{ kind:'medley', artist:'Toto', track:'Africa · Rosanna', okBySlot:{artist:true}, teamOk:true, gained:150, locked:{artist:'toto'},
+    clips:[{track:'Africa',artist:'Toto',year:'1982',art:''},{track:'Rosanna <b>',artist:'Toto',year:'1982',art:''}] } })); await settle(8);
+  const rv=aStage();
+  ok(/zagrały: 1\. Africa · 2\. Rosanna &lt;b&gt;/.test(rv) && /WYK\./.test(rv) && /„toto"/.test(rv), 'odsłona: wykonawca, zagrane utwory (escape), odpowiedź drużyny');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('MP fortepian/gitara: odsłona „🎹/🎸 cover: <kto grał>" (telefon i TV)', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws.pushState(revealState(ws, { playNonce:9931, mode:'piano', reveal:{ kind:'music', track:'Wonderwall', artist:'Oasis', okTitle:true, okArtist:true, teamOk:true, gained:100, locked:{title:'Wonderwall',artist:'Oasis'}, coverArtist:'Pianovus <i>', instrument:'piano' } })); await settle(8);
+  ok(/🎹 cover: <b>Pianovus &lt;i&gt;<\/b>/.test(aStage()), 'telefon: 🎹 cover (escape)');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  ws.pushState(revealState(ws, { playNonce:9932, mode:'guitar', salon:true, tvId:me, hostId:me, teams:[{id:'all',name:'Drużyna',members:['P2']}],
+    reveal:{ kind:'music', track:'Wonderwall', artist:'Oasis', teamOk:true, gained:100, coverArtist:'Fingerstyle Duo', instrument:'guitar' } })); await settle(8);
+  ok(/🎸 cover: <b>Fingerstyle Duo<\/b>/.test(aStage()), 'TV: 🎸 cover');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('MP oś czasu: oś drużyny ze szczelinami, tap = typ ze szczeliną (+ żetony), głosy, TV, odsłona', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const tl=(over={})=>playState(ws, { mode:'timeline', answerSlots:[{key:'gap',label:'miejsce na osi'},{key:'title',label:'tytuł (+20)'},{key:'artist',label:'wykonawca (+20)'}],
+    timeline:{ all:[{ track:'Africa', artist:'Toto', year:1982, art:'', anchor:true }, { track:'Jump <x>', artist:'Van Halen', year:1984, art:'' }] }, ...over });
+  ws.pushState(tl({ playNonce:9941 })); await settle(8);
+  w.mpGoKombinuj(); await settle(3);
+  const axis=$(w,'mpStage').querySelector('.mp-tl');
+  ok(axis && axis.querySelectorAll('.mp-tl-gap').length===3 && axis.querySelectorAll('.mp-tl-card').length===2, 'oś: 2 karty, 3 szczeliny');
+  ok(/1982/.test(axis.textContent) && /Jump &lt;x&gt;/.test(axis.innerHTML) && /2 karty · 1982–1984/.test(axis.textContent), 'karty jawne (rok, tytuł z escape) + podsumowanie osi');
+  ok(!$(w,'mpProp_gap') && $(w,'mpProp_title') && $(w,'mpProp_artist'), 'pola: tylko żetony tytuł/wykonawca (szczelina na osi)');
+  ok(axis.querySelector('[data-gap="1"]').getAttribute('onclick')==='mpTlPick(this.dataset.gap)', 'szczelina: data-gap + delegacja (bez danych w onclick)');
+  let n0=ws.sent.length; w.mpTlPick('1'); await settle(3);
+  let p=ws.sent.slice(n0).find(m=>m.t==='action' && m.action.type==='propose');
+  ok(p && p.action.values.gap==='1', 'tap w szczelinę → propose {gap:1} — '+JSON.stringify(p && p.action.values));
+  $(w,'mpProp_title').value='Take On Me'; n0=ws.sent.length; w.mpPropose(); await settle(3);
+  p=ws.sent.slice(n0).find(m=>m.t==='action' && m.action.type==='propose');
+  ok(p && p.action.values.gap==='1' && p.action.values.title==='Take On Me', '„Wrzuć" żeton → ta sama propozycja zachowuje szczelinę — '+JSON.stringify(p && p.action.values));
+  // stan z serwera: głos drużyny na szczelinę 1 → TOP + opis „między 1982 a 1984"
+  ws.pushState(tl({ playNonce:9941, byTeam:{ all:{ proposals:[{id:'p',by:me,byName:'Ja',values:{gap:'1',title:'Take On Me'}}], votes:{ gap:{ [me]:'1' }, title:{ [me]:'Take On Me' } }, sure:[], passed:[] } } })); await settle(6);
+  const ax2=$(w,'mpStage').querySelector('.mp-tl');
+  ok(ax2.querySelector('[data-gap="1"]').classList.contains('sel') && ax2.querySelector('[data-gap="1"]').classList.contains('top'), 'moja szczelina + TOP drużyny podświetlone');
+  ok(/drużyna: <b>między 1982 a 1984<\/b>/.test(ax2.innerHTML) && /między 1982 a 1984/.test($(w,'mpStage').querySelector('#mpTeam').textContent), 'odpowiedź drużyny opisana słowami (nie „1")');
+  // TV coop: ta sama oś (sędzia), bez pól
+  ws.pushState(tl({ playNonce:9942, salon:true, tvId:me, hostId:me, teams:[{id:'all',name:'Drużyna',members:['P2']}] })); await settle(8);
+  w.mpGoKombinuj(); await settle(4);
+  ok($(w,'mpStage').querySelector('.tv-tl .mp-tl-gap') && !/mpProp_/.test(aStage()), 'TV: oś drużyny (szczeliny do nadpisania), bez pól');
+  n0=ws.sent.length; w.mpTlPick('0'); await settle(3);
+  const v=ws.sent.slice(n0).find(m=>m.t==='action' && m.action.type==='vote');
+  ok(v && v.action.slot==='gap' && v.action.value==='0' && v.action.set===true, 'TV-sędzia: tap = nadpisanie głosem drużyny');
+  // odsłona
+  ws.pushState(revealState(ws, { playNonce:9943, mode:'timeline', timeline:{ all:[{track:'Africa',artist:'Toto',year:1982},{track:'Take On Me',artist:'a-ha',year:1983},{track:'Jump',artist:'Van Halen',year:1984}] },
+    reveal:{ kind:'timeline', track:'Take On Me', artist:'a-ha', year:'1985', art:'', teamOk:true, gained:120, okBySlot:{gap:true,title:true,artist:false}, locked:{gap:'1',title:'Take On Me',artist:''},
+      timelineEval:{ gap:1, placeOk:true, good:[1], card:{track:'Take On Me',artist:'a-ha',year:1983}, before:[{track:'Africa',artist:'Toto',year:1982},{track:'Jump',artist:'Van Halen',year:1984}] } } })); await settle(8);
+  const rv=aStage();
+  ok(/MIEJSCE/.test(rv) && /między 1982 a 1984/.test(rv) && /karta zostaje na osi · 3 karty · 1982–1984/.test(rv), 'odsłona: miejsce ✓, oś po wstawieniu');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+/* ===================== dług MP/Gust (TODO §4): „Gotowy ✓", pokój mieszany, czat osi, zapas składanki, gust ===================== */
+await group('„Gotowy ✓" w lobby: gość stuka (toggle → {t:lobbyReady}), ✓ przy graczach, host widzi „gotowi 1/2", start nie blokowany', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const pres=(over={})=>ws._emit({ t:'presence', members:[{id:'HOST',name:'Host'},{id:me,name:'Ja'},{id:'O',name:'Ola'}], hostId:'HOST', caps:['lobbyReady'], ready:['O'], ...over });
+  pres(); await settle(4);
+  let h=$(w,'mpRoom').innerHTML;
+  ok($(w,'mpReadyBtn') && /Gotowy ✓/.test($(w,'mpReadyBtn').textContent) && $(w,'mpReadyBtn').getAttribute('aria-pressed')==='false', 'gość: przycisk „Gotowy ✓"');
+  ok(/Ola[^]*?pcz-ready/.test(h) && /gotowi 1\/2/.test(h), '✓ przy Oli + licznik „gotowi 1/2" (bez hosta)');
+  const n0=ws.sent.length; w.mpLobbyReadyToggle(); await settle(2);
+  const m=ws.sent.slice(n0).find(x=>x.t==='lobbyReady');
+  ok(m && m.on===true, 'stuknięcie → {t:"lobbyReady", on:true} — '+JSON.stringify(m));
+  pres({ ready:['O', me] }); await settle(3);
+  ok($(w,'mpReadyBtn').classList.contains('on') && /✓ Gotowy/.test($(w,'mpReadyBtn').textContent), 'stan z serwera: „✓ Gotowy" (toggle)');
+  w.mpLobbyReadyToggle(); await settle(2);
+  ok(ws.sent.filter(x=>x.t==='lobbyReady').pop().on===false, 'ponowne stuknięcie → on:false');
+  // host: licznik, ZACZNIJ dostępne mimo niegotowych
+  ws._emit({ t:'presence', members:[{id:me,name:'Ja'},{id:'O',name:'Ola'},{id:'K',name:'Kuba'}], hostId:me, caps:['lobbyReady'], ready:['O'] }); await settle(4);
+  h=$(w,'mpRoom').innerHTML;
+  ok(/gotowi 1\/2/.test(h) && !$(w,'mpReadyBtn') && /ZACZNIJ/.test(h), 'host: „gotowi 1/2", bez własnego przycisku, ZACZNIJ dostępne');
+  // stary serwer (bez capability) → bez przycisku i licznika
+  ws._emit({ t:'presence', members:[{id:'HOST',name:'Host'},{id:me,name:'Ja'}], hostId:'HOST' }); await settle(3);
+  ok(!$(w,'mpReadyBtn') && !/gotowi \d/.test($(w,'mpRoom').innerHTML), 'stary serwer/relay → „Gotowy" ukryty');
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('„Gotowy na rewanż ✓" po meczu (DONE): gość ma przycisk, host widzi licznik obok „Jeszcze raz"', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws.pushState(revealState(ws, { playNonce:9951 })); await settle(6);   // gość „widział mecz" (P0-10)
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  ws._emit({ t:'presence', members:[{id:'HOST',name:'Host'},{id:me,name:'Ja'}], hostId:'HOST', caps:['lobbyReady'], ready:[] }); await settle(3);
+  ws.pushState(playState(ws, { phase:'done', hostId:'HOST', tallyList:[], slots:[{round:1,cat:'d80',mode:'music'}] })); await settle(6);
+  ok($(w,'mpReadyBtn') && /rewanż/.test($(w,'mpReadyBtn').textContent), 'gość: „Gotowy na rewanż ✓"');
+  ws._emit({ t:'presence', members:[{id:me,name:'Ja'},{id:'O',name:'Ola'}], hostId:me, caps:['lobbyReady'], ready:['O'] }); await settle(3);
+  ws.pushState(playState(ws, { phase:'done', hostId:me, tallyList:[], slots:[{round:1,cat:'d80',mode:'music'}] })); await settle(6);
+  ok(/gotowi 1\/1 na rewanż/.test(aStage()) && /Jeszcze raz/.test(aStage()), 'host: „gotowi 1/1 na rewanż" + „Jeszcze raz" (bez blokady)');
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('pokój mieszany: „Czekamy na" po „dalej" pomija starego klienta (bez adv) — nie wisi do zmiany fazy', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ok(ws.sent.some(m=>m.t==='hello' && Array.isArray(m.caps) && m.caps.includes('adv')), 'nowy klient ogłasza `adv` w hello');
+  ws._emit({ t:'presence', members:[{id:'HOST',name:'Host',adv:true},{id:me,name:'Ja',adv:true},{id:'O',name:'StaryOla'},{id:'K',name:'Kuba',adv:true}], hostId:'HOST' }); await settle(3);
+  ws.pushState(revealState(ws, { playNonce:9961, hostId:'HOST' })); await settle(6);
+  w.mpAdvance(); await settle(4);
+  const h=aStage();
+  ok(/Czekamy na/.test(h) && /Kuba/.test(h.split('Czekamy na')[1]||'') && !/StaryOla/.test((h.split('Czekamy na')[1]||'').split('</div>')[0]), '„Czekamy na: Kuba" — bez starego klienta — '+((h.match(/Czekamy na[^]*?<\/div>/)||[''])[0]).replace(/<[^>]+>/g,' ').slice(0,120));
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('oś czasu: czat pokazuje szczelinę słowami (nie „@MIEJSCE NA OSI 1")', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  w.mpSetSkin('czat'); await settle(2);
+  ws.pushState(playState(ws, { playNonce:9971, mode:'timeline', answerSlots:[{key:'gap',label:'miejsce na osi'},{key:'title',label:'tytuł (+20)'},{key:'artist',label:'wykonawca (+20)'}],
+    teams:[{id:'all',name:'D',members:[me,'O']}], timeline:{ all:[{track:'A',artist:'X',year:1982},{track:'B',artist:'Y',year:1984}] },
+    byTeam:{ all:{ proposals:[{id:'p1',by:'O',byName:'Ola',values:{gap:'1',title:'Take On Me'}}], votes:{gap:{O:'1'}}, sure:[], passed:[] } } })); await settle(8);
+  w.mpGoKombinuj(); await settle(4);
+  const feed=($(w,'mpChatFeed')||{}).innerHTML||'';
+  ok(/między 1982 a 1984/.test(feed) && !/>1<\/span>/.test(feed), 'czat: „@MIEJSCE NA OSI między 1982 a 1984" — '+feed.replace(/<[^>]+>/g,' ').replace(/\s+/g,' ').slice(0,140));
+  w.mpSetSkin('kolumny'); await settle(2);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('składanka MP: bez WebAudio (CORS/stary silnik) → zapas na trwałym elemencie (wycinki od startów serwera)', async ()=>{
+  const w=window; const ws=await aFreshRoom();
+  const plays=()=>audioInstances.reduce((n,x)=>n+x.plays,0);
+  const medley=[0,1,2].map(i=>({ preview:'https://x/fb'+i+'.m4a', start:12 }));
+  ws.pushState(playState(ws, { phase:'arming', armNonce:9981, mode:'medley', preview:medley[0].preview, medley, answerSlots:[{key:'artist',label:'wykonawca'}] })); await settle(10);
+  const p0=plays();
+  ws.pushState(playState(ws, { playNonce:9982, armNonce:9981, mode:'medley', preview:medley[0].preview, medley, answerSlots:[{key:'artist',label:'wykonawca'}] })); await settle(8);
+  await new Promise(r=>setTimeout(r, 700));   // wejście 0,4 s przed 1. wycinkiem
+  const a=audioInstances.find(x=>x.src && x.src.includes('fb0.m4a'));
+  ok(plays()>p0 && a, 'zapas: 1. wycinek gra na trwałym elemencie');
+  ok(/fragment 1\/3/.test(($(w,'mpPlayStatus')||{}).textContent||''), 'licznik „fragment 1/3…" — '+(($(w,'mpPlayStatus')||{}).textContent||''));
+  w.mpGoKombinuj(); await settle(2);   // wyjście do „kombinuj" ucisza zapas
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('Gust: ❤️ w odsłonie okładki (utwór reprezentatywny), wycofanie półki po ukryciu gustu, wylogowanie czyści lokalne oceny', async ()=>{
+  const w=window; const tasteMod=await import('../app/taste.js');
+  let ws=await aFreshRoom();
+  ws.pushState(revealState(ws, { playNonce:9991, mode:'cover', reveal:{ kind:'cover', track:'Toto IV', artist:'Toto', album:'Toto IV', year:'1982', art:'', okBySlot:{artist:true}, teamOk:true, gained:200,
+    locked:{artist:'Toto'}, rep:{ title:'Rosanna', artist:'Toto', year:'1982', art:'', genre:'Rock' } } })); await settle(8);
+  const hb=$(w,'mpStage').querySelector('[data-taste-heart]');
+  ok(hb && /Rosanna — Toto/.test(hb.getAttribute('aria-label')||''), 'odsłona okładki: ❤️ „na półkę" dla utworu reprezentatywnego albumu');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+  // półka w pokoju → ukrycie gustu → {t:shelf, items:[]} (wycofanie); odkrycie → ponownie
+  w.localStorage.setItem('stacjaTasteVis', 'friends');
+  for(let i=0;i<8;i++) tasteMod.tasteRate({ title:'Wycof '+i, artist:'Grupa '+i, year:'1999' }, 2);
+  ws=await f6bRoom();
+  ws._emit({ t:'presence', members:[{ id:ws._id, name:'Ja' }], hostId:ws._id, caps:['tableTaste'] }); await settle(4);
+  ok(ws.sent.some(m=>m.t==='shelf' && m.items.length>0), 'półka wysłana (gust widoczny)');
+  await tasteMod.setTasteVisibility('hidden');
+  await new Promise(r=>setTimeout(r, 750));   // debounce wysyłki półki
+  const last=ws.sent.filter(m=>m.t==='shelf').pop();
+  ok(last && Array.isArray(last.items) && last.items.length===0, 'ukrycie gustu w pokoju → {t:"shelf", items:[]} (serwer kasuje półkę)');
+  await tasteMod.setTasteVisibility('friends');
+  await new Promise(r=>setTimeout(r, 750));
+  ok(ws.sent.filter(m=>m.t==='shelf').pop().items.length>0, 'odkrycie → półka wraca');
+  w.mpLeaveConfirmed('room'); await settle(6);
+  // wylogowanie: najpierw próba dosłania, potem pusty lokalny gust
+  ok(Object.keys(tasteMod.tasteStore()).length>0, 'przed wylogowaniem są oceny');
+  await w.acLogout(); await settle(4);
+  eq2(Object.keys(tasteMod.tasteStore()).length, 0, 'wylogowanie → lokalne oceny wyczyszczone');
+  eq2(w.localStorage.getItem('stacjaTaste'), '{}', 'localStorage gustu pusty');
+  eq2(tasteMod.tastePending(), 0, 'kolejka synchronizacji pusta');
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

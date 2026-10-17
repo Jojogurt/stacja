@@ -9,6 +9,7 @@
  * z sieci — u różnych osób różne kafle; (3) „rok" bywa datą remasteru z iTunes, a „intro" premiuje
  * cierpliwość, nie wiedzę — wynik dnia byłby mniej porównywalny. dailyPlan przyjmuje inne tryby (opts.modes). */
 import { modesFor } from './match.js';
+import { APP_NAME } from './util.js';
 
 export const DAILY_TZ = 'Europe/Warsaw';
 export const DAILY_EPOCH = '2026-10-15';          // Stacja dnia #1 (dzień wydania audytu 2026-10)
@@ -155,14 +156,14 @@ export function resultGrid(results, total){
   return s;
 }
 export function countHits(results){ return (Array.isArray(results) ? results : []).filter(r => r && r.okTitle && r.okArtist && !r.skipped).length; }
-// „STACJA #N 🎧 7/10 · 🔥3\n🟩🟩🟨…\n<link>"
+// „Uszy & Mózg #N 🎧 7/10 · 🔥3\n🟩🟩🟨…\n<link>"
 export function dailyShareText({ n, hits, total = DAILY_QUESTIONS, streak = 0, grid = '', url = '' }){
-  const head = `STACJA #${Math.max(0, Math.floor(n) || 0)} 🎧 ${Math.max(0, hits | 0)}/${Math.max(0, total | 0)}` + (streak > 0 ? ` · 🔥${streak | 0}` : '');
+  const head = `${APP_NAME} #${Math.max(0, Math.floor(n) || 0)} 🎧 ${Math.max(0, hits | 0)}/${Math.max(0, total | 0)}` + (streak > 0 ? ` · 🔥${streak | 0}` : '');
   return [head, grid, url].filter(Boolean).join('\n');
 }
-// zwykły mecz solo: „STACJA 🎧 450 pkt · 7/10\n🟩…\n<link>"
+// zwykły mecz solo: „Uszy & Mózg 🎧 450 pkt · 7/10\n🟩…\n<link>"
 export function matchShareText({ points = 0, hits = 0, total = 0, grid = '', url = '' }){
-  const head = `STACJA 🎧 ${Math.max(0, Math.round(+points) || 0)} pkt · ${Math.max(0, hits | 0)}/${Math.max(0, total | 0)}`;
+  const head = `${APP_NAME} 🎧 ${Math.max(0, Math.round(+points) || 0)} pkt · ${Math.max(0, hits | 0)}/${Math.max(0, total | 0)}`;
   return [head, grid, url].filter(Boolean).join('\n');
 }
 

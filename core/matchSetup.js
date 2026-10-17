@@ -123,7 +123,7 @@ export function modeStates({ cats, modes, allCats, available = ALL_MODES, famili
 export function modeNote(reasons){
   const r = new Set(reasons || []), parts = [];
   if(r.has('cats')) parts.push('Wyszarzone tryby nie pasują do wybranych kategorii — np. covery wymagają światowych hitów, lektor kategorii z zakładki Teksty.');
-  if(r.has('solo')) parts.push('Tryby „tylko solo" (intro, oś czasu, składanka, okładka, covery) nie działają w grze ze znajomymi.');
+  if(r.has('solo')) parts.push('Tryby „tylko solo" (oś czasu, składanka, covery) nie działają w grze ze znajomymi.');
   if(r.has('server')) parts.push('Część trybów jest wyłączona, bo serwer pokoju jeszcze ich nie obsługuje.');
   return parts.join(' ');
 }

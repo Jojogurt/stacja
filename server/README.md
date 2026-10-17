@@ -14,7 +14,8 @@ Jeden Worker obsługuje **cały** backend, który dawniej stał na Supabase:
 - `lib/auth.js` — tożsamość bez kont: device-UUID podpisany tokenem (HS256/HMAC). Worker generuje id.
 - `lib/api.js` — REST API danych (D1) + walidacja zapisu meczu (`record-match`) + „Twój gust" (`/api/taste`:
   GET własne oceny, POST upsert ≤ 50 LWW po `ts`, DELETE `?key=`; rate-limit per profil, limit 2000 ocen).
-- `lib/proxies.js` — `/tracks` (iTunes→Deezer), `/spotify` (embed `__NEXT_DATA__`), `/audio` (allowlista+Range).
+- `lib/sources.js` — pobieranie utworów/albumów: iTunes + Deezer ŁĄCZNIE i scalone (`core/sources.js`). Dlaczego Deezer: iTunes Search API zwraca 429 (a `/lookup` 403) dla wspólnego adresu wyjściowego Workerów Cloudflare, więc samo iTunes bywa puste; Deezer po wykonawcy (`/search/artist` → `/top` + `/albums`) daje utwory z rokiem i gatunkiem.
+- `lib/proxies.js` — `/tracks` (iTunes+Deezer; `source`: `itunes`/`deezer`/`itunes+deezer`), `/spotify` (embed `__NEXT_DATA__`), `/audio` (allowlista+Range).
 - `gameRoom.js` — Durable Object **relay**: broadcast (self=true) + presence. **Host-authority zostaje
   w `app.js`** — DO wozi tylko transport (zamiennik Supabase Realtime).
 - `wrangler.toml` — config deployu (DO na SQLite = darmowy plan).
@@ -23,7 +24,10 @@ Jeden Worker obsługuje **cały** backend, który dawniej stał na Supabase:
 ## Deploy
 ```bash
 cd server
-export CLOUDFLARE_API_TOKEN="$(tr -d '[:space:]' < .cf-token)"   # token gitignored, nie commitować
+# token: CLOUDFLARE_API_TOKEN + CLOUDFLARE_ACCOUNT_ID z ~/.zshrc (źródło prawdy; nie commitować).
+# Dawny plik .cf-token (gitignored) bywał nieaktualny — używany tylko, gdy zmiennej brak:
+[ -n "$CLOUDFLARE_API_TOKEN" ] || export CLOUDFLARE_API_TOKEN="$(tr -d '[:space:]' < .cf-token)"
+node_modules/.bin/wrangler whoami   # sprawdź token przed deployem
 node_modules/.bin/wrangler deploy
 # sekret tożsamości (raz):
 # echo '<losowy-sekret>' | node_modules/.bin/wrangler secret put TOKEN_SECRET
@@ -34,7 +38,7 @@ Pliki `migrations/*.sql` stosuje się RĘCZNIE (`wrangler.toml` nie ma `migratio
 Postgres z Supabase — `wrangler d1 migrations apply` by się na nim wyłożył). Format SQLite: `0001`, `0004`, `0005`.
 ```bash
 cd server
-export CLOUDFLARE_API_TOKEN="$(tr -d '[:space:]' < .cf-token)"
+[ -n "$CLOUDFLARE_API_TOKEN" ] || export CLOUDFLARE_API_TOKEN="$(tr -d '[:space:]' < .cf-token)"   # jak wyżej
 node_modules/.bin/wrangler d1 execute stacja-db --local  --file=migrations/0005_taste.sql   # najpierw lokalnie
 node_modules/.bin/wrangler d1 execute stacja-db --remote --file=migrations/0005_taste.sql   # produkcja — PRZED deployem Workera
 node_modules/.bin/wrangler d1 execute stacja-db --remote --command "SELECT COUNT(*) FROM taste_ratings"   # sprawdzenie

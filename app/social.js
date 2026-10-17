@@ -3,6 +3,7 @@
  * odblokowanie audio, kolor awatara) oraz etykiety kategorii wstrzykiwane przez initSocial —
  * dzięki temu moduł nie importuje app.js (brak cyklu), a przeniesiony kod został bez zmian. */
 import { escapeHtml } from '../core/util.js';
+import { tasteLogout } from './taste.js';   // wylogowanie: dosłanie + wyczyszczenie lokalnego gustu
 import { ensureSession, setHandle, fetchProfile, loginOAuth, logout,
   teamCreate, teamJoin, teamLeave, myTeams, friendAdd, friendRespond,
   friendsList, pendingFriends, sentFriends, meInfo } from '../adapters-web/cf.js';
@@ -286,7 +287,8 @@ async function acInitAuthButtons(){
     }
   }catch(e){ /* przycisk się nie pokaże */ } }
 }
-async function acLogout(){ logout(); myHandle=null; cacheHandle(null); await ensureSession(); acAfterLogin(); }
+// dług gustu: przed wylogowaniem dosłać oceny (stary token), potem wyczyścić lokalny gust (app/taste.tasteLogout)
+async function acLogout(){ try{ await tasteLogout(); }catch(_e){} logout(); myHandle=null; cacheHandle(null); await ensureSession(); acAfterLogin(); }
 
 export async function renderProfil(){
   const el=$m('profilStats'); el.innerHTML=`<div class="profil-empty">${bbLoader}</div>`;

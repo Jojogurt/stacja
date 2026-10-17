@@ -4,7 +4,7 @@
  * `.on/.subscribe/.track/.send/.presenceState/.unsubscribe` — więc `mpEnterRoom` i nadawcy
  * emotek w `app.js` działają bez zmian. RÓŻNICA: tu serwer jest autorytetem — klient NIE
  * rozsyła stanu, tylko WYSYŁA AKCJE i DOSTAJE autorytatywny `{t:'state'}`. Plus komendy
- * hosta: `.startMatch/.lock/.next/.retry/.go` i odczyt `.hostId`.
+ * hosta: `.startMatch/.lock/.next/.retry/.go` i odczyt `.hostId`; każdego gracza: `.more` (etap odsłony wcześniej).
  *
  * Mapowanie `send({type:'broadcast', event, payload})`:
  *   event 'sync'             → IGNOR (stan należy do DO, klient go nie rozsyła)
@@ -39,6 +39,7 @@ export function authorityChannel(code, cfg = {}) {
     serverModes: null,         // F8a: tryby znane serwerowi (presence.modes); null = stary serwer → tylko dawne tryby
     serverCaps: [],            // gust etap 3: capability serwera (presence.caps, np. 'tableTaste'); stary serwer → []
     shelves: [],               // gust etap 3: [{id, n}] — kto z obecnych dosłał półkę (presence.shelves)
+    readyIds: [],              // „Gotowy ✓” w lobby / przy rewanżu (presence.ready; stary serwer → [])
 
     on(kind, opts, cb) {
       if (kind === 'broadcast') { const e = opts && opts.event; (bcast[e] = bcast[e] || []).push(cb); }
@@ -63,6 +64,8 @@ export function authorityChannel(code, cfg = {}) {
     next() { return send({ t: 'next' }); },
     retry() { return send({ t: 'retry' }); },   // 1.3: host ponawia rundę zablokowaną w NETERR/NOLYRIC
     go() { return send({ t: 'go' }); },         // F2b #6: host „pomiń czekających" w ARMING (stary serwer: ignoruje)
+    lobbyReady(on) { return send({ t: 'lobbyReady', on: on === true }); },   // „Gotowy ✓” (toggle; stary serwer: ignoruje)
+    more(playNonce, stage) { return send({ t: 'more', playNonce, stage }); },   // MP okładka/intro: „+ więcej"/„wyraźniej" — dowolny gracz (stary serwer: ignoruje)
     // gust etap 3: półka do „Gust stołu" (items = top ❤️ {title,artist,year}; [] = wycofaj). Zapamiętana do reconnectu.
     shareShelf(items) { myShelf = Array.isArray(items) ? items : []; return send({ t: 'shelf', items: myShelf }); },
 
@@ -90,7 +93,7 @@ export function authorityChannel(code, cfg = {}) {
 
     ws.onopen = () => {
       retry = 0;
-      send({ t: 'hello' });
+      send({ t: 'hello', caps: ['adv'] });   // pokój mieszany: ten klient wysyła `advanced` po „dalej” także poza salonem
       if (myName) send({ t: 'track', name: myName });
       if (myShelf && myShelf.length) send({ t: 'shelf', items: myShelf });   // gust etap 3: DO mógł zgubić półkę
       if (subCb) subCb('SUBSCRIBED');
@@ -115,8 +118,9 @@ export function authorityChannel(code, cfg = {}) {
         api.serverCaps = Array.isArray(msg.caps) ? msg.caps.filter((m) => typeof m === 'string').slice(0, 16) : [];
         api.shelves = Array.isArray(msg.shelves) ? msg.shelves.filter((x) => x && typeof x.id === 'string')
           .map((x) => ({ id: x.id, n: Math.max(0, Math.min(20, x.n | 0)) })).slice(0, 64) : [];
+        api.readyIds = Array.isArray(msg.ready) ? msg.ready.filter((x) => typeof x === 'string').slice(0, 64) : [];
         presence = {};
-        (msg.members || []).forEach((m) => { if (m && m.id) presence[m.id] = [{ name: m.name || '' }]; });
+        (msg.members || []).forEach((m) => { if (m && m.id) presence[m.id] = [{ name: m.name || '', adv: m.adv === true }]; });
         if (presenceCb) { try { presenceCb(); } catch (_e) {} }
       }
     };

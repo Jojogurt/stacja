@@ -138,6 +138,23 @@ export async function tastePull({ create=false }={}){
   }catch(e){ failed(e); return false; }
 }
 
+/* ---- wylogowanie (dług gustu): najpierw spróbuj DOSŁAĆ niezsynchronizowane oceny (token jeszcze ważny), potem wyczyść
+ * lokalne oceny, kolejkę i widoczność — następny profil (anon) nie dziedziczy cudzej półki. Limit czasu: nie blokuj wylogowania. */
+export const LOGOUT_FLUSH_MS = 4000;
+export async function tasteLogout({ timeoutMs=LOGOUT_FLUSH_MS }={}){
+  if(flushT){ clearTimeout(flushT); flushT=null; }
+  let flushed=!(queue.push.length || queue.del.length);
+  if(!flushed && base() && syncState!=='off' && hasSession()){
+    try{ await Promise.race([ flush(), new Promise(r=>setTimeout(r, timeoutMs)) ]); }catch(_e){}
+    flushed=!(queue.push.length || queue.del.length);
+  }
+  if(flushT){ clearTimeout(flushT); flushT=null; }
+  store={}; queue={ push:[], del:[] }; retryMs=0;
+  save(); saveQueue(); lsSet(LS_VIS, ''); lsSet(LS_VIS_Q, '0');
+  syncState='local'; emit();
+  return flushed;
+}
+
 /* ---- widoczność gustu (etap 2 → porównania w etapie 3): local-first + POST /api/taste/visibility ----
  * Zapis lokalny od razu; flaga 'stacjaTasteVisQ' = zmiana jeszcze nie na serwerze (wyśle ją następny pull/zmiana).
  * Stary Worker (404) / baza bez kolumny → zostaje lokalnie. */
