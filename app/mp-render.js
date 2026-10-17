@@ -1536,6 +1536,9 @@ function tvQHeadHTML(g){
 // treść pytania na TV — tryb „abcd" (muzyka) ma ogólne „Jaki to utwór?" (zadanie jest w chipie) → same kafle, bez pudełka
 const tvPromptHTML = (g)=> g.mode==='abcd' ? '' : mpPromptHTML(g);
 const tvClockHTML = ()=> `<div class="tv-clock" id="mpCountdown" role="timer" aria-label="czas fazy"></div>`;
+/* TV: dwie kolumny (pytanie | odpowiedzi), żeby treść mieściła się na ekranie 16:9 bez przewijania (przegląd v70: wiersze jeden
+ * pod drugim nie mieściły się na TV). Pusta prawa → sama lewa na całą szerokość. Pion (orientation:portrait) → CSS składa w jedną. */
+const tvCols = (q, a, cls='')=> String(a||'').trim() ? `<div class="tv-cols${cls?' '+cls:''}"><div class="tv-col tv-col-q">${q}</div><div class="tv-col tv-col-a">${a}</div></div>` : q;
 function tvTopHTML(g){
   const ph=mpPhaseNow(g);
   const rail=MP_PHASES.map(([k,e])=>`<span class="tv-rail-i${k===ph?' on':''}"><i aria-hidden="true">${e}</i>${k===ph?`<b>${escapeHtml(mpPhaseLabel(g,k))}</b>`:''}</span>`).join('<span class="tv-rail-sep" aria-hidden="true">›</span>');
@@ -1580,7 +1583,7 @@ function tvRevealHTML(g, snap){
     body=`<div class="tv-track">${cover}<div class="tv-track-i"><small class="tv-ans-h">${r.kind==='year'?'Utwór':'Poprawna odpowiedź'}</small><b class="tv-track-t">${escapeHtml(displayTitle(r.track))}</b><span class="tv-track-a">${escapeHtml(r.artist||'')}</span>${meta?`<span class="tv-track-m">${escapeHtml(meta)}</span>`:''}${mpFromHTML(r)}${mpCoverArtistHTML(r)}</div></div>${year}`;
   }
   const stg = !comp && rv.stageEval ? `<div class="tv-fun" data-rv-stage>${r.kind==='cover'?'🖼':'⏱'} ${escapeHtml(mpStageEvalText(rv.stageEval))}</div>` : '';   // MP okładka/intro: etap i mnożnik drużyny
-  return `${tvQHeadHTML(g)}<div class="tv-reveal">${body}${stg}</div>${comp ? '' : mpRevealBanner(rv)}`;
+  return tvQHeadHTML(g) + tvCols(`<div class="tv-reveal">${body}</div>`, `${stg}${comp ? '' : mpRevealBanner(rv)}`);
 }
 function tvLeftHTML(g, sc){
   switch(sc){
@@ -1596,15 +1599,19 @@ function tvLeftHTML(g, sc){
       return `${tvQHeadHTML(g)}<div class="tv-count" aria-hidden="true"><b data-d="${num(d)}">${d>0?num(d):'▶'}</b></div>${prompt}`;
     }
     case 'listen':
-      if(mpStaged(g)) return `${tvQHeadHTML(g)}<div class="tv-clockrow">${tvClockHTML()}</div>${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}`;   // MP okładka/intro
-      if(g.mode==='quiz') return `${tvQHeadHTML(g)}<div class="tv-clockrow">${tvClockHTML()}</div>${mpPromptHTML(g)}${mpMcHTML(g)}`;
-      return `${tvQHeadHTML(g)}<div class="tv-listen${mcOptions(g)?' mc':''}">${mpKnobHTML(g)}<div class="tv-listen-r">${tvClockHTML()}<div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}${mpTimelineHTML(g, true)}`;
+      if(mpStaged(g)) return tvQHeadHTML(g)+tvCols(`${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}`, `<div class="tv-clockrow">${tvClockHTML()}</div>`);   // MP okładka/intro
+      if(g.mode==='quiz') return tvQHeadHTML(g)+tvCols(mpPromptHTML(g), `<div class="tv-clockrow">${tvClockHTML()}</div>${mpMcHTML(g)}`, 'aw');
+      return tvQHeadHTML(g)+tvCols(`<div class="tv-listen${mcOptions(g)?' mc':''}">${mpKnobHTML(g)}<div class="tv-listen-r">${tvClockHTML()}<div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>`,
+        `${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}`)+mpTimelineHTML(g, true);
     case 'answer': {
       const comp=(g.format||'coop')!=='coop', mc=!!mcOptions(g);
       const wait = g.allDoneAt ? `<div class="mp-alldone tv-alldone" role="status">✓ Wszyscy gotowi! Sprawdzamy…</div>`
         : (mpWaitNamesHTML(unsettledIds(g, mpPlayers().map(m=>m.id))) || `<div class="mp-waitfor"><span class="mp-wf-tx">odpowiadacie na telefonach</span></div>`);
       const board = comp || mc ? '' : `<div class="mp-board tv-board" id="mpBoard">${mpSlotsHTML(g)}</div>${tvTeamAnswerHTML(g)}`;
-      return `${tvQHeadHTML(g)}<div class="tv-clockrow">${tvClockHTML()}${wait}</div>${tvPromptHTML(g)}${mpLyricFoldHTML(g)}${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}${mpTimelineHTML(g, true)}${mc?mpMcHTML(g):''}${board}`;
+      const q=`${tvPromptHTML(g)}${mpLyricFoldHTML(g)}${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}`;
+      const clock=`<div class="tv-clockrow">${tvClockHTML()}${wait}</div>`, ans=`${mc?mpMcHTML(g):''}${board}`;
+      // treść pytania (okładka/tekst/intro) | zegar + odpowiedzi; bez treści: zegar + oczekujący | odpowiedzi (ABCD, tablica)
+      return tvQHeadHTML(g) + (q.trim() ? tvCols(q, clock+ans) : tvCols(clock, ans, 'aw')) + mpTimelineHTML(g, true);
     }
     case 'checking': return `${tvQHeadHTML(g)}<div class="tv-checking" role="status"><div class="mp-chk-ic" aria-hidden="true">🥁</div><b>Sprawdzamy…</b>${bbLoader}</div>`;
     case 'reveal': return tvRevealHTML(g, S.revealSnap);
@@ -1632,7 +1639,7 @@ function tvSideHTML(g, sc){
   const advSet=new Set(mpAdvancedIds(g.playNonce)||[]);
   const stOf=(t, id)=> tvPlayerStatus({ phase, roster: phase==='play' ? rosterState(g, t.id, id, S.typingSet) : null, ready:readySet.has(id), advanced:advSet.has(id) });
   const person=(t, id, big)=>{ const nm=mpNameOf(id)||'gracz', s=stOf(t, id);
-    return `<li class="tv-p st-${s.key}${big?' big':''}"><b class="tv-av" style="background:${mpAvatarColor(nm)}">${tvInitial(nm)}</b><span class="tv-p-nm">${escapeHtml(nm)}</span><i class="tv-p-st">${escapeHtml(s.label)}</i></li>`; };
+    return `<li class="tv-p st-${s.key}${big?' big':''}"><b class="tv-av" style="background:${mpAvatarColor(nm)}">${tvInitial(nm)}</b><span class="tv-p-tx"><span class="tv-p-nm">${escapeHtml(nm)}</span><i class="tv-p-st">${escapeHtml(s.label)}</i></span></li>`; };
   if(sc==='done' && !comp){
     const tally=(g.tallyList||[]);
     return `<h2 class="tv-side-h">Wkład drużyny</h2><ol class="tv-wk">${tally.map(t=>`<li><b class="tv-av" style="background:${mpAvatarColor(t.name)}">${tvInitial(t.name)}</b><span>${escapeHtml(t.name)}</span><em>${num(t.correct)}</em></li>`).join('') || '<li>brak trafnych typów</li>'}</ol>`;

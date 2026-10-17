@@ -3477,7 +3477,8 @@ await group('P1-16: TV w coop (Wspólna) — tablica typów drużyny klikalna, o
   ok(st.querySelectorAll('.tv-right .tv-p.big').length===2 && /1\/2 z typem/.test(st.querySelector('.tv-right').textContent), 'coop: skład drużyny z dużymi awatarami + 1/2 z typem');
   const css=aCss();
   ok(/@media \(prefers-reduced-motion: reduce\)\{\s*\.tv-left\.tv-in,\.tv-lp,\.tv-gain,\.tv-count b,\.tv-cover[^}]*animation:none!important\}\s*\.tv-team\{transition:none!important;transform:none!important\}/.test(css), 'reduced-motion: TV bez animacji wejścia, „+N", odliczania i przesuwania rankingu');
-  ok(/html\.tv\{font-size:clamp\(14px,1\.25vw,52px\)\}/.test(css) && /\.tv-main\{display:grid;grid-template-columns:minmax\(0,1\.45fr\) minmax\(0,1fr\)/.test(css), 'układ TV: rem skalowany szerokością (×2 przy 1920), dwie kolumny');
+  ok(/html\.tv\{font-size:clamp\(9px,min\(1\.25vw,2\.22vh\),52px\)\}/.test(css) && /\.tv-main\{display:grid;grid-template-columns:minmax\(0,2\.5fr\) minmax\(0,1fr\)/.test(css), 'układ TV: rem z mniejszego wymiaru (TV 960×540 = przeskalowane 1920×1080), dwie kolumny');
+  ok(/@media \(orientation:portrait\)\{ \.tv-main\{grid-template-columns:minmax\(0,1fr\)\} \}/.test(css) && !/@media \(max-width:1000px\)\{ \.tv-main/.test(css), 'TV: jedna kolumna tylko w pionie (nie ≤1000 px — TV 960 px)');
   w.mpLeaveConfirmed('room'); await settle(6);
   ok(!w.document.documentElement.classList.contains('tv') && !w.document.body.classList.contains('salon'), 'wyjście z pokoju: koniec sceny TV (motyw i powłoka przywrócone)');
 });
@@ -3655,6 +3656,7 @@ await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu
   box=$(w,'mpStage').querySelector('.tv-coverfig .mp-cover');
   ok(box && box.dataset.art===base+'16x16bb.jpg' && box.querySelector('canvas'), 'TV: duża okładka z obrazem etapu');
   ok(!/mpProp_/.test(aStage()) && !$(w,'mpMore'), 'TV: bez pól odpowiedzi i bez „wyraźniej"');
+  { const st=$(w,'mpStage'); ok(st.querySelector('.tv-cols .tv-col-q .tv-coverfig') && st.querySelector('.tv-cols .tv-col-a #mpCountdown'), 'TV: kolumny — okładka | zegar/odpowiedzi (przegląd v70: wiersze nie mieściły się na TV)'); }
   // odsłona: pełna okładka, wykonawca, album, etap i mnożnik
   ws.pushState(revealState(ws, { playNonce:9904, mode:'cover', slots:[{round:1,cat:'d80',mode:'cover'}], answerSlots:[{key:'artist',label:'wykonawca'},{key:'album',label:'album (bonus)'}],
     reveal:{ kind:'cover', track:'Toto IV', artist:'Toto', album:'Toto IV', year:'1982', art:base+'600x600bb.jpg', okBySlot:{artist:true, album:false}, teamOk:true, gained:200,

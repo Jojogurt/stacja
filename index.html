@@ -330,13 +330,7 @@
   .mp-cover-legend{margin-top:2px;font-size:var(--fs-xs);color:var(--muted)}
   .tv-coverfig .cover-box{width:min(34rem,38vh);border-radius:1.2rem}
   .tv-coverfig .mp-cover-cap,.tv-coverfig .mp-cover-legend{font-size:1rem}
-  /* przegląd v70: na TV okładka (główny element pytania) lądowała pod zegarem i „Czekamy na" — ucięta, z przewijaniem.
-     Gdy jest okładka: lewa kolumna w dwóch kolumnach — treść po lewej, okładka obok (bez :has → stary układ, przewijany). */
-  html.tv #mpStage .tv-left:has(> .tv-coverfig){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:2rem;row-gap:.9rem;align-content:start}
-  html.tv #mpStage .tv-left:has(> .tv-coverfig) > *{grid-column:1}
-  html.tv #mpStage .tv-left:has(> .tv-coverfig) > .tv-coverfig{grid-column:2;grid-row:1 / span 6;align-self:start;margin:0}
-  html.tv #mpStage .tv-left:has(> .tv-coverfig) .tv-coverfig .cover-box{width:min(25rem,40vh)}
-  html.tv #mpStage .tv-left:has(> .tv-coverfig) .tv-coverfig{max-width:min(25rem,40vh)}
+  html.tv #mpStage .tv-left .tv-col-q .tv-coverfig .cover-box{width:min(26rem,46vh)}   /* okładka w kolumnie pytania */
   .mp-cover-fig .mp-more{margin:6px auto 0;display:block}
   .mp-more,#mpIntroReplay{white-space:nowrap}   /* przegląd v70: „+ WIĘCEJ (16 S)" łamało się na 375 px */
   @media (max-width:360px){ .mp-stg-btns .mp-btn{font-size:.82rem;padding-left:10px;padding-right:10px} }
@@ -1982,7 +1976,9 @@
    * Fluid ≥1280 px → 1920×1080 i większe: rem skalowany szerokością (16 px przy 1280, 24 px przy 1920, max 52 px) — typografia ×2
    * względem telefonu, czytelna z kanapy (3–4 m). Dwie kolumny: pytanie | drużyny; góra — rail faz + QR w rogu; dół — sterowanie.
    * Motyw domyślnie ciemny (app/mp-tv.js), jasny z menu ⋯. Wysoki kontrast: tekst --ink na --panel, QR zawsze czarny na białym. */
-  html.tv{font-size:clamp(14px,1.25vw,52px)}
+  /* przegląd v70: TV-przeglądarki (Tizen/webOS/Android TV) przy 1920×1080 raportują 960×540 CSS px (DPR 2) — rem liczony
+     z mniejszego z wymiarów (1,25vw ≈ 2,22vh przy 16:9), bez dolnego progu 14 px: 960×540 wygląda jak przeskalowane 1920×1080 */
+  html.tv{font-size:clamp(9px,min(1.25vw,2.22vh),52px)}
   html.tv body, html.tv body.salon{max-width:none;padding:0;margin:0;min-height:100dvh}
   html.tv #mpStage.salon, html.tv #mpStage, html.tv #mpRoom, html.tv body.mp #mp{margin:0;padding:0}
   .tv-scene{display:grid;grid-template-rows:auto minmax(0,1fr) auto;height:100dvh;min-height:30rem;padding:1rem 1.5rem;gap:1rem;box-sizing:border-box;font-size:1.1rem;color:var(--ink)}
@@ -2005,8 +2001,21 @@
   .tv-corner-tx b{font-family:var(--display);font-weight:900;font-size:1.5rem;letter-spacing:.12em}
   .tv-menubtn{width:3rem;height:3rem;border-radius:50%;border:0;background:rgba(255,255,255,.2);color:#fff;font-size:1.7rem;font-weight:900;line-height:1;cursor:pointer;flex:0 0 auto}
   .tv-menubtn:focus-visible,.tv-btn:focus-visible,.tv-menu-card button:focus-visible{outline:.22rem solid var(--gold);outline-offset:.18rem}
-  .tv-main{display:grid;grid-template-columns:minmax(0,1.45fr) minmax(0,1fr);gap:1.25rem;min-height:0}   /* v69 P2: prawa kolumna (ranking) szersza — pełne imiona */
-  @media (max-width:1000px){ .tv-main{grid-template-columns:minmax(0,1fr)} }
+  .tv-main{display:grid;grid-template-columns:minmax(0,2.5fr) minmax(0,1fr);gap:1.25rem;min-height:0}   /* przegląd v70: wąska prawa kolumna (status pod imieniem), pytanie w 2 kolumnach */
+  @media (orientation:portrait){ .tv-main{grid-template-columns:minmax(0,1fr)} }   /* przegląd v70: składaj tylko w pionie (dawniej ≤1000 px — łapało TV 960 px) */
+  .tv-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1.4rem;align-items:start}
+  .tv-col{display:flex;flex-direction:column;gap:.9rem;min-width:0}
+  .tv-cols.aw{grid-template-columns:minmax(0,.7fr) minmax(0,1.4fr)}   /* po lewej sam zegar/treść → szersze odpowiedzi (ABCD w jednej linii) */
+  .tv-col-a .tv-clockrow{gap:1rem}
+  /* w kolumnach: płyta nad zegarem (nie obok), odpowiedzi ABCD jako lista (nie 2×2), mniejszy zegar */
+  html.tv #mpStage .tv-left .tv-col-q .tv-listen{grid-template-columns:minmax(0,1fr);justify-items:center;gap:1rem;text-align:center}
+  html.tv #mpStage .tv-left .tv-col-q .tv-listen .mp-vinyl{width:min(14rem,30vh)}
+  html.tv #mpStage .tv-left .tv-col-q .tv-listen #mpCountdown.tv-clock,html.tv #mpStage .tv-left .tv-col-a #mpCountdown.tv-clock{font-size:4.6rem}
+  html.tv #mpStage .tv-left .tv-col-a .mc-opts{grid-template-columns:minmax(0,1fr);gap:.6rem}
+  html.tv #mpStage .tv-left .tv-col-a .mc-opt{min-height:3.2rem;padding:.55rem 1rem}
+  html.tv #mpStage .tv-left .tv-col-a .mp-slots{grid-template-columns:minmax(0,1fr)}
+  html.tv #mpStage .tv-left .tv-col-q > .tv-clockrow{flex-direction:column;align-items:flex-start}   /* zegar nad listą „Czekamy na" */
+  @media (orientation:portrait){ .tv-cols{grid-template-columns:minmax(0,1fr)} }
   .tv-left,.tv-right{background:var(--panel);border:2px solid var(--line);border-radius:1.3rem;padding:1.3rem 1.6rem;min-width:0;overflow-x:hidden;overflow-y:auto}
   .tv-left{display:flex;flex-direction:column;gap:.9rem}
   .tv-left::-webkit-scrollbar,.tv-right::-webkit-scrollbar{width:.4rem} .tv-left::-webkit-scrollbar-thumb,.tv-right::-webkit-scrollbar-thumb{background:var(--line);border-radius:1rem}
@@ -2108,8 +2117,9 @@
   .tv-ppl{display:flex;flex-wrap:wrap;gap:.45rem 1rem;margin-top:.5rem}
   .tv-p{display:flex;align-items:center;gap:.45rem;font-family:var(--display);font-weight:800;font-size:1.05rem;min-width:0}
   .tv-av{width:2.3rem;height:2.3rem;border-radius:50%;display:inline-grid;place-items:center;color:#fff;font-family:var(--display);font-weight:900;font-size:1.05rem;flex:0 0 auto}
+  .tv-p-tx{display:flex;flex-direction:column;min-width:0;line-height:1.15}   /* imię, a status („myśli") drugą linią */
   .tv-p-nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-  .tv-p-st{font-style:normal;color:var(--muted);white-space:nowrap}
+  .tv-p-st{font-style:normal;color:var(--muted);white-space:nowrap;font-size:.78em;font-weight:700}
   .tv-p.st-think .tv-av,.tv-p.st-watch .tv-av,.tv-p.st-wait .tv-av,.tv-p.st-pass .tv-av{opacity:.5;filter:grayscale(.7)}
   .tv-p.st-ans .tv-p-st,.tv-p.st-next .tv-p-st,.tv-p.st-ready .tv-p-st{color:var(--rs-ans-lc)}
   .tv-p.st-sure .tv-p-st{color:var(--rs-sure-lc)} .tv-p.st-type .tv-p-st{color:var(--rs-type-lc)}
