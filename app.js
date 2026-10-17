@@ -10,7 +10,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v67';   // fix MP: odpowiedzi w skórce czatu, status odpowiedzi rywali, dołączanie w trakcie do najmniejszej drużyny
+const APP_VERSION = 'v68';   // MP: blokery P0, jeden zegar fazy, auto-zamknięcie, intro jako karta pytania, czekamy na, wynik na żywo, kafle ABCD, rewanż 1 tap
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).
