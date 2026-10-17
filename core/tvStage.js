@@ -80,7 +80,8 @@ export function tvControls(ctx = {}){
     case 'arming':  return { next:null, skip: c.armLimit ? { act:'skipArm', label:'Pomiń czekanie' } : null };
     // słuchanie: „dalej" = koniec słuchania na TV (muzyka gra tylko tu) → odpowiadanie; telefony i tak piszą od razu
     case 'listen':  return { next: { act:'goComb', label:'DALEJ — KOMBINUJCIE ›' }, skip:null };
-    case 'answer':  return { next: c.allDone ? null : { act:'lock', label: c.comp ? '✓ ZATWIERDŹ WSZYSTKICH' : '✓ ZATWIERDŹ ODPOWIEDŹ' }, skip:null };
+    // odpowiadanie: TV NIE zatwierdza (nie gra) — pytanie zamyka się samo (wszyscy odpowiedzieli / koniec czasu) albo gracz zatwierdza na telefonie
+    case 'answer':  return { next:null, skip:null };
     // odsłona: TV przechodzi sama, gdy wszystkie telefony klikną „dalej" — przycisk = „pomiń czekanie" (jeden, bez dubla)
     case 'reveal':  return { next: { act:'advance', label: c.last ? 'WYNIK KOŃCOWY →' : 'DALEJ — POMIŃ CZEKANIE ›' }, skip:null };
     case 'waitnext':return { next: { act:'nextQ', label:'NASTĘPNE PYTANIE ›' }, skip:null };

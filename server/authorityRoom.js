@@ -351,6 +351,8 @@ export class GameAuthority extends Server {
   onError(){ this.pushPresence(); }
   // SALON: id TV (stały host salonu) — w meczu i po nim (rewanż); poza salonem null
   salonTv(){ return this.game && this.game.salon ? tvIdOf(this.game) : null; }
+  // SALON coop: zatwierdza gracz drużyny (z telefonu), nie TV; Solo/Drużyny — tylko „wszyscy odpowiedzieli" / czas
+  salonPlayerLock(id){ const g=this.game; return !!(g && g.salon && (g.format||'coop')==='coop' && id!==this.salonTv() && teamOf(g, id)); }
   // SALON bez TV (zamknięta/padła): czy gra ma toczyć się bez hosta (gracze „dalej" → serwer przechodzi sam)
   tvAway(){ const tv=this.salonTv(); return !!tv && !this.idPresent(tv); }
   // czy id ma jeszcze jakieś połączenie poza `except` (wiele kart / reconnect przed zamknięciem starego)
@@ -482,8 +484,8 @@ export class GameAuthority extends Server {
         return;
       }
 
-      case 'lock':                                    // tylko host (auto-lock robi timer)
-        if(me && (me===this.hostId || this.tvAway())) await this.lock();
+      case 'lock':                                    // host (auto-lock robi timer); SALON coop: dowolny GRACZ (TV nie gra i nie zatwierdza)
+        if(me && (me===this.hostId || this.tvAway() || this.salonPlayerLock(me))) await this.lock();
         return;
 
       case 'next':                                    // tylko host

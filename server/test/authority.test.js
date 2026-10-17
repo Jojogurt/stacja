@@ -1600,6 +1600,22 @@ await group('salon bez TV: „dalej" wszystkich graczy w REVEAL → serwer sam p
   eq(room.hostId, 'TV', 'host dalej TV');
   room.clearArmTimer(); room.clearAutoLock(); room.clearHostGrace();
 });
+await group('salon: zatwierdza GRACZ z telefonu (coop), nie TV; w Solo gracz nie zamyka pytania za innych', async ()=>{
+  const { room } = await makeRoom();
+  const tv=await room.connect('TV','TV'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
+  await readyAll(room, p1, p2);
+  await room.msg(p1, { t:'lock' });
+  eq(room.game.phase, MP.REVEAL, 'coop salon: lock od gracza → REVEAL');
+  room.clearArmTimer(); room.clearAutoLock();
+  const r2=(await makeRoom()).room;
+  const tv2=await r2.connect('TV','TV'), q1=await r2.connect('P1','Ola'), q2=await r2.connect('P2','Kuba');
+  await r2.msg(tv2, { t:'start', config:CONFIG({ salon:true, format:'solo' }) });
+  await readyAll(r2, q1, q2);
+  await r2.msg(q1, { t:'lock' });
+  eq(r2.game.phase, MP.PLAY, 'Solo salon: gracz NIE zamyka pytania za wszystkich');
+  r2.clearArmTimer(); r2.clearAutoLock();
+});
 // restart DO: nowa instancja na TYM SAMYM storage (stare in-memory timery giną), połączenia = podane
 async function restartRoom(room, conns, over={}){
   room.clearHostGrace(true); room.clearArmTimer(); room.clearAutoLock();

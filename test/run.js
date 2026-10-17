@@ -3105,7 +3105,7 @@ group('P1-16 TV: link „dołącz", ranking z ruchem miejsc, statusy, sterowanie
   eq(TV.tvControls({scene:'lobby',canStart:true}).next.act, 'start', 'lobby gotowe → START');
   eq(TV.tvControls({scene:'lobby',canStart:false}).next.act, 'setup', 'lobby bez ustawień → ustawienia');
   eq([TV.tvControls({scene:'arming',armLimit:true}).skip.act, TV.tvControls({scene:'arming'}).skip], ['skipArm', null], 'gotowość: „pomiń" tylko z limitem serwera');
-  eq(TV.tvControls({scene:'answer',comp:true}).next.label, '✓ ZATWIERDŹ WSZYSTKICH', 'kombinuj Solo/Drużyny → zatwierdź wszystkich');
+  eq([TV.tvControls({scene:'answer',comp:true}).next, TV.tvControls({scene:'answer'}).next], [null, null], 'odpowiadanie: TV NIE zatwierdza (nie gra) — ani coop, ani Solo/Drużyny');
   eq(TV.tvControls({scene:'answer',allDone:true}).next, null, 'komplet odpowiedzi → bez przycisku (serwer zamyka)');
   eq(TV.tvControls({scene:'reveal',last:true}).next.label, 'WYNIK KOŃCOWY →', 'ostatnia odsłona');
   const ctl=TV.tvControls({scene:'reveal'});

@@ -870,10 +870,10 @@ await group('MP: tryb salonowy — host = normalne fazy, większe; bez pól/emot
   w.mpGoKombinuj && w.mpGoKombinuj(); await settle(4);
   const h=$(w,'mpRoom').innerHTML;
   ok(/id="mpBoard"/.test(h) && h.includes('Hey Jude'), 'salon kombinuj: kolumny z typami telefonów');
-  ok(/onclick="mpVote/.test(h), 'salon: board KLIKALNY (host nadpisuje odpowiedź)');
+  ok(!/onclick="mpVote/.test(h) && /mp-cand[^>]*disabled/.test(h), 'salon: tablica TYLKO do oglądania (TV nie gra — bez nadpisań)');
   ok(!/mpProp_|mp-composer|id="mpConf"/.test(h), 'salon: brak pól typowania/pewności na TV');
   ok(!/mp-reacts/.test(h), 'salon kombinuj: brak paska emotek u hosta');
-  ok(/mp-lockbtn/.test(h) && /ZATWIERDŹ/.test(h), 'salon: host ma pełny przycisk „ZATWIERDŹ" (F6b, dawniej ✓ 36 px)');
+  ok(!/mp-lockbtn/.test(h) && !/ZATWIERDŹ/.test(h), 'salon: TV BEZ „ZATWIERDŹ" (nie gra; zamyka się samo / zatwierdza gracz)');
   ok(!/mp-rz[^>]*\byou\b/.test(h), 'salon: TV (host) poza paskiem graczy');
   ok(!/undefined is not|Cannot read/.test(h), 'salon render bez wyjątku');
 });
@@ -1525,7 +1525,7 @@ await group('F6b (#6): TV salonu w formacie Solo — karty drużyn bez treści t
   const h=$(w,'mpRoom').innerHTML;
   ok(/mp-tvteams/.test(h) && (h.match(/data-tvteam=/g)||[]).length===2, 'TV: wiersz na drużynę (P1-16: ranking z prawej)');
   ok(!/TAJNY TYP/.test(h), 'TV: treść typów niewidoczna (TV widzą wszyscy)');
-  ok(/ZATWIERDŹ WSZYSTKICH/.test(h), 'TV: host zatwierdza wszystkich');
+  ok(!/ZATWIERDŹ/.test(h), 'TV: bez „zatwierdź wszystkich" (TV nie gra)');
   ok(!/mpProp_|mp-reacts/.test(h), 'TV: bez pól i emotek');
   ws.pushState(revealState(ws, { playNonce:7102, salon:true, format:'solo', teams:[{id:'t0',name:'Ala',members:['A']},{id:'t1',name:'Bo',members:['B']}],
     reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', byTeam:{}, ranking:[{teamId:'t0',name:'Ala',score:100,teamOk:true},{teamId:'t1',name:'Bo',score:0,teamOk:false}] } })); await settle(6);
@@ -3431,12 +3431,12 @@ await group('P1-16: mecz na TV — dwie kolumny, karta pytania, duży zegar, ros
   tvKey(w, 'Enter'); await settle(3);
   ok(st.querySelector('.tv-left .tv-qbar .tv-qclock #mpCountdown') && /🧠/.test($(w,'mpCountdown').textContent), 'Enter → odpowiadanie: zegar 🧠 do końca pytania');
   ok(/Czekamy na/.test(left.textContent) && /Kuba/.test(left.textContent), 'kombinuj: „Czekamy na: Kuba"');
-  ok(/ZATWIERDŹ WSZYSTKICH/.test(st.querySelector('.tv-ctl').textContent) && /1\/2 z typem/.test(st.querySelector('.tv-ctl-note').textContent), 'kombinuj: „ZATWIERDŹ WSZYSTKICH" + 1/2 z typem');
+  ok(!/ZATWIERDŹ/.test(st.querySelector('.tv-ctl').textContent) && /1\/2 z typem/.test(st.querySelector('.tv-ctl-note').textContent) && /zamknie się samo/.test(st.querySelector('.tv-ctl-note').textContent), 'kombinuj: bez przycisku, „1/2 z typem · zamknie się samo"');
   const nL=ws.sent.filter(m=>m.t==='lock').length;
   tvKey(w, ' ', { repeat:true }); await settle(2);
   ok(ws.sent.filter(m=>m.t==='lock').length===nL, 'przytrzymana spacja (repeat) nic nie robi');
   tvKey(w, ' '); await settle(3);
-  ok(ws.sent.filter(m=>m.t==='lock').length===nL+1, 'Spacja = zatwierdź wszystkich (lock)');
+  ok(ws.sent.filter(m=>m.t==='lock').length===nL, 'Spacja w odpowiadaniu NIE zatwierdza (TV nie gra)');
   tvKey(w, 'Escape'); await settle(2);
   ok($(w,'mpLeaveDlg') && $(w,'mpLeaveDlg').classList.contains('show'), 'Esc = „Opuścić pokój?" (potwierdzenie)');
   const nL2=ws.sent.filter(m=>m.t==='lock').length;
@@ -3472,8 +3472,8 @@ await group('P1-16: TV w coop (Wspólna) — tablica typów drużyny klikalna, o
     byTeam:{ all:{ proposals:[{id:'p1',by:'P1',byName:'Ola',values:{title:'Hey Jude',artist:'Beatles'}}], votes:{ title:{P1:'Hey Jude'}, artist:{P1:'Beatles'} }, sure:[], passed:[] } } })); await settle(8);
   w.mpGoKombinuj(); await settle(3);
   const st=$(w,'mpStage');
-  ok(st.querySelector('.tv-left #mpBoard') && /onclick="mpVote/.test(st.innerHTML) && /Hey Jude/.test(st.querySelector('.tv-teamans').textContent), 'coop: tablica typów (klik = nadpisanie) + odpowiedź drużyny');
-  ok(st.querySelector('.mp-lockbtn') && /ZATWIERDŹ ODPOWIEDŹ/.test(st.querySelector('.tv-ctl').textContent), 'coop: „✓ ZATWIERDŹ ODPOWIEDŹ"');
+  ok(st.querySelector('.tv-left #mpBoard') && !/onclick="mpVote/.test(st.innerHTML) && /Hey Jude/.test(st.querySelector('.tv-teamans').textContent), 'coop: tablica typów (tylko podgląd) + odpowiedź drużyny');
+  ok(!st.querySelector('.mp-lockbtn') && /gracze zatwierdzają na telefonach/.test(st.querySelector('.tv-ctl-note').textContent), 'coop: TV bez „zatwierdź" — gracze zatwierdzają na telefonach');
   ok(st.querySelectorAll('.tv-right .tv-p.big').length===2 && /1\/2 z typem/.test(st.querySelector('.tv-right').textContent), 'coop: skład drużyny z dużymi awatarami + 1/2 z typem');
   const css=aCss();
   ok(/@media \(prefers-reduced-motion: reduce\)\{\s*\.tv-left\.tv-in,\.tv-lp,\.tv-gain,\.tv-count b,\.tv-cover[^}]*animation:none!important\}\s*\.tv-team\{transition:none!important;transform:none!important\}/.test(css), 'reduced-motion: TV bez animacji wejścia, „+N", odliczania i przesuwania rankingu');
@@ -3775,7 +3775,7 @@ await group('MP oś czasu: oś drużyny ze szczelinami, tap = typ ze szczeliną 
   ok($(w,'mpStage').querySelector('.tv-tl .mp-tl-gap') && !/mpProp_/.test(aStage()), 'TV: oś drużyny (szczeliny do nadpisania), bez pól');
   n0=ws.sent.length; w.mpTlPick('0'); await settle(3);
   const v=ws.sent.slice(n0).find(m=>m.t==='action' && m.action.type==='vote');
-  ok(v && v.action.slot==='gap' && v.action.value==='0' && v.action.set===true, 'TV-sędzia: tap = nadpisanie głosem drużyny');
+  ok(!v, 'TV: tap w szczelinę nic nie wysyła (TV nie gra)');
   // odsłona
   ws.pushState(revealState(ws, { playNonce:9943, mode:'timeline', timeline:{ all:[{track:'Africa',artist:'Toto',year:1982},{track:'Take On Me',artist:'a-ha',year:1983},{track:'Jump',artist:'Van Halen',year:1984}] },
     reveal:{ kind:'timeline', track:'Take On Me', artist:'a-ha', year:'1985', art:'', teamOk:true, gained:120, okBySlot:{gap:true,title:true,artist:false}, locked:{gap:'1',title:'Take On Me',artist:''},

@@ -486,7 +486,7 @@ function mpSlotsHTML(g){
   if(mpIsCompTV()) return mpTvTeamsHTML(g);
   const slots=renderSlots(g);
   const tid=myTeamId();   // kolumny TYLKO mojej drużyny
-  const ro=mpIsSalonHost();   // TV-sędzia: może KLIKNĄĆ propozycję (nadpisuje górkę głosów), ale nie dorzuca własnych typów
+  const ro=mpIsSalonHost();   // TV salonu: tablica tylko do oglądania (nie gra — bez głosów i nadpisań)
   // P2-5: pusty stan zamiast pustych kolumn (dawniej ~150 px pustki pod samymi nagłówkami)
   if(!ro && slots.every(s=>!candidatesForSlot(g, tid, s.key).length)){
     const solo=(g.format||'coop')==='solo' || myTeamSize()<2;
@@ -500,7 +500,7 @@ function mpSlotsHTML(g){
       const isTop=i===0 && c.votes.length>0;
       const voted = myVal && norm(myVal)===norm(c.value);   // salon: podświetla wybór hosta (nadpisanie)
       const dots = c.votes.slice(0,5).map((v,j)=>`<b class="mp-vdot" style="background:${VOTE_COLORS[j%VOTE_COLORS.length]}"></b>`).join('');
-      return `<button type="button" class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-k="${escapeHtml(s.key)}" data-v="${escapeHtml(c.value)}" onclick="mpVote(this.dataset.k, this.dataset.v)">
+      return `<button type="button" class="mp-cand${isTop?' is-top':''}${voted?' voted':''}" data-k="${escapeHtml(s.key)}" data-v="${escapeHtml(c.value)}"${ro?' disabled tabindex="-1"':' onclick="mpVote(this.dataset.k, this.dataset.v)"'}>
         <span class="cv">${escapeHtml(mpSlotShow(g, s.key, c.value))}</span>
         <span class="crow"><span class="up">▲ ${c.votes.length}</span><span class="dots">${dots}</span>${isTop?'<span class="topb">TOP</span>':''}</span>
       </button>`;
@@ -522,11 +522,13 @@ function mpTeamHTML(g){
   // P1-4: host widzi, na kogo czeka („Czekamy na: Ola, Kuba") — rywale z okrojonego bucketu (`answered`, bez treści)
   const waitFor = (S.host && !allDone) ? mpWaitNamesHTML(unsettledIds(g, mpPlayers().map(m=>m.id)), { lead:'Czekamy na' }) : '';
   // P1-10: w Solo/Drużynach host jest GRACZEM — „Zakończ pytanie" nie stoi nad jego polami (jest w stopce, od połowy czasu)
-  const lockBtn = allDone ? allDone : (S.host && (!comp || mpIsCompTV()))
+  // salon: TV nie zatwierdza (nie gra); w coop zatwierdza dowolny GRACZ z telefonu (serwer: lock od gracza w salonie coop)
+  const canLock = !mpIsSalonHost() && !comp && (S.host || !!g.salon);
+  const lockBtn = allDone ? allDone : canLock
     ? `<button type="button" class="mp-lockbtn" onclick="mpLock()" aria-label="${comp?'Zakończ pytanie i zatwierdź odpowiedzi wszystkich drużyn':'Zatwierdź odpowiedź drużyny'}">✓ ${comp?'ZATWIERDŹ WSZYSTKICH':'ZATWIERDŹ ODPOWIEDŹ'}${cnt}</button>`
     : `<div class="mp-lockwait">${comp ? (g.timer>0?'pytanie kończy się, gdy wszyscy odpowiedzą — albo minie czas':'pytanie kończy się, gdy wszyscy odpowiedzą (albo host je zakończy)')
-        : (g.timer>0?'host zatwierdza — albo koniec czasu':'czekamy, aż host zatwierdzi odpowiedź')}</div>`;
-  if(mpIsCompTV()) return lockBtn+waitFor;   // TV (Solo/Drużyny): bez odpowiedzi drużyny, tylko „zatwierdź wszystkich"
+        : (g.salon ? (g.timer>0?'zamyka się samo: wszyscy odpowiedzą albo minie czas':'zamyka się samo, gdy wszyscy odpowiedzą') : (g.timer>0?'host zatwierdza — albo koniec czasu':'czekamy, aż host zatwierdzi odpowiedź'))}</div>`;
+  if(mpIsCompTV()) return (allDone||'')+waitFor;   // TV (Solo/Drużyny): bez przycisków — tylko status
   const tid=myTeamId();
   const ta=teamAnswer(g, tid), slots=renderSlots(g);
   const any=slots.some(s=>ta[s.key]);
@@ -1694,8 +1696,9 @@ function tvCtlNote(g, sc){
   if(sc==='arming' && g.armMs>0) return `<span id="mpArmLeft">${mpArmLeftText(secsLeft(S.armDeadlineLocal, Date.now()))}</span>`;
   if(sc==='answer' && (g.format||'coop')!=='coop'){
     const ts=(g.teams||[]).filter(t=>(t.members||[]).length);
-    return `${num(ts.filter(t=>mpTeamAnswered(g, t).length).length)}/${num(ts.length)} z typem`;
+    return `${num(ts.filter(t=>mpTeamAnswered(g, t).length).length)}/${num(ts.length)} z typem · zamknie się samo, gdy wszyscy odpowiedzą${g.timer>0?' albo minie czas':''}`;
   }
+  if(sc==='answer') return `gracze zatwierdzają na telefonach · zamknie się samo, gdy wszyscy odpowiedzą${g.timer>0?' albo minie czas':''}`;
   if(sc==='reveal'){ const c=S.advCount||0, t=S.advTotal||mpPlayers().length||0; return `✓ ${num(c)}/${num(t)} graczy kliknęło „dalej" — przejdę sam, gdy wszyscy`; }
   if(sc==='listen') return 'telefony: odpowiedź wpisujecie po wysłuchaniu';
   return '';

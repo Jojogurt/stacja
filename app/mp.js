@@ -488,11 +488,11 @@ function mpTlMerge(act){
   if(v.gap==null && S.tlPick && S.tlPick.nonce===nonce) v.gap=String(S.tlPick.gap);
   S.tlMine={ nonce, values:{ ...v } };
 }
-// tap w szczelinę osi (data-gap) — gracz: typ z tą szczeliną; TV-sędzia (coop): nadpisanie głosem drużyny
+// tap w szczelinę osi (data-gap) — gracz: typ z tą szczeliną; TV salonu — nic (nie gra)
 function mpTlPick(gap){
   const g=S.game; if(!g || g.mode!=='timeline' || g.phase!==MP.PLAY) return;
   const k=Number(gap); if(!Number.isInteger(k) || k<0 || k>99) return;
-  if(mpIsSalonHost()){ if((g.format||'coop')==='coop') mpSend({type:'vote', slot:'gap', value:String(k), set:true}); return; }
+  if(mpIsSalonHost()) return;   // TV salonu nie gra: bez nadpisywania odpowiedzi drużyny (dawny „TV-sędzia")
   S.tlPick={ nonce:g.playNonce, gap:k };
   mpSend({type:'propose', values:{ gap:String(k) }});
 }
@@ -1167,13 +1167,13 @@ function mpPropose(){
   mpSend({type:'propose', values});
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); if(el) el.value=''; });
 }
-function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
+function mpVote(slot, value){ if(mpIsSalonHost()) return; mpSend({type:'vote', slot, value}); }   // TV salonu nie głosuje
 /* P1-8: kafel ABCD — tap = propozycja + głos (`propose` {slot: litera}: jedna odpowiedź na gracza, auto-głos) →
  * odpowiedź drużyny = najczęstsza litera. Działa ze STARYM serwerem (zwykły propose). TV-sędzia (coop) — nadpisanie głosem. */
 function mpMcPick(letter){
   const g=S.game; const mc=mcOptions(g); if(!mc || !/^[A-D]$/.test(String(letter||''))) return;
   if(!mc.options.some(o=>o.letter===letter)) return;
-  if(mpIsSalonHost()){ if((g.format||'coop')==='coop') mpSend({type:'vote', slot:mc.key, value:letter, set:true}); return; }
+  if(mpIsSalonHost()) return;   // TV salonu nie gra: bez nadpisywania odpowiedzi drużyny (dawny „TV-sędzia")
   mpSend({type:'propose', values:{ [mc.key]:letter }});
 }
 // P1-12: rozwinięcie opisu lektora w „kombinuj" — pamiętane per pytanie
