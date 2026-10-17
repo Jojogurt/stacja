@@ -1,6 +1,6 @@
 /* server/test/sources.test.js — źródła utworów (iTunes + Deezer) z podmienionym globalThis.fetch.
  * Uruchom: node --no-warnings test/sources.test.js (w server/). */
-import { fetchTracks, fetchAlbums, pickDeezerArtist } from '../lib/sources.js';
+import { fetchTracks, fetchAlbums, pickDeezerArtist, _resetDeezerPause } from '../lib/sources.js';
 import { handleProxy } from '../lib/proxies.js';
 
 let pass=0, fail=0;
@@ -66,6 +66,36 @@ await group('/tracks (proxy): kształt odpowiedzi', async()=>{
   const r=await handleProxy({ headers:new Headers() }, new URL('https://w/tracks?artist=Queen'));
   const j=await r.json();
   eq([j.source, j.results.length], ['deezer', 2], '/tracks?artist');
+});
+
+await group('fetchAlbums: iTunes + albumy właściwego wykonawcy z Deezera (przegląd v70: PL iTunes bywa niekompletny)', async()=>{
+  globalThis.fetch = async (url) => {
+    url=String(url);
+    if(url.startsWith('https://itunes.apple.com/search')) return res({ results:[ { collectionName:"Live Era '87-'93", artistName:"Guns N' Roses", artworkUrl100:'i/100x100bb.jpg' } ] });
+    if(url.includes('/search/artist')) return res({ data:[ { id:9, name:"Guns N' Roses", nb_fan:5 } ] });
+    if(url.includes('/artist/9/albums')) return res({ data:[ { id:1, title:'Appetite For Destruction', cover_medium:'d/250x250-000000-80-0-0.jpg', release_date:'1987-07-21', record_type:'album' },
+      { id:2, title:'Sweet Child O Mine', cover_medium:'d2.jpg', record_type:'single' } ] });
+    return res({}, 404);
+  };
+  const r=await fetchAlbums("Guns N' Roses");
+  eq(r.map(a=>a.collectionName), ["Live Era '87-'93", 'Appetite For Destruction'], 'iTunes pierwszy + studyjny z Deezera, bez singli');
+  eq([r[1].releaseDate, r[1].artistName], ['1987-07-21', "Guns N' Roses"], 'rok i wykonawca z Deezera');
+  const pr=await handleProxy({ headers:new Headers() }, new URL("https://w/tracks?albums=Guns%20N'%20Roses"));
+  eq((await pr.json()).results.length, 2, '/tracks?albums= → albumy');
+});
+
+await group('Deezer: limit (HTTP 200 + error code 4) → wyjątek i pauza, nie ciche „pusto"', async()=>{
+  _resetDeezerPause();
+  let dzCalls=0;
+  globalThis.fetch = async (url) => { url=String(url);
+    if(url.startsWith('https://itunes.apple.com')) return res({}, 429);
+    dzCalls++; return res({ error:{ type:'Exception', message:'Quota limit exceeded', code:4 } }); };
+  const r=await fetchTracks('Queen');
+  eq(r.results.length, 0, 'brak wyników przy limicie');
+  const n=dzCalls;
+  await fetchTracks('Abba');
+  eq(dzCalls, n, 'w pauzie bez kolejnych zapytań do Deezera');
+  _resetDeezerPause();
 });
 
 globalThis.fetch = realFetch;

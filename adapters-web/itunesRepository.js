@@ -46,7 +46,7 @@ function itunesProxy(term, cfg={}, opts){
   if(!cfg || !cfg.roomsBase) return Promise.reject(new Error('no-proxy'));
   const ctrl=new AbortController();
   const to=setTimeout(()=>ctrl.abort(),12000);
-  const u=cfg.roomsBase+'/tracks?'+(opts && opts.song ? 'q=' : 'artist=')+encodeURIComponent(term);
+  const u=cfg.roomsBase+'/tracks?'+(opts && opts.album ? 'albums=' : opts && opts.song ? 'q=' : 'artist=')+encodeURIComponent(term);
   return fetch(u,{signal:ctrl.signal})
     .then(r=>{ if(!r.ok) throw new Error('fn '+r.status); return r.json(); })
     .then(d=>(d.results||[]))
@@ -57,7 +57,13 @@ const PROXY_GRACE_MS=3000;   // bezpośredni iTunes już odpowiedział → proxy
 export function itunes(term, cfg, opts){
   // EKSPERYMENT: proxy Workera nie zna wyszukiwania albumów (zwróciłby UTWORY) → albumy tylko wprost/JSONP;
   // gdy oba padną, core/resolveCover bierze albumy z wyników utworów (te idą przez proxy)
-  if(opts && opts.album) return itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts));
+  // przegląd v70: albumy też z dwóch źródeł — bezpośredni iTunes (PL sklep bywa niekompletny) + proxy `/tracks?albums=`
+  // (Deezer po wykonawcy). Stary Worker zwraca pusto → zostaje iTunes. Bez scalania po tytule — core/pickAlbum grupuje sam.
+  if(opts && opts.album){
+    const direct=itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts)).catch(()=>[]);
+    const proxy=itunesProxy(term, cfg, opts).catch(()=>[]);
+    return Promise.all([direct, Promise.race([proxy, new Promise(r=>setTimeout(()=>r([]),PROXY_GRACE_MS+2000))])]).then(([a,b])=>[...a, ...b]);
+  }
   // Przeglądarka użytkownika NIE jest limitowana jak Cloudflare → bezpośredni iTunes to główne źródło (rok, gatunek);
   // równolegle proxy Workera (Deezer). Wynik = scalenie (iTunes pierwszy); gdy jedno padnie — drugie.
   const direct=itunesFetch(term, opts).catch(()=>itunesJsonp(term, opts));

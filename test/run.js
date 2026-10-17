@@ -1621,7 +1621,7 @@ await (async ()=>{
 group('F8b scoring: legenda punktacji wg trybu (stopka solo)', ()=>{
   eq(scoreLegend('abcd'),'trafienie 100 · szybkość · seria','ABCD'); eq(scoreLegend('quiz'),'trafienie 100 · szybkość · seria','quiz');
   eq(scoreLegend('year'),'dokładnie 100 · ±1 70 · ±2 50 · dekada 20','rok');
-  eq(scoreLegend('intro'),'im wcześniej, tym więcej: ×2.0 → ×1.0','intro');
+  eq(scoreLegend('intro'),'im wcześniej, tym więcej: ×2,0 → ×1,0','intro');
   eq(scoreLegend('music'),'tytuł 50 · wykonawca 50 · rok ±2 +20 · album +20 · szybkość do +50% · seria ×1,5 / ×2','muzyka (jak dotąd)');
   eq(scoreLegend('reverse'),scoreLegend('music'),'od tyłu = muzyka'); eq(scoreLegend(undefined),scoreLegend('music'),'brak → muzyka');
 });
@@ -1657,9 +1657,9 @@ group('EKSP. timing: okno „od tyłu krótko", wycinki składanki, etapy okład
   eq(T8.medleyClipAt(99,4).done,true,'po końcu → done'); eq(T8.medleyClipAt(NaN,4).index,0,'śmieci → początek'); eq(T8.medleyClipAt(1,0).done,true,'0 wycinków → done');
   eq(T8.medleyLabel(5.2,4),'fragment 2/4…','licznik w trakcie'); eq(T8.medleyLabel(7,4),'przerwa · zaraz fragment 3/4','licznik w przerwie');
   ok(/^koniec/.test(T8.medleyLabel(20,4)),'po końcu: koniec składanki');
-  eq(T8.COVER_STAGES,[16,32,64],'okładka: 16 → 32 → 64 (bez 8×8; pełna tylko w odsłonie — nazwa zespołu na okładce)');
+  eq(T8.COVER_STAGES,[16,24,40],'okładka: 16 → 24 → 40 (bez 8×8; pełna tylko w odsłonie — nazwa zespołu na okładce)');
   eq(T8.coverStageBlocks(0),16,'pierwszy etap = 16 bloków'); eq(T8.coverStageBlocks(-3),16,'ujemny → etap 0');
-  eq(T8.coverStageBlocks(2),64,'etap 2 = 64×64'); eq(T8.coverStageBlocks(99),64,'poza zakresem → 64 (nigdy pełna)');
+  eq(T8.coverStageBlocks(2),40,'etap 2 = 40×40'); eq(T8.coverStageBlocks(99),40,'poza zakresem → 40 (nigdy pełna)');
   eq(T8.coverNextStage(1),2,'następny'); eq(T8.coverNextStage(2),null,'koniec na 64×64');
   eq(T8.COVER_STEP_MS,6000,'etap okładki trwa 6 s (było 3 s)');
   eq(T8.COVER_STEP_MS*(T8.COVER_STAGES.length-1),12000,'ostatni etap (64×64) po 12 s auto-odsłony');
@@ -1683,8 +1683,8 @@ group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etap�
   eq(S8.scoreRound({ okTitle:true, okArtist:true, mult:S8.revsnipMult(1) }).points,80,'„dłużej" → 100 × 0,8');
   ok(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, elapsedMs:0, streak:9, mult:2 }).points<=S8.SCORE_MAX_PER_Q,'limit ligi bez zmian');
   eq(S8.scoreLegend('medley'),'wykonawca 100 · szybkość · seria','legenda składanki');
-  ok(/wykonawca 100 · album \+20/.test(S8.scoreLegend('cover')) && /×2\.0 → ×1\.0/.test(S8.scoreLegend('cover')),'legenda okładki');
-  ok(/„dłużej" ×0\.8/.test(S8.scoreLegend('revsnip')),'legenda od tyłu krótko');
+  ok(/wykonawca 100 · album \+20/.test(S8.scoreLegend('cover')) && /×2,0 → ×1,0/.test(S8.scoreLegend('cover')),'legenda okładki');
+  ok(/„dłużej" ×0,8/.test(S8.scoreLegend('revsnip')),'legenda od tyłu krótko');
 });
 group('EKSP. match: tryby, etykiety, MP (revsnip tak, składanka/okładka tylko solo), modesFor', ()=>{
   ok(['revsnip','medley','cover'].every(m=>M8.ALL_MODES.includes(m) && M8.MODE_LABEL[m] && M8.MODE_SHORT[m]),'nowe tryby + etykiety');
@@ -1741,7 +1741,7 @@ await (async ()=>{
 group('EKSP. trackSelect: okładka — rangi albumów, tytuł, URL 600×600, wybór', ()=>{
   const al=(n,a='Queen',extra={})=>({ collectionName:n, artistName:a, artworkUrl100:'https://is1-ssl.mzstatic.com/image/thumb/x/y.jpg/100x100bb.jpg', releaseDate:'1975-11-21T08:00:00Z', trackCount:12, collectionType:'Album', ...extra });
   eq(TS8.albumTier(al('A Night At The Opera')),0,'zwykły album'); eq(TS8.albumTier(al('Nocny Patrol (Remastered)')),0,'remaster = zwykły');
-  eq(TS8.albumTier(al('Innuendo (Deluxe Edition)')),1,'deluxe = edycja'); eq(TS8.albumTier(al('Greatest Hits II')),2,'kompilacja');
+  eq(TS8.albumTier(al('Innuendo (Deluxe Edition)')),1,'deluxe = edycja'); eq(TS8.albumTier(al('Greatest Hits II')),2,'kompilacja'); eq(TS8.albumTier(al('Greatest')),2,'„Greatest" (Duran Duran) = kompilacja — przegląd v70');
   eq(TS8.albumTier(al('Live at Wembley Stadium')),2,'koncertowy'); eq(TS8.albumTier(al('Miłość Jest Cudowna (1975-2015)')),2,'zakres lat = składak');
   eq(TS8.albumTier(al('Face It Alone - Single')),-1,'singiel odrzucony'); eq(TS8.albumTier(al('X',undefined,{trackCount:2})),-1,'EP/2 utwory odrzucone');
   eq(TS8.albumTitle('Innuendo (Deluxe Edition)'),'Innuendo','tytuł bez „(Deluxe Edition)"'); eq(TS8.albumTitle('Nocny Patrol (Remastered)'),'Nocny Patrol','bez „(Remastered)"');
@@ -2069,6 +2069,32 @@ group('EKSP. gitara: tryb, modesFor (bez kategorii polskich), pickInstrumentalCo
   eq(TS8.pianoQueries({ track:'Billie Jean', artist:'Michael Jackson' }),TS8.coverQueries({ track:'Billie Jean', artist:'Michael Jackson' }, 'piano'),'pianoQueries = coverQueries(piano)');
   eq(TS8.INSTRUMENT_EMOJI.guitar,'🎸','emoji odsłony');
 });
+group('EKSP. covery (pomiar 2026-10: iTunes+Deezer): konsensus przy braku oryginału, ścisły tytuł, live, wokalista-akustyk', ()=>{
+  const it=(t,a,col='Album',extra={})=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+encodeURIComponent(a+'|'+t), ...extra });
+  const africa={ track:'Africa', artist:'Toto' };
+  // Deezer-only w MP: „Africa guitar" zwraca same covery (oryginału Toto brak, żadnego konkurencyjnego nie-coveru) — ≥3 różnych coverów = konsensus
+  const dz=[ it('Africa (Guitar Cover)','Spanish Guitar Project','Acoustic Guitar Hits'), it('Africa (Guitar Instrumental)','Simon Martin Perkins','Guitar Covers'),
+    it('Africa (Guitar Version)','Paco Nula','Spanish Guitar Hits') ];
+  eq(TS8.pickInstrumentalCover(dz, africa, 'guitar').artistName,'Spanish Guitar Project','konsensus ≥3 wykonawców, brak oryginału i konkurenta → bez dowodu przyjęty');
+  eq(TS8.pickInstrumentalCover(dz.slice(0,2), africa, 'guitar'),null,'tylko 2 wykonawców → to jeszcze nie konsensus (dowód wymagany)');
+  eq(TS8.pickInstrumentalCover([ it('Africa','Inny Zespół','Africa - Single'), ...dz ], africa, 'guitar'),null,'konkurencyjny NIE-cover o tym tytule (inny utwór) → konsensus nie obowiązuje');
+  const king={ track:'King', artist:'T.Love' };
+  eq(TS8.pickInstrumentalCover([ it('King','Florence + the Machine','King - Single'), ...dz.map(r=>({ ...r, trackName:r.trackName.replace('Africa','King') })) ], king, 'guitar'),null,'„King": konkurent Florence + 3 covery → nadal kolizja (przypadek z pomiaru)');
+  // „Freedom" Wham!: oryginał JEST w wynikach (6.), konkurenci wyżej → konsensus NIE ratuje (test fortepianu wyżej też to pilnuje)
+  const fr={ track:'Freedom', artist:'Wham!' };
+  eq(TS8.pickInstrumentalCover([ it('Freedom','Kygo & Zak Abel','Freedom - Single'), it('Freedom (Guitar)','A1'), it('Freedom (Guitar Version)','A2'), it('Freedom (Guitar Cover)','A3'), it('Freedom','Wham!','Make It Big') ], fr, 'guitar'),null,'oryginał obecny, ale konkurent wyżej → dowód nadal wymagany');
+  // ścisły tytuł coveru: „Creepin'" (The Weeknd/Metro Boomin) ≠ „Creep" (textMatch gracza jest luźniejszy)
+  eq(TS8.pickInstrumentalCover([ it('Creepin\' (Acoustic Guitar Version)','We Rabbitz','Creepin\' (Acoustic)') ], { track:'Creep', artist:'Radiohead' }, 'guitar'),null,'inna piosenka o podobnym tytule odrzucona');
+  eq(TS8.pickInstrumentalCover([ it('Gimme! Gimme! Gimme!','ABBA','Voulez-Vous'), it('Giimme! Gimme! Gimme! (Guitar Version)','Paco Nula','Spanish Guitar Hits') ], { track:'Gimme! Gimme! Gimme!', artist:'ABBA' }, 'guitar').artistName,'Paco Nula','literówka ±1 znak w tytule coveru nadal przechodzi');
+  // live: „Piano Rock — Livin' On A Prayer (Live)" (zespół z wokalem na żywo) to nie cover instrumentalny
+  const lop={ track:"Livin' on a Prayer", artist:'Bon Jovi' };
+  eq(TS8.pickInstrumentalCover([ it("Livin' On A Prayer (Live)",'Piano Rock','Piano Rock (Live in Rio)') ], lop, 'piano'),null,'piano: wersja Live odrzucona');
+  eq(TS8.pickInstrumentalCover([ it("Livin' On A Prayer (Live)",'Johan Kvarnström','Guitar Covers') ], lop, 'guitar'),null,'gitara: wersja Live odrzucona');
+  // lista wykonawców: sprawdzeni na Deezerze (top utworów) / odrzucony wokalista-akustyk
+  eq(GC.guitarCoverVerdict({ trackName:'Imagine (Guitar Solo)', artistName:'Edy Hafler', collectionName:'Guitar Pop Covers, Vol. 1' }).ok,true,'Edy Hafler (Guitar Pop Covers) na liście');
+  ok(GC.isGuitarCoverArtist('Steve Petrunak'),'Steve Petrunak na liście');
+  eq(GC.guitarCoverVerdict({ trackName:'Hotel California (Acoustic Guitar Version)', artistName:'Mount Hayes', collectionName:'New & Old (Pt. 5)' }),{ok:false,why:'deny'},'Mount Hayes (wokalista) → deny mimo znacznika w tytule');
+});
 console.log('• EKSP. gitara: resolveGuitar — cover, polskie pomijane, fallback');
 await (async ()=>{
   const it=(t,a,col='Album',extra={})=>({ trackName:t, artistName:a, collectionName:col, previewUrl:'https://p/'+encodeURIComponent(a+'|'+t), releaseDate:'1985-01-01', artworkUrl100:'https://a/'+encodeURIComponent(a)+'/100x100bb.jpg', ...extra });
@@ -2091,6 +2117,12 @@ await (async ()=>{
   ok(r4.error && r4.reason==='empty','brak coveru po próbach → błąd (wołający gra zwykłą muzykę)');
   const rp=await TS8.resolvePiano({ cat:{ artists:['Madonna'] }, seen:new Set(), recent:[], itunes, rnd:()=>0, tries:1 });
   ok(rp.error,'fortepian nie bierze coveru gitarowego (wspólna ścieżka, osobne reguły)');
+  // limit Deezera/iTunes (HTTP 200 + {"error":{"code":4}} = pusta lista): 2 kolejne oryginały bez ŻADNEGO wiersza → stop (nie 6 × 3 zapytań)
+  const dead={ 'a:A1':[it('Song One','A1')], 'a:A2':[it('Song Two','A2')], 'a:A3':[it('Song Three','A3')], 'a:A4':[it('Song Four','A4')], 'a:A5':[it('Song Five','A5')], 'a:A6':[it('Song Six','A6')] };
+  let songCalls=0;
+  const itDead=async(term,opts)=>{ if(opts&&opts.song){ songCalls++; return []; } return dead['a:'+term]||[]; };
+  const rd=await TS8.resolveGuitar({ cat:{ artists:['A1','A2','A3','A4','A5','A6'] }, seen:new Set(), recent:[], itunes:itDead, rnd:()=>0 });
+  ok(rd.error && songCalls===6,'źródło coverów milczy (limit) → po 2 oryginałach koniec: '+songCalls+' zapytań o cover zamiast 18');
 })();
 /* ===== „akustycznie / unplugged": pole `match` utworu (wersja akustyczna zamiast studyjnej) ===== */
 group('songs[].match: matchSong wymaga słowa w tytule/albumie, songTerms najpierw z tym słowem', ()=>{
@@ -2359,8 +2391,8 @@ group('EKSP. obroty: etapy tempa, mnożniki, płyta, MP', ()=>{
   eq([S9.tempoMult('slowmo',0), S9.tempoMult('slowmo',1), S9.tempoMult('slowmo',7), S9.tempoMult('fastmo',0), S9.tempoMult('music',0)], [1.5,1,1,1.2,1], 'mnożniki ×1.5 → ×1.0, fastmo ×1.2');
   eq(S9.scoreRound({ okTitle:true, okArtist:true, elapsedMs:null, mult:S9.tempoMult('slowmo',0) }).points, 150, '100 × 1.5 = 150');
   eq(S9.scoreRound({ okTitle:true, elapsedMs:null, mult:S9.tempoMult('fastmo',0) }).points, 60, '50 × 1.2 = 60');
-  ok(/0\.6× ×1\.5 → 0\.75× ×1\.0/.test(S9.scoreLegend('slowmo')), 'legenda slowmo — '+S9.scoreLegend('slowmo'));
-  ok(/1\.5× ×1\.2/.test(S9.scoreLegend('fastmo')), 'legenda fastmo — '+S9.scoreLegend('fastmo'));
+  ok(/0,6× ×1,5 → 0,75× ×1,0/.test(S9.scoreLegend('slowmo')), 'legenda slowmo — '+S9.scoreLegend('slowmo'));
+  ok(/1,5× ×1,2/.test(S9.scoreLegend('fastmo')), 'legenda fastmo — '+S9.scoreLegend('fastmo'));
   ok(['slowmo','fastmo'].every(m=>M9.MP_MODES.includes(m) && !M9.SOLO_ONLY_MODES.includes(m)), 'tempo działa w MP');
   ok(!M9.mpAvailableModes(null,true).includes('slowmo') && M9.mpAvailableModes(M9.MP_MODES,true).includes('fastmo'), 'stary serwer → bez tempa; nowy → z');
   eq([M9.MODE_LABEL.slowmo, M9.MODE_LABEL.fastmo], ['🐢 zwolnione obroty','🐿 przyspieszone'], 'etykiety');
@@ -3152,7 +3184,7 @@ group('MP etapy: harmonogram (stageAt/stageStartsFrom/stageIndexAt) + okładka (
   eq(T.coverStageOffsets(), [0,6000,12000], 'okładka: etap k od k × 6 s (3 etapy)');
   eq(T.coverRevealMs(), 12000, 'ostatni etap (64×64) po 12 s'); eq(T.LISTEN_SECS.cover, 12, 'MP: okno „patrz" = do ostatniego etapu → endsAt po nim');
   const L=T.MP_INTRO_MS;
-  eq([0, L-1, L+5999, L+6000, L+12000, L+60000].map(dt=>T.mpCoverStageAt(10000, 10000+dt)), [0,0,0,1,2,2], 'mpCoverStageAt: 16 → 32 → 64, wspólne od playAt (+ LEAD)');
+  eq([0, L-1, L+5999, L+6000, L+12000, L+60000].map(dt=>T.mpCoverStageAt(10000, 10000+dt)), [0,0,0,1,2,2], 'mpCoverStageAt: 16 → 24 → 40, wspólne od playAt (+ LEAD)');
   eq(T.mpCoverStageAt(0, 250, 0, 100), 2, 'krok i LEAD parametryzowane (testy serwera)');
   eq([T.mpCoverStageStartsAt(10000, 1), T.mpCoverStageStartsAt(10000, 2), T.mpCoverStageStartsAt(10000, 3)], [10000+L+6000, 10000+L+12000, null], 'termin następnego etapu (timer DO)');
 });
@@ -3176,11 +3208,11 @@ group('MP intro: introStageOffsets (etap + przerwa na typ), introRevealMs, LISTE
 });
 group('MP okładka: coverStageUrl / coverFullUrl — anty-podglądanie (iTunes / Deezer / nieznany CDN)', ()=>{
   const it='https://is1-ssl.mzstatic.com/image/thumb/Music125/v4/ab/cd/ef/x.jpg/600x600bb.jpg';
-  eq([0,1,2,3,99].map(k=>T.coverStageUrl(it,k).split('/').pop()), ['16x16bb.jpg','32x32bb.jpg','64x64bb.jpg','64x64bb.jpg','64x64bb.jpg'], 'iTunes: rozmiar = rozdzielczość etapu; poza zakresem → 64 (NIGDY pełna)');
+  eq([0,1,2,3,99].map(k=>T.coverStageUrl(it,k).split('/').pop()), ['16x16bb.jpg','24x24bb.jpg','40x40bb.jpg','40x40bb.jpg','40x40bb.jpg'], 'iTunes: rozmiar = rozdzielczość etapu; poza zakresem → 40 (NIGDY pełna)');
   eq(T.coverFullUrl(it).split('/').pop(), '600x600bb.jpg', 'pełna okładka tylko przez coverFullUrl (odsłona)');
   eq(T.coverStageUrl('https://is3-ssl.mzstatic.com/image/thumb/a/b.jpg/100x100bb.jpg', 0), 'https://is3-ssl.mzstatic.com/image/thumb/a/b.jpg/16x16bb.jpg', 'iTunes 100×100 → 16×16');
   const dz='https://e-cdns-images.dzcdn.net/images/cover/0a1b2c3d4e5f60718293a4b5c6d7e8f9/250x250-000000-80-0-0.jpg';
-  eq([0,1,2].map(k=>T.coverStageUrl(dz,k).split('/').pop()), ['16x16-000000-80-0-0.jpg','32x32-000000-80-0-0.jpg','64x64-000000-80-0-0.jpg'], 'Deezer: ten sam wzór rozmiaru');
+  eq([0,1,2].map(k=>T.coverStageUrl(dz,k).split('/').pop()), ['16x16-000000-80-0-0.jpg','24x24-000000-80-0-0.jpg','40x40-000000-80-0-0.jpg'], 'Deezer: ten sam wzór rozmiaru');
   eq(T.coverFullUrl(dz).split('/').pop(), '600x600-000000-80-0-0.jpg', 'Deezer: pełna 600×600');
   ok(T.coverStageUrl(dz,0).startsWith('https://e-cdns-images.dzcdn.net/images/cover/0a1b2c3d4e5f60718293a4b5c6d7e8f9/'), 'Deezer: hash/host bez zmian');
   const unk='https://example.com/covers/100x100bb.jpg';
@@ -3189,7 +3221,7 @@ group('MP okładka: coverStageUrl / coverFullUrl — anty-podglądanie (iTunes /
   eq([T.coverFullUrl('http://is1-ssl.mzstatic.com/a/600x600bb.jpg'), T.coverFullUrl('javascript:x'), T.coverStageUrl(null,0)], ['','',''], 'tylko https');
   eq([T.coverStageable(it), T.coverStageable(dz), T.coverStageable(unk), T.coverStageable('')], [true,true,false,false], 'coverStageable: tylko znane CDN (serwer: inaczej pytanie jak muzyka)');
   eq([SC.coverMult(0), SC.coverMult(1), SC.coverMult(2), SC.coverMult(9)], [2, 1.5, 1, 1], 'mnożniki 3 etapów: ×2.0 → ×1.5 → ×1.0');
-  ok(/×2\.0 → ×1\.0/.test(SC.scoreLegend('cover')), 'legenda okładki (od ×2.0 do ×1.0)');
+  ok(/×2,0 → ×1,0/.test(SC.scoreLegend('cover')), 'legenda okładki (od ×2.0 do ×1.0)');
 });
 group('MP okładka/intro: dostępność (autorytet tak, relay nie), ekran „Nowy mecz"', ()=>{
   ok(!M.SOLO_ONLY_MODES.includes('cover') && !M.SOLO_ONLY_MODES.includes('intro') && M.MP_MODES.includes('cover') && M.MP_MODES.includes('intro'), 'okładka i intro w MP_MODES');
@@ -3217,6 +3249,8 @@ const mkG=(mode, format='coop', offsets)=>{
 };
 group('MP okładka: sloty, czas propozycji od serwera, mnożnik etapu zamiast szybkości, odsłona', ()=>{
   eq(R.slotsFor('cover').map(s=>s.key), ['artist','album'], 'sloty: wykonawca + album');
+  { const g0=mkG('cover','coop',T.coverStageOffsets(1000)); const e0=R.evaluateAnswer(g0, { track:'X', album:'X', artist:'Toto', year:'1982', art:'' }, undefined, P+L+500);
+    eq(e0.reveal.stageEval, undefined, 'przegląd v70: drużyna bez odpowiedzi → bez linii etapu/mnożnika'); }
   const offs=T.coverStageOffsets(1000);   // krok 1 s (test) — etap k od P+L+k·1000
   const mk=(format)=>mkG('cover', format||'coop', offs);
   const cur={ track:'Toto IV', album:'Toto IV', artist:'Toto', artistAlt:'TOTO', year:'1982', art:'https://is1-ssl.mzstatic.com/a/600x600bb.jpg' };
@@ -3291,7 +3325,7 @@ group('MP intro: introAnswerStage (komplet tytuł+wykonawca), introMult zamiast 
   g=mk(); g.stageStarts=T.stageShift(g.stageStarts, 0, P+L+60).starts; g.stage=1;
   R.reduceAction(g, { type:'propose', by:'A', byName:'Ala', values:{ title:'Africa', artist:'Toto' }, at:P+L+70 });
   eq(R.evaluateAnswer(g, cur, undefined, P+L+80).reveal.stageEval.mult, SC.introMult(1), '„+ więcej" → etap z przesuniętych startów (×1.6)');
-  eq(SC.scoreLegend('intro'), 'im wcześniej, tym więcej: ×2.0 → ×1.0', 'legenda intro');
+  eq(SC.scoreLegend('intro'), 'im wcześniej, tym więcej: ×2,0 → ×1,0', 'legenda intro');
 });
 }
 import { deezerRows, mergeSources, DEEZER_GENRES } from '../core/sources.js';
@@ -3438,5 +3472,12 @@ group('Gust ❤️ okładki: utwór reprezentatywny albumu (coverRepTrack + reso
   eq(R.evaluateAnswer({ ...g, mode:'music', answerSlots:null }, { track:'X', artist:'Y', rep:r.rep }).reveal.rep, undefined, 'poza okładką — bez rep');
 });
 }
+group('przegląd v70: widoki MP nie używają globalnej klasy „top" (body.mp .top{display:none} chowało wybór drużyny)', ()=>{
+  const ROOT=join(dirname(fileURLToPath(import.meta.url)),'..');
+  for(const rel of ['app/mp-render.js','app/mp-tv.js','app/mp-picker.js']){
+    const src=readFileSync(join(ROOT,rel),'utf8');
+    ok(!/\?\s*' top'|class="(?:[^"]*\s)?top[\s"]/.test(src), rel+': brak klasy „top" w generowanym HTML');
+  }
+});
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

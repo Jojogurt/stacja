@@ -1,5 +1,5 @@
 /* app/cover.js — EKSPERYMENT: tryb „okładka" (solo). Okładka albumu odsłaniana ETAPAMI rozdzielczości
- * (core/timing.COVER_STAGES: 16 → 32 → 64 bloki na bok), auto co COVER_STEP_MS (6 s) albo przyciskiem
+ * (core/timing.COVER_STAGES: 16 → 24 → 40 bloków na bok), auto co COVER_STEP_MS (6 s) albo przyciskiem
  * „wyraźniej" (app/solo.js). PEŁNA okładka (często z nazwą zespołu) dopiero w odsłonie — coverStop(true).
  *
  * CORS: obraz z iTunes CDN (mzstatic) ładujemy BEZ crossOrigin i NIGDY nie czytamy pikseli (getImageData/toDataURL).

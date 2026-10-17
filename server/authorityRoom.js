@@ -174,7 +174,8 @@ export class GameAuthority extends Server {
   shelves = new Map();    // gust etap 3: id gracza → półka [{title,artist,year}] (≤ 20) — „Gust stołu"
   lobbyReady = new Set(); // „Gotowy ✓" w lobby/przy rewanżu (ulotne; reset przy starcie meczu i wyjściu gracza)
   hostGraceMs = HOST_GRACE_MS;   // testy podmieniają (0 = awans od razu, dawne zachowanie)
-  hostAwayUntil = 0; _hostGrace = null;
+  hostAwayUntil = 0; hostAwayId = null; _hostGrace = null;   // persist: karencja przeżywa evikcję DO (wznowienie w konstruktorze + alarm)
+  cleanupAt = 0;          // epoch ms sprzątania pustego pokoju (persist; jeden alarm DO obsługuje i karencję, i sprzątanie)
   _autoLock = null;       // serwerowy timer auto-locka (koniec czasu pytania)
   _allDone = null;        // P1-3: timer karencji „wszyscy gotowi" → lock
   allDoneGraceMs = MP_ALL_DONE_GRACE_MS;   // P1-3: karencja (testy podmieniają)
@@ -199,7 +200,7 @@ export class GameAuthority extends Server {
     super(ctx, env);
     // wczytaj stan z trwałego magazynu (po eviccie/restarcie DO) zanim obsłużymy żądania
     ctx.blockConcurrencyWhile(async () => {
-      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden','shelves','tlYears']);
+      const s = await ctx.storage.get(['game','current','pools','hostId','starterId','hostSeen','recent','ready','armDeadline','armHidden','shelves','tlYears','hostAwayUntil','hostAwayId','cleanupAt']);
       this.game = s.get('game') || null;
       this.current = s.get('current') || null;
       this.pools = s.get('pools') || null;
@@ -212,6 +213,14 @@ export class GameAuthority extends Server {
       this.armDeadline = s.get('armDeadline') || null;
       this.armHidden = s.get('armHidden') || null;
       this.shelves = new Map(Array.isArray(s.get('shelves')) ? s.get('shelves') : []);
+      this.hostAwayUntil = s.get('hostAwayUntil') || 0;
+      this.hostAwayId = s.get('hostAwayId') || null;
+      this.cleanupAt = s.get('cleanupAt') || 0;
+      // karencja nieobecnego hosta: timer in-memory zginął z DO — wznów wg pozostałego czasu
+      // (termin minął → 0 ms = ta sama ścieżka awansu co zwykły callback; po konstruktorze, gdy połączenia są już widoczne)
+      if(this.hostAwayUntil && this.hostAwayId){
+        this.scheduleHostGrace(this.hostAwayId, Math.max(0, this.hostAwayUntil - Date.now()));
+      }
       // WZNÓW serwerowy auto-lock po restarcie (in-memory setTimeout ginie przy evikcji DO).
       if(this.game && this.game.phase===MP.PLAY && this.game.timer>0 && this.game.endsAt){
         this.scheduleAutoLock(Math.max(0, this.game.endsAt - Date.now()));   // auto-lock wg pozostałego czasu
@@ -236,6 +245,7 @@ export class GameAuthority extends Server {
       game:this.game, current:this.current, pools:this.pools,
       hostId:this.hostId, starterId:this.starterId, hostSeen:[...this.hostSeen], recent:this.recent, ready:[...this.ready],
       armDeadline:this.armDeadline, armHidden:this.armHidden, shelves:[...this.shelves], tlYears:this.tlYears,
+      hostAwayUntil:this.hostAwayUntil, hostAwayId:this.hostAwayId, cleanupAt:this.cleanupAt,
     });
   }
 
@@ -250,12 +260,13 @@ export class GameAuthority extends Server {
     }catch(e){ /* zostanie null → odrzut */ }
     if(!id){ try{ conn.close(4001,'auth'); }catch(_e){} return; }            // brak ważnego tokenu → odrzuć (koniec ?id=)
     conn.setState({ id, name, verified:true });
-    try{ await this.ctx.storage.deleteAlarm(); }catch(_e){}                   // ktoś wrócił → anuluj zaplanowane sprzątanie
+    if(this.cleanupAt){ this.cleanupAt=0; await this.persist(); }              // ktoś wrócił → anuluj zaplanowane sprzątanie
+    await this.syncAlarm();                                                    // (alarm zostaje, jeśli czeka jeszcze karencja hosta)
     // F2b #3: host NIEOBECNY (wyszedł, gdy nie było kogo awansować) → pierwszy łączący przejmuje
     // (jak dawniej przy hostId=null). Sam host po powrocie ma hostId===id → nic się nie zmienia.
     const hostHere = !!this.hostId && this.idPresent(this.hostId, conn);
     // karencja: nieobecny host (np. przeładowanie TV) wraca — nikt w tym czasie nie przejmuje roli
-    if(id===this.hostId) this.clearHostGrace();
+    if(id===this.hostId && this.hostAwayUntil){ this.clearHostGrace(); await this.persist(); await this.syncAlarm(); }
     const inGrace = this.hostAwayUntil > Date.now();
     if(!this.hostId || (!hostHere && this.hostId!==id && !inGrace)){          // pierwszy obecny = host (przenoszalny)
       this.hostId=id; if(this.game) this.game.hostId=id; await this.persist();
@@ -285,7 +296,11 @@ export class GameAuthority extends Server {
     if(left && left===this.hostId && !this.idPresent(left, conn)){     // promote: awansuj najstarszego obecnego
       // TV/host przeładowuje stronę → najpierw KARENCJA (hostGraceMs): wraca w niej → zostaje hostem (i TV), gracz nie
       // przejmuje ekranu. Awans dopiero po karencji (scheduleHostGrace). hostGraceMs 0 → awans od razu (dawniej).
-      if(this.hostGraceMs>0){ this.hostAwayUntil=Date.now()+this.hostGraceMs; this.scheduleHostGrace(left); }
+      if(this.hostGraceMs>0){
+        this.hostAwayUntil=Date.now()+this.hostGraceMs; this.hostAwayId=left;
+        this.scheduleHostGrace(left);
+        await this.persist();   // termin przeżywa evikcję DO; alarm (syncAlarm niżej) wybudza DO i dokończy awans
+      }
       else await this.promoteFrom(left, conn);
     }
     if(left && !this.idPresent(left, conn)) this.lobbyReady.delete(left);   // „Gotowy ✓" znika z wyjściem gracza
@@ -294,8 +309,17 @@ export class GameAuthority extends Server {
     await this.checkAllDone(conn); // P1-3: wyszedł ostatni niegotowy → reszta ma typy → zamknij po karencji
     // pokój opustoszał → zaplanuj sprzątanie storage (karencja na reconnect; alarm i tak re-sprawdzi przy odpaleniu)
     if([...this.getConnections()].filter(c => c !== conn).length === 0){
-      try{ await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS); }catch(_e){}
+      this.cleanupAt = Date.now() + ROOM_TTL_MS; await this.persist();
     }
+    await this.syncAlarm();
+  }
+  // DO ma JEDEN alarm: ustaw na najbliższy z terminów (koniec karencji hosta, sprzątanie pustego pokoju); brak → skasuj
+  async syncAlarm(){
+    const ts=[this.hostAwayUntil, this.cleanupAt].filter(t=>t>0);
+    try{
+      if(ts.length) await this.ctx.storage.setAlarm(Math.min(...ts));
+      else await this.ctx.storage.deleteAlarm();
+    }catch(_e){}
   }
   // awans najstarszego obecnego (poza `left`); nikogo → hostId ZOSTAJE (pokój czeka na powrót; inny łączący przejmie
   // w onConnect). Dawniej null → klient hosta po powrocie nie dostawał roli, a serwer odrzucał lock/next → zamrożenie.
@@ -307,15 +331,20 @@ export class GameAuthority extends Server {
     await this.persist();
     return true;
   }
-  scheduleHostGrace(left){
+  scheduleHostGrace(left, ms=this.hostGraceMs){
     this.clearHostGrace(true);
-    this._hostGrace=setTimeout(async ()=>{
-      this._hostGrace=null; this.hostAwayUntil=0;
-      if(this.hostId!==left || this.idPresent(left)) return;   // wrócił / już ktoś inny
-      if(await this.promoteFrom(left)){ this.pushPresence(); this.broadcastState(); }
-    }, this.hostGraceMs);
+    this._hostGrace=setTimeout(()=>{ this._hostGrace=null; this.expireHostGrace(left).catch(()=>{}); }, ms);
   }
-  clearHostGrace(keepDeadline=false){ if(this._hostGrace){ clearTimeout(this._hostGrace); this._hostGrace=null; } if(!keepDeadline) this.hostAwayUntil=0; }
+  // koniec karencji (timer albo alarm): awans gracza, jeśli host nie wrócił
+  async expireHostGrace(left){
+    this.clearHostGrace();
+    this.hostAwayId=null;
+    let promoted=false;
+    if(this.hostId===left && !this.idPresent(left)) promoted=await this.promoteFrom(left);   // wrócił / już ktoś inny → nic
+    await this.persist(); await this.syncAlarm();
+    if(promoted){ this.pushPresence(); this.broadcastState(); }
+  }
+  clearHostGrace(keepDeadline=false){ if(this._hostGrace){ clearTimeout(this._hostGrace); this._hostGrace=null; } if(!keepDeadline){ this.hostAwayUntil=0; this.hostAwayId=null; } }
   onError(){ this.pushPresence(); }
   // czy id ma jeszcze jakieś połączenie poza `except` (wiele kart / reconnect przed zamknięciem starego)
   idPresent(id, except){
@@ -334,11 +363,18 @@ export class GameAuthority extends Server {
   coopRejoin(id){ return this.rejoin(id); }   // zgodność wsteczna (nazwa z F2b #7)
 
   // sprzątanie: alarm odpala po karencji od opustoszenia — jeśli nadal pusto, skasuj storage pokoju
+  // alarm wybudza wyeksmitowany DO; najpierw wygasła karencja hosta (awans), potem sprzątanie
   async onAlarm(){
-    if([...this.getConnections()].length > 0) return;          // ktoś wrócił — nie kasuj
+    const now=Date.now();
+    if(this.hostAwayUntil && this.hostAwayUntil<=now) await this.expireHostGrace(this.hostAwayId);
+    if([...this.getConnections()].length > 0){                 // ktoś jest — nie kasuj
+      if(this.cleanupAt){ this.cleanupAt=0; await this.persist(); }
+      await this.syncAlarm(); return;
+    }
+    if(this.cleanupAt && this.cleanupAt>now){ await this.syncAlarm(); return; }   // jeszcze nie czas (alarm był od karencji) — przestaw na właściwy termin
     await this.ctx.storage.deleteAll();                        // kasuje też alarm
     this.game=null; this.current=null; this.pools=null; this.hostId=null; this.starterId=null;
-    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.tlYears=[]; this.armDeadline=null; this.armHidden=null; this.draft=null; this.shelves=new Map();
+    this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.tlYears=[]; this.armDeadline=null; this.armHidden=null; this.draft=null; this.shelves=new Map(); this.cleanupAt=0;
     this.clearAutoLock(); this.clearArmTimer(); this.clearAllDone(); this.clearStageTimer(); this.clearHostGrace(); this.lobbyReady=new Set();
   }
 

@@ -611,7 +611,7 @@ function mpTimelineHTML(g, tv=false){
     const c=cands.find(x=>norm(x.value)===String(k)), n=c ? c.votes.length : 0;
     const sel=mine!=null && String(mine)===String(k), isTop=top!=null && top!=='' && String(top)===String(k) && n>0;
     const dots=n ? `<span class="mp-tl-n" aria-label="głosy: ${num(n)}">${'●'.repeat(Math.min(n,5))}</span>` : '';
-    return `<button type="button" class="mp-tl-gap${sel?' sel':''}${isTop?' top':''}" data-gap="${num(k)}" aria-pressed="${sel}" aria-label="${escapeHtml(gapLabel(cards, k))}"${live?'':' disabled'} onclick="mpTlPick(this.dataset.gap)">▼${dots}</button>`;
+    return `<button type="button" class="mp-tl-gap${sel?' sel':''}${isTop?' lead':''}" data-gap="${num(k)}" aria-pressed="${sel}" aria-label="${escapeHtml(gapLabel(cards, k))}"${live?'':' disabled'} onclick="mpTlPick(this.dataset.gap)">▼${dots}</button>`;
   };
   const row=[gapBtn(0)];
   cards.forEach((c,i)=>{ row.push(mpTlCardHTML(c)); row.push(gapBtn(i+1)); });
@@ -703,7 +703,7 @@ function mpMcInnerHTML(g){
     const n=(tally[o.letter]||[]).length, sel=myL===o.letter;
     const dots = many && n ? `<span class="mc-n" aria-label="głosy: ${num(n)}">${'●'.repeat(Math.min(n,5))}${n>5?'+':''}</span>` : '';
     const topB = many && top===o.letter && n ? '<span class="mc-top">TOP</span>' : '';
-    return `<button type="button" class="mc-opt${sel?' sel':''}${top===o.letter&&many?' top':''}" data-letter="${o.letter}" aria-pressed="${sel}"${compTV?' disabled':''} onclick="mpMcPick(this.dataset.letter)"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span>${topB}${dots}</button>`;
+    return `<button type="button" class="mc-opt${sel?' sel':''}${top===o.letter&&many?' lead':''}" data-letter="${o.letter}" aria-pressed="${sel}"${compTV?' disabled':''} onclick="mpMcPick(this.dataset.letter)"><span class="mc-let">${o.letter}</span><span class="mc-tx">${escapeHtml(o.text)}</span>${topB}${dots}</button>`;
   }).join('');
 }
 const mpMcHTML = (g)=> mcOptions(g) ? `<div class="mc-opts mp-mc" id="mpMc" role="group" aria-label="odpowiedzi A–D">${mpMcInnerHTML(g)}</div>` : '';

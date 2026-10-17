@@ -255,7 +255,7 @@ export function revsnipMult(stage){
   const i=Math.floor(Number(stage));
   return REVSNIP_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(REVSNIP_MULTS.length-1, i)) : 0];
 }
-/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 32 → 64 bloki; pełna tylko
+/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 24 → 40 bloków; pełna tylko
  * w odsłonie): ×2.0 przy 16×16, ×1.5 przy 32×32, ×1.0 przy 64×64 (bez bonusu za szybkość — jak intro). */
 export const COVER_MULTS = [2.0, 1.5, 1.0];
 export function coverMult(stage){
@@ -323,7 +323,7 @@ export function scoreRound(args = {}){
 /* F8b: stopka-legenda punktacji solo zależna od trybu BIEŻĄCEGO pytania (tekst z tych samych stałych co liczenie):
  *  • ABCD / quiz: „trafienie 100 · szybkość · seria"; • rok: „dokładnie 100 · ±1 70 · ±2 50 · dekada 20";
  *  • intro: „im wcześniej, tym więcej: ×2.0 → ×1.0"; • składanka/okładka/od tyłu krótko (EKSPERYMENT); • reszta (muzyka/lektor/od tyłu/fragment): tytuł/wykonawca/rok/album. */
-const fmtX = x => '×' + Number(x).toFixed(1);
+const fmtX = x => '×' + Number(x).toFixed(1).replace('.', ',');   // przegląd v70: polski zapis jak „TERAZ ×2,0"
 export function scoreLegend(mode){
   if(mode==='abcd' || mode==='quiz') return `trafienie ${PTS.quiz} · szybkość · seria`;
   if(mode==='year') return `dokładnie ${YEAR_PTS.exact} · ±1 ${YEAR_PTS.off1} · ±2 ${YEAR_PTS.off2} · dekada ${YEAR_PTS.decade}`;
@@ -331,8 +331,8 @@ export function scoreLegend(mode){
   if(mode==='medley') return `wykonawca ${ARTIST_ONLY_PTS} · szybkość · seria`;
   if(mode==='cover') return `wykonawca ${ARTIST_ONLY_PTS} · album +${PTS.album} · im mniej widać, tym więcej: ${fmtX(COVER_MULTS[0])} → ${fmtX(COVER_MULTS[COVER_MULTS.length-1])}`;
   if(mode==='timeline') return `dobre miejsce na osi ${TIMELINE_PTS.place} · tytuł +${TIMELINE_PTS.title} · wykonawca +${TIMELINE_PTS.artist} · szybkość · seria`;
-  if(mode==='slowmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 0.6× ${fmtX(SLOWMO_MULTS[0])} → 0.75× ${fmtX(SLOWMO_MULTS[SLOWMO_MULTS.length-1])}`;
-  if(mode==='fastmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 1.5× ${fmtX(FASTMO_MULT)}`;
+  if(mode==='slowmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 0,6× ${fmtX(SLOWMO_MULTS[0])} → 0,75× ${fmtX(SLOWMO_MULTS[SLOWMO_MULTS.length-1])}`;
+  if(mode==='fastmo') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · 1,5× ${fmtX(FASTMO_MULT)}`;
   if(mode==='revsnip') return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok/album +${PTS.year} · szybkość · „dłużej" ${fmtX(REVSNIP_MULTS[REVSNIP_MULTS.length-1])}`;
   return `tytuł ${PTS.title} · wykonawca ${PTS.artist} · rok ±2 +${PTS.year} · album +${PTS.album} · szybkość do +${Math.round(SPEED_BONUS_MAX*100)}% · seria ×1,5 / ×2`;
 }

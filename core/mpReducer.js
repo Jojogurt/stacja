@@ -73,7 +73,7 @@ export function slotsFor(mode, cat, q){
   if(mode==='timeline') return TIMELINE_SLOTS.map(s=>({ ...s }));   // MP oś czasu: szczelina + żetony tytuł/wykonawca
   return [ {key:'title', label:'tytuł'}, {key:'artist', label:'wykonawca'} ];
 }
-export const COVER_SLOTS = [ { key:'artist', label:'wykonawca' }, { key:'album', label:'album (bonus)' } ];
+export const COVER_SLOTS = [ { key:'artist', label:'wykonawca' }, { key:'album', label:'album +20' } ];
 // MP oś czasu: 'gap' = indeks szczeliny na osi DRUŻYNY (0 = przed pierwszą kartą … n = po ostatniej) — walidowany w reducerze
 export const TIMELINE_SLOTS = [ { key:'gap', label:'miejsce na osi' }, { key:'title', label:'tytuł (+20)' }, { key:'artist', label:'wykonawca (+20)' } ];
 // oś drużyny (karty jawne, posortowane po roku) — game.timeline[teamId]; brak → []
@@ -404,7 +404,9 @@ function evaluateTeam(game, teamId, current, match, timing){
   // F8a: odsłona „rok" (NIE `year` — coop spłaszcza pola drużyny na reveal, a reveal.year = rok utworu)
   const yearEval = yearQ ? { pts:ev.year.points, diff:ev.year.diff, tier:ev.year.tier } : undefined;
   // odsłona: etap i mnożnik drużyny (okładka: bloki; intro: sekundy etapu)
-  const stageEval = stg ? { stage:stg.stage, mult:sc.mult, ...(coverQ ? { blocks:coverStageBlocks(stg.stage) } : { secs:introStageSecs(stg.stage) }) } : undefined;
+  // przegląd v70: drużyna bez odpowiedzi (pas/cisza) → bez linii „odpowiedź przy 16×16 · ×2,0" (mylące)
+  const answeredAny = slots.some(s=>String(locked[s.key]||'').trim());
+  const stageEval = stg && answeredAny ? { stage:stg.stage, mult:sc.mult, ...(coverQ ? { blocks:coverStageBlocks(stg.stage) } : { secs:introStageSecs(stg.stage) }) } : undefined;
   // MP oś czasu: szczelina drużyny, dobre szczeliny, karta i oś PRZED wstawieniem (odsłona); karta wstawiana w applyEvaluation
   const timelineEval = tlQ ? { gap: /^\d{1,3}$/.test(String(locked.gap||'')) ? Number(locked.gap) : null, placeOk:teamOk,
     good:correctGaps(cards, tlYear), card:current.tlCard || null, before:cards.slice() } : undefined;

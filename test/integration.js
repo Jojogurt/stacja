@@ -1796,7 +1796,7 @@ await group('F8b zwykły mecz solo: „Udostępnij wynik" (punkty + X/Y + siatka
 });
 await group('F8b stopka-legenda punktacji wg trybu pytania (rok / intro / ABCD)', async ()=>{
   await f8aSolo(/rok/, async (w)=>{ eq2(txt(w,'footLegend'), 'dokładnie 100 · ±1 70 · ±2 50 · dekada 20', 'rok'); });
-  await f8aSolo(/intro/, async (w)=>{ eq2(txt(w,'footLegend'), 'im wcześniej, tym więcej: ×2.0 → ×1.0', 'intro'); });
+  await f8aSolo(/intro/, async (w)=>{ eq2(txt(w,'footLegend'), 'im wcześniej, tym więcej: ×2,0 → ×1,0', 'intro'); });
   await f8aSolo(/ABCD/, async (w)=>{ eq2(txt(w,'footLegend'), 'trafienie 100 · szybkość · seria', 'ABCD'); });
 });
 /* ===================== EKSPERYMENT: „od tyłu krótko" / „składanka" / „okładka" (solo) + picker MP ===================== */
@@ -1867,7 +1867,7 @@ await group('EKSP. solo: „od tyłu krótko" — okno 3 s wspak (WebAudio), „
     const rm=txt(w,'rmeta').replace(/\s+/g,' ');
     ok(/okno 5 s/.test(rm) && /„dłużej" ×0,8/.test(rm), 'odsłona: okno 5 s · ×0,8 — '+rm.slice(0,200));
     ok(/Tytuł/.test(rm) && /Wykonawca/.test(rm), 'odsłona jak muzyka (tytuł + wykonawca)');
-    eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · szybkość · „dłużej" ×0.8', 'legenda');
+    eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · szybkość · „dłużej" ×0,8', 'legenda');
   });
 });
 await group('EKSP. solo: „składanka" — 4 zajawki buforowane („ładuję składankę k/4"), jeden bufor, zgadujesz wykonawcę, odsłona z 4 tytułami', async ()=>{
@@ -1936,7 +1936,7 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
     ok(draws.some(d=>d.to===16 && d.smooth) && !draws.some(d=>d.to===8) && draws.some(d=>d.to===320 && d.smooth===false), 'pikselizacja: 16×16 → widok 320 bez wygładzania — '+JSON.stringify(draws.slice(-3)));
     ok(coverMod._coverDebug().timer, 'auto-odsłona uzbrojona (etap co 6 s)');
     more.click(); await settle(1);
-    eq2(box.dataset.blocks, '32', '„wyraźniej" → 32×32');
+    eq2(box.dataset.blocks, '24', '„wyraźniej" → 24×24');
     ok(!more.disabled && /wyraźniej/.test(more.textContent), 'dalej „wyraźniej" (64×64 przed nami)');
     const src=decodeURIComponent($(w,'coverImg').getAttribute('src')||'');
     const who=(src.match(/Płyta (.+?)\//)||[])[1]||'';
@@ -1944,7 +1944,7 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
     click(w,'check'); await settle(2);
     const rm=txt(w,'rmeta').replace(/\s+/g,' ');
     ok(/Wykonawca/.test(rm) && /Album/.test(rm) && /1984/.test(rm), 'odsłona: wykonawca + album + rok — '+rm.slice(0,220));
-    ok(/32×32/.test(rm) && /mnożnik ×1,5/.test(rm), 'mnożnik etapu 32×32 = ×1,5');
+    ok(/24×24/.test(rm) && /mnożnik ×1,5/.test(rm), 'mnożnik etapu 24×24 = ×1,5');
     eq2(+txt(w,'sPoints'), Math.round(120*1.5), 'punkty: (100 + album 20) × 1,5, bez bonusu za szybkość');
     eq2(box.dataset.blocks, '0', 'po Sprawdź — pełna okładka');
     ok(/Dobrze!/.test(txt(w,'revealHead')), 'nagłówek: trafienie');
@@ -2207,7 +2207,7 @@ await group('EKSP. solo: „zwolnione obroty" — 0.6× (WebAudio playbackRate),
     ok((v.querySelector('.vn-ic')||{}).dataset.icon==='pause' && !v.querySelector('.vn-ic').closest('.vn-disc'), 'ikona ❚❚ na środku — STATYCZNA (poza obracającą się płytą)');
     ok(+v.querySelector('.vn-prog').getAttribute('stroke-dashoffset')<=100, 'postęp na obwodzie płyty (łuk .vn-prog)');
     ok(more && !more.disabled && /szybciej \(0,75×\)/.test(more.textContent), '„szybciej (0,75×)" — '+(more&&more.textContent));
-    eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 0.6× ×1.5 → 0.75× ×1.0', 'legenda');
+    eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 0,6× ×1,5 → 0,75× ×1,0', 'legenda');
     // pauza (tap w płytę) → hamowanie, ramię odjeżdża; wznowienie od tego samego miejsca
     v.click(); await settle(2);
     ok(!dbg().revSrc && src.stopped, 'tap → pauza (źródło zatrzymane)');
@@ -2243,7 +2243,7 @@ await group('EKSP. solo: „przyspieszone" 1.5× + prefers-reduced-motion → p�
       ok(v.dataset.state==='playing' && v.classList.contains('still') && !v.classList.contains('spinning'), 'reduced-motion: gra, ale płyta statyczna (still, bez spinning)');
       ok(vinylMod._vinylDebug().reduced, 'vinyl widzi reduced-motion');
       ok(w.document.body.classList.contains('tempo-mode') && !w.document.body.classList.contains('slowmo-mode'), 'fastmo: bez „szybciej"');
-      eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 1.5× ×1.2', 'legenda fastmo');
+      eq2(txt(w,'footLegend'), 'tytuł 50 · wykonawca 50 · rok/album +20 · 1,5× ×1,2', 'legenda fastmo');
       const g=dbg().revSrc && dbg().revSrc;
       ok(g, 'gra');
     });
@@ -3641,9 +3641,9 @@ await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu
   ok(req && req.playNonce===9901 && req.stage===0, '„wyraźniej" → {t:more, playNonce, stage} do serwera — '+JSON.stringify(req));
   ok($(w,'mpMore').disabled, 'po prośbie przycisk wyszarzony (do nowego etapu)');
   const inp=$(w,'mpProp_artist') || $(w,'mpTyp_artist'); inp.value='Toto';
-  ws.pushState(cov({ playNonce:9901, stage:2, coverStage:2, coverArt:base+'64x64bb.jpg' })); await settle(6);
+  ws.pushState(cov({ playNonce:9901, stage:2, coverStage:2, coverArt:base+'40x40bb.jpg' })); await settle(6);
   box=$(w,'mpStage').querySelector('.mp-cover');
-  ok(box && box.dataset.art===base+'64x64bb.jpg' && box.dataset.blocks==='64', 'nowy etap ze stanu → nowy obraz (bez własnych timerów)');
+  ok(box && box.dataset.art===base+'40x40bb.jpg' && box.dataset.blocks==='40', 'nowy etap ze stanu → nowy obraz (bez własnych timerów)');
   ok($(w,'mpMore').disabled && /×1,0/.test(aStage()), 'ostatni etap (64×64, ×1,0): „wyraźniej" nieaktywne — pełna tylko w odsłonie');
   eq2(($(w,'mpProp_artist') || $(w,'mpTyp_artist')).value, 'Toto', 'wpisany typ nie ginie przy zmianie etapu');
   ws.pushState(cov({ playNonce:9902, coverArt:'javascript:alert(1)//"><b>x' })); await settle(8);
@@ -3765,7 +3765,7 @@ await group('MP oś czasu: oś drużyny ze szczelinami, tap = typ ze szczeliną 
   // stan z serwera: głos drużyny na szczelinę 1 → TOP + opis „między 1982 a 1984"
   ws.pushState(tl({ playNonce:9941, byTeam:{ all:{ proposals:[{id:'p',by:me,byName:'Ja',values:{gap:'1',title:'Take On Me'}}], votes:{ gap:{ [me]:'1' }, title:{ [me]:'Take On Me' } }, sure:[], passed:[] } } })); await settle(6);
   const ax2=$(w,'mpStage').querySelector('.mp-tl');
-  ok(ax2.querySelector('[data-gap="1"]').classList.contains('sel') && ax2.querySelector('[data-gap="1"]').classList.contains('top'), 'moja szczelina + TOP drużyny podświetlone');
+  ok(ax2.querySelector('[data-gap="1"]').classList.contains('sel') && ax2.querySelector('[data-gap="1"]').classList.contains('lead'), 'moja szczelina + TOP drużyny podświetlone');
   ok(/drużyna: <b>między 1982 a 1984<\/b>/.test(ax2.innerHTML) && /między 1982 a 1984/.test($(w,'mpStage').querySelector('#mpTeam').textContent), 'odpowiedź drużyny opisana słowami (nie „1")');
   // TV coop: ta sama oś (sędzia), bez pól
   ws.pushState(tl({ playNonce:9942, salon:true, tvId:me, hostId:me, teams:[{id:'all',name:'Drużyna',members:['P2']}] })); await settle(8);

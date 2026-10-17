@@ -16,6 +16,14 @@ Wydawanie: najpierw Worker (`cd server && wrangler deploy` — token z `~/.zshrc
 - MP: „Gotowy ✓" w lobby i przy rewanżu (autorytet), TV po przeładowaniu zostaje hostem (karencja 10 s), „Czekamy na" w pokoju mieszanym, „Gust stołu" w relay ukryty z notką, szczelina osi słowami w czacie, zapas składanki bez WebAudio.
 - Gust: ❤️ w okładce (utwór reprezentatywny albumu), ukrycie gustu w pokoju wycofuje półkę, wylogowanie dosyła i czyści lokalne oceny.
 - `server/README.md`: deploy z tokenem z env (`.cf-token` tylko zapasowo — był nieważny).
+- **Przegląd MP w przeglądarce (lokalny Worker, 3 tożsamości, telefon 375 px + TV 1920 px)** — poprawione:
+  okładka: ostatni etap 40 bloków zamiast 64 (przy 64 czytelny napis „Modern Talking"), albumy z iTunes **i** Deezera
+  (PL iTunes: Guns N' Roses tylko „Live Era"), „Greatest" = kompilacja; **klasa `.top` chowała wybór drużyny**
+  (szczelina osi czasu i prowadząca opcja ABCD w MP — `body.mp .top{display:none}`; test-strażnik); linia etapu
+  przy pasie; polski zapis mnożników (×2,0); opis zadania „Cover: tytuł + oryginalny wykonawca"; „+ więcej (16 s)"
+  bez łamania; TV: okładka obok treści zamiast uciętej pod zegarem.
+- Karencja hosta przeżywa evikcję DO (persist + alarm). Deezer: limit (HTTP 200 + code 4) → wyjątek + pauza 4 s.
+- Covery: gitara w MP (Deezer) 85% → 98% bez fałszywych trafień (`tools/measure-covers.mjs`).
 
 ## 1. Do sprawdzenia ręcznie (nie da się w jsdom/panelu)
 - [ ] **Nowe tryby MP na 2–3 telefonach + TV (lokalny Worker albo po deployu)**: okładka (etapy, „wyraźniej"), intro (równy start, „+ więcej", iOS autoplay), składanka (4 wycinki, salon), fortepian/gitara (gra cover), oś czasu (szczeliny, głosy, karta zostaje, 320 px).
@@ -26,10 +34,10 @@ Wydawanie: najpierw Worker (`cd server && wrangler deploy` — token z `~/.zshrc
 - [ ] Porównanie gustu z prawdziwym znajomym (oboje ≥ 10 ocen), Gust stołu w MP.
 
 ## 2. Znane problemy / dług
-- [ ] Karencja hosta (10 s) to timer w pamięci DO — po evikcji pokój odblokuje się dopiero przy kolejnym połączeniu.
 - [ ] Stary klient (PWA z cache) w pokoju z nowymi trybami: okładka bez obrazu, intro jako cała zajawka, szczelina osi jako pole tekstowe (serwer odrzuca złą wartość).
-- [ ] Gitara: cover dla ~55% hitów (badanie na iTunes; z Deezerem do ponownego pomiaru); tytuły kolidujące (Wonderwall, Africa) — można rozszerzyć `core/guitarCovers.js`.
-- [ ] Limity Deezera przy wielu pokojach naraz — niezmierzone.
+- [ ] Fortepian: brak odpowiednika `strict` z gitary — przechodzą wokalistki z „(Piano Version)" (np. Alice Boman), tylko Deezer; lista deny/allow jak `core/guitarCovers.js`.
+- [ ] MP: „Zmień ustawienia" po meczu pamięta tryby, ale nie kategorie; podsumowanie meczu po przeładowaniu strony bez miniatur (okładki z historii telefonu).
+- [ ] Limity Deezera (~50 zapytań / 5 s na wspólnym IP Cloudflare): jest pauza po błędzie, brak semafora współbieżności — obserwować przy wielu pokojach.
 - [ ] Na produkcji zostały dane testowe z weryfikacji (anonimowa sesja + przerwany mecz solo 0/1) — nieszkodliwe.
 
 ## 3. Treści

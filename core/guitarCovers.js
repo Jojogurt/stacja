@@ -34,9 +34,13 @@ export const GUITAR_COVER_ARTISTS = [
   // gitarzyści fingerstyle (covery)
   'Sungha Jung', 'Kent Nishimura', 'Alexandr Misko', 'Gabriella Quevedo', 'Eddie van der Meer', 'Leon Alex',
   'Mattias Krantz', 'Daria Semikina', 'Renan Rusch', 'Evan Handyside', 'Mark D. Caribé', 'Fingerstyle Guitar Covers',
+  // Deezer (pomiar 2026-10, top utworów sprawdzone): serie 'Guitar Pop Covers, Vol. N' / 'Instrumental Guitar Covers of Pop Hits'
+  'Edy Hafler', 'Steve Petrunak',
 ];
 // wytwórnie karaoke / podkładów / przeróbek TikTok — nawet ze znacznikiem „Instrumental" w tytule to nie „cover gitarowy"
-export const GUITAR_COVER_DENY = ['singahit', 'Sing2Guitar', 'Pop Music Workshop', 'Backing Tracks For Guitarists', 'Play Along', 'Guitar Girl', 'Kris Farrow'];
+export const GUITAR_COVER_DENY = ['singahit', 'Sing2Guitar', 'Pop Music Workshop', 'Backing Tracks For Guitarists', 'Play Along', 'Guitar Girl', 'Kris Farrow',
+  // wokalista-akustyk: jego „X (Acoustic Guitar Version)" to własna wersja Z WOKALEM (pomiar 2026-10: ten sam wykonawca ma „Zombie" na płycie „Covered In Snow")
+  'Mount Hayes'];
 
 // (a) znacznik instrumentalny w TYTULE utworu
 export const GUITAR_TITLE_MARK = /\bguitar\s+(?:version|cover|instrumental)\b|\binstrumental\b|\bfinger-?style\b|\barr(?:\.|anged)?\s+for\s+(?:solo\s+)?guitar\b/i;

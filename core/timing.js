@@ -116,9 +116,9 @@ export function medleyLabel(t, n){
 /* EKSPERYMENT: „okładka" (cover) — okładka albumu odsłaniana etapami rozdzielczości (bloki na bok).
  * Auto-odsłona co COVER_STEP_MS albo przycisk „wyraźniej". Mnożnik punktów: core/scoring.coverMult (COVER_MULTS).
  * Poprawki po testach: etap 8×8 usunięty (praktycznie nie do zgadnięcia) — start od 16×16; etap trwa 6 s (było 3 s).
- * Dług z TODO: pełna okładka często pokazuje nazwę zespołu → w trakcie zgadywania TYLKO 16 → 32 → 64 bloki; PEŁNA
+ * Dług z TODO: pełna okładka często pokazuje nazwę zespołu → w trakcie zgadywania TYLKO 16 → 24 → 40 bloków; PEŁNA
  * okładka wyłącznie w odsłonie (solo po „Sprawdź"/pominięciu, MP w REVEAL — coverFullUrl). */
-export const COVER_STAGES = [16, 32, 64];
+export const COVER_STAGES = [16, 24, 40];   // przegląd v70: przy 64 duży napis (np. „Modern Talking") był czytelny
 export const COVER_STEP_MS = 6000;
 // bloki etapu — przycinane do [0..ostatni] (NIGDY pełna: ta tylko w odsłonie); śmieci → etap 0
 export function coverStageBlocks(stage){

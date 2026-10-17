@@ -330,7 +330,16 @@
   .mp-cover-legend{margin-top:2px;font-size:var(--fs-xs);color:var(--muted)}
   .tv-coverfig .cover-box{width:min(34rem,38vh);border-radius:1.2rem}
   .tv-coverfig .mp-cover-cap,.tv-coverfig .mp-cover-legend{font-size:1rem}
+  /* przegląd v70: na TV okładka (główny element pytania) lądowała pod zegarem i „Czekamy na" — ucięta, z przewijaniem.
+     Gdy jest okładka: lewa kolumna w dwóch kolumnach — treść po lewej, okładka obok (bez :has → stary układ, przewijany). */
+  html.tv #mpStage .tv-left:has(> .tv-coverfig){display:grid;grid-template-columns:minmax(0,1fr) auto;column-gap:2rem;row-gap:.9rem;align-content:start}
+  html.tv #mpStage .tv-left:has(> .tv-coverfig) > *{grid-column:1}
+  html.tv #mpStage .tv-left:has(> .tv-coverfig) > .tv-coverfig{grid-column:2;grid-row:1 / span 6;align-self:start;margin:0}
+  html.tv #mpStage .tv-left:has(> .tv-coverfig) .tv-coverfig .cover-box{width:min(25rem,40vh)}
+  html.tv #mpStage .tv-left:has(> .tv-coverfig) .tv-coverfig{max-width:min(25rem,40vh)}
   .mp-cover-fig .mp-more{margin:6px auto 0;display:block}
+  .mp-more,#mpIntroReplay{white-space:nowrap}   /* przegląd v70: „+ WIĘCEJ (16 S)" łamało się na 375 px */
+  @media (max-width:360px){ .mp-stg-btns .mp-btn{font-size:.82rem;padding-left:10px;padding-right:10px} }
   /* MP intro: pasek etapów 1·2·4·8·16 s (minione ✓, bieżący podświetlony) + „↻ odsłuchaj" / „+ więcej" */
   .mp-stages{margin:6px 0 4px;text-align:center}
   .mp-stg-row{display:flex;flex-wrap:wrap;justify-content:center;align-items:center;gap:4px}
@@ -354,7 +363,7 @@
   .mp-tl-card.anchor{border-style:dashed}
   .mp-tl-gap{flex:0 0 auto;min-width:40px;min-height:44px;border-radius:999px;border:2px dashed var(--line);background:transparent;color:var(--muted);font-weight:800;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:2px 6px}
   .mp-tl-gap.sel{border-style:solid;border-color:var(--green);color:var(--ink)}
-  .mp-tl-gap.top{background:var(--panel2);color:var(--ink)}
+  .mp-tl-gap.lead{background:var(--panel2);color:var(--ink)}   /* przegląd v70: NIE „.top" — globalne body.mp .top{display:none} ukrywało szczelinę drużyny */
   .mp-tl-n{font-size:var(--fs-xs);letter-spacing:1px}
   .mp-tl-sum{list-style:none;margin:6px 0;padding:0;text-align:center}
   .tv-tl .mp-tl-card{min-width:8rem;max-width:12rem}
@@ -1935,7 +1944,7 @@
   /* P1-8: ABCD w MP = kafle .mc-opt (jak solo) */
   .mp-mc{display:flex;flex-direction:column;gap:9px;margin:12px 0}
   .mp-mc .mc-opt{min-height:52px}
-  .mp-mc .mc-opt.top:not(.sel){border-color:var(--green)}
+  .mp-mc .mc-opt.lead:not(.sel){border-color:var(--green)}
   .mp-mc .mc-n{margin-left:auto;flex:0 0 auto;color:var(--blue-d);font-size:12px;letter-spacing:1px}
   .mp-mc .mc-top{flex:0 0 auto;font-family:var(--display);font-weight:900;font-size:12px;color:#fff;background:var(--green);border-radius:6px;padding:2px 5px}
   html.dark .mp-mc .mc-opt{background:var(--panel);color:var(--ink);border-color:var(--line)}

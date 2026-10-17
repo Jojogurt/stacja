@@ -28,8 +28,8 @@ export const MODE_SUB={music:'zajawka', lektor:'czytany tekst', reverse:'wspak',
 export const MODE_TASK={music:'Tytuł + wykonawca', lektor:'Z opisu: tytuł + wykonawca', reverse:'Od tyłu: tytuł + wykonawca',
   snippet:'Fragment: tytuł + wykonawca', revsnip:'Od tyłu: tytuł + wykonawca', slowmo:'Zwolnione: tytuł + wykonawca',
   fastmo:'Przyspieszone: tytuł + wykonawca', year:'Zgadnij ROK wydania', abcd:'Wybierz A–D', quiz:'Odpowiedz na pytanie',
-  intro:'Tytuł + wykonawca', medley:'Wykonawcy ze składanki', cover:'Wykonawca z okładki (+ album)', piano:'Tytuł + wykonawca',
-  guitar:'Tytuł + wykonawca', timeline:'Ułóż na osi czasu'};
+  intro:'Intro: tytuł + wykonawca', medley:'Wykonawcy ze składanki', cover:'Wykonawca z okładki (+ album)', piano:'Cover: tytuł + oryginalny wykonawca',
+  guitar:'Cover: tytuł + oryginalny wykonawca', timeline:'Ułóż na osi czasu'};
 export function modeTask(mode, { mc=false }={}){
   if(mc) return MODE_TASK.abcd;
   return MODE_TASK[mode] || MODE_TASK.music;
@@ -52,7 +52,7 @@ export const MODE_PICK_LABEL={music:'muzyka', intro:'intro 1–16 s', snippet:'f
 /* EKSPERYMENT: „od tyłu krótko" działa w MP (offset okna od autorytetu jak „fragment", F2b).
  * Pozostałe tryby z etapami/rozwiązywaniem po stronie serwera działają w MP TYLKO pod serwerem-autorytetem
  * (AUTHORITY_ONLY_MODES; relay-host gra takie pytanie jak „muzykę"):
- *  • „okładka" — album wybiera DO (server/lib/resolve.resolveCoverServer), etapy 16 → 32 → 64 z timera DO, w stanie tylko
+ *  • „okładka" — album wybiera DO (server/lib/resolve.resolveCoverServer), etapy 16 → 24 → 40 z timera DO, w stanie tylko
  *    obraz w rozdzielczości etapu (coverStageUrl; pełny wyłącznie w odsłonie). Mnożnik z czasu propozycji (core/mpReducer).
  *  • „składanka" — DO rozwiązuje 4 utwory wykonawcy (resolveMedleyServer) i losuje starty wycinków; klienci buforują
  *    4 zajawki w ARMING i sklejają lokalnie 4 × 1,5 s (app/audio.loadMedley — ten sam kod co solo). Sekret = wykonawca.

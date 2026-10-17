@@ -10,13 +10,26 @@ import { deezerRows, mergeSources } from '../../core/sources.js';
 const ITUNES_MS = 4000, DEEZER_MS = 5000;
 
 // GET JSON z timeoutem; 429/403/inne !ok → rzuca (wywołujący traktuje jako brak źródła)
+/* Deezer zgłasza limit (~50 zapytań / 5 s na IP — wspólne IP Cloudflare!) jako HTTP 200 z {"error":{"code":4}}.
+ * Bez tego `d.data` = undefined → ciche „brak wyników" i dalsze zapytania w limit. Teraz: wyjątek + krótka pauza
+ * (izolat) — zapytania do Deezera w pauzie od razu rzucają (wołający ma fallback: iTunes / „muzyka"). */
+export const DEEZER_COOLDOWN_MS = 4000;
+let dzPauseUntil = 0;
+export const _resetDeezerPause = () => { dzPauseUntil = 0; };   // testy
 async function getJson(url, ms){
+  const dz = url.startsWith(DZ);
+  if(dz && Date.now() < dzPauseUntil) throw new Error('deezer cooldown');
   const ctrl = new AbortController();
   const to = setTimeout(() => ctrl.abort(), ms);
   try{
     const r = await fetch(url, { signal: ctrl.signal });
     if(!r.ok) throw new Error('http ' + r.status);
-    return await r.json();
+    const d = await r.json();
+    if(dz && d && d.error){
+      if(Number(d.error.code) === 4) dzPauseUntil = Date.now() + DEEZER_COOLDOWN_MS + Math.floor(Math.random() * 1000);
+      throw new Error('deezer ' + (d.error.code != null ? d.error.code : 'error'));
+    }
+    return d;
   } finally { clearTimeout(to); }
 }
 
@@ -70,10 +83,16 @@ export async function deezerBySong(term){
   return deezerRows({ tracks: d.data });
 }
 // Deezer: wyszukiwanie albumów (okładka z dzcdn — core/timing.coverStageUrl zna jej wzór rozmiaru)
+// przegląd v70: albumy WŁAŚCIWEGO wykonawcy (/artist/{id}/albums, kolejność ≈ popularność) zamiast rozmytego
+// /search/album?q=artist:"…" — PL sklep iTunes bywa niekompletny (Guns N' Roses: tylko „Live Era")
 export async function deezerAlbums(term){
-  const d = await getJson(DZ + '/search/album?limit=25&q=' + encodeURIComponent('artist:"' + term.replace(/"/g, '') + '"'), DEEZER_MS);
-  return (d.data || []).map((a) => ({ collectionName: a.title || '', artistName: (a.artist && a.artist.name) || '',
-    artworkUrl100: a.cover_medium || a.cover || '', releaseDate: '', trackCount: a.nb_tracks, collectionId: a.id }));
+  const s = await getJson(DZ + '/search/artist?limit=5&q=' + encodeURIComponent(term), DEEZER_MS);
+  const art = pickDeezerArtist(term, s.data);
+  if(!art) return [];
+  const d = await getJson(DZ + '/artist/' + art.id + '/albums?limit=50', DEEZER_MS);
+  return (d.data || []).filter((a) => !a.record_type || a.record_type === 'album').map((a) => ({ collectionName: a.title || '',
+    artistName: art.name || '', artworkUrl100: a.cover_medium || a.cover || '', releaseDate: a.release_date || '',
+    trackCount: a.nb_tracks, collectionId: 'dz' + a.id }));
 }
 
 /* ---------- API ---------- */
@@ -90,7 +109,8 @@ export async function fetchTracks(term, song = false){
   return { source, results: mergeSources(a, b) };
 }
 // albumy (tryb okładka): iTunes, a gdy pusto/zablokowane — Deezer
+// oba źródła równolegle, iTunes pierwszy (core/pickAlbum grupuje tę samą płytę po nazwie i woli studyjne)
 export async function fetchAlbums(term){
-  try{ const r = await itunesAlbums(term); if(r.length) return r; }catch(_e){ /* Deezer */ }
-  try{ return await deezerAlbums(term); }catch(_e){ return []; }
+  const [it, dz] = await Promise.allSettled([itunesAlbums(term), deezerAlbums(term)]);
+  return [...(it.status === 'fulfilled' ? it.value : []), ...(dz.status === 'fulfilled' ? dz.value : [])];
 }

@@ -528,7 +528,7 @@ export async function resolveMedley({ cat, seen, recent, itunes, rnd=Math.random
  * jeśli są alternatywy"); w niej losowanie ważone popularnością z top ALBUM_TOP. */
 export const ALBUM_TOP = 8, COVER_ARTIST_TRIES = 5;
 const ALBUM_SINGLE = /\s[-–]\s(?:single|ep)\s*$/i;
-const ALBUM_COMPILATION = /\b(?:greatest hits|best of|the best|very best|hits|collection|kolekcja|essentials?|anthology|antologia|gold|platinum|singles|przeboje|soundtrack|motion picture|original score|live|unplugged|in concert|koncert|na żywo|na zywo|remix(?:es|ed)?|karaoke|tribute|covers)\b|\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b/i;
+const ALBUM_COMPILATION = /\b(?:greatest(?: hits)?|best of|the best|very best|hits|collection|kolekcja|essentials?|anthology|antologia|gold|platinum|singles|przeboje|soundtrack|motion picture|original score|live|unplugged|in concert|koncert|na żywo|na zywo|remix(?:es|ed)?|karaoke|tribute|covers)\b|\b(?:19|20)\d{2}\s*[-–]\s*(?:19|20)\d{2}\b/i;
 const ALBUM_EDITION = /\b(?:deluxe|expanded|anniversary|edition|bonus|special|collector'?s)\b/i;
 const ALBUM_DECOR = /remaster|deluxe|expanded|anniversary|edition|version|bonus|special|collector|mono|stereo|explicit|clean|\d{4}/i;
 // tytuł albumu do odsłony/oceny: bez „(Remastered)", „(Deluxe Edition)", „ - Single/EP"
@@ -647,16 +647,19 @@ export async function resolveCover({ cat, seen, recent, itunes, rnd=Math.random,
  * Gitara — poprawki po testach (2026-10): akceptacja ZAOSTRZONA (core/guitarCovers.js: znacznik instrumentalny w tytule
  * / kuratorowana lista wykonawców / album coverów + „guitar" w nazwie wykonawcy; bez vocal/feat./lyrics/karaoke).
  * Pomiar na żywym iTunes PL (22 światowe hity, 3 zapytania/hit): przed 13/22, po zaostrzeniu 12/22 (55%) — odpadły
- * m.in. „Acoustic Version" bez pewności braku wokalu; pytanie i tak ma do COVER_TRIES oryginałów na znalezienie coveru. */
+ * m.in. „Acoustic Version" bez pewności braku wokalu; pytanie i tak ma do COVER_TRIES oryginałów na znalezienie coveru.
+ * Pomiar 2026-10 (tools/measure-covers.mjs, 40 hitów, zapytania jak resolver; iTunes / Deezer-only jak serwer MP / scalone):
+ * fortepian 80/70/90%, gitara 60/98/95% (przed: 70/70/90 i 53/85/90) — poprawki: konsensus ≥3 coverów przy braku oryginału
+ * (COVER_CONSENSUS), ścisły tytuł coveru (coverSameTitle), odrzut „Live", 2 wpisy na liście gitarzystów, Mount Hayes na deny. */
 export const PIANO_WORD = /\b(?:piano|pianoforte|klavier|fortepian\w*)\b/i;
 // odrzuć: wokal, karaoke, kołysanki (Rockabye Baby to nie fortepian), inne instrumenty, składanki/mashupy
-export const PIANO_REJECT = /\bvocals?\b|with vocals|karaoke|sing-?along|in the style of|backing track|lullab|rockabye|guitar|string quartet|\bstrings\b|quartet|\bviolins?\b|\bcellos?\b|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|medley|mash-?up|\bmegamix\b/i;
+export const PIANO_REJECT = /\bvocals?\b|with vocals|\blive\b|karaoke|sing-?along|in the style of|backing track|lullab|rockabye|guitar|string quartet|\bstrings\b|quartet|\bviolins?\b|\bcellos?\b|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|medley|mash-?up|\bmegamix\b/i;
 /* gitara: guitar/gitar…/guitarra/Gitarre/fingerstyle/fingerpicking w tytule, wykonawcy albo albumie (wynik bez tego słowa —
  * np. zespół coverowy z wokalem, „Acoustic" wokalisty — odpada). Odrzuć: wokal, karaoke, podkłady/„guitar base"/play-along,
  * lekcje/tutoriale/taby/akordy, „cover sessions" (wokalne zespoły coverowe), fortepian (inny tryb), kołysanki, inne
  * instrumenty (sax/skrzypce/wiolonczela/orkiestra/bas/perkusja/ukulele…), medleye, sped up/slowed/reverb/nightcore. */
 export const GUITAR_WORD = /\b(?:guitars?|gitar\w*|guitarra\w*|gitarre\w*|fingerstyle|finger-?style|fingerpick\w*)\b/i;
-export const GUITAR_REJECT = /\bvocals?\b|with vocals|\bsung by\b|karaoke|sing-?along|in the style of|backing tracks?|\bguitar base\b|play-?along|\blessons?\b|tutorial|how to play|\btabs?\b|tablature|\bchords\b|cover sessions|\bpiano\w*|klavier|fortepian|lullab|rockabye|\bsax\b|saxo\w*|\bviolins?\b|\bcellos?\b|string quartet|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|\bbass\b|\bdrums?\b|\bflute|medley|mash-?up|\bmegamix\b|sped up|slowed|reverb|nightcore|remix|\b8d\b|extended/i;
+export const GUITAR_REJECT = /\bvocals?\b|with vocals|\blive\b|\bsung by\b|karaoke|sing-?along|in the style of|backing tracks?|\bguitar base\b|play-?along|\blessons?\b|tutorial|how to play|\btabs?\b|tablature|\bchords\b|cover sessions|\bpiano\w*|klavier|fortepian|lullab|rockabye|\bsax\b|saxo\w*|\bviolins?\b|\bcellos?\b|string quartet|orchestra|\bharp\b|ukulele|marimba|music box|8-?bit|\bbass\b|\bdrums?\b|\bflute|medley|mash-?up|\bmegamix\b|sped up|slowed|reverb|nightcore|remix|\b8d\b|extended/i;
 /* pomiar na żywo: „About a Girl" The Academy Is… (INNA piosenka, wokal) z kompilacji „Guitar Underground", remiksy „Guitar Remix - EP".
  * Gdy słowo gitary jest TYLKO w albumie, album musi też wyglądać na płytę coverów/instrumentalną („Guitar Covers, Vol. 1",
  * „Acoustic Guitar Pearls", „Peaceful Music Romantic Guitar", „Spanish Guitar Hits"). */
@@ -697,17 +700,33 @@ export function looksPolish(t){ return /[ąćęłńśźżĄĆĘŁŃŚŹŻ]/.test
  * („Piano Tribute to Madonna", „(Originally Performed by …)", „Tribute to Michael Jackson in Spanish Guitar"). */
 export const PIANO_OWN_TOP = 5;   // oryginał w top 5 wyników „<tytuł> piano" = tytuł zdominowany przez ten utwór
 const COVER_MARK = /\bcover\b|tribute|originally|made famous|in the style|karaoke|instrumental|version|arrang|rendition|lullab|reimagined/i;
+/* KONSENSUS (pomiar na żywo, Deezer-only w MP: „Africa" Toto — oryginału nie ma w wynikach „Africa guitar", bo wypełniają je covery):
+ * gdy oryginału NIE ma w wynikach, ale też nie ma żadnego konkurującego NIE-coveru o tym tytule (others=0), a ≥ COVER_CONSENSUS
+ * RÓŻNYCH wykonawców ma przechodzący wszystkie reguły instrumentu cover tego tytułu — tytuł jest zdominowany przez jeden
+ * znany utwór (kilku niezależnych aranżerów nie gra obskurnego „King"), więc dowód z nazwy wykonawcy nie jest wymagany.
+ * NIE dotyczy przypadku „oryginał jest, ale inny wykonawca wyżej / dopiero od PIANO_OWN_TOP" („Freedom" Wham!) — tam kolizja
+ * to realnie inna piosenka i dowód zostaje wymagany. */
+export const COVER_CONSENSUS = 3;
+/* tytuł coveru = tytuł oryginału: równy albo literówka/interpunkcja (długość ±1, ≥6 znaków: "Giimme" ≈ "Gimme").
+ * textMatch (dla odpowiedzi gracza) jest za luźny na covery: "Creepin'" (inna piosenka) ≈ "Creep" przez zawieranie ≥60%. */
+function coverSameTitle(got, want){
+  return got===want || (got.length>=6 && want.length>=6 && Math.abs(got.length-want.length)<=1 && textMatch(got, want));
+}
 function coverAmbiguous(results, want, who, inst, instrument){
-  let own=-1; const others=new Set(); let otherFirst=-1;
+  let own=-1; const others=new Set(); let otherFirst=-1; const coverers=new Set();
   (results||[]).forEach((r, idx)=>{
     if(!r || !r.trackName || !r.artistName) return;
     const key=coverTitleKey(r.trackName, instrument);
-    if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)){ if(own<0 && (key===want || textMatch(key, want))) own=idx; return; }
+    if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)){ if(own<0 && coverSameTitle(key, want)) own=idx; return; }
     if(key!==want) return;
-    const text=r.trackName+' '+r.artistName+' '+(r.collectionName||'');
-    if(inst.word.test(text) || COVER_MARK.test(text)) return;          // inne covery/aranżacje nie świadczą o kolizji
+    const text=r.trackName+' \u0001 '+r.artistName+' \u0001 '+(r.collectionName||'');
+    if(inst.word.test(text) || COVER_MARK.test(text)){          // inne covery/aranżacje nie świadczą o kolizji
+      if(r.previewUrl && inst.word.test(text) && !inst.reject.test(text) && (!inst.strict || inst.strict(r))) coverers.add(artistKey(r.artistName));
+      return;
+    }
     others.add(artistKey(r.artistName)); if(otherFirst<0) otherFirst=idx;
   });
+  if(own<0 && others.size===0 && coverers.size>=COVER_CONSENSUS) return false;
   return own<0 || (otherFirst>=0 && otherFirst<own) || (own>=PIANO_OWN_TOP && others.size>=2);
 }
 function coverEvidence(r, who){
@@ -729,7 +748,7 @@ export function pickInstrumentalCover(results, orig, instrument='piano'){
     if(inst.strict && !inst.strict(r)) continue;   // gitara: zaostrzone reguły (bez „piosenek z gitarą" z wokalem)
     if(sameArtist(r.artistName, who) || sameArtist(who, r.artistName)) continue;   // oryginał (też „X & Y") — nie cover
     const got=coverTitleKey(r.trackName, name);
-    if(!got || !(got===want || textMatch(got, want))) continue;
+    if(!got || !coverSameTitle(got, want)) continue;
     if(ambiguous && !coverEvidence(r, who)) continue;
     return r;
   }
@@ -751,7 +770,7 @@ export function pianoQueries(orig){ return coverQueries(orig, 'piano'); }
 export async function resolveInstrumentalCover({ instrument='piano', cat, seen, recent, itunes, rnd=Math.random, capMs=RESOLVE_CAP_MS, tries=COVER_TRIES }){
   const name=instrumentOf(instrument);
   const deadline=Date.now()+capMs;
-  let anyResponse=false;
+  let anyResponse=false, emptyTries=0;
   // tani prefiltr: wykonawcy / utwory playlisty z polskimi znakami w nazwie nie mają coverów (oszczędza zapytania)
   const pl=x=>/[ąćęłńśźżĄĆĘŁŃŚŹŻ]/.test(String(x||''));
   const arts=Array.isArray(cat.artists) ? cat.artists.filter(a=>!pl(a)) : [];
@@ -766,13 +785,20 @@ export async function resolveInstrumentalCover({ instrument='piano', cat, seen, 
     if(!t || t.error){ if(t && t.reason==='empty') anyResponse=true; break; }
     anyResponse=true;
     if(looksPolish(t)) continue;
+    let gotRows=false;
     for(const q of coverQueries(t, name)){
       remaining=deadline-Date.now(); if(remaining<=0) break;
       let res=null;
       try{ res=await withTimeout(Promise.resolve(itunes(q, { song:true })), remaining); }catch(_e){ res=null; }
+      if(res && res.length) gotRows=true;
       const c=pickInstrumentalCover(res, t, name);
       if(c) return { ...t, origPreview:t.preview, preview:c.previewUrl, coverArtist:String(c.artistName||'').trim(), coverTrack:String(c.trackName||'').trim(), instrument:name };
     }
+    /* limit Deezera (HTTP 200 + {"error":{"code":4,"message":"Quota limit exceeded"}} → server/lib/sources.js widzi to jak PUSTĄ listę)
+     * albo iTunes 429: gdy KOLEJNE 2 oryginały nie dały ŻADNEGO wiersza ze wszystkich zapytań o cover, to nie brak coverów,
+     * tylko brak źródła — nie mnożymy zapytań (do COVER_TRIES × 3), wołający gra zwykłą „muzykę". */
+    emptyTries = gotRows ? 0 : emptyTries+1;
+    if(emptyTries>=2) break;
   }
   return { error:true, reason: anyResponse ? 'empty' : 'offline' };
 }

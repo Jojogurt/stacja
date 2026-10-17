@@ -23,6 +23,7 @@ class FakeStorage {
   async setAlarm(ts){ this.#alarm=ts; }
   async deleteAlarm(){ this.#alarm=null; }
   async deleteAll(){ this.#m.clear(); this.#alarm=null; }
+  async getAlarm(){ return this.#alarm; }
 }
 class FakeConn {
   constructor(id,name){ this.sent=[]; this.state={id,name,verified:true}; this.closed=null; }
@@ -1281,10 +1282,10 @@ await group('MP okładka: runda cover → ARMING bez audio → PLAY etap 0 (16×
   ok(p.at>=g.playAt && p.at<=Date.now(), 'czas propozycji z zegara serwera (klientowe at:1 zignorowane)');
   ok(await until(()=>room.game.stage>=1), 'timer DO podbił etap');
   const g1=b.last('state').game;
-  ok(g1.stage>=1 && /\/(32x32|64x64)bb\.jpg$/.test(g1.coverArt), 'broadcast etapu z nowym URL — '+g1.coverArt);
+  ok(g1.stage>=1 && /\/(24x24|40x40)bb\.jpg$/.test(g1.coverArt), 'broadcast etapu z nowym URL — '+g1.coverArt);
   ok(await until(()=>room.game.stage===2), 'etap 2 (64×64)');
   const g2=b.last('state').game;
-  ok(/\/64x64bb\.jpg$/.test(g2.coverArt) && !JSON.stringify(g2).includes('600x600'), 'ostatni etap 64×64 — pełny URL dalej ukryty');
+  ok(/\/40x40bb\.jpg$/.test(g2.coverArt) && !JSON.stringify(g2).includes('600x600'), 'ostatni etap 40×40 — pełny URL dalej ukryty');
   eq(room.game.stageNextAt, null, 'po ostatnim etapie brak kolejnego terminu');
   await sleep(30);
   ok(!room._stageTimer, 'timer etapów zatrzymany po ostatnim');
@@ -1313,7 +1314,7 @@ await group('MP okładka: „wyraźniej" (dowolny gracz) — następny etap od r
   await room.msg(b, { t:'more', playNonce:g0.playNonce, stage:0 });   // gość (nie host)
   const g1=b.last('state').game;
   eq([g1.stage, g1.coverStage], [1, 1], 'gracz (nie host) → etap 1 od razu');
-  ok(/\/32x32bb\.jpg$/.test(g1.coverArt), 'od razu obraz 32×32');
+  ok(/\/24x24bb\.jpg$/.test(g1.coverArt), 'od razu obraz 24×24');
   ok(Math.abs(g1.stageStarts[1]-Date.now())<50 && g1.stageStarts[0]===g0.stageStarts[0], 'start etapu 1 = teraz; miniony bez zmian');
   const shift=g0.stageStarts[1]-g1.stageStarts[1];
   ok(shift>4000, 'przesunięcie ~ krok etapu — '+shift);
@@ -1577,6 +1578,75 @@ await group('karencja hosta: TV (salon) przeładowuje się i wraca w karencji �
   eq(room.hostId, 'TV', 'starter-TV wraca później → odzyskuje hosta (reclaim)');
   room.clearArmTimer(); room.clearAutoLock(); room.clearHostGrace();
   void p1; void p2; void p3; void tv4;
+});
+// restart DO: nowa instancja na TYM SAMYM storage (stare in-memory timery giną), połączenia = podane
+async function restartRoom(room, conns, over={}){
+  room.clearHostGrace(true); room.clearArmTimer(); room.clearAutoLock();
+  let init=null; const ctx={ storage:room.ctx.storage, blockConcurrencyWhile:(fn)=>{ init=fn(); return init; } };
+  const r2=new GameAuthority(ctx, { TOKEN_SECRET:'x' }); await init;
+  Object.assign(r2, { hostGraceMs:room.hostGraceMs }, over);
+  r2.getConnections=()=>conns; r2.broadcast=(s)=>conns.forEach(c=>c.send(s)); r2.name='TEST';
+  return r2;
+}
+await group('karencja hosta przeżywa evikcję DO: restart po terminie → awans gracza', async ()=>{
+  const { room, conns } = await makeRoom(); room.hostGraceMs=40;
+  const tv=await room.connect('TV','TV'), p=await room.connect('P1','Ola');
+  await room.drop(tv);
+  eq(room.hostId, 'TV', 'w karencji host bez zmian');
+  ok(room.hostAwayUntil>0 && (await room.ctx.storage.get('hostAwayUntil'))>0, 'termin karencji w storage');
+  ok((await room.ctx.storage.getAlarm())>0, 'alarm ustawiony (wybudzi evikowany DO)');
+  await sleep(70);                                   // termin minął, a „DO spał" — timer zginął
+  room.clearHostGrace(true);
+  const r2=await restartRoom(room, conns);
+  await until(()=>r2.hostId==='P1', 500);
+  eq(r2.hostId, 'P1', 'po restarcie z wygasłą karencją gracz awansuje od razu');
+  eq(r2.hostAwayUntil, 0, 'karencja wyczyszczona');
+  eq(await r2.ctx.storage.get('hostId'), 'P1', 'awans zapisany w storage');
+  void p;
+});
+await group('karencja hosta: restart przed terminem → host wraca w czasie → zostaje hostem', async ()=>{
+  const { room, conns } = await makeRoom(); room.hostGraceMs=150;
+  const tv=await room.connect('TV','TV'); await room.connect('P1','Ola');
+  await room.drop(tv);
+  const r2=await restartRoom(room, conns);
+  eq([r2.hostId, r2.hostAwayId], ['TV','TV'], 'po restarcie karencja wczytana');
+  ok(r2._hostGrace!==null, 'timer na pozostały czas zaplanowany');
+  const c=new FakeConn(null,null); c.state=null; conns.push(c);
+  const tok=await signToken('x', { sub:'TV' });
+  await r2.onConnect(c, { request:{ url:'https://w/parties/game-authority/TEST?t='+tok+'&name=TV' } });
+  eq([r2.hostId, r2.hostAwayUntil], ['TV',0], 'host wrócił w karencji → nadal host');
+  await sleep(200);
+  eq(r2.hostId, 'TV', 'po terminie nadal host (timer zdjęty)');
+  r2.clearHostGrace();
+});
+await group('karencja hosta: alarm z wygasłą karencją awansuje gracza i NIE kasuje niepustego pokoju', async ()=>{
+  const { room } = await makeRoom(); room.hostGraceMs=40;
+  const tv=await room.connect('TV','TV'); await room.connect('P1','Ola');
+  await room.drop(tv);
+  room.clearHostGrace(true);                         // timer zginął; zostaje sam alarm
+  await sleep(60);
+  await room.onAlarm();
+  eq(room.hostId, 'P1', 'alarm: awans gracza');
+  ok(room.game===null || room.game!==undefined, 'pokój żyje');
+  ok((await room.ctx.storage.get('hostId'))==='P1', 'storage NIE skasowany (niepusty pokój)');
+  eq(await room.ctx.storage.getAlarm(), null, 'alarm zdjęty po obsłudze');
+});
+await group('sprzątanie: alarm przed TTL przestawia termin; pusty pokój po TTL kasowany', async ()=>{
+  const { room, conns } = await makeRoom(); room.hostGraceMs=40;
+  const tv=await room.connect('TV','TV');
+  await room.drop(tv);                               // pusto: karencja + sprzątanie
+  const al=await room.ctx.storage.getAlarm();
+  eq(al, room.hostAwayUntil, 'alarm = min(karencja, sprzątanie) = karencja');
+  ok(room.cleanupAt>room.hostAwayUntil, 'sprzątanie później niż karencja');
+  await sleep(60);
+  await room.onAlarm();                              // karencja wygasła, pokój pusty, TTL jeszcze nie
+  ok((await room.ctx.storage.get('hostId'))==='TV', 'przed TTL storage zostaje');
+  eq(await room.ctx.storage.getAlarm(), room.cleanupAt, 'alarm przestawiony na termin sprzątania');
+  room.cleanupAt=Date.now()-1;                       // „minął TTL"
+  await room.onAlarm();
+  eq(await room.ctx.storage.get('hostId'), undefined, 'po TTL pusty pokój wyczyszczony');
+  eq([room.hostId, room.cleanupAt], [null,0], 'stan zresetowany');
+  void conns;
 });
 await group('karencja hosta: po meczu (DONE) w salonie TV odzyskuje hosta po reloadzie (rewanż ustawia TV)', async ()=>{
   const { room } = await makeRoom();   // hostGraceMs 0 → awans od razu (najgorszy przypadek)

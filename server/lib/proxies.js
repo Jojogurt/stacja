@@ -8,13 +8,16 @@
  * Logika identyczna jak w `_ref-supabase/*` — zmienia się tylko opakowanie (Deno.serve → trasa Workera).
  * CORS dokłada globalnie index.js; tu pilnujemy tylko Range/content-range dla /audio. */
 
-import { fetchTracks } from './sources.js';
+import { fetchTracks, fetchAlbums } from './sources.js';
 
 const json = (obj, status = 200) =>
   new Response(JSON.stringify(obj), { status, headers: { 'content-type': 'application/json; charset=utf-8' } });
 
 /* ---------- /tracks (iTunes + Deezer, scalone — server/lib/sources.js) ---------- */
 async function handleTracks(url) {
+  // przegląd v70: albumy wykonawcy (tryb okładki w solo) — iTunes + Deezer scalone; stary klient nie wysyła `albums`
+  const alb = (url.searchParams.get('albums') || '').trim().slice(0, 200);
+  if (alb) return json({ source: 'albums', results: await fetchAlbums(alb) });
   const q = (url.searchParams.get('q') || '').trim().slice(0, 200);
   const artist = q || (url.searchParams.get('artist') || '').trim();
   const song = !!q;
