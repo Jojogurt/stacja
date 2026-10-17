@@ -3223,7 +3223,8 @@ await group('B P1-5/P1-6/P1-1 krok 4: „Sprawdzamy…" → karta; ⭐ i „+N";
     ok(st.querySelector('.mp-checking') && /Sprawdzamy…/.test(st.textContent) && !st.querySelector('.rv-card'), 'krok 4: „Sprawdzamy…" przed kartą utworu');
     ok(st.querySelector('.mp-hd[data-ph="odslona"]'), 'rama nagłówka widoczna w „Sprawdzamy…"');
     ok(/⭐\s*50/.test(st.querySelector('#mpScore').textContent), '„Sprawdzamy…": ⭐ jeszcze POPRZEDNI wynik (50) — nie zdradza trafienia');
-    await new Promise(r=>setTimeout(r,130)); await settle(3);
+    // czekanie do skutku (max ~3 s) zamiast sztywnych 130 ms — wolny runner CI nie zdążał z timerem „Sprawdzamy…"
+    for(let i=0;i<60 && !(st.querySelector('.rv-card') && st.querySelector('#mpScore')?.getAttribute('aria-label')==='punkty: 90');i++){ await new Promise(r=>setTimeout(r,50)); await settle(2); }
     ok(st.querySelector('.rv-card'), 'po ~600 ms (tu 80) — karta utworu');
     const sc=st.querySelector('#mpScore');
     ok(sc && /⭐/.test(sc.textContent) && sc.getAttribute('aria-label')==='punkty: 90', 'P1-5: ⭐ w nagłówku (cel 90)');
