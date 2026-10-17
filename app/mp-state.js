@@ -55,4 +55,16 @@ export const S = {
   armDeadlineLocal: 0,    // lokalny termin twardego limitu ARMING (licznik w UI)
   skipArm: false,         // salon: TV kliknęło „pomiń czekanie" → pomiń też ARMING (jednorazowo)
   revealAutoAt: 0,        // termin auto-„dalej" na odsłonie (bezczynność); 0 = wyłączone
+  // przegląd MP 2026-10 (etap A)
+  clockSamples: [],       // P1-2: próbki serverNow − lokalny odbiór (core/timing.addClockSample)
+  clockOff: 0,            // P1-2: offset zegara serwera (ms) — czas serwera ≈ Date.now() + clockOff
+  netErr: null,           // P0-8: błąd połączenia z pokojem ('session'|'channel'|'timeout') → karta „spróbuj ponownie"
+  enterArgs: null,        // P0-8: {code, asHost, groupId} ostatniego wejścia (retry)
+  connTimer: null,        // P0-8: limit czasu pierwszego połączenia
+  sawMatch: false,        // P0-10: ten klient widział mecz w tym pokoju (dołączający w DONE → lobby, nie cudzy wynik)
+  lastHostId: undefined,  // P1-11: ostatni znany host (toast przy zmianie roli)
+  pastHosts: new Set(),   // P1-11: kto już prowadził („X znów prowadzi")
+  sureArmUntil: 0,        // P0-3: pewniak bez odpowiedzi drużyny czeka na potwierdzenie do tego czasu
+  allDoneTimer: null,     // P1-3: relay-host — karencja „wszyscy gotowi"
+  listenNonce: null,      // P1-2: playNonce, dla którego wystartowało lokalne okno słuchania (zegar w nagłówku)
 };

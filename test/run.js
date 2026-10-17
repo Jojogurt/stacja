@@ -1047,7 +1047,7 @@ group('F6a match: długość w pytaniach (buildMatch {questions}) + clampQuestio
   const C={ d80:{label:'80s',artists:['A']}, d90:{label:'90s',artists:['B']}, d00:{label:'00s',artists:['C']}, d10:{label:'10s',artists:['D']} };
   const keys=Object.keys(C);
   const m5=buildMatch(keys,['music'],{questions:5},C);
-  eq([m5.slots.length, m5.rounds, m5.questions],[1,1,5],'5 pytań → 1 slot, 1 runda');
+  eq([m5.slots.length, m5.rounds, m5.questions, m5.qpc],[5,1,5,1],'P1-7: 5 pytań → 5 slotów po 1 pytaniu (qpc 1), 1 runda');
   const m10=buildMatch(keys,['music'],{questions:QUICK_QUESTIONS},C);
   eq([m10.slots.length, m10.rounds],[2,1],'10 pytań („Graj teraz") → 2 sloty, 1 runda');
   ok(new Set(m10.slots.map(x=>x.cat)).size===2,'10 pytań: różne kategorie w rundzie');
@@ -1164,9 +1164,9 @@ group('F6a picker: quickPool / restorePick / pickSummary {questions}', ()=>{
   eq(restorePick({cats:['80s','zniknęła',5], modes:['music','<x>'], questions:31}, C, ALL_MODES),{cats:['80s'],modes:['music'],questions:35},'restorePick: tylko istniejące klucze, znane tryby, clamp długości');
   eq(restorePick(null, C, ALL_MODES),{cats:[],modes:[],questions:null},'restorePick(null) → pusto');
   const s5=pickSummary(new Set(['80s','90s']), new Set(['music']), {questions:5}, C);
-  eq([s5.count, s5.blocks, s5.unit],[5,1,'utworów'],'pickSummary {questions:5}');
+  eq([s5.count, s5.blocks, s5.unit, s5.mixed],[5,5,'utworów',true],'P1-7: pickSummary {questions:5} — 5 slotów po 1 pytaniu');
   const t5=pickSummaryText(s5);
-  ok(/1 kategoria × 5 pytań = /.test(t5.head) && t5.total==='5 utworów' && /z 2 wybranych/.test(t5.from),'tekst: „1 kategoria × 5 pytań = 5 utworów · losowane z 2 wybranych" — '+t5.head+t5.total+t5.from);
+  ok(/5 × 1 pytanie = /.test(t5.head) && t5.total==='5 utworów' && /na przemian z 2 kategorii/.test(t5.from),'P1-7 tekst: „5 × 1 pytanie = 5 utworów · na przemian z 2 kategorii" — '+t5.head+t5.total+t5.from);
   const t30=pickSummaryText(pickSummary(new Set(['80s']), new Set(['music']), {questions:30}, C));
   ok(/6 bloków/.test(t30.head) && /powtarzane/.test(t30.from),'30 pytań z 1 kategorii → „6 bloków … (powtarzane)" — '+t30.head+t30.from);
 });
@@ -1979,7 +1979,7 @@ group('Nowy mecz: setupSummary / settingsSummary', ()=>{
   const s=MS.setupSummary({ cats:new Set(['80s','90s','00s','pop-world']), active:['music','intro','abcd'], questions:15, allCats:MS_CATS });
   eq([s.ok, s.text], [true, '15 utworów · 4 kat. · 3 tryby'], 'makieta: „15 … · 4 kat. · 3 tryby"');
   eq(MS.setupSummary({ cats:new Set(['80s']), active:['music'], questions:30, allCats:MS_CATS }).text, '30 utworów · 1 kat. · 1 tryb · z powtórkami', 'mała pula → „z powtórkami"');
-  eq(MS.setupSummary({ cats:new Set(['80s','rebusy']), active:['music','quiz'], questions:5, allCats:MS_CATS }).text, '5 pytań · 2 kat. · 2 tryby', 'z quizem → „pytań"');
+  eq(MS.setupSummary({ cats:new Set(['80s','rebusy']), active:['music','quiz'], questions:5, allCats:MS_CATS }).text, '5 pytań · 2 kat. · 2 tryby · na przemian', 'z quizem → „pytań" (P1-7: krótki mecz miesza)');
   eq(MS.setupSummary({ cats:new Set(['tlum']), active:['music'], questions:15, allCats:MS_CATS }).ok, false, 'niekompatybilne → ok:false');
   eq(MS.settingsSummary({ questions:15, trener:false }), '15 pytań · trener wył.', 'solo');
   eq(MS.settingsSummary({ ctx:'mp', questions:30, format:'teams', timer:0, salon:true }), '30 pytań · Drużyny · bez limitu · TV', 'MP');
@@ -2794,5 +2794,117 @@ group('gust3: MP „Gust stołu" — półka gracza, sanityzacja, pula stołu', 
   const cat=tablePoolCategory(pool);
   eq([cat.label, cat.kind, TABLE_KEY], ['🎧 Gust stołu', 'playlist', 'gust-stolu'], 'kategoria stołu');
 });
+
+/* ===================== Przegląd MP 2026-10 — etap A (P0/P1) ===================== */
+{
+const T = await import('../core/timing.js');
+const R = await import('../core/mpReducer.js');
+const TM = await import('../core/teams.js');
+const M = await import('../core/match.js');
+group('P1-7: krótki mecz miesza kategorie i tryby (qpc 1), dłuższe bez zmian', ()=>{
+  const C={ a:{label:'A',artists:['x','y'],songs:[]}, b:{label:'B',artists:['z','w']} };
+  for(let k=0;k<20;k++){
+    const m=M.buildMatch(['a','b'],['music','reverse','abcd'],{questions:5},C);
+    eq([m.slots.length, m.qpc, m.rounds],[5,1,1],'5 pytań → 5 slotów, qpc 1');
+    eq(new Set(m.slots.map(x=>x.cat)).size, 2, 'obie kategorie zagrają');
+    eq(new Set(m.slots.map(x=>x.mode)).size, 3, 'wszystkie 3 tryby zagrają');
+    ok(m.slots.every((x,i)=>i===0 || x.cat!==m.slots[i-1].cat || x.mode!==m.slots[i-1].mode), 'bez identycznych pytań pod rząd');
+  }
+  eq(M.matchQpcFor(5), 1, 'matchQpcFor(5) = 1'); eq(M.matchQpcFor(15), QPC, 'matchQpcFor(15) = QPC');
+  const m15=M.buildMatch(['a','b'],['music'],{questions:15},C);
+  ok(!('qpc' in m15) && m15.slots.length===3, '15 pytań: bloki po QPC (bez qpc)');
+  // nawigacja meczu qpc 1: 5 × next → koniec; postęp 1..5
+  const g={ slots:M.buildMatch(['a'],['music'],{questions:5},C).slots, si:0, qi:0, qpc:1 };
+  const seen=[]; do { seen.push(M.matchProgress(g).n); } while(M.matchAdvance(g));
+  eq(seen,[1,2,3,4,5],'matchProgress/matchAdvance z qpc 1');
+  const s=pickSummary(new Set(['a']), new Set(['music']), {questions:5}, C);
+  ok(/z 1 kategorii/.test(pickSummaryText(s).from), 'podsumowanie przy 1 kategorii: „z 1 kategorii"');
+});
+group('P1-2: semantyka czasu — endsAt = go + LEAD + słuchanie + timer; zegar fazy; offset zegara', ()=>{
+  eq(T.phaseDeadlines({ playAt:1000, leadMs:900, listenMs:15000, timerS:30 }), { listenEndsAt:16900, endsAt:46900 }, 'deadlines z timerem');
+  eq(T.phaseDeadlines({ playAt:1000, leadMs:900, listenMs:15000, timerS:0 }), { listenEndsAt:16900, endsAt:null }, 'bez timera → endsAt null');
+  eq(T.phaseDeadlines({ playAt:'x' }), { listenEndsAt:null, endsAt:null }, 'śmieci → null');
+  eq(T.phaseDeadlines({ playAt:0, leadMs:900, listenMs:15000, timerS:999 }).endsAt, 900+15000+T.MP_TIMER_MAX_S*1000, 'timer przycięty do MP_TIMER_MAX_S');
+  // zegar fazy: słuchanie → 🎧 do końca okna, potem 🧠 do endsAt; czerwień tylko ≤ 5 s
+  eq(T.phaseClock({ sub:'sluchaj', listenEnd:13000, endsAt:43000, now:1000 }), { phase:'sluchaj', icon:'🎧', ms:12000, low:false }, '🎧 0:12');
+  eq(T.phaseClock({ sub:'kombinuj', listenEnd:13000, endsAt:43000, now:13000 }).icon, '🧠', 'kombinuj → 🧠');
+  eq(T.phaseClock({ sub:'sluchaj', listenEnd:13000, endsAt:43000, now:14000 }).ms, 29000, 'okno słuchania minęło → 🧠 do końca pytania');
+  eq(T.phaseClock({ sub:'kombinuj', listenEnd:0, endsAt:43000, now:38500 }).low, true, 'ostatnie 5 s → low');
+  eq(T.phaseClock({ sub:'kombinuj', listenEnd:0, endsAt:43000, now:30000 }).low, false, 'wcześniej nie czerwono');
+  eq(T.phaseClock({ sub:'kombinuj', listenEnd:0, endsAt:null, now:1 }), null, 'kombinuj bez limitu → brak zegara');
+  eq([T.fmtClock(12000), T.fmtClock(65000), T.fmtClock(0), T.fmtClock(400)], ['0:12','1:05','0:00','0:01'], 'fmtClock m:ss');
+  // offset: max z próbek (latencja tylko zaniża), ring-buffer
+  let sm=[]; sm=T.addClockSample(sm, 10000, 9000); sm=T.addClockSample(sm, 20050, 19100); sm=T.addClockSample(sm, 'x', 1);
+  eq(sm, [1000, 950], 'próbki serverNow − lokalny odbiór (śmieci pominięte)');
+  eq(T.clockOffset(sm), 1000, 'offset = max próbek'); eq(T.clockOffset([]), 0, 'brak próbek → 0');
+  for(let i=0;i<20;i++) sm=T.addClockSample(sm, 100+i, 0);
+  eq(sm.length, T.CLOCK_SAMPLES_MAX, 'ring-buffer próbek');
+});
+group('P0-7: okno słuchania przy powrocie w trakcie pytania', ()=>{
+  eq(T.listenWindowMs({ listenMs:15000, listenEndsAt:20000, now:5000 }), 15000, 'start pytania → pełne okno');
+  eq(T.listenWindowMs({ listenMs:15000, listenEndsAt:20000, now:12000 }), 8000, 'powrót w połowie → reszta okna (8 s, nie 15)');
+  eq(T.listenWindowMs({ listenMs:15000, listenEndsAt:20000, now:16000 }), 0, 'zostało < 5 s → od razu kombinuj');
+  eq(T.listenWindowMs({ listenMs:15000, endsAt:12000, now:0 }), 12000, 'stary serwer: min(słuchanie, endsAt−now) — B7: 12 s do końca');
+  eq(T.listenWindowMs({ listenMs:15000, endsAt:60000, now:0 }), 15000, 'stary serwer, dużo czasu → pełne okno');
+  eq(T.listenWindowMs({ listenMs:15000, endsAt:3000, now:0 }), 0, 'stary serwer, < 5 s → 0');
+  eq(T.listenWindowMs({ listenMs:15000, now:0 }), 15000, 'bez terminów (bez timera, stary serwer) → pełne okno');
+});
+group('P1-10: „Zakończ pytanie" hosta po połowie czasu', ()=>{
+  ok(!T.hostEndVisible({ playAt:0, endsAt:40000, now:19999 }), 'przed połową — ukryte');
+  ok(T.hostEndVisible({ playAt:0, endsAt:40000, now:20000 }), 'od połowy — widoczne');
+  ok(T.hostEndVisible({ playAt:0, endsAt:null, now:0 }), 'bez limitu — od razu');
+});
+group('P0-1: tvIdOf — TV salonu to osobna rola (nie aktualny host)', ()=>{
+  eq(R.tvIdOf({ salon:true, tvId:'TV', hostId:'P1' }), 'TV', 'tvId z serwera');
+  eq(R.tvIdOf({ salon:true, hostId:'H' }), 'H', 'stary stan bez tvId → host');
+  eq(R.tvIdOf({ salon:false, tvId:'TV', hostId:'H' }), null, 'poza salonem → null');
+  const g={ salon:true, tvId:'TV', hostId:'P1', format:'coop', phase:MP.PLAY,
+    teams:[{ id:'all', members:['P1','P2'] }], byTeam:{ all:{ proposals:[], votes:{ title:{ P1:'X', P2:'Y', P3:'Y' } }, sure:[], passed:[] } }, answerSlots:[{key:'title',label:'tytuł'}] };
+  eq(R.teamOf(g, 'TV'), 'all', 'coop: TV sędziuje drużynę');
+  eq(R.teamAnswer(g, 'all').title, 'Y', 'awansowany gracz (host) NIE nadpisuje większości');
+  g.byTeam.all.votes.title.TV='X';
+  eq(R.teamAnswer(g, 'all').title, 'X', 'głos TV nadpisuje (jak dotąd)');
+});
+group('P1-3: allSettled — wszyscy obecni mają typ / pas / głos', ()=>{
+  const g={ phase:MP.PLAY, format:'solo', answerSlots:[{key:'title',label:'tytuł'}],
+    teams:[{ id:'A', members:['A'] },{ id:'B', members:['B'] },{ id:'C', members:['C'] }],
+    byTeam:{ A:{ proposals:[{ by:'A', values:{title:'x'} }], votes:{}, sure:[], passed:[] }, B:{ proposals:[], votes:{}, sure:[], passed:[{id:'B'}] }, C:{ proposals:[], votes:{}, sure:[], passed:[] } } };
+  ok(!R.allSettled(g, ['A','B','C']), 'C jeszcze myśli → false');
+  ok(R.allSettled(g, ['A','B']), 'C nieobecny → liczą się tylko obecni');
+  ok(!R.allSettled(g, []), 'pusty stół → false');
+  g.byTeam.C.sure=[{id:'C'}];
+  ok(!R.allSettled(g, ['A','B','C']), 'sam pewniak (bez typu/głosu) to jeszcze nie odpowiedź');
+  g.byTeam.C.votes={ title:{ C:'x' } };
+  ok(R.allSettled(g, ['A','B','C']), 'głos się liczy');
+  ok(!R.allSettled({ ...g, phase:MP.REVEAL }, ['A','B','C']), 'poza PLAY → false');
+  ok(R.allSettled(g, ['A','B','C','OBCY']), 'gracz spoza drużyn (np. TV/przed dołączeniem) nie blokuje');
+});
+group('P0-3: needsSureConfirm — pewniak bez odpowiedzi drużyny wymaga potwierdzenia', ()=>{
+  const g={ answerSlots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}],
+    byTeam:{ all:{ proposals:[], votes:{}, sure:[], passed:[] } }, teams:[{id:'all',members:['me']}] };
+  ok(R.needsSureConfirm(g, 'all', 'me'), 'pusta odpowiedź drużyny → potwierdź');
+  g.byTeam.all.votes={ title:{ x:'Hey Jude' } };
+  ok(!R.needsSureConfirm(g, 'all', 'me'), 'jest odpowiedź → bez pytania');
+  g.byTeam.all.votes={}; g.byTeam.all.sure=[{id:'me'}];
+  ok(!R.needsSureConfirm(g, 'all', 'me'), 'wyłączanie pewniaka → bez pytania');
+});
+group('P0-5: standings — remis to remis (wspólne miejsce), nie „X wygrywa"', ()=>{
+  const t=[{id:'a',name:'A'},{id:'b',name:'B'},{id:'c',name:'C'}];
+  const s0=TM.standings(t, {});
+  ok(s0.tie && s0.winner===null, '0:0:0 → remis, bez zwycięzcy');
+  eq(s0.rows.map(r=>r.place), [1,1,1], 'wszyscy na 1. miejscu');
+  const s1=TM.standings(t, { a:50, b:120, c:50 });
+  eq([s1.tie, s1.winner.id], [false, 'b'], 'jest zwycięzca');
+  eq(s1.rows.map(r=>r.id+':'+r.place), ['b:1','a:2','c:2'], 'wspólne 2. miejsce');
+  const s2=TM.standings(t, { a:90, b:90, c:10 });
+  eq([s2.tie, s2.rows.map(r=>r.place)], [true, [1,1,3]], 'remis na czele → 1, 1, 3');
+  eq(TM.standings([], {}).winner, null, 'brak drużyn');
+  eq(TM.standings([{id:'a',name:'A'}], {}).tie, false, 'jedna drużyna to nie remis');
+});
+group('P1-2: answerTiming — limit szybkości = całe okno pytania (playAt → endsAt)', ()=>{
+  eq(answerTiming({ timer:30, playAt:1000, endsAt:1000+900+15000+30000 }, 2000).limitMs, 45900, 'okno z intro+słuchaniem+timerem');
+  eq(answerTiming({ timer:30, playAt:1000, endsAt:null }, 2000).limitMs, 30000, 'bez endsAt → sam timer (jak dotąd)');
+});
+}
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

@@ -225,3 +225,66 @@ export function mpSnipStart(rnd = Math.random){
 export function shouldPing(lastTs, now, interval = TYPING_PING_MS){
   return (now - lastTs) >= interval;
 }
+
+/* ===== P1-2 (przegląd MP 2026-10): semantyka czasu pytania MP =====
+ * Dawniej `endsAt = go + timer`, a słuchanie (15–22 s) zjadało czas na odpowiedź. Teraz autorytet liczy:
+ *   listenEndsAt = playAt + LEAD (intro, równy start) + listenMs,   endsAt = listenEndsAt + timer.
+ * „30 s na odpowiedź" = 30 s PO słuchaniu. Czyste — serwer, host relay i testy liczą tak samo. */
+export const MP_ALL_DONE_GRACE_MS = 1500;   // P1-3: wszyscy obecni mają typ/pas → zamknięcie pytania po tej karencji
+export function phaseDeadlines({ playAt, leadMs = MP_INTRO_MS, listenMs = 15000, timerS = 0 } = {}){
+  const t0 = Number(playAt);
+  if(!Number.isFinite(t0)) return { listenEndsAt:null, endsAt:null };
+  const lead = Math.max(0, Number(leadMs) || 0), listen = Math.max(0, Number(listenMs) || 0);
+  const listenEndsAt = t0 + lead + listen;
+  const tm = clampTimer(timerS);
+  return { listenEndsAt, endsAt: tm > 0 ? listenEndsAt + tm*1000 : null };
+}
+/* P0-7: ile ms okna „słuchaj" zostało TEMU klientowi (powrót/odświeżenie w trakcie pytania nie daje pełnych 15 s).
+ * nowy serwer → do listenEndsAt; stary (tylko endsAt) → min(listenMs, endsAt−now); bez terminów → pełne okno.
+ * Zostało < minMs (5 s) → 0 = od razu „kombinuj" (nie ma sensu odpalać zajawki na 3 s). `now` w czasie SERWERA. */
+export const LISTEN_MIN_LEFT_MS = 5000;
+export function listenWindowMs({ listenMs, listenEndsAt, endsAt, now, minMs = LISTEN_MIN_LEFT_MS } = {}){
+  const full = Math.max(0, Number(listenMs) || 0);
+  let rem = full;
+  if(Number.isFinite(Number(listenEndsAt)) && listenEndsAt) rem = Number(listenEndsAt) - now;
+  else if(Number.isFinite(Number(endsAt)) && endsAt) rem = Math.min(full, Number(endsAt) - now);
+  rem = Math.max(0, Math.min(full, rem));
+  return rem < minMs ? 0 : Math.round(rem);
+}
+/* P1-2: przesunięcie zegara klienta względem serwera (anty-skew). Próbka = serverNow − czas odbioru (lokalny);
+ * opóźnienie sieci tylko ZANIŻA próbkę, więc najlepsze oszacowanie = maksimum z ostatnich próbek. [] → 0. */
+export const CLOCK_SAMPLES_MAX = 8;
+export function clockOffset(samples){
+  const xs = (Array.isArray(samples) ? samples : []).map(Number).filter(Number.isFinite).slice(-CLOCK_SAMPLES_MAX);
+  return xs.length ? Math.max(...xs) : 0;
+}
+// dopisz próbkę (ring-buffer CLOCK_SAMPLES_MAX); zwraca nową tablicę
+export function addClockSample(samples, serverNow, localNow){
+  const s = Number(serverNow), l = Number(localNow);
+  const arr = Array.isArray(samples) ? samples.slice() : [];
+  if(Number.isFinite(s) && s > 0 && Number.isFinite(l)) arr.push(s - l);
+  return arr.slice(-CLOCK_SAMPLES_MAX);
+}
+// zegar w nagłówku: „0:12" (m:ss) — zawsze z minutami, żeby szerokość się nie zmieniała
+export function fmtClock(ms){
+  const s = Math.max(0, Math.ceil((Number(ms) || 0) / 1000));
+  return `${Math.floor(s/60)}:${String(s%60).padStart(2,'0')}`;
+}
+/* P1-2: JEDEN zegar bieżącej fazy w nagłówku. sub = lokalna pod-faza ('sluchaj'|'kombinuj'); listenEnd (lokalny ms
+ * końca okna słuchania; 0 = brak), endsAt (lokalny ms końca pytania; null = bez limitu). Słuchanie → 🎧 do końca okna,
+ * potem/„kombinujemy" → 🧠 do końca pytania. low = ostatnie 5 s (czerwień tylko wtedy). null = nic do pokazania. */
+export function phaseClock({ sub, listenEnd, endsAt, now }){
+  if(sub === 'sluchaj' && listenEnd > now) return { phase:'sluchaj', icon:'🎧', ms: listenEnd - now, low:false };
+  if(endsAt && Number.isFinite(Number(endsAt))){
+    const ms = Math.max(0, Number(endsAt) - now);
+    return { phase:'kombinuj', icon:'🧠', ms, low: ms <= TICK_LAST_S*1000 };
+  }
+  return null;
+}
+/* P1-10: Solo/Drużyny — „Zakończ pytanie" hosta dopiero po połowie czasu pytania (host jest też graczem — nie
+ * kończy „w ciemno" przed innymi). Bez limitu czasu → od razu (inaczej AFK zablokowałby stół; P1-3 domyka resztę). */
+export function hostEndVisible({ playAt, endsAt, now }){
+  const a = Number(playAt), e = Number(endsAt);
+  if(!e || !Number.isFinite(e) || !Number.isFinite(a) || e <= a) return true;
+  return now >= a + (e - a) / 2;
+}

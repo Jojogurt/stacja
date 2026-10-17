@@ -68,7 +68,10 @@ export function pickSummary(cats, modes, len, allCats){
   const unit = audioOnly ? 'utworów' : 'pytań';
   if(len && typeof len==='object'){
     const questions = clampQuestions(len.questions);
-    return { count: questions, questions, blocks: questions/QPC, rounds: r.rounds, cats: playable.length, unit };
+    // P1-7: krótki mecz (qpc 1) — każde pytanie osobnym slotem (kategorie i tryby na przemian)
+    const qpc = r.qpc || QPC;
+    return { count: questions, questions, blocks: questions/qpc, qpc, mixed: qpc===1, rounds: r.rounds, cats: playable.length,
+      modes: usedModes.size, unit };
   }
   const rounds = len;
   return { count: rounds * CPR * QPC, rounds, label: plPick(rounds, 'runda', 'rundy', 'rund'),
@@ -79,6 +82,10 @@ export function pickSummary(cats, modes, len, allCats){
 // („z 1 kategorii" przy powtórkach zamiast udawania 3 różnych kategorii)
 export function pickSummaryText(s){
   if(!s || s.error) return { head: '', total: '', from: '' };
+  if(s.questions && s.mixed){   // P1-7: krótki mecz — pytania z różnych kategorii/trybów na przemian
+    const from = s.cats > 1 ? ` · na przemian z ${s.cats} ${plPick(s.cats, 'kategorii', 'kategorii', 'kategorii')}` : ' · z 1 kategorii';
+    return { head: `${s.count} × 1 pytanie = `, total: `${s.count} ${s.unit}`, from };
+  }
   if(s.questions){   // F6a: długość w pytaniach — N bloków (kategorii) po QPC pytań
     const b = s.blocks;
     const blocks = s.cats >= b ? `${b} ${plPick(b, 'kategoria', 'kategorie', 'kategorii')}` : `${b} ${plPick(b, 'blok', 'bloki', 'bloków')}`;

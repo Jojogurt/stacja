@@ -30,11 +30,18 @@ const rid = () => Math.random().toString(36).slice(2,8);
 
 /* drużyna gracza (membership po a.by). Salon-host (sędzia) nie jest członkiem — w coop
  * sędziuje jedyną drużynę, więc dostaje teams[0]. Brak dopasowania → null (akcja ignorowana). */
+/* P0-1 (przegląd MP 2026-10): TV salonu to OSOBNA rola (`game.tvId`, ustalana przy starcie), nie „aktualny host".
+ * Dawniej rolę TV wyznaczał hostId — gdy TV wyszło, awansowany GRACZ stawał się TV (traci pola, widzi typy rywali).
+ * Stan bez tvId (stary serwer / relay sprzed zmiany) → dawne zachowanie (host = TV). Poza salonem → null. */
+export function tvIdOf(game){
+  if(!game || !game.salon) return null;
+  return (typeof game.tvId==='string' && game.tvId) ? game.tvId : (game.hostId || null);
+}
 export function teamOf(game, playerId){
   if(!game || !Array.isArray(game.teams)) return null;
   for(const t of game.teams){ if((t.members||[]).includes(playerId)) return t.id; }
   // F6b (#6): salon w formatach Solo/Drużyny — TV nie sędziuje żadnej drużyny (nie nadpisuje rywalom odpowiedzi)
-  if(game.salon && playerId===game.hostId && game.teams.length && (game.format||'coop')==='coop') return game.teams[0].id;
+  if(game.salon && playerId && playerId===tvIdOf(game) && game.teams.length && (game.format||'coop')==='coop') return game.teams[0].id;
   return null;
 }
 /* F6b (tryb #6 „Jeden głośnik"): zajawka/lektor gra TYLKO u hosta (flaga meczu albo salon — TV gra muzykę).
@@ -151,7 +158,7 @@ export function candidatesForSlot(game, teamId, slotKey){
 export function teamAnswer(game, teamId){
   const out={};
   const bkt=readBucket(game, teamId);
-  const hostId = game && game.salon ? game.hostId : null;
+  const hostId = tvIdOf(game);   // P0-1: nadpisuje TV salonu, nie awansowany gracz
   slotsOf(game).forEach(s=>{
     const c=candidatesForSlot(game, teamId, s.key);
     const pick = hostId && bkt.votes && bkt.votes[s.key] && bkt.votes[s.key][hostId];
@@ -174,6 +181,31 @@ export function rosterState(game, teamId, id, typingSet){
   if(Array.isArray(bkt.answered) && bkt.answered.includes(id)) return 'ans';   // rywal w PLAY (serwer wyciął treść, zostawił KTO)
   if(typingSet && typingSet.has && typingSet.has(id)) return 'type';
   return 'idle';
+}
+
+/* P1-3: czy gracz „skończył" pytanie — dał typ, spasował albo zagłosował (np. na typ kolegi z drużyny). */
+export function playerSettled(game, playerId){
+  const tid = teamOf(game, playerId); if(!tid) return false;
+  const bkt = readBucket(game, tid);
+  if((bkt.passed||[]).some(p=>p.id===playerId)) return true;
+  if((bkt.proposals||[]).some(p=>p.by===playerId)) return true;
+  return Object.values(bkt.votes||{}).some(sv=>sv && Object.prototype.hasOwnProperty.call(sv, playerId));
+}
+/* P1-3: auto-zamknięcie pytania — WSZYSCY obecni gracze (`presentIds`, bez TV) przypisani do drużyn skończyli.
+ * Tylko w PLAY; pusta lista → false (nie zamykamy pustego stołu). */
+export function allSettled(game, presentIds){
+  if(!game || game.phase!==MP.PLAY) return false;
+  const ids = (presentIds||[]).filter(id=>id && teamOf(game, id) && id!==tvIdOf(game));
+  return ids.length>0 && ids.every(id=>playerSettled(game, id));
+}
+/* P0-3: pewniak „×2" bez odpowiedzi drużyny = pewna przegrana („stawia kolejkę") → klient prosi o potwierdzenie.
+ * true = włączam pewniaka, a odpowiedź mojej drużyny jest pusta. */
+export function needsSureConfirm(game, teamId, myId){
+  if(!game || !teamId) return false;
+  const bkt = readBucket(game, teamId);
+  if((bkt.sure||[]).some(p=>p.id===myId)) return false;   // wyłączanie — bez pytania
+  const ta = teamAnswer(game, teamId);
+  return !Object.values(ta).some(v=>String(v||'').trim());
 }
 
 /* F6b (R8): kto co wniósł do odpowiedzi drużyny — per slot pierwszy autor typu z tą wartością (norm),
@@ -259,7 +291,9 @@ function evaluateTeam(game, teamId, current, match, timing){
  * Dla coop (1 drużyna) pola jedynej drużyny są SPŁASZCZONE na top-level reveal →
  * mpRenderRevealCard działa bez zmian (wsteczna zgodność). app.js nakłada scores/tally w pętli. */
 export function answerTiming(game, now){
-  const limitMs = (game && game.timer>0) ? game.timer*1000 : SPEED_CAP_MS;
+  // P1-2: okno pytania = playAt → endsAt (intro + słuchanie + czas na odpowiedź); stan bez endsAt → sam timer
+  const win = (game && Number.isFinite(game.endsAt) && Number.isFinite(game.playAt) && game.endsAt>game.playAt) ? game.endsAt-game.playAt : 0;
+  const limitMs = win>0 ? win : (game && game.timer>0) ? game.timer*1000 : SPEED_CAP_MS;
   const elapsedMs = (game && Number.isFinite(game.playAt) && Number.isFinite(now)) ? Math.max(0, now-game.playAt) : null;
   return { elapsedMs, limitMs };
 }

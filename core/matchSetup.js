@@ -136,7 +136,8 @@ export function setupSummary({ cats, active, questions, allCats }){
   const s = pickSummary(cats, new Set(active), { questions }, allCats);
   if(s.error) return { ok:false, text:'Wybrane tryby nie pasują do kategorii' };
   const n = active.length;
-  const rep = s.cats < s.blocks ? ' · z powtórkami' : '';
+  // P1-7: krótki mecz miesza kategorie i tryby (slot = pytanie) — „z powtórkami" tylko gdy blokom brakuje kategorii
+  const rep = s.mixed ? ((s.cats>1 || n>1) ? ' · na przemian' : '') : (s.cats < s.blocks ? ' · z powtórkami' : '');
   return { ok:true, text:`${s.count} ${s.unit} · ${s.cats} kat. · ${n} ${plPick(n, 'tryb', 'tryby', 'trybów')}${rep}`, summary:s };
 }
 export const FORMAT_LABEL = { coop:'Wspólna drużyna', solo:'Każdy sam', teams:'Drużyny' };

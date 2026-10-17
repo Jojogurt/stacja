@@ -14,7 +14,10 @@
  *   klient → DO:  {t:'hello'} · {t:'start', config} (host) · {t:'action', action}
  *                 (propose/vote/unpropose/pass/ready) · {t:'lock'} (host) · {t:'next'} (host)
  *                 · {t:'go'} (host, F2b #6: „pomiń czekających" w ARMING)
- *   DO → klient:  {t:'state', game}  (BEZ sekretu — pełny utwór tylko w game.reveal przy REVEAL)
+ *   DO → klient:  {t:'state', game, serverNow}  (BEZ sekretu — pełny utwór tylko w game.reveal przy REVEAL;
+ *                 P1-2: serverNow = zegar serwera do korekty skew klienta; game.listenEndsAt/endsAt w czasie serwera;
+ *                 P1-3: game.allDoneAt = termin auto-zamknięcia, gdy wszyscy obecni dali typ/pas;
+ *                 P0-1: game.tvId = TV salonu (osobna rola, nie aktualny host); P1-11: game.names = {id: ksywa})
  *                 {t:'presence', members, hostId, modes}  (F8a: `modes` = tryby, które ten serwer zna —
  *                 capability dla pickera MP; stary serwer bez pola → klient ukrywa nowe tryby)
  *                 + `caps:['tableTaste']` i `shelves:[{id,n}]` (gust etap 3: kto z OBECNYCH dosłał półkę i ile utworów)
@@ -29,7 +32,7 @@
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
-import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf } from '../core/mpReducer.js';
+import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf, tvIdOf, allSettled } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, joinTeam } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES } from '../core/match.js';
@@ -40,7 +43,7 @@ import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
 import { norm, quizKey, shuffleMC, parseYear, clampQuizTrack, quizListen } from '../core/scoring.js';
 import { buildTrackMC, yearReliable } from '../core/trackSelect.js';
 import { lektorLang, catLektorLang } from '../core/lektorVoice.js';   // język lektora (pl|en) z puli
-import { mpSnipOffset, MP_ARM_TIMEOUT_MS } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING
+import { mpSnipOffset, MP_ARM_TIMEOUT_MS, MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, listenSecs, phaseDeadlines } from '../core/timing.js';   // 3.5: jedno źródło okna fragmentu; F2b #6: limit ARMING; P1-2/P1-3
 import { resolveTrackServer, resolveDistractorsServer } from './lib/resolve.js';
 import { insertMatch } from './lib/recordMatch.js';
 import { sanitizeTableShelf, buildTablePool, tablePoolCategory, TABLE_KEY, TABLE_MIN_SONGS } from '../core/tasteCompare.js';
@@ -129,6 +132,7 @@ function clampPools(pools){
     // F1: wszystko z hosta jako TEKST z capem (catLabel/utwór lecą do stanu u wszystkich)
     const o={ label:clipText(c.label, CAT_TEXT_MAX), range:clipText(c.range, CAT_TEXT_MAX), kind:clipText(c.kind, 16) };
     if(c.lang!=null) o.lang=lektorLang(c.lang);   // język opisów lektora: tylko 'pl' | 'en'
+    { const ls=Math.floor(Number(c.listenSecs)); if(ls>=5 && ls<=60) o.listenSecs=ls; }   // P1-2: własne okno „słuchaj" kategorii
     if(Array.isArray(c.artists)) o.artists=c.artists.slice(0, POOL_MAX_SONGS).map(a=>clipText(a, SONG_TEXT_MAX)).filter(Boolean);
     if(Array.isArray(c.songs)) o.songs=c.songs.slice(0, POOL_MAX_SONGS).filter(s=>s && typeof s==='object').map(s=>{
       const r={ title:clipText(s.title, SONG_TEXT_MAX), artist:clipText(s.artist, SONG_TEXT_MAX) };
@@ -157,6 +161,8 @@ export class GameAuthority extends Server {
   recent = [];            // anty-powtórki artystów
   shelves = new Map();    // gust etap 3: id gracza → półka [{title,artist,year}] (≤ 20) — „Gust stołu"
   _autoLock = null;       // serwerowy timer auto-locka (koniec czasu pytania)
+  _allDone = null;        // P1-3: timer karencji „wszyscy gotowi" → lock
+  allDoneGraceMs = MP_ALL_DONE_GRACE_MS;   // P1-3: karencja (testy podmieniają)
   // F2b #6: twardy limit fazy gotowości — po nim pytanie rusza z gotowymi (persist: armDeadline)
   armTimeoutMs = MP_ARM_TIMEOUT_MS;
   armDeadline = null;     // epoch ms końca ARMING (wznowienie timera po evikcji DO)
@@ -186,6 +192,10 @@ export class GameAuthority extends Server {
       // WZNÓW serwerowy auto-lock po restarcie (in-memory setTimeout ginie przy evikcji DO).
       if(this.game && this.game.phase===MP.PLAY && this.game.timer>0 && this.game.endsAt){
         this.scheduleAutoLock(Math.max(0, this.game.endsAt - Date.now()));   // auto-lock wg pozostałego czasu
+      }
+      // P1-3: wznów karencję „wszyscy gotowi" (termin w stanie)
+      if(this.game && this.game.phase===MP.PLAY && this.game.allDoneAt){
+        this.scheduleAllDone(Math.max(0, this.game.allDoneAt - Date.now()));
       }
       // F2b #6: wznów twardy limit ARMING (gotowość przelicza też onConnect/maybeGoArming)
       if(this.game && this.game.phase===MP.ARMING && this.armDeadline){
@@ -229,10 +239,12 @@ export class GameAuthority extends Server {
     // w newRound → krótki rozłącz między pytaniami = całe pytanie bez gry). Fix „host nie widział moich odpowiedzi":
     // dotyczy też Solo (własna drużyna) i Drużyn (najmniejsza drużyna) — wcześniej tylko coop, a typy późnego
     // gracza Solo/Drużyn reducer odrzucał po cichu (teamOf=null; w Drużynach do końca meczu).
-    if(this.rejoin(id, name)){ this.broadcastState(); await this.persist(); }
-    conn.send(JSON.stringify({ t:'state', game:this.viewFor(id) }));   // 3.1: okrojony widok
+    const named=this.noteName(id, name);   // P1-11: ksywa zachowana w stanie gry (wracający nie jest „graczem"/„?")
+    if(this.rejoin(id, name) || named){ this.broadcastState(); await this.persist(); }
+    conn.send(this.stateMsg(id));   // 3.1: okrojony widok
     this.pushPresence();
     await this.maybeGoArming();   // restart/redołączenie w ARMING → przelicz gotowość (+ twardy limit armTimeoutMs, F2b #6)
+    await this.checkAllDone();    // P1-3: nowy (niegotowy) gracz w PLAY → zdejmij karencję „wszyscy gotowi"
   }
 
   async onClose(conn){
@@ -251,6 +263,7 @@ export class GameAuthority extends Server {
     }
     this.pushPresence();
     await this.maybeGoArming();   // ktoś wyszedł w ARMING → jeśli reszta gotowa, startuj (nie blokuj na nieobecnym)
+    await this.checkAllDone(conn); // P1-3: wyszedł ostatni niegotowy → reszta ma typy → zamknij po karencji
     // pokój opustoszał → zaplanuj sprzątanie storage (karencja na reconnect; alarm i tak re-sprawdzi przy odpaleniu)
     if([...this.getConnections()].filter(c => c !== conn).length === 0){
       try{ await this.ctx.storage.setAlarm(Date.now() + ROOM_TTL_MS); }catch(_e){}
@@ -266,7 +279,7 @@ export class GameAuthority extends Server {
   rejoin(id, name){
     const g=this.game;
     if(!g || ![MP.LOADING, MP.ARMING, MP.PLAY].includes(g.phase)) return false;
-    if(g.salon && id===this.hostId) return false;
+    if(g.salon && id===tvIdOf(g)) return false;   // P0-1: TV salonu (nie awansowany gracz) poza drużynami
     if((g.format||'coop')==='coop' && !(g.teams||[])[0]) return false;   // coop bez drużyny (stan sprzed startu) — bez zmian
     const m=this.members().find(x=>x.id===id);
     return joinTeam(g, { id, name:(m && m.name) || name || '' });
@@ -279,7 +292,7 @@ export class GameAuthority extends Server {
     await this.ctx.storage.deleteAll();                        // kasuje też alarm
     this.game=null; this.current=null; this.pools=null; this.hostId=null; this.starterId=null;
     this.ready=new Set(); this.hostSeen=new Set(); this.recent=[]; this.armDeadline=null; this.armHidden=null; this.draft=null; this.shelves=new Map();
-    this.clearAutoLock(); this.clearArmTimer();
+    this.clearAutoLock(); this.clearArmTimer(); this.clearAllDone();
   }
 
   async onMessage(conn, raw){
@@ -294,7 +307,7 @@ export class GameAuthority extends Server {
 
     switch(msg.t){
       case 'hello':
-        conn.send(JSON.stringify({ t:'state', game:this.viewFor(me) }));   // 3.1: okrojony widok
+        conn.send(this.stateMsg(me));   // 3.1: okrojony widok
         if(this.draft && this.idle() && me!==this.hostId) conn.send(JSON.stringify({ t:'event', event:'draft', payload:{ ...this.draft, from:this.hostId, by:this.hostId }, from:this.hostId }));
         this.pushPresence();
         return;
@@ -304,6 +317,7 @@ export class GameAuthority extends Server {
         this.pushPresence();
         // Solo: drużyna = gracz. Gość dołączający w trakcie dostaje drużynę w onConnect, ZANIM klient przyśle ksywę
         // (track po otwarciu socketu) → nazwa „gracz" w rankingu. Ksywa z track nadpisuje nazwę jego 1-os. drużyny.
+        if(this.noteName(me, conn.state.name)){ this.broadcastState(); await this.persist(); }   // P1-11
         if(this.game && this.game.format==='solo' && conn.state.name){
           const t=(this.game.teams||[]).find(x=>x.id===me && (x.members||[]).length===1 && x.members[0]===me);
           if(t && t.name!==conn.state.name){ t.name=conn.state.name; this.broadcastState(); await this.persist(); }
@@ -349,8 +363,11 @@ export class GameAuthority extends Server {
         // Dawniej dowolny gracz startował mecz i przejmował hosta. Starter = host (reclaim po reconnect).
         const idle = !this.game || this.game.phase==null || this.game.phase===MP.DONE;
         if(!idle || me!==this.hostId) return;
+        const cfg=(msg.config && typeof msg.config==='object') ? msg.config : {};
+        // P0-9: salon bez ani jednego gracza (TV samo w pokoju) — nikt by nie grał → odrzuć; host dostaje stan (koniec „ładowania")
+        if(cfg.salon===true && !this.members().some(m=>m.id!==me)){ conn.send(this.stateMsg(me)); return; }
         this.starterId=me; this.draft=null; this.pushPresence();
-        await this.startMatch((msg.config && typeof msg.config==='object') ? msg.config : {});
+        await this.startMatch(cfg);
         return;
       }
 
@@ -361,7 +378,7 @@ export class GameAuthority extends Server {
         a.by = me;                                    // WYMUSZONE z tożsamości połączenia (anty-spoof)
         a.byName = (conn.state && conn.state.name) || clipText(a.byName, NAME_MAX);
         if(a.type==='ready'){ await this.onReady(me, a.armNonce); return; }
-        if(reduceAction(this.game, a)){ this.broadcastState(); await this.persist(); }
+        if(reduceAction(this.game, a)){ this.broadcastState(); await this.persist(); await this.checkAllDone(); }
         return;
       }
 
@@ -402,11 +419,27 @@ export class GameAuthority extends Server {
     return [...byId.values()];
   }
   // GRACZE = członkowie bez salon-hosta (TV nie gra) — do budowy/uzgodnienia drużyn
+  // P0-1: w trakcie meczu TV = game.tvId (nie aktualny host — po wyjściu TV awansowany gracz dalej GRA)
   playersOf(salon){
     const ms=this.members();
+    if(salon==null && this.game && this.game.salon){ const tv=tvIdOf(this.game); return tv ? ms.filter(m=>m.id!==tv) : ms; }
     const s = salon!=null ? salon : (this.game && this.game.salon);
     return (s && this.hostId) ? ms.filter(m=>m.id!==this.hostId) : ms;
   }
+  // P1-11: ksywa gracza w stanie gry (game.names) — po wyjściu/powrocie widać imię, nie „gracz"/„?". true = zmiana.
+  noteName(id, name){
+    const g=this.game; const n=clipText(name, NAME_MAX);
+    if(!g || g.phase==null || !id || !n) return false;
+    g.names = g.names || {};
+    if(g.names[id]===n) return false;
+    if(Object.keys(g.names).length>=64 && !(id in g.names)) return false;   // cap (anty-flood)
+    g.names[id]=n;
+    // solo: drużyna = gracz — przywróć nazwę drużyny, gdy dołączył bez ksywy („gracz")
+    if(g.format==='solo'){ const t=(g.teams||[]).find(x=>x.id===id && (x.members||[]).length===1 && x.members[0]===id); if(t && (!t.name || t.name==='gracz')) t.name=n; }
+    return true;
+  }
+  // P1-2: ramka stanu z zegarem serwera (klient liczy offset — anty-skew)
+  stateMsg(id){ return JSON.stringify({ t:'state', game:this.viewFor(id), serverNow:Date.now() }); }
   pushPresence(){ this.broadcast(JSON.stringify({ t:'presence', members:this.members(), hostId:this.hostId, modes:MP_MODES,
     caps:CAPS, shelves:this.shelfInfo() })); }
   // gust etap 3: półki OBECNYCH (kolejność = kolejność w pokoju) — licznik dla hosta i źródło puli „Gust stołu"
@@ -416,7 +449,7 @@ export class GameAuthority extends Server {
   broadcastState(){
     for(const c of this.getConnections()){
       const id=c.state && c.state.id; if(!id) continue;
-      try{ c.send(JSON.stringify({ t:'state', game:this.viewFor(id) })); }catch(_e){}
+      try{ c.send(this.stateMsg(id)); }catch(_e){}
     }
   }
   // widok stanu dla odbiorcy: cudze buckety drużyn okrojone do liczników w fazie odpowiedzi.
@@ -424,7 +457,7 @@ export class GameAuthority extends Server {
   viewFor(id){
     const g=this.game;
     if(!g || !g.byTeam || g.phase!==MP.PLAY) return g;         // pełny stan poza PLAY (REVEAL i tak jawny)
-    if(g.salon && id===this.hostId) return g;                  // TV/sędzia widzi wszystko
+    if(g.salon && id===tvIdOf(g)) return g;                    // TV/sędzia widzi wszystko (P0-1: TV, nie awansowany gracz)
     const myTid=teamOf(g, id);                                 // teamOf zwraca ID drużyny (string), nie obiekt
     const byTeam={};
     for(const tid of Object.keys(g.byTeam)){
@@ -463,6 +496,7 @@ export class GameAuthority extends Server {
     // DRUŻYNY wg formatu (coop=1, solo=N×1, teams=podział hosta z `assignments`). Stan odpowiedzi per-drużyna.
     const teams = buildTeams(format, this.playersOf(salon), assignments);
     const scores = {}; teams.forEach(t=>{ scores[t.id]=0; });
+    const names = {}; this.members().forEach(m=>{ if(m.name) names[m.id]=clipText(m.name, NAME_MAX); });   // P1-11
     this.game = {
       hostId:this.hostId, phase:MP.PLAY, slots:r.slots, rounds:r.rounds, si:0, qi:0,
       catKey:s0.cat, mode:s0.mode, round:s0.round, catLabel:this.catLabelOf(s0.cat),
@@ -470,7 +504,11 @@ export class GameAuthority extends Server {
       format, teams, byTeam:emptyByTeam(teams), scores,
       reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon, audioHostOnly, groupId,   // MVP-3: tag drużyny; F6b: audio tylko u hosta
       timer:timer||0, endsAt:null, beerTally:{}, tally:{}, streaks:{}, playAt:null,
+      tvId: salon ? this.hostId : null,   // P0-1: TV salonu = kto wystartował (osobno od hostId, który przechodzi przy wyjściu)
+      names,                              // P1-11: ksywy graczy (po wyjściu z presence)
+      listenEndsAt:null, allDoneAt:null,  // P1-2 / P1-3
     };
+    if(r.qpc) this.game.qpc=r.qpc;        // P1-7: krótki mecz — 1 pytanie na slot (kategorie i tryby na przemian)
     await this.nextQuestion();
   }
 
@@ -487,6 +525,7 @@ export class GameAuthority extends Server {
     reconcileTeams(this.game, this.playersOf());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
     this.game.phase=MP.LOADING; this.game.byTeam=emptyByTeam(this.game.teams);   // czyste buckety; scores kumulują się
     this.game.reveal=null; this.game.endsAt=null; this.game.playAt=null; this.current=null;
+    this.game.listenEndsAt=null; this.game.allDoneAt=null; this.clearAllDone();
     this.broadcastState();
     const cat=this.pools[this.game.catKey];
     const hidden={ prompt:'', lyric:'', ttsUrl:'', lyricLang:'', snipStart:0 };   // F2b #11: odsłaniane w go()
@@ -577,7 +616,7 @@ export class GameAuthority extends Server {
   // (TV i tak buforuje audio niezależnie). Brak graczy → fallback na wszystkich (anty-deadlock).
   expectedReady(){
     const ids=this.members().map(m=>m.id);
-    if(this.game && this.game.salon){ const ps=ids.filter(id=>id!==this.hostId); return ps.length?ps:ids; }
+    if(this.game && this.game.salon){ const tv=tvIdOf(this.game); const ps=ids.filter(id=>id!==tv); return ps.length?ps:ids; }
     return ids;
   }
   // przelicz gotowość i wystartuj, gdy wszyscy OCZEKIWANI gotowi (woła: onReady, onConnect, onClose)
@@ -608,19 +647,49 @@ export class GameAuthority extends Server {
     this.game.phase=assertMp(this.game.phase, MP.PLAY, console.warn);
     this.game.playNonce=(this.game.playNonce||0)+1;
     this.game.playAt=Date.now();                    // F6a: start PLAY → bonus za szybkość liczony do zatwierdzenia
-    if(this.game.timer>0) this.game.endsAt=Date.now()+this.game.timer*1000;   // serwerowy stempel czasu
+    // P1-2: czas na odpowiedź liczony PO słuchaniu — endsAt = go + LEAD (intro) + okno „słuchaj" + timer
+    const cat=this.pools && this.pools[this.game.catKey];
+    const dl=phaseDeadlines({ playAt:this.game.playAt, leadMs:MP_INTRO_MS, listenMs:listenSecs(this.game.mode, cat && cat.listenSecs)*1000, timerS:this.game.timer });
+    this.game.listenEndsAt=dl.listenEndsAt; this.game.endsAt=dl.endsAt; this.game.allDoneAt=null;
     this.broadcastState(); await this.persist();
-    if(this.game.timer>0) this.scheduleAutoLock(this.game.timer*1000);
+    if(this.game.endsAt) this.scheduleAutoLock(Math.max(0, this.game.endsAt-Date.now()));
   }
+
+  /* ---- P1-3: auto-zamknięcie, gdy WSZYSCY obecni gracze dali typ albo pas (karencja allDoneGraceMs) ----
+   * Woła: akcja gracza, wejście/wyjście z pokoju. Ktoś cofnie typ / dojdzie niegotowy → karencja zdjęta. */
+  async checkAllDone(except){
+    const g=this.game;
+    if(!g || g.phase!==MP.PLAY){ this.clearAllDone(); return; }
+    const ids=[...new Set([...this.getConnections()].filter(c=>c!==except && c.state && c.state.id).map(c=>c.state.id))];
+    const done=allSettled(g, ids);
+    if(done && !g.allDoneAt){
+      g.allDoneAt=Date.now()+this.allDoneGraceMs;
+      this.broadcastState(); await this.persist();
+      this.scheduleAllDone(this.allDoneGraceMs);
+    } else if(!done && g.allDoneAt){
+      g.allDoneAt=null; this.clearAllDone();
+      this.broadcastState(); await this.persist();
+    }
+  }
+  scheduleAllDone(ms){
+    this.clearAllDone();
+    const nonce=this.game && this.game.playNonce;
+    this._allDone=setTimeout(()=>{
+      this._allDone=null;
+      if(this.game && this.game.phase===MP.PLAY && this.game.playNonce===nonce && this.game.allDoneAt) this.lock().catch(()=>{});
+    }, ms);
+  }
+  clearAllDone(){ if(this._allDone){ clearTimeout(this._allDone); this._allDone=null; } }
 
   /* ---- zatwierdzenie odpowiedzi (host albo serwerowy timer) ---- */
   async lock(){
     if(!this.game || this.game.phase!==MP.PLAY) return;
-    this.clearAutoLock();
+    this.clearAutoLock(); this.clearAllDone();
     noteAnswerers(this.game);                       // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
     const ev=evaluateAnswer(this.game, this.current, undefined, Date.now());   // ocenia KAŻDĄ drużynę (ev.perTeam); F6a: punkty + szybkość
     applyEvaluation(this.game, ev, (this.game.tally=this.game.tally||{}));   // F6a: punkty/serie/tally/pewniaki/wynik/reveal — wspólne z hostem relay
     this.game.phase=assertMp(this.game.phase, MP.REVEAL, console.warn); this.game.endsAt=null;
+    this.game.listenEndsAt=null; this.game.allDoneAt=null;
     this.broadcastState(); await this.persist();
   }
 
@@ -639,7 +708,8 @@ export class GameAuthority extends Server {
     // zapis do D1 — AUTORYTATYWNY (DO liczył wynik sam; bez klientowego podawania)
     try{
       // F2b #8: uczestnicy z historii odpowiedzi (game.playedBy), nie z obecnych przy DONE; salon bez TV
-      const payload=buildMpRecord({ game:this.game, tally:this.game.tally, members:this.members(), hostId:this.hostId, roomCode:this.name });
+      // P0-1: w salonie „host" rekordu = TV (wykluczane z graczy) — nie awansowany gracz, który przejął po wyjściu TV
+      const payload=buildMpRecord({ game:this.game, tally:this.game.tally, members:this.members(), hostId:tvIdOf(this.game) || this.hostId, roomCode:this.name });
       await insertMatch(this.env, payload);
     }catch(e){ try{ console.warn('finish: zapis meczu do D1 nieudany', e&&e.message||e); }catch(_e){} }   // 3.5: nie połykaj po cichu
     await this.persist();

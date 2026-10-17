@@ -5,11 +5,12 @@
 import { S, mpMe } from './mp-state.js';
 import { escapeHtml, safeColor, isSlotKey, num } from '../core/util.js';
 import { norm, YEAR_MIN, YEAR_MAX } from '../core/scoring.js';   // F8a: + zakres pola roku; mpSlotsHTML: porównanie głosów (mój głos == kandydat)
-import { QPC, matchProgress } from '../core/match.js';
+import { QPC, matchProgress, matchQpc } from '../core/match.js';
 import { displayTitle } from '../core/trackSelect.js';   // tytuł z iTunes bez „(2012 Remaster)" itp. (tylko wyświetlanie)
 import { MP } from '../core/phases.js';
-import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS, MP_INTRO_MS, isTempoMode, mpTempoRate } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"; F2b #6: auto-„dalej"; F6b: intro
+import { listenSecs as _listenSecs, secsLeft, MP_REVEAL_AUTO_MS, MP_INTRO_MS, isTempoMode, mpTempoRate, listenWindowMs, hostEndVisible } from '../core/timing.js';   // mpListenSecs: czas fazy „słuchaj"; F2b #6: auto-„dalej"; F6b: intro
 import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, answerCredits, playsAudioLocally, audioHostOnly } from '../core/mpReducer.js';
+import { standings } from '../core/teams.js';   // P0-5: ranking z remisami
 import { REACTIONS } from '../core/chatFeed.js';   // F6b: whitelist emotek wspólna z serwerem (🖕 → 🍺)
 import { ALL_CATS } from './catalog.js';
 import { confetti, animIn, promptBodyHTML } from './dom.js';
@@ -31,7 +32,13 @@ export function initMpRender(deps){
 }
 // czy TEN klient jest ekranem salonowym (host w trybie salon). Fallback S.salon = nim serwer
 // odeśle game.salon (działa bez deployu DO). Wymaga aktywnej gry (przed grą: lobby/picker normalnie).
-const mpIsSalonHost = ()=> !!(S.host && S.game && S.game.phase!=null && (S.game.salon || S.salon));
+// P0-1: nowy serwer niesie game.tvId (TV = kto wystartował salon) — awansowany po wyjściu TV gracz NIE staje się TV.
+// Stan bez tvId (stary serwer) → dawne zachowanie (host = TV).
+const mpIsSalonHost = ()=>{
+  const g=S.game; if(!g || g.phase==null) return false;
+  if(typeof g.tvId==='string' && g.tvId) return g.tvId===mpMe.id;
+  return !!(S.host && (g.salon || S.salon));
+};
 // F6b (#6): TV w salonie przy formacie Solo/Drużyny — nie sędziuje drużyny; pokazuje status drużyn (bez ich
 // odpowiedzi — TV widzą wszyscy) i ranking. W coop zachowanie bez zmian (TV-sędzia jedynej drużyny).
 const mpIsCompTV = ()=> mpIsSalonHost() && ((S.game && S.game.format) || 'coop')!=='coop';
@@ -60,6 +67,12 @@ function mpDraftHTML(d){
       <div class="mpd-grid">${cell('długość', d.questions+' pytań')}${cell('format', FORMAT_LABEL[d.format]||FORMAT_LABEL.coop)}${cell('czas na odpowiedź', timerLabel(d.timer))}${cell('dźwięk', d.salon?'tylko na TV':d.audioHostOnly?'tylko u hosta':'u wszystkich')}</div>
     </section>`;
 }
+// P0-8: błąd połączenia z pokojem — zamiast „0 osób · czekamy na graczy…" bez końca
+const NET_ERR_TX = { session:'Nie łączę się z serwerem (brak sesji).', channel:'Serwer pokoju odrzucił połączenie.', timeout:'Serwer pokoju nie odpowiada.' };
+function mpNetErrHTML(){
+  return `<div class="mp-neterr" role="alert"><b>Nie łączę się z serwerem — spróbuj ponownie</b><small>${escapeHtml(NET_ERR_TX[S.netErr]||'')} Sprawdź internet i spróbuj jeszcze raz.</small>
+    <div class="mp-neterr-btns"><button type="button" class="mp-neterr-retry" onclick="mpRetryRoom()">Spróbuj ponownie</button><button type="button" class="mp-neterr-exit" onclick="mpRoomBack()">Wyjdź</button></div></div>`;
+}
 function mpLobbyWaitHTML(){
   const ms=mpMembers();
   const hostId = S.game ? S.game.hostId : (S.host ? mpMe.id : (S.ch && S.ch.hostId) || null);
@@ -74,11 +87,13 @@ function mpLobbyWaitHTML(){
   }).join('') || `<div class="pcz-waitmsg">czekamy na graczy…</div>`;
   const n=ms.length, word = n===1?'osoba' : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? 'osoby' : 'osób';
   const draft = !S.host ? mpDraftHTML(S.draft) : '';
-  const foot = S.host
+  const foot = S.netErr ? ''   // P0-8: bez połączenia nie ma czego zaczynać — akcje są w karcie błędu
+    : S.host
     ? `<button class="pcz-start" onclick="mpLobbyStart()">ZACZNIJ →</button>`
     : S.draft ? `<div class="pcz-waitmsg" role="status">⏳ host układa mecz — zmiany widzisz na żywo; zacznie, gdy będzie gotowy</div>`
     : `<div class="pcz-waitmsg">⏳ czekamy, aż host ułoży mecz…</div>`;
-  return `<div class="pcz">
+  const err = S.netErr ? mpNetErrHTML() : '';
+  return `<div class="pcz">${err}
     <div class="pcz-hd">
       <div class="pcz-hd-r1"><button type="button" class="pcz-exit" onclick="mpConfirmLeave('lobby')">${ic('back')} wyjdź</button><span class="pcz-lbl">KOD POKOJU</span></div>
       <div class="pcz-hd-r2"><span class="pcz-code">${escapeHtml(S.code||'····')}</span><button class="pcz-share" onclick="mpShare(this)">${ic('share')} Udostępnij</button></div>
@@ -108,7 +123,7 @@ function mpOnEnter(g, head, st){
     // F6b (R8): „złożona z głosów" — nowy serwer/host liczy credits w ocenie (core/mpReducer.answerCredits);
     // stary serwer ich nie ma → policz z bucketu drużyny, który w stanie REVEAL jeszcze jest (czyszczony w nowej rundzie)
     const credits = Array.isArray(rvm.credits) ? rvm.credits : (tid && !mpIsCompTV() ? answerCredits(g, tid, rvm.locked||{}) : []);
-    S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=QPC-1), credits };
+    S.revealSnap={ reveal:g.reveal, head, isLast:(g.si>=g.slots.length-1 && g.qi>=matchQpc(g)-1), credits };   // P1-7: qpc meczu
     // Łamigłówki: ~10 s zajawki rozwiązania — LOKALNIE u gracza; „🔈 dźwięk tylko u hosta" → gra tylko host/TV
     listenStart(g.reveal.listen, { auto:true, allowed:mpPlaysHere(g) });
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
@@ -127,7 +142,7 @@ function mpOnEnter(g, head, st){
   // Inaczej reduced-motion grałby od razu i miał przewagę. Sceny bez meta (kombinuj/odsłona/wynik/picker) → animIn.
   const scene=mpSceneKey(g);
   if(scene!==S.lastView){ S.lastView=scene;
-    if(g && g.phase===MP.DONE && scene==='ph:'+MP.DONE) playSfx('fanfare');   // F6b (U4): fanfara końca meczu (raz)
+    if(g && g.phase===MP.DONE && scene==='ph:'+MP.DONE && (S.sawMatch || S.host)) playSfx('fanfare');   // F6b (U4): fanfara końca meczu (raz); P0-10: nie dla dołączającego po meczu
     const meta=mpPhaseIntroMeta(g);
     if(meta){ mpPlayPhaseIntro(st, meta); }
     else { mpCancelIntro(st); S.introUntil=0; if(!(g && g.phase===MP.DONE)) animIn(st); }
@@ -159,7 +174,10 @@ function mpRender(){
     case MP.NOLYRIC: st.innerHTML=mpRenderNoLyric(head); return;
     case MP.PLAY:    mpRenderPlay(g, head, st); return;   // salon: te same fazy, tylko większe (CSS) + ukryte kontrolki gracza
     case MP.REVEAL:  st.innerHTML=mpRenderWaitNext(head); return;   // już kliknąłem „dalej" — czekam na resztę
-    case MP.DONE:    st.innerHTML=mpRenderDone(g, head); mpJuiceScore(g); return;
+    case MP.DONE:
+      // P0-10: dołączający DOPIERO po meczu nie widzi cudzego wyniku — lobby + szkic rewanżu (gdy host go układa)
+      if(!S.sawMatch && !S.host){ st.innerHTML=mpLobbyWaitHTML(); return; }
+      st.innerHTML=mpRenderDone(g, head); mpJuiceScore(g); return;
   }
 }
 // pasek emotek + krótka wiadomość — wspólny dla gry, wyniku i czekania.
@@ -322,9 +340,13 @@ function mpTeamHTML(g){
   const teamsAll=(g.teams||[]).filter(t=>(t.members||[]).length);
   const nAns=comp ? teamsAll.filter(t=>mpTeamAnswered(g, t).length).length : 0;
   const cnt=comp && teamsAll.length ? ` <small class="mp-lockcnt">${num(nAns)}/${num(teamsAll.length)} z typem</small>` : '';
-  const lockBtn = S.host
+  // P1-3: wszyscy obecni dali typ albo pas → serwer zamyka pytanie po krótkiej karencji
+  const allDone = g.allDoneAt ? `<div class="mp-alldone" role="status">✓ Wszyscy gotowi! Sprawdzamy…</div>` : '';
+  // P1-10: w Solo/Drużynach host jest GRACZEM — „Zakończ pytanie" nie stoi nad jego polami (jest w stopce, od połowy czasu)
+  const lockBtn = allDone ? allDone : (S.host && (!comp || mpIsCompTV()))
     ? `<button type="button" class="mp-lockbtn" onclick="mpLock()" aria-label="${comp?'Zakończ pytanie i zatwierdź odpowiedzi wszystkich drużyn':'Zatwierdź odpowiedź drużyny'}">✓ ${comp?'ZATWIERDŹ WSZYSTKICH':'ZATWIERDŹ ODPOWIEDŹ'}${cnt}</button>`
-    : `<div class="mp-lockwait">${g.timer>0?'host zatwierdza — albo koniec czasu':'czekamy, aż host zatwierdzi odpowiedź'}</div>`;
+    : `<div class="mp-lockwait">${comp ? (g.timer>0?'pytanie kończy się, gdy wszyscy odpowiedzą — albo minie czas':'pytanie kończy się, gdy wszyscy odpowiedzą (albo host je zakończy)')
+        : (g.timer>0?'host zatwierdza — albo koniec czasu':'czekamy, aż host zatwierdzi odpowiedź')}</div>`;
   if(mpIsCompTV()) return lockBtn;   // TV (Solo/Drużyny): bez odpowiedzi drużyny, tylko „zatwierdź wszystkich"
   const tid=myTeamId();
   const ta=teamAnswer(g, tid), slots=renderSlots(g);
@@ -335,6 +357,16 @@ function mpTeamHTML(g){
   const cls = curSkin()==='czat' ? 'mp-teamc' : 'mp-teamd';
   return `<div class="${cls}"><span class="ic">${ic('target')}</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${val}</span></span>${badge}</div>${lockBtn}`;
 }
+/* P1-10: „Zakończ pytanie" hosta w Solo/Drużynach — w stopce POD jego polami, widoczne od połowy czasu pytania
+ * (widoczność odświeża też tick w mp.js). Z P1-3 (auto-zamknięcie przy komplecie) potrzebne rzadko. */
+function mpEndQHTML(g){
+  if(!S.host || !g || (g.format||'coop')==='coop' || mpIsSalonHost() || g.allDoneAt) return '';
+  const teamsAll=(g.teams||[]).filter(t=>(t.members||[]).length);
+  const nAns=teamsAll.filter(t=>mpTeamAnswered(g, t).length).length;
+  const off=S.clockOff||0;
+  const vis=hostEndVisible({ playAt:Number.isFinite(g.playAt)?g.playAt-off:null, endsAt:g.endsAt?g.endsAt-off:null, now:Date.now() });
+  return `<button type="button" class="mp-endq" id="mpEndQ" onclick="mpLock()"${vis?'':' hidden'} aria-label="Zakończ pytanie dla wszystkich">⏹ Zakończ pytanie <small>${num(nAns)}/${num(teamsAll.length)} z typem</small></button>`;
+}
 // „pewniak" + „pas" — dwa NIEZALEŻNE od typowania toggle (jeden wiersz). Działają dla każdego
 // uczestnika (też kto tylko głosował), bo stan żyje w buckecie drużyny (sure/passed, nie w propozycji).
 // Stan podświetlony z gry (on), więc po wysłaniu odpowiedzi klik nadal działa i widać efekt.
@@ -343,7 +375,9 @@ function mpConfHTML(withPass=true){
   const bkt=myBucket();
   const iSure   = (bkt.sure||[]).some(p=>p.id===mpMe.id);
   const iPassed = (bkt.passed||[]).some(p=>p.id===mpMe.id);
-  const sure = `<button class="mp-seg s${iSure?' on':''}" style="flex:1.6" onclick="mpSend({type:'sure'})">🟡 PEWNIAK ×2</button>`;
+  // P0-3: pewniak przy pustej odpowiedzi drużyny wymaga 2. tapu (mpSureTap) — etykieta pyta „na pewno?"
+  const arm = !iSure && S.sureArmUntil>Date.now();
+  const sure = `<button class="mp-seg s${iSure?' on':''}${arm?' confirm':''}" style="flex:1.6" onclick="mpSureTap()" aria-pressed="${iSure}">${arm?'🟡 ×2 — na pewno?':'🟡 PEWNIAK ×2'}</button>`;
   const pass = withPass ? `<button class="mp-seg p${iPassed?' on':''}" style="flex:1" onclick="mpSend({type:'pass'})">✋ pas</button>` : '';
   return `${sure}${pass}`;
 }
@@ -390,7 +424,7 @@ function mpChatFeedHTML(){
 function mpTypingFeedHTML(){
   const ids=[...(S.typingSet||[])].filter(id=>id && id!==mpMe.id);
   if(!ids.length) return '';
-  const names=ids.map(mpNameOf), first=names[0]||'?';
+  const names=ids.map(id=>mpNameOf(id)||'gracz'), first=names[0]||'?';
   return `<div class="mp-cmsg mp-ctyping"><b class="mp-cmav" style="background:${mpAvatarColor(first)}">${escapeHtml(first.slice(0,1).toUpperCase())}</b>`+
     `<span class="mp-typing"><span></span><span></span><span></span></span><span class="mp-typname">${escapeHtml(names.join(', '))} pisze…</span></div>`;
 }
@@ -467,7 +501,8 @@ function mpLegendHTML(){
 // formularz typowania per slot (wspólny dla fazy/kombinuj)
 function mpFormHTML(g){
   const slots=renderSlots(g);
-  const inputs=slots.map(s=>`<input id="mpProp_${s.key}"${slotInputAttrs(s)} placeholder="${escapeHtml(s.label)}" oninput="mpTypingPing()">`).join('');
+  // P0-4: Enter = „Wrzuć" (wcześniejsze pole: dalej do następnego); klawiatura telefonu „Dalej"/„Wyślij"
+  const inputs=slots.map((s,i)=>`<input id="mpProp_${s.key}"${slotInputAttrs(s)} placeholder="${escapeHtml(s.label)}" enterkeyhint="${i<slots.length-1?'next':'send'}" autocomplete="off" data-k="${escapeHtml(s.key)}" oninput="mpTypingPing()" onkeydown="mpPropKey(event, this.dataset.k)">`).join('');
   const cols=slots.map(()=>'1fr').join(' ')+' auto';
   return `<div class="mp-form" style="grid-template-columns:${cols}">${inputs}<button onclick="mpPropose()">Wrzuć</button></div>`;
 }
@@ -478,7 +513,7 @@ function mpFormHTML(g){
 function mpComposerHTML(g){
   const slots=renderSlots(g);
   const typ = S.composerMode!=='chat';
-  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" autocomplete="off" placeholder="${escapeHtml(s.label)}" aria-label="odpowiedź: ${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
+  const chips=slots.map((s,i)=>`${i?'<span class="mp-sep">,</span>':''}<input id="mpTyp_${s.key}"${slotInputAttrs(s)} class="mp-slotchip" enterkeyhint="send" autocomplete="off" placeholder="${escapeHtml(s.label)}" aria-label="odpowiedź: ${escapeHtml(s.label)}" oninput="mpTypingPing()" onkeydown="if(event.key==='Enter')mpComposerSend()">`).join('');
   return `<div class="mp-composer">
       <button class="mp-cf mp-typtoggle" id="mpTypToggle" onclick="mpComposerToggle()" title="przełącz czat/odpowiedź" aria-label="${typ?'przełącz na czat':'przełącz na odpowiedź'}">${typ?'💬':'✍️'}</button>
       <div class="mp-compfield">
@@ -521,7 +556,7 @@ function mpSluchajBodyHTML(g){
   if(g.mode==='quiz'){
     return `${mpPromptHTML(g)}
       <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">odpowiadamy →</button>
-      <div class="mp-foot">${mpHr()}${mpReactsBarHTML(true)}</div>`;
+      <div class="mp-foot listen">${mpHr()}${mpReactsBarHTML(true)}</div>`;
   }
   // F6b (tryb #6): nie-host przy „Dźwięk tylko u hosta"/salonie = pilot — gałka głośnika, bez odtwarzania
   const here=mpPlaysHere(g);
@@ -532,19 +567,23 @@ function mpSluchajBodyHTML(g){
       <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
     ${mpLyricHTML(g)}${mpPromptHTML(g)}
     <button class="mp-btn ghost" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
-    <div class="mp-foot">${mpHr()}${mpReactsBarHTML(true)}</div>`;
+    <div class="mp-foot listen">${mpHr()}${mpReactsBarHTML(true)}</div>`;
 }
 // FAZA „kombinuj" — widok KOLUMNOWY (bez audio; quiz pokazuje pytanie na górze).
 // Kolejność: profile ─ odpowiedź drużyny ─ kolumny ─ [dół: input+wrzuć ─ pewność ─ emotki].
 // SALON (TV): bez pól wpisywania/pewności/emotek — host nadpisuje odpowiedź klikiem w kolumny.
+/* P0-2 (przegląd MP 2026-10): treść pytania (quiz/ABCD) NAD kolumnami, nie w sticky stopce — na 320×568 stopka
+ * (pytanie + pola + pewność + emotki + czat) zasłaniała cały ekran. Stopka = .mp-foot-pin (pola + WRZUĆ + pewność)
+ * + .mp-foot-x (emotki/czat); na niskich ekranach (max-height 700 px) przyklejony jest TYLKO pin (CSS). */
 function mpKombinujKolumnyHTML(g){
+  const prompt = mpPromptHTML(g);
   const foot = mpIsSalonHost()   // TV: bez pól/pewności/emotek (coop i Solo/Drużyny)
-    ? ((g.mode==='quiz'||g.mode==='abcd') ? `<div class="mp-foot">${mpHr()}${mpPromptHTML(g)}</div>` : '')
+    ? ''
     : `<div class="mp-foot">
-        ${mpPromptHTML(g)}${mpFormHTML(g)}
-        <div class="mp-conf" id="mpConf">${mpConfHTML()}</div>
-        ${mpHr()}${mpReactsBarHTML()}</div>`;
-  return `<div class="mp-roster" id="mpRoster"></div>
+        <div class="mp-foot-pin">${mpFormHTML(g)}
+        <div class="mp-conf" id="mpConf">${mpConfHTML()}</div></div>
+        <div class="mp-foot-x"><div id="mpEndWrap">${mpEndQHTML(g)}</div>${mpHr()}${mpReactsBarHTML()}</div></div>`;
+  return `${prompt}<div class="mp-roster" id="mpRoster"></div>
     ${mpHr()}
     <div class="mp-team" id="mpTeam"></div>
     ${mpHr()}
@@ -553,12 +592,16 @@ function mpKombinujKolumnyHTML(g){
 }
 // FAZA „kombinuj" — widok CZAT (design 08): odpowiedź drużyny przypięta na górze,
 // strumień czatu, composer = rząd emotek + ✋pas → pewność → pole @odp + wyślij.
+/* P0-3: bez skoków układu — feed ma STAŁĄ wysokość (flex, własny scroll), composer + pewność + emotki przyklejone
+ * do dołu (.mp-comp sticky). Dawniej każda wiadomość wydłużała feed i spychała composer: tap w emotkę trafiał w „PEWNIAK ×2".
+ * Pewniak oddzielony od emotek (odstęp + kreska) i przy pustej odpowiedzi drużyny wymaga potwierdzenia (mpSureTap). */
 function mpKombinujCzatHTML(g){
   return `${mpPromptHTML(g)}<div class="mp-team" id="mpTeam"></div>
-    <div class="mp-chatfeed" id="mpChatFeed" aria-live="polite"></div>
+    <div class="mp-chatfeed fixed" id="mpChatFeed" aria-live="polite"></div>
     <div class="mp-comp">
       ${mpComposerHTML(g)}
       <div class="mp-conf" id="mpConf">${mpConfHTML(true)}</div>
+      <div id="mpEndWrap">${mpEndQHTML(g)}</div>
       <div class="mp-comp-react">${REACTIONS.map(e=>`<button class="mp-rbtn" onclick="mpReact('${e}')">${e}</button>`).join('')}</div>
     </div>`;
 }
@@ -585,15 +628,23 @@ function mpRefreshDynamic(g){
   set('mpBoard', mpSlotsHTML(g));
   set('mpTeam', mpTeamHTML(g));
   set('mpConf', mpConfHTML());   // zwykła/niepewny/pewniak/pas w jednej linii (obie skórki)
+  set('mpEndWrap', mpEndQHTML(g));   // P1-10: „Zakończ pytanie" (licznik z typem)
   mpIngestFeed(g);                                  // dopisz nowe typy/pasy do feedu
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
 // start okna fazy słuchania (licznik czasu + auto-przejście do „kombinuj") — po intro
+// P0-7: okno liczone od terminu SERWERA (game.listenEndsAt; stary serwer: min(słuchanie, endsAt−teraz)) — powrót
+// w trakcie pytania nie daje pełnych 15 s. Zostało < 5 s → od razu „kombinuj" (zwraca 0 — caller nie włącza audio).
 function mpStartListenWindow(g){
-  S.listenStart=Date.now(); S.listenDur=mpListenSecs(g)*1000;
-  if(S.subTimer) clearTimeout(S.subTimer);
-  S.subTimer=setTimeout(()=>{ if(S.sub==='sluchaj' && S.game && S.game.phase===MP.PLAY) mpGoKombinuj(); }, S.listenDur);
+  const full=mpListenSecs(g)*1000;
+  const rem=listenWindowMs({ listenMs:full, listenEndsAt:g.listenEndsAt, endsAt:g.endsAt, now:Date.now()+(S.clockOff||0) });
+  if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; }
+  S.listenNonce=g.playNonce;   // zegar w nagłówku liczy od tego okna (przed nim — od terminu serwera)
+  if(rem<=0){ S.listenStart=Date.now(); S.listenDur=0; if(S.sub==='sluchaj') mpGoKombinuj(); return 0; }
+  S.listenDur=full; S.listenStart=Date.now()-(full-rem);   // pasek startuje od pozostałej części okna
+  S.subTimer=setTimeout(()=>{ if(S.sub==='sluchaj' && S.game && S.game.phase===MP.PLAY) mpGoKombinuj(); }, rem);
   mpAnimListenBar();
+  return rem;
 }
 // animuj pasek czasu fazy słuchania (CSS-transition od pozostałego % do 0)
 function mpAnimListenBar(){
@@ -640,11 +691,14 @@ function mpTeamLockedText(r, teamId){
 function mpRevealStandingsHTML(ranking, r){
   if(!ranking || ranking.length<2) return '';
   const tid=myTeamId&&myTeamId();
+  // P0-5: równe punkty = wspólne miejsce (1, 1, 3)
+  const places=standings(ranking.map(t=>({ id:t.teamId, name:t.name })), Object.fromEntries(ranking.map(t=>[t.teamId, t.score]))).rows;
+  const placeOf=(id)=>{ const p=places.find(x=>x.id===id); return p ? p.place : 0; };
   const rows=ranking.map((t,i)=>{
     const av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
     const ans=mpTeamLockedText(r, t.teamId);
     const ansHtml=`<small class="ans">${ans?'„'+escapeHtml(ans)+'"':'bez odpowiedzi'}</small>`;
-    return `<div class="rv-stand-row${t.teamId===tid?' me':''}"><span class="rk">${i+1}</span><b class="av" style="background:${safeColor(t.color, mpAvatarColor(t.name))}">${av}</b><span class="nm">${escapeHtml(t.name||'drużyna')}${t.teamId===tid?' (Ty)':''}${r?ansHtml:''}</span><span class="mk ${t.teamOk?'ok':'no'}">${t.teamOk?'✓':'✗'}</span><span class="pts">${num(t.score)}</span></div>`;
+    return `<div class="rv-stand-row${t.teamId===tid?' me':''}"><span class="rk">${num(placeOf(t.teamId)||i+1)}</span><b class="av" style="background:${safeColor(t.color, mpAvatarColor(t.name))}">${av}</b><span class="nm">${escapeHtml(t.name||'drużyna')}${t.teamId===tid?' (Ty)':''}${r?ansHtml:''}</span><span class="mk ${t.teamOk?'ok':'no'}">${t.teamOk?'✓':'✗'}</span><span class="pts">${num(t.score)}</span></div>`;
   }).join('');
   return `<div class="rv-standings"><div class="rv-stand-h">RANKING DRUŻYN</div>${rows}</div>`;
 }
@@ -714,12 +768,13 @@ function mpRenderYearReveal(snap){
   const cover = artOk?`<img class="rv-cover" src="${escapeHtml(r.art)}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">${ic('disc')}</div>`;
   const y=rv.yearEval||{}, ok=!!(rv.okBySlot&&rv.okBySlot.year);
   const team=(rv.locked&&rv.locked.year)||'';
-  const tier = !tv && team ? `<small class="rv-team">drużyna: „${escapeHtml(team)}" · ${escapeHtml(YEAR_TIER_TX[y.tier]||'')}${y.pts?` · +${num(y.pts)}`:''}</small>` : '';
+  // P0-6: jedna liczba punktów (w banerze) — tu tylko typ i trafność; <small> w osobnym wierszu (nie ucinany)
+  const tier = !tv && team ? `<small class="rv-team">drużyna: „${escapeHtml(team)}" · ${escapeHtml(YEAR_TIER_TX[y.tier]||'')}</small>` : '';
   const note = r.yearNote ? `<div class="rv-team rv-fun">ℹ️ ${escapeHtml(r.yearNote)}</div>` : '';
   return `${head}${mpRailHTML('odslona')}${mpRosterStrip()}${mpHr()}
     <div class="rv-card">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${r.album?`<span class="m">${escapeHtml(r.album)}</span>`:''}</div></div>
-      <div class="rv-slot"><span class="k">ROK</span><span class="v">${escapeHtml(String(r.year||'—'))}${tier}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>
+      <div class="rv-slot year"><span class="k">ROK</span><span class="v">${escapeHtml(String(r.year||'—'))}${tier}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>
       ${note}
       ${mpFromHTML(r)}
       ${tv?'':mpTasteHTML([r])}
@@ -793,6 +848,11 @@ function mpJuiceScore(g){
     el.textContent=Math.round(n*e); if(k<1) requestAnimationFrame(tick); else el.textContent=target; };
   requestAnimationFrame(tick);
 }
+// P1-17: gość na wyniku widzi szkic rewanżu na żywo (host po „Zmień ustawienia" rozsyła draft)
+function mpRematchDraftHTML(){
+  if(!S.draft) return '';
+  return mpDraftHTML(S.draft).replace('Mecz, który ustawia host', 'Rewanż — host ustawia');
+}
 // wynik meczu (design): złoty hero + MVP + kto stawia + paski wkładu
 function mpRenderDone(g, head){
   const tally=(g.tallyList||[]);
@@ -807,14 +867,18 @@ function mpRenderDone(g, head){
   // KONKURENCJA (solo/drużyny): hero = zwycięzca, główna lista = ranking drużyn (pkt).
   // WSPÓLNA (coop): hero = wynik jedynej drużyny, lista = wkład graczy (jak dotąd).
   const isComp=(g.format||'coop')!=='coop';
-  const tr=mpTeamRanking(g), winner=tr[0];
-  const heroT = isComp && winner ? escapeHtml(winner.name)+' wygrywa!' : 'Mecz zakończony!';
-  const heroS = isComp ? 'zwycięska drużyna · punkty' : 'punkty drużyny';   // F6a: wynik w punktach (core/scoring.scoreRound)
+  const tr=mpTeamRanking(g);
+  // P0-5: remis (także 0:0) to „Remis!", nie „<pierwszy po sortowaniu> wygrywa!"; wspólne miejsca w rankingu
+  const st=standings((g.teams||[]).map(t=>({ id:t.id, name:t.name })), Object.fromEntries(tr.map(t=>[t.id, t.score])));
+  const placeOf=(id)=>{ const p=st.rows.find(x=>x.id===id); return p ? p.place : 0; };
+  const tied=st.rows.filter(x=>x.place===1);
+  const heroT = isComp && st.tie ? 'Remis!' : isComp && st.winner ? escapeHtml(st.winner.name)+' wygrywa!' : 'Mecz zakończony!';
+  const heroS = isComp && st.tie ? escapeHtml(tied.map(x=>x.name).join(' · '))+' · ex aequo' : isComp ? 'zwycięska drużyna · punkty' : 'punkty drużyny';   // F6a: wynik w punktach (core/scoring.scoreRound)
   let body;
   if(isComp){
     const tmax=Math.max(1,...tr.map(t=>t.score));
     const trows=tr.map((t,i)=>{ const av=escapeHtml((t.name||'?').slice(0,1).toUpperCase()), pct=Math.round(t.score/tmax*100);
-      return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${t.color}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${num(pct)}%;background:${i===0?'var(--green)':(t.score?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${num(t.score)}</span></div>`;
+      return `<div class="wk-row"><span class="rk">${num(placeOf(t.id)||i+1)}</span><b class="av" style="background:${t.color}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${num(pct)}%;background:${i===0?'var(--green)':(t.score?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${num(t.score)}</span></div>`;
     }).join('');
     body=`<div class="dn-lbl">Ranking drużyn</div><div class="dn-wk">${trows}</div>`;
   } else {
@@ -823,7 +887,10 @@ function mpRenderDone(g, head){
   return `<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc">${num(mpWinnerScore(g))}</div></div>
     ${mvp}${stawia}
     ${body}
-    <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">${ic('back')} menu</button>${S.host?'<button class="dn-again" onclick="mpNewGame()">REWANŻ 🔁</button>':'<div class="dn-wait">host zaczyna rewanż</div>'}</div>`;
+    ${S.host ? '' : mpRematchDraftHTML()}
+    <div class="dn-btns"><button class="dn-menu" onclick="mpExitMenu()">${ic('back')} menu</button>${S.host
+      ? '<button class="dn-again" onclick="mpRematch()" aria-label="Jeszcze raz — te same ustawienia">Jeszcze raz 🔁<small>te same ustawienia</small></button><button class="dn-change" onclick="mpNewGame()">Zmień ustawienia</button>'
+      : `<div class="dn-wait">${S.draft?'host ustawia rewanż…':'host zaczyna rewanż'}</div>`}</div>`;
 }
 
-export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText };
+export { mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost };

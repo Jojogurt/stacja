@@ -109,3 +109,16 @@ export function reconcileTeams(game, players){
   }
   game.teams.forEach(t=>{ if(game.scores[t.id]==null) game.scores[t.id]=0; });
 }
+
+/* P0-5 (przegląd MP 2026-10): ranking z REMISAMI — wspólne miejsce przy równych punktach (1, 1, 3) i flaga `tie`
+ * (remis na czele). Dawniej 0:0 ogłaszało „X wygrywa!" (pierwszy po sortowaniu). Kolejność remisujących = jak w `teams`.
+ * → { rows:[{id,name,color,score,place}], tie, winner (null przy remisie / braku drużyn) } */
+export function standings(teams, scores){
+  const sc = scores || {};
+  const rows = (teams || []).map((t, i)=>({ id:t.id, name:t.name, color:t.color, score:Number(sc[t.id])||0, i }))
+    .sort((a, b)=> b.score - a.score || a.i - b.i);
+  let place = 0;
+  rows.forEach((r, k)=>{ if(k===0 || r.score!==rows[k-1].score) place = k+1; r.place = place; delete r.i; });
+  const tie = rows.length>1 && rows[0].score===rows[1].score;
+  return { rows, tie, winner: rows.length && !tie ? rows[0] : null };
+}

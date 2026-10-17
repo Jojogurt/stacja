@@ -1768,6 +1768,66 @@
   @media (max-width:360px){ .gu-tl{display:none} .gf-big b{font-size:38px} .gf-score{gap:10px;padding:12px} .gf-part{grid-template-columns:88px minmax(0,1fr) 34px} .gf-head b{font-size:18px} }
   @media (max-width:360px){ .gu-link{font-size:12px;padding:8px 4px} .tp-arch-tx b{font-size:20px} .tp-arch-ic{font-size:38px} .gu-tabs button{font-size:13px;padding:9px 4px} .tp-cmp-row{grid-template-columns:64px minmax(0,1fr)} .gu-play,.gu-del{width:36px} .gu-acts{gap:5px} .mh-card.gust .tx b{font-size:17px} .mh-card.gust{gap:12px;padding:16px} .gu-stage{min-height:340px} .gu-b{width:58px;height:58px;font-size:25px} .gu-b.heart{width:68px;height:68px;font-size:30px} .gu-btns{gap:14px} .gu-ct b{font-size:18px} }
   @media (prefers-reduced-motion: reduce){ .gu-card,.gu-card.fly{transition:none} .gu-prog i{transition:none} }
+  /* ===== Przegląd MP 2026-10 — etap A (P0/P1) ===== */
+  /* P1-2: JEDEN zegar bieżącej fazy w nagłówku (🎧 słuchanie → 🧠 odpowiedź); czerwień tylko w ostatnich 5 s */
+  .mp-hd-timer:not(:empty){background:rgba(255,255,255,.22);box-shadow:0 3px 0 rgba(0,0,0,.14);font-variant-numeric:tabular-nums;min-width:68px;text-align:center}
+  .mp-hd-timer[data-phase="kombinuj"]:not(:empty){background:rgba(0,0,0,.18)}
+  /* F9/P0-2: „słuchaj" — stopka NIE przyklejona (CTA „gotowe, kombinujemy" nigdy pod nią); margin-top:auto zostaje */
+  .mp-foot.listen{position:static}
+  .mp-foot-pin,.mp-foot-x{display:block}
+  /* P0-2: niskie ekrany (320×568, 375×667) — przyklejony TYLKO wiersz pól + „WRZUĆ" + pewność (≤ ~140 px);
+     emotki/czat/„Zakończ" w zwykłym przepływie pod nim (do przewinięcia) */
+  @media (max-height:700px){
+    .mp-play .mp-foot:not(.listen){display:contents}
+    .mp-play .mp-foot-pin{position:sticky;bottom:calc(-1 * (env(safe-area-inset-bottom) + 18px));margin-top:auto;z-index:3;
+      background:var(--bg);padding:8px 0 calc(env(safe-area-inset-bottom) + 12px);box-shadow:0 -8px 12px -10px rgba(0,0,0,.35)}
+    .mp-play .mp-foot-pin .mp-form{margin-bottom:6px}
+    .mp-play .mp-foot-pin .mp-conf{margin:0}
+    .mp-play .mp-foot-pin .mp-seg{padding:7px 3px}
+    .mp-play .mp-foot-x{padding-bottom:calc(env(safe-area-inset-bottom) + 12px)}
+    .mp-hd{padding:10px 12px;margin-bottom:10px}
+    .mp-hd-chips{margin-top:6px;gap:6px}
+  }
+  /* P0-3: skórka czat bez skoków — feed o stałej wysokości (flex + własny scroll), composer przyklejony do dołu */
+  .mp-play .mp-chatfeed.fixed{flex:1 1 0;min-height:120px;max-height:none;margin:8px 0}
+  .mp-play .mp-chatfeed.fixed:empty{display:flex}
+  .mp-play .mp-comp{position:sticky;bottom:calc(-1 * (env(safe-area-inset-bottom) + 18px));z-index:3;background:var(--bg);
+    margin-top:auto;padding-bottom:calc(env(safe-area-inset-bottom) + 12px);border-top-color:var(--line)}
+  .mp-comp .mp-conf{margin:2px 0 0}
+  .mp-comp .mp-comp-react{margin-top:6px;padding-top:10px;border-top:2px dashed var(--line)}
+  @media (max-height:700px){ .mp-play .mp-chatfeed.fixed{min-height:84px} .mp-comp{gap:7px} }
+  /* P0-3: pewniak czeka na potwierdzenie (pusta odpowiedź drużyny) */
+  .mp-seg.s.confirm{background:var(--part-bg);border-color:var(--gold);color:var(--part-ink);animation:tlow .6s ease-in-out 2}
+  /* P1-10: „Zakończ pytanie" hosta (Solo/Drużyny) — pod polami, nie nad nimi */
+  .mp-endq{display:block;width:100%;margin:10px 0 2px;min-height:44px;font-family:var(--display);font-weight:900;font-size:var(--fs-sm);
+    color:var(--ink);background:var(--surface);border:2px solid var(--line);border-bottom-width:4px;border-radius:13px;padding:9px;cursor:pointer}
+  .mp-endq[hidden]{display:none}
+  .mp-endq small{font-weight:800;color:var(--muted);margin-left:4px}
+  /* P1-3: wszyscy gotowi */
+  .mp-alldone{text-align:center;font-family:var(--display);font-weight:900;font-size:var(--fs-md);color:var(--ok-ink,var(--green-d));
+    background:var(--ok-bg);border:2px solid var(--green);border-radius:13px;padding:9px;margin:8px 0 2px}
+  /* P0-6: odsłona „rok" — typ drużyny w osobnym wierszu (nie ucinany „+1") */
+  .rv-slot.year .v{white-space:normal;overflow:visible}
+  .rv-slot.year .v .rv-team{display:block}
+  /* P0-8: błąd połączenia w lobby */
+  .mp-neterr{margin:0 0 12px;padding:14px;border:2px solid var(--red);border-radius:16px;background:var(--fail-bg);color:var(--fail-ink);display:flex;flex-direction:column;gap:6px}
+  .mp-neterr b{font-family:var(--display);font-weight:900;font-size:var(--fs-md)}
+  .mp-neterr small{font-family:var(--body);font-weight:700;font-size:var(--fs-sm);line-height:1.4}
+  .mp-neterr-btns{display:flex;gap:10px;margin-top:4px}
+  .mp-neterr-btns button{flex:1;min-height:44px;border-radius:13px;font-family:var(--display);font-weight:900;font-size:var(--fs-sm);cursor:pointer}
+  .mp-neterr-retry{color:#fff;background:var(--green);border:none;box-shadow:0 4px 0 var(--green-d)}
+  .mp-neterr-exit{color:var(--muted);background:var(--surface);border:2px solid var(--line)}
+  /* P1-11: toast roli hosta */
+  .mp-toast{position:fixed;left:50%;top:calc(env(safe-area-inset-top) + 12px);transform:translate(-50%,-140%);z-index:210;max-width:min(92vw,420px);
+    background:var(--ink);color:var(--bg);font-family:var(--display);font-weight:900;font-size:var(--fs-sm);padding:10px 16px;border-radius:14px;
+    box-shadow:0 6px 18px rgba(0,0,0,.25);transition:transform .28s cubic-bezier(.2,.8,.2,1);pointer-events:none;text-align:center}
+  .mp-toast.show{transform:translate(-50%,0)}
+  @media (prefers-reduced-motion: reduce){ .mp-toast{transition:none} }
+  /* P1-17: rewanż 1 tap + „Zmień ustawienia" */
+  .dn-btns{flex-wrap:wrap}
+  .dn-change{flex:1 1 100%;background:var(--surface);border:2px solid var(--line);border-bottom-width:4px;border-radius:18px;padding:12px;font-family:var(--display);font-weight:900;font-size:14px;color:var(--ink);cursor:pointer}
+  .dn-again{min-width:0}
+  .dn-again small{display:block;font-size:12px;font-weight:800;letter-spacing:0;opacity:.9;margin-top:2px}
 </style>
 <script>/* motyw przed renderem — bez mignięcia. F6a (R-U7): brak wyboru / 'system' → prefers-color-scheme */try{var _t=localStorage.getItem('stacjaTheme');if(_t==='dark'||(_t!=='light'&&window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches))document.documentElement.classList.add('dark');}catch(e){try{if(window.matchMedia&&matchMedia('(prefers-color-scheme: dark)').matches)document.documentElement.classList.add('dark');}catch(_e){}}</script>
 </head>

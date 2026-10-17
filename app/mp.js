@@ -7,10 +7,11 @@ import { norm, quizKey, parseYear, quizListen } from '../core/scoring.js';
 import { listenStop, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie (start w mp-render: mpOnEnter)
 import { QPC, CPR, ALL_MODES, MODE_LABEL, matchSlot, matchAdvance, clampRounds, clampQuestions, roundsForQuestions, mpAvailableModes } from '../core/match.js';
 import { MP, assertMp } from '../core/phases.js';
-import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally } from '../core/mpReducer.js';
+import { reduceAction, countReady, evaluateAnswer, applyEvaluation, slotsFor, teamOf, playsAudioLocally, tvIdOf, allSettled, needsSureConfirm } from '../core/mpReducer.js';
 import { buildTeams, emptyByTeam, reconcileTeams, COOP_TEAM } from '../core/teams.js';
 import { buildMpRecord, noteAnswerers } from '../core/matchRecord.js';
-import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond, isTempoMode, mpTempoRate } from '../core/timing.js';
+import { clampTimer, mpSnipOffset, revsnipWindow, listenSecs as _listenSecs, shouldPing, secsLeft, SNIP_SECS, MP_SNIP_WINDOW_S, MP_BUFFER_TIMEOUT_MS, EMOJI_TTL_MS, SAY_TTL_MS, lastRoomCode, tickSecond, isTempoMode, mpTempoRate,
+  MP_INTRO_MS, MP_ALL_DONE_GRACE_MS, phaseDeadlines, addClockSample, clockOffset, phaseClock, fmtClock, hostEndVisible } from '../core/timing.js';
 import { createFeed, resetFeed, pushChat as _pushChat, ingestFeed as _ingestFeed } from '../core/chatFeed.js';
 import { plPick, togglePick as _togglePick, syncQuizMode as _syncQuizMode, grpActive as _grpActive, pickSummary } from '../core/picker.js';
 import { animIn, confetti, val, lsGet, lsSet } from './dom.js';
@@ -29,11 +30,10 @@ import { playSfx, registerMusicProbe } from './sfx.js';
 import { mpVinyl } from './vinyl.js';   // płyta winylowa = kontrolka odtwarzania w fazie „słuchaj"
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft } from './mp-picker.js';
+import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft, mpPickResetRoom, mpPickReady } from './mp-picker.js';
 import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla gości (ta sama sanityzacja co serwer)
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText } from './mp-render.js';
-import { ic } from './icons.js';
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost } from './mp-render.js';
 import { tableShelfPayload } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
 import { tasteStore, tasteVisibility } from './taste.js';
 
@@ -127,6 +127,25 @@ function mpNetStatus(s){
   if(s==='reconnecting'){ el.textContent='łączę ponownie…'; el.classList.add('show'); }
   else { el.classList.remove('show'); }   // 'ok' → schowaj
 }
+// P1-11: krótki toast nad ekranem MP (zmiana roli hosta itp.) — role="status", znika sam po ~3,2 s
+let mpToastTimer=null;
+function mpToast(text){
+  let el=$m('mpToast');
+  if(!el){ el=document.createElement('div'); el.id='mpToast'; el.className='mp-toast'; el.setAttribute('role','status'); el.setAttribute('aria-live','polite'); document.body.appendChild(el); }
+  el.textContent=text; el.classList.add('show');
+  if(mpToastTimer) clearTimeout(mpToastTimer);
+  mpToastTimer=setTimeout(()=>{ el.classList.remove('show'); mpToastTimer=null; }, 3200);
+}
+// P1-11: presence z nowym hostId → komunikat roli („Jesteś teraz hostem" / „X znów prowadzi"). Pierwsza presence — bez toastu.
+function mpNoteHost(hid){
+  if(!hid) return;
+  const prev=S.lastHostId;
+  S.lastHostId=hid;
+  if(prev===undefined || prev===hid){ S.pastHosts.add(hid); return; }
+  const again=S.pastHosts.has(hid); S.pastHosts.add(hid);
+  if(hid===mpMe.id) mpToast(again ? '👑 Znów prowadzisz' : '👑 Jesteś teraz hostem');
+  else mpToast(`👑 ${mpNameOf(hid)||'gracz'} ${again?'znów prowadzi':'prowadzi teraz'}`);
+}
 // 5.8: podpowiedź linku pokoju z REALNEGO origin (nie hardcode „stacja.app")
 try{ const _h=$m('mpLinkHint'); if(_h) _h.textContent=(location.origin+location.pathname).replace(/\/$/,'')+'/?room='; }catch(_e){}
 
@@ -186,7 +205,7 @@ async function mpLeave(){
   if(S.subTimer){ clearTimeout(S.subTimer); S.subTimer=null; }
   if(S.audio){ mpClearSnip(S.audio); mpClearArmWait(S.audio); }
   S.playRound=S.playSkin=S.playSub=null; S.sub='sluchaj'; S.composerMode='typ'; S.introUntil=0;
-  S.listenStart=0; S.listenDur=0; S.revealAutoAt=0; S.skipArm=false;
+  S.listenStart=0; S.listenDur=0; S.listenNonce=null; S.revealAutoAt=0; S.skipArm=false;
   S.armPending=S.armReported=S.armSeen=null; S.armDeadlineLocal=0;
   S.seenActs.clear(); S.hostSeen.clear(); S.autoLocked=false;
   mpFeedReset(); mpClearTyping();
@@ -194,6 +213,9 @@ async function mpLeave(){
   advancedSet=new Set(); advancedNonce=null; S.advCount=S.advTotal=0;   // salon: licznik „dalej" graczy
   S.ack=S.revealNonce=S.revealSnap=null;
   S.audioHostOnly=false; S.tickSec=null;
+  S.clockSamples=[]; S.clockOff=0; S.netErr=null; S.sawMatch=false; S.lastHostId=undefined; S.pastHosts=new Set(); S.sureArmUntil=0;   // etap A
+  if(S.connTimer){ clearTimeout(S.connTimer); S.connTimer=null; }
+  if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
   S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.draft=null; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
   mpLeaveCancel(); mpSyncRoomBack();
@@ -262,22 +284,34 @@ function mpOnDraft(payload, from){
   const hid=(S.ch && S.ch.hostId) || (S.game && S.game.hostId) || null;
   if(hid && from && from!==hid) return;                      // tylko od hosta (serwer i tak to wymusza)
   const d=sanitizeDraft(payload); if(!d) return;
-  S.draft=d; if(mpInLobby()) mpRender();
+  // P0-10/P1-17: po meczu (DONE) host układa rewanż → goście widzą szkic na żywo (dawniej tylko w lobby przed meczem)
+  S.draft=d; if(mpInLobby() || (S.game && S.game.phase===MP.DONE)) mpRender();
 }
 
 async function mpEnterRoom(code, asHost, groupId){
   mpErr('');
   if(!(window.STACJA_CONFIG&&window.STACJA_CONFIG.roomsBase)){ mpErr('Brak połączenia z serwerem (config.js).'); return; }
   const uid=await ensureSession(); if(uid) mpMe.id=uid;   // tożsamość = profile id PRZED presence
+  if(S.code!==code) mpPickResetRoom();   // P0-9: salon/format/podział z poprzedniego pokoju nie przechodzą do nowego
   S.code=code; S.host=asHost; S.roomStage='wait'; S.groupId=groupId||null; S.shelfSent=false;   // MVP-3: tag drużyny (host)
+  S.enterArgs={ code, asHost:!!asHost, groupId:groupId||null }; S.netErr=null;
   lastRoomSave(code); mpSyncRoomBack();   // F6b (F6): przeładowanie karty w meczu → „Wróć do pokoju" w menu
   $m('mpLobby').style.display='none'; $m('mpRoom').style.display='';
+  // P0-8: bez sesji (np. 500 z /api/session) serwer-autorytet odrzuci połączenie (brak tokenu) — dawniej lobby
+  // „0 osób · czekamy na graczy…" bez końca. Teraz karta błędu z „spróbuj ponownie".
+  S.sessionFail = SERVER_AUTH && !uid;   // bez tokenu DO odrzuci połączenie (4001 → CHANNEL_ERROR) — tekst błędu „brak sesji"
+  if(S.connTimer) clearTimeout(S.connTimer);
+  S.connTimer=setTimeout(()=>{ S.connTimer=null; if(S.code===code && !S.subscribed){ S.netErr='timeout'; mpRender(); } }, 9000);
+  S.subscribed=false;
   // SERVER_AUTH → transport na autorytatywny DO (ta sama powierzchnia); else relay cfChannel.
-  S.ch=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}});
+  // P1-11: ksywa od pierwszego połączenia (serwer zapisuje ją w drużynie/names zanim przyjdzie `track`)
+  S.ch=(SERVER_AUTH?authorityChannel:cfChannel)(code, {config:{broadcast:{self:true}, presence:{key:mpMe.id}}, name:mpMe.name});
   // pod autorytetem KAŻDY (też host) bierze stan z DO; w relay tylko nie-host (host jest źródłem).
   // AUTORYTET: 'sync' przychodzi WYŁĄCZNIE z {t:'state'} (roomTransport nie mapuje eventów na stan — F1 #1).
   // RELAY: stan tylko od hosta — gdy serwer podaje nadawcę (`from`), sync od kogoś innego niż host gry odrzucony.
-  S.ch.on('broadcast',{event:'sync'},({payload, from})=>{
+  S.ch.on('broadcast',{event:'sync'},({payload, from, serverNow, recvAt})=>{
+    // P1-2: offset zegara serwera (anty-skew) — z każdej ramki stanu; stary serwer bez serverNow → offset 0
+    if(serverNow){ S.clockSamples=addClockSample(S.clockSamples, serverNow, recvAt||Date.now()); S.clockOff=clockOffset(S.clockSamples); }
     if(!(SERVER_AUTH || !S.host) || !payload || typeof payload!=='object') return;
     if(!SERVER_AUTH && from && S.game && S.game.hostId && from!==S.game.hostId) return;   // F1: relay — tylko host
     S.game=payload; mpAfterSync();
@@ -296,6 +330,7 @@ async function mpEnterRoom(code, asHost, groupId){
     // host = autorytatywny hostId z DO. F2b #3: także gdy hostId=null (stary serwer po wyjściu hosta
     // z duplikatem socketu) — dawniej klient zostawał przy S.host=true z przyciskami, które DO odrzucał.
     if(SERVER_AUTH) S.host=(!!S.ch.hostId && S.ch.hostId===mpMe.id);
+    if(SERVER_AUTH) mpNoteHost(S.ch.hostId);                         // P1-11: toast przy zmianie roli hosta
     mpRenderMembers();
     // 1.5: zmiana S.host → ZAWSZE re-render (inaczej awansowany host nie zobaczy przycisków hosta;
     //      domyka 1.2 — przycisk „następne" po promocie w REVEAL). Dotąd re-render tylko w lobby.
@@ -309,12 +344,21 @@ async function mpEnterRoom(code, asHost, groupId){
     }
   });
   S.ch.subscribe(async(status)=>{
-    if(status==='SUBSCRIBED'){ await S.ch.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
-    else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); }
+    if(status==='SUBSCRIBED'){ S.subscribed=true; S.netErr=null; if(S.connTimer){ clearTimeout(S.connTimer); S.connTimer=null; }
+      await S.ch.track({name:mpMe.name}); mpRenderMembers(); mpRender(); }
+    else if(status==='CHANNEL_ERROR'){ mpErr('Błąd kanału — spróbuj ponownie.'); S.netErr=S.sessionFail?'session':'channel'; mpRender(); }   // P0-8: widoczne w pokoju
   });
   if(!S.timerInt) S.timerInt=setInterval(mpTickTimer, 500);
 }
 
+// P0-8: „spróbuj ponownie" z karty błędu połączenia — wyjdź czysto i wejdź do tego samego pokoju z tą samą rolą
+async function mpRetryRoom(){
+  const a=S.enterArgs; if(!a) return;
+  mpUnlockAudio();
+  await mpLeave();
+  showScreen('mp');
+  mpEnterRoom(a.code, a.asHost, a.groupId);
+}
 /* gust etap 3: „🎧 Gust stołu" — półka gracza (top 20 ❤️: tytuł/wykonawca/rok) do serwera-autorytetu.
  * Tylko gdy serwer ogłasza capability 'tableTaste' (stary serwer / relay → nic nie wysyłamy), gracz ma ≥ 5 ❤️
  * i NIE ukrył gustu (tableShelfPayload → null). Serwer trzyma półki w stanie pokoju (nie D1). */
@@ -337,16 +381,23 @@ function mpSender(p){ return (p && typeof p==='object' && (p.from || p.by)) || n
 function mpMembers(){
   if(!S.ch) return [];
   const st=S.ch.presenceState(); const out=[];
-  Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||'?'}); });
+  const names=(S.game && S.game.names) || {};   // P1-11: ksywa ze stanu gry, gdy presence jeszcze bez niej
+  Object.keys(st).forEach(k=>{ const meta=st[k][0]||{}; out.push({id:k, name:meta.name||names[k]||'?'}); });
   return out;
 }
 // GRACZE = członkowie pokoju; w trybie salonowym TV (host) jest tylko prowadzącym, więc poza listą.
 // Filtr działa od startu meczu (flaga salon żyje w stanie gry); przed meczem nie znamy roli.
 function mpPlayers(){
   const ms=mpMembers(), g=S.game;
-  const salon=(g&&g.salon)||S.salon;                 // S.salon = host-lokalny fallback (przed game.salon z serwera)
-  const hostId=g?g.hostId:(S.host?mpMe.id:null);
-  return (salon && hostId) ? ms.filter(m=>m.id!==hostId) : ms;
+  const active=!!(g && g.phase!=null && g.phase!==MP.DONE);
+  if(active){
+    // P0-1: TV = game.tvId (po wyjściu TV awansowany gracz DALEJ gra); stan bez tvId → host (stary serwer)
+    const salon=g.salon||S.salon;                    // S.salon = host-lokalny fallback (przed game.salon z serwera)
+    const tv=salon ? (g.tvId || g.hostId) : null;
+    return tv ? ms.filter(m=>m.id!==tv) : ms;
+  }
+  // P0-9: przed meczem / rewanż — salon wg wyboru w pickerze (TV = ten host) → TV poza przydziałem do drużyn
+  return (S.host && mpPickSalon) ? ms.filter(m=>m.id!==mpMe.id) : ms;
 }
 // drużyna TEGO klienta (izolacja widoku). coop → 'all'; salon-host → drużyna, którą sędziuje.
 function myTeamId(){ return teamOf(S.game, mpMe.id) || COOP_TEAM; }
@@ -362,7 +413,7 @@ function myTeamMembers(){
 // Brak graczy → fallback na wszystkich (anty-deadlock, gdy host sam w pokoju).
 function mpExpectedReady(){
   const ids=mpMembers().map(m=>m.id);
-  if(S.game && S.game.salon){ const ps=ids.filter(id=>id!==S.game.hostId); return ps.length?ps:ids; }
+  if(S.game && S.game.salon){ const tv=tvIdOf(S.game); const ps=ids.filter(id=>id!==tv); return ps.length?ps:ids; }
   return ids;
 }
 function mpRenderMembers(){
@@ -394,6 +445,9 @@ function mpAfterSync(){
   // (Nie-host przy starym serwerze flagi nie dostanie → gra jak dotąd; salon działa, bo game.salon serwer odsyła.)
   if(S.host && S.audioHostOnly && S.game && S.game.phase!=null && !S.game.audioHostOnly) S.game.audioHostOnly=true;
   const g=S.game;
+  // P0-10: ten klient WIDZIAŁ mecz (dołączający dopiero w DONE dostaje lobby + szkic rewanżu, nie cudzy wynik);
+  // szkic sprzed meczu nieaktualny — przy DONE pokazujemy tylko szkic REWANŻU (host wysyła go po „Zmień ustawienia")
+  if(g && [MP.LOADING, MP.ARMING, MP.PLAY, MP.REVEAL].includes(g.phase)){ S.sawMatch=true; S.draft=null; }
   // F6b: audio tylko w fazie słuchania — wejście w ODSŁONĘ ucisza zajawkę/lektora (i nie dusi „ding"/oklasków)
   if(g && g.phase===MP.REVEAL && g.reveal && S.revealNonce!==g.playNonce) mpStopAudio();
   // F2b #6: lokalny termin twardego limitu ARMING (serwer wysyła armMs; stary serwer — brak → bez licznika)
@@ -420,7 +474,8 @@ function mpAfterSync(){
   mpRender();   // może odpalić INTRO fazy i ustawić S.introUntil (start fazy wstrzymany do końca animacji)
   // CAŁA faza (okno czasu + audio) startuje DOPIERO po intrze — nic nie gra/tyka pod dużą ikoną fazy.
   if(startPlay){
-    const begin=()=>{ if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===S.lastNonce){ mpStartListenWindow(S.game); mpPlayLocal(); } };
+    // P0-7: okno słuchania wg terminu serwera — powrót w trakcie pytania nie daje pełnych 15 s; < 5 s → od razu „kombinuj" (bez audio)
+    const begin=()=>{ if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===S.lastNonce){ if(mpStartListenWindow(S.game)>0) mpPlayLocal(); } };
     const wait=(S.introUntil||0)-Date.now();
     if(S.startTimer){ clearTimeout(S.startTimer); S.startTimer=null; }
     if(wait>20) S.startTimer=setTimeout(begin, wait); else begin();
@@ -477,7 +532,7 @@ function mpAdvance(){
     // F2b #6: SALON — klik na TV = „pomiń czekanie" → pomiń też fazę gotowości następnego pytania
     // (TV wyśle {t:go} zaraz po zbuforowaniu własnego audio; telefony dogonią). Auto-przejście
     // po „dalej" wszystkich graczy (mpRecountAdvance) idzie prosto do mpHostNextReveal — bez pomijania.
-    if(S.game.salon || S.salon) S.skipArm=true;
+    if(mpIsSalonHost()) S.skipArm=true;   // P0-1: tylko TV (nie awansowany gracz)
     mpHostNextReveal(); return;                         // host → następne pytanie
   }
   // SALON: zgłoś hostowi „kliknąłem dalej" — TV przejdzie samo, gdy wszyscy klikną (host nie gra)
@@ -663,7 +718,10 @@ function mpGo(){
   if(S.armTimer){ clearTimeout(S.armTimer); S.armTimer=null; }
   S.game.phase=assertMp(S.game.phase, MP.PLAY, console.warn); S.game.playNonce=(S.game.playNonce||0)+1;
   S.game.playAt=Date.now();   // F6a: start PLAY → bonus za szybkość (do zatwierdzenia)
-  if(S.game.timer>0) S.game.endsAt=Date.now()+S.game.timer*1000;
+  // P1-2: relay-host = autorytet — ta sama semantyka co serwer (czas na odpowiedź PO słuchaniu)
+  const cat=ALL_CATS[S.game.catKey];
+  const dl=phaseDeadlines({ playAt:S.game.playAt, leadMs:MP_INTRO_MS, listenMs:_listenSecs(S.game.mode, cat && cat.listenSecs)*1000, timerS:S.game.timer });
+  S.game.listenEndsAt=dl.listenEndsAt; S.game.endsAt=dl.endsAt; S.game.allDoneAt=null;
   mpBroadcast(); mpAfterSync();   // host gra lokalnie
 }
 
@@ -682,7 +740,21 @@ function mpHandleAct(a){
     return;
   }
   // pozostałe akcje gry: czysty reducer (propose/unpropose/vote/sure)
-  if(reduceAction(S.game, a)){ mpBroadcast(); mpRender(); }
+  if(reduceAction(S.game, a)){ mpBroadcast(); mpRender(); mpRelayAllDone(); }
+}
+// P1-3 (relay-host = autorytet): wszyscy obecni gracze mają typ/pas → zamknij po karencji (jak serwer)
+function mpRelayAllDone(){
+  if(SERVER_AUTH || !S.host || !S.game || S.game.phase!==MP.PLAY) return;
+  const done=allSettled(S.game, mpPlayers().map(m=>m.id));
+  if(done && !S.game.allDoneAt){
+    S.game.allDoneAt=Date.now()+MP_ALL_DONE_GRACE_MS; const nonce=S.game.playNonce;
+    if(S.allDoneTimer) clearTimeout(S.allDoneTimer);
+    S.allDoneTimer=setTimeout(()=>{ S.allDoneTimer=null; if(S.game && S.game.phase===MP.PLAY && S.game.playNonce===nonce && S.game.allDoneAt) mpLock(); }, MP_ALL_DONE_GRACE_MS);
+    mpBroadcast(); mpRender();
+  } else if(!done && S.game.allDoneAt){
+    S.game.allDoneAt=null; if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
+    mpBroadcast(); mpRender();
+  }
 }
 
 /* ---- host: start gry / runda ---- */
@@ -712,7 +784,9 @@ function mpStart(){
     answerSlots:slotsFor(r.slots[0].mode, r.slots[0].cat),
     format:mpPickFormat, teams, byTeam:emptyByTeam(teams), scores,
     reveal:null, results:[], preview:'', lyric:'', playNonce:0, salon:mpPickSalon, audioHostOnly:S.audioHostOnly,
-    timer:mpPickTimer||0, endsAt:null, beerTally:{}, streaks:{}, playAt:null, groupId:S.groupId};   // MVP-3: tag drużyny (relay)
+    timer:mpPickTimer||0, endsAt:null, beerTally:{}, streaks:{}, playAt:null, groupId:S.groupId,   // MVP-3: tag drużyny (relay)
+    tvId: mpPickSalon ? mpMe.id : null, listenEndsAt:null, allDoneAt:null};   // P0-1 / P1-2 / P1-3
+  if(r.qpc) S.game.qpc=r.qpc;   // P1-7: krótki mecz — 1 pytanie na slot
   S.tally={};
   S.hostSeen.clear();
   S.ack=S.revealNonce=S.revealSnap=null;   // świeży mecz → brak zaległej odsłony
@@ -730,6 +804,7 @@ async function mpHostNewRound(){
   reconcileTeams(S.game, mpPlayers());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
   S.game.phase=MP.LOADING; S.game.byTeam=emptyByTeam(S.game.teams);   // czyste buckety; scores KUMULUJĄ się przez mecz
   S.game.reveal=null; S.game.locked=null; S.game.endsAt=null; S.game.playAt=null; S.autoLocked=false; S.game.promptStyle='';
+  S.game.listenEndsAt=null; S.game.allDoneAt=null; if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
   mpBroadcast(); mpRender();
   const catKey = S.game.catKey==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : S.game.catKey;
   if(S.game.mode==='quiz'){
@@ -800,6 +875,7 @@ function mpLock(){
   const ev=evaluateAnswer(S.game, c, undefined, Date.now());   // czysta ocena (core) — KAŻDA drużyna; F6a: punkty + szybkość
   applyEvaluation(S.game, ev, S.tally);   // F6a: punkty/serie/tally/pewniaki/wynik/reveal — wspólne z serwerem-autorytetem
   S.game.phase=assertMp(S.game.phase, MP.REVEAL, console.warn); S.game.endsAt=null;
+  S.game.listenEndsAt=null; S.game.allDoneAt=null; if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
   mpBroadcast(); mpRender();
 }
 function mpNext(){
@@ -815,6 +891,14 @@ function mpFinish(){
   const snap={ game:S.game, tally:{...S.tally}, members:mpMembers(), hostId:mpMe.id, roomCode:S.code };
   (async()=>{ const uid=await ensureSession(); if(uid) recordMatch(buildMpRecord(snap)); })();
   S.game.phase=MP.DONE; mpBroadcast(); mpRender();
+}
+// P1-17: „Jeszcze raz — te same ustawienia" (1 tap). Picker hosta trzyma wybór poprzedniego meczu; gdy się nie da
+// (host awansowany bez wyboru, za mało graczy do Drużyn/salonu…) → ekran ustawień jak „Zmień ustawienia".
+function mpRematch(){
+  if(!S.host) return;
+  S.ack=S.revealNonce=S.revealSnap=null;
+  if(!mpPickReady()){ mpNewGame(); return; }
+  mpStart();
 }
 function mpNewGame(){
   S.ack=S.revealNonce=S.revealSnap=null;
@@ -841,6 +925,29 @@ function mpPropose(){
   slots.forEach(s=>{ const el=$m('mpProp_'+s.key); if(el) el.value=''; });
 }
 function mpVote(slot, value){ mpSend({type:'vote', slot, value}); }
+// P0-3: pewniak ×2 przy PUSTEJ odpowiedzi drużyny = pewna przegrana → pierwszy tap pyta „×2 — na pewno?" (3 s), drugi stawia
+function mpSureTap(){
+  if(!S.game) return;
+  const now=Date.now();
+  if(needsSureConfirm(S.game, myTeamId(), mpMe.id) && !(S.sureArmUntil>now)){
+    S.sureArmUntil=now+3000; mpRefreshConf();
+    setTimeout(()=>{ if(S.sureArmUntil && Date.now()>=S.sureArmUntil){ S.sureArmUntil=0; mpRefreshConf(); } }, 3100);
+    return;
+  }
+  S.sureArmUntil=0;
+  mpSend({type:'sure'});
+}
+function mpRefreshConf(){ const el=$m('mpConf'); if(el) el.innerHTML=mpConfHTML(); }
+// P0-4: Enter w polach kolumn — wcześniejsze pole: dalej do następnego (gdy puste), inaczej „Wrzuć"; ostatnie pole = „Wrzuć"
+function mpPropKey(ev, key){
+  if(!ev || ev.key!=='Enter' || ev.isComposing) return;
+  ev.preventDefault();
+  const slots=((S.game&&S.game.answerSlots)||slotsFor()).map(s=>s.key);
+  const i=slots.indexOf(key), next=i>=0 && i<slots.length-1 ? $m('mpProp_'+slots[i+1]) : null;
+  if(next && !next.value.trim()){ next.focus(); return; }
+  mpPropose();
+  const first=$m('mpProp_'+slots[0]); if(first) try{ first.focus(); }catch(_e){}
+}
 // host „wybiera odpowiedź": jawny WYBÓR slotu (set=true → zawsze ustaw, nie przełączaj)
 function mpPick(slot, value){ mpSend({type:'vote', slot, value, set:true}); }
 function mpVoteFromBubble(el){
@@ -860,10 +967,27 @@ function mpTickTimer(){
     const le=$m('mpArmLeft'); if(le) le.textContent=mpArmLeftText(secsLeft(S.armDeadlineLocal, Date.now()));
   }
   const el=$m('mpCountdown');
-  if(!S.game || S.game.phase!==MP.PLAY || !S.game.endsAt){ if(el) el.textContent=''; return; }
-  const rem=Math.max(0, S.game.endsAt - Date.now());
-  const s=Math.ceil(rem/1000);
-  if(el){ const m=Math.floor(s/60); el.innerHTML=ic('timer')+' '+(m?m+':'+String(s%60).padStart(2,'0'):s+' s'); el.classList.toggle('low', rem>0 && rem<=5000); }
+  if(!S.game || S.game.phase!==MP.PLAY){ if(el){ el.textContent=''; el.classList.remove('low'); } return; }
+  // P1-2: JEDEN zegar bieżącej fazy: 🎧 do końca okna słuchania (lokalnego, zakotwiczonego w terminie serwera),
+  // potem 🧠 do końca pytania (endsAt serwera − offset zegara). Czerwień tylko w ostatnich 5 s.
+  const now=Date.now(), off=S.clockOff||0;
+  const endsLocal = S.game.endsAt ? S.game.endsAt - off : null;
+  // okno słuchania TEGO pytania (po intrze) → lokalne; przed jego startem (intro) → termin serwera (listenEndsAt)
+  const listenEnd = (S.listenNonce===S.game.playNonce && S.listenStart) ? S.listenStart + S.listenDur
+    : (Number.isFinite(S.game.listenEndsAt) ? S.game.listenEndsAt - off : 0);
+  const sub = (S.playRound===S.game.playNonce) ? S.sub : 'sluchaj';
+  const c=phaseClock({ sub, listenEnd, endsAt:endsLocal, now });
+  if(el){
+    el.textContent = c ? `${c.icon} ${fmtClock(c.ms)}` : '';
+    el.classList.toggle('low', !!(c && c.low && c.ms>0));
+    el.dataset.phase = c ? c.phase : '';
+    el.setAttribute('aria-label', c ? (c.phase==='sluchaj' ? 'czas słuchania' : 'czas na odpowiedź') : '');
+  }
+  // P1-10: „Zakończ pytanie" hosta (Solo/Drużyny) dopiero po połowie czasu pytania
+  const eq=$m('mpEndQ');
+  if(eq) eq.hidden = !hostEndVisible({ playAt: Number.isFinite(S.game.playAt) ? S.game.playAt - off : null, endsAt:endsLocal, now });
+  if(!S.game.endsAt) return;
+  const rem=Math.max(0, endsLocal - now);
   // F6b (U4): tik ostatnich 5 s (raz na sekundę; duck pod zajawką w app/sfx.js); nie na zaległej odsłonie
   const ts=tickSecond(rem, S.tickSec);
   if(ts!=null){ S.tickSec=ts; if(!mpRevealPending()) playSfx('tick'); }
@@ -886,7 +1010,11 @@ function mpPushChat(byName, text, mine){
   _pushChat(S.feed, byName, text, mine);   // core/chatFeed.js (stan + ring-buffer)
   const feed=$m('mpChatFeed'); if(feed){ feed.innerHTML=mpChatFeedHTML(); feed.scrollTop=feed.scrollHeight; }
 }
-function mpNameOf(id){ const m=mpMembers().find(x=>x.id===id); return m?m.name:'gracz'; }
+// P1-11: ksywa z presence, a gdy gracza już nie ma (wyszedł) — ze stanu gry (game.names); nieznany → null
+function mpNameOf(id){
+  const m=mpMembers().find(x=>x.id===id); if(m && m.name && m.name!=='?') return m.name;
+  const n=S.game && S.game.names && S.game.names[id]; return n ? String(n) : null;
+}
 function mpFeedReset(){ resetFeed(S.feed); }
 // zaksięguj NOWE typy/pasy do feedu (core/chatFeed.js) i zdejmij „pisze" dla autorów typów
 function mpIngestFeed(g){
@@ -996,6 +1124,7 @@ Object.assign(window, {
   mpStart, mpAdvance, mpHostRetry, mpHostNextReveal, mpTickTimer, mpHostSkipWait,
   mpLobbyStart, mpLobbyBack, mpRoomBack, mpExitMenu, mpShare,
   mpConfirmLeave, mpLeaveCancel, mpLeaveConfirmed, mpRejoinLast,   // F6b (F6)
+  mpRetryRoom, mpRematch, mpSureTap, mpPropKey,                     // przegląd MP 2026-10 (etap A)
 });
 // initMpRender na końcu — wszystkie back-calls (w tym const mpSkin) już zdefiniowane
 initMpRender({ mpMembers, mpPlayers, myTeamId, myTeamMembers, mpRevealPending, mpSkin, mpIngestFeed, mpFeedReset, mpClearTyping, mpTickTimer, mpGoKombinuj, mpNameOf });

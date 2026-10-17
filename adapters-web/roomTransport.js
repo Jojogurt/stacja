@@ -10,7 +10,8 @@
  *   event 'sync'             → IGNOR (stan należy do DO, klient go nie rozsyła)
  *   event 'act'              → {t:'action', action:payload}      (propose/vote/sure/pass/ready)
  *   event 'react/say/typing' → {t:'event', event, payload}       (ulotne — DO przekazuje)
- * Odbiór: {t:'state',game} → cb 'sync' ({payload:game}); {t:'event',event,payload} → cb event;
+ * Odbiór: {t:'state',game,serverNow} → cb 'sync' ({payload:game, serverNow, recvAt}) — P1-2: zegar serwera do offsetu;
+ *         {t:'event',event,payload} → cb event;
  *         {t:'presence',members,hostId} → presence cb + zapis hostId/presenceState.
  *
  * F1 (#1): STAN gry wyłącznie z {t:'state'}. {t:'event'} trafia do callbacków TYLKO dla nazw
@@ -27,7 +28,8 @@ export function authorityChannel(code, cfg = {}) {
   const bcast = {};            // event → [cb]   (sync/react/say/typing)
   let presenceCb = null;
   let presence = {};           // { id:[{name}] }
-  let subCb = null, myName = '', statusCb = null;   // 5.6: onStatus('reconnecting'|'ok')
+  // P1-11: ksywa znana od PIERWSZEGO połączenia (?name=) — dawniej pusta do `track` → serwer dopisywał gracza jako „gracz"
+  let subCb = null, myName = (cfg && typeof cfg.name === 'string') ? cfg.name : '', statusCb = null;   // 5.6: onStatus('reconnecting'|'ok')
   let ws = null, closed = false, firstOpen = true, retry = 0, retryTimer = null;
   let myShelf = null;          // gust etap 3: moja półka do „Gust stołu" — dosyłana ponownie po każdym (re)connect
   const emitStatus = (s)=>{ if(statusCb) try{ statusCb(s); }catch(_e){} };
@@ -98,7 +100,9 @@ export function authorityChannel(code, cfg = {}) {
     ws.onmessage = (e) => {
       let msg; try { msg = JSON.parse(e.data); } catch { return; }
       if (msg.t === 'state') {
-        (bcast['sync'] || []).forEach((cb) => { try { cb({ payload: msg.game }); } catch (_e) {} });
+        const recvAt = Date.now();
+        const serverNow = Number.isFinite(msg.serverNow) ? msg.serverNow : null;   // stary serwer → null
+        (bcast['sync'] || []).forEach((cb) => { try { cb({ payload: msg.game, serverNow, recvAt }); } catch (_e) {} });
       } else if (msg.t === 'event') {
         // F1 (#1): event ≠ stan — 'sync'/'act'/nieznane nazwy odrzucane (stan tylko z t:'state')
         if (!RELAY_EVENTS.includes(msg.event)) return;

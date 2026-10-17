@@ -125,14 +125,37 @@ export function clampQuestions(q){
 // rundy (stary format `rounds`) odpowiadające liczbie pytań — dla starego serwera (5/10/15 → 1, 30 → 2)
 export function roundsForQuestions(q){ return Math.max(1, Math.ceil(clampQuestions(q)/(CPR*QPC))); }
 
+/* P1-7 (przegląd MP 2026-10): KRÓTKI mecz (≤ QPC pytań) gra po JEDNYM pytaniu na slot (qpc 1, jak Stacja dnia) —
+ * 5 pytań = 5 slotów z różnymi kategoriami i trybami (dawniej 1 slot = 5× ta sama kategoria i tryb, mimo wybranych
+ * 2 kat. i 3 trybów). Dłuższe mecze bez zmian (bloki po QPC). */
+export function matchQpcFor(questions){ return clampQuestions(questions)<=QPC ? 1 : QPC; }
+// qpc 1: wybór par MIESZAJĄCY — najpierw nieużyta kategoria, potem nieużyty tryb (remis → kolejność po tasowaniu)
+function mixSlots(pairs, n){
+  const catN=new Map(), modeN=new Map(), out=[];
+  for(let i=0;i<n;i++){
+    let best=null, bestK=Infinity;
+    for(const p of shuffle(pairs)){
+      const k=(catN.get(p.cat)||0)*100 + (modeN.get(p.mode)||0)*10 + (out.length && out[out.length-1].cat===p.cat ? 5 : 0);
+      if(k<bestK){ best=p; bestK=k; }
+    }
+    catN.set(best.cat, (catN.get(best.cat)||0)+1); modeN.set(best.mode, (modeN.get(best.mode)||0)+1);
+    out.push({ round:1, cat:best.cat, mode:best.mode });
+  }
+  return out;
+}
 // ułóż mecz: sloty {round,cat,mode} — kompatybilne, bez powtórki kategorii w rundzie.
-// `len` = liczba rund (stary format: rounds × CPR slotów) ALBO {questions} (F6a: ceil(Q/QPC) slotów).
+// `len` = liczba rund (stary format: rounds × CPR slotów) ALBO {questions} (F6a: ceil(Q/QPC) slotów;
+// P1-7: ≤ QPC pytań → `qpc:1`, slot = pytanie, kategorie i tryby na przemian).
 export function buildMatch(catPool, modePool, len, cats){
   const catsArr=[...catPool], modes=[...modePool];
   const pairs=[];
   catsArr.forEach(cat=> modesFor(cat,cats).forEach(m=>{ if(modes.includes(m)) pairs.push({cat,mode:m}); }));
   if(!pairs.length) return {error:'Wybrane tryby nie pasują do kategorii — dodaj kategorię audio (muzyka/od tyłu/fragment) albo z tekstem (lektor).'};
   const byQ = len && typeof len==='object';
+  if(byQ && matchQpcFor(len.questions)===1){
+    const n=clampQuestions(len.questions);
+    return { slots:mixSlots(pairs, n), rounds:1, qpc:1, questions:n };
+  }
   const nSlots = byQ ? clampQuestions(len.questions)/QPC : Math.max(1, Math.floor(Number(len))||1)*CPR;
   const rounds = Math.ceil(nSlots/CPR);
   const slots=[];

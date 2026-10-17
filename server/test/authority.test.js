@@ -705,7 +705,7 @@ await group('F6a: start {questions} — 5 pytań = 1 slot; stary klient (tylko r
   const { room } = await makeRoom();
   const a=room.join('A','Ala');
   await room.msg(a, { t:'start', config:CONFIG({ questions:5, rounds:1 }) });
-  eq(room.game.slots.length, 1, 'questions=5 → 1 slot (5 pytań)');
+  eq([room.game.slots.length, room.game.qpc], [5, 1], 'P1-7: questions=5 → 5 slotów po 1 pytaniu (qpc 1)');
   room.game.phase=MP.DONE;
   await room.msg(a, { t:'start', config:CONFIG({ rounds:2 }) });
   eq(room.game.slots.length, 2*CPR, 'stary klient: rounds=2 → 2×CPR slotów');
@@ -1109,6 +1109,131 @@ await group('FIX odpowiedzi gościa: Solo — wejście już w PLAY → własna d
   eq(room.game.scores.G, 0, 'wynik gościa od 0');
   await room.msg(g, { t:'track', name:'Gosia' });
   eq(room.game.teams.find(t=>t.id==='G').name, 'Gosia', 'ksywa z track (po onConnect) → nazwa drużyny Solo (nie „gracz")');
+});
+
+/* ==================== Przegląd MP 2026-10 — etap A ==================== */
+const quiz2=()=>({ ...quizPools(), q2:{ label:'Quiz 2', kind:'quiz', questions:Array.from({ length:30 }, (_,i)=>({ prompt:'R'+i, slots:[{key:'a',label:'odp'}], answers:{a:['y'+i]} })) } });
+await group('P0-1: salon — wyjście TV NIE robi z awansowanego gracza TV (pełny stan rywali, poza drużyną)', async ()=>{
+  const { room } = await makeRoom();
+  const tv=await room.connect('TV','Telewizor'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true, format:'solo' }) });
+  eq(room.game.tvId, 'TV', 'tvId = TV (kto wystartował salon)');
+  await readyAll(room, p1, p2);
+  eq(room.game.phase, MP.PLAY, 'PLAY');
+  await room.msg(p2, { t:'action', action:{ type:'propose', values:{ a:'typ-kuby' } } });
+  await room.drop(tv);                                    // TV wychodzi → awans gracza
+  eq(room.hostId, 'P1', 'host przechodzi na gracza P1');
+  eq(room.game.tvId, 'TV', 'tvId zostaje przy TV (rola TV nie przechodzi)');
+  const v1=room.viewFor('P1');
+  eq(v1.byTeam.P2.proposals.length, 0, 'P1 (nowy host) NIE widzi treści typów rywala (B1: dawniej pełny stan)');
+  ok(teamOfId(room.game,'P1')==='P1', 'P1 dalej ma swoją drużynę');
+  await room.msg(p1, { t:'action', action:{ type:'propose', values:{ a:'typ-oli' } } });
+  ok(room.game.byTeam.P1.proposals.some(p=>p.by==='P1'), 'P1 nadal odpowiada (nie jest TV)');
+  ok(room.playersOf().some(m=>m.id==='P1'), 'P1 na liście graczy (gotowość/drużyny)');
+  // TV wraca → odzyskuje hosta (starter) i pełny widok, ale nie trafia do drużyn
+  await room.connect('TV','Telewizor');
+  eq(room.hostId, 'TV', 'TV po powrocie odzyskuje hosta');
+  eq(room.viewFor('TV').byTeam.P2.proposals.length, 1, 'TV widzi stan wszystkich (jak dotąd)');
+  ok(!teamOfId(room.game,'TV'), 'TV poza drużynami');
+});
+await group('P0-1: salon coop — awansowany gracz NIE nadpisuje większości głosem „sędziego"', async ()=>{
+  const { room } = await makeRoom();
+  const tv=await room.connect('TV','Telewizor'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba'), p3=await room.connect('P3','Ala');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
+  await readyAll(room, p1, p2, p3);
+  await room.drop(tv);
+  eq(room.hostId, 'P1', 'P1 hostem');
+  await room.msg(p1, { t:'action', action:{ type:'propose', values:{ a:'zle' } } });
+  await room.msg(p2, { t:'action', action:{ type:'propose', values:{ a:'dobrze' } } });
+  await room.msg(p3, { t:'action', action:{ type:'vote', slot:'a', value:'dobrze' } });
+  await room.msg(p1, { t:'lock' });
+  eq(room.game.reveal.locked.a, 'dobrze', 'odpowiedź = większość (2:1), nie głos nowego hosta');
+});
+await group('P0-9: salon bez graczy (TV sam w pokoju) — start odrzucony, host dostaje stan', async ()=>{
+  const { room } = await makeRoom();
+  const tv=await room.connect('TV','Telewizor');
+  const n0=tv.sent.filter(m=>m.t==='state').length;
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
+  ok(!room.game || room.game.phase==null, 'mecz NIE wystartował');
+  ok(tv.sent.filter(m=>m.t==='state').length>n0, 'host dostał stan (koniec optymistycznego „ładowania")');
+  await room.connect('P1','Ola');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
+  ok(room.game && room.game.phase===MP.ARMING, 'z 1 graczem salon startuje');
+});
+await group('P1-2: czas na odpowiedź PO słuchaniu — endsAt = go + LEAD + słuchanie + timer; serverNow w ramce stanu', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ timer:30 }) });
+  ok(Number.isFinite(a.last('state').serverNow), 'ramka stanu ma serverNow (zegar serwera)');
+  await readyAll(room, a, b);
+  const g=room.game;
+  eq(g.listenEndsAt - g.playAt, 900+15000, 'listenEndsAt = playAt + LEAD 900 + słuchanie 15 s');
+  eq(g.endsAt - g.listenEndsAt, 30000, 'endsAt = koniec słuchania + 30 s (dawniej go+30 s)');
+  ok(Math.abs(a.last('state').serverNow - Date.now())<1000, 'serverNow ≈ teraz');
+  await room.msg(a, { t:'lock' });
+  eq([room.game.endsAt, room.game.listenEndsAt], [null, null], 'po lock terminy wyczyszczone');
+});
+await group('P1-3: auto-lock, gdy wszyscy obecni dali typ albo pas (karencja), cofnięcie anuluje', async ()=>{
+  const { room } = await makeRoom();
+  room.allDoneGraceMs=30;
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ format:'solo' }) });
+  await readyAll(room, a, b);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'x' } } });
+  eq(room.game.allDoneAt, null, 'B jeszcze myśli → brak auto-zamknięcia');
+  await room.msg(b, { t:'action', action:{ type:'pass' } });
+  ok(room.game.allDoneAt>0, 'A typ + B pas → allDoneAt („Wszyscy gotowi!")');
+  ok(b.last('state').game.allDoneAt>0, 'klienci dostają allDoneAt');
+  await room.msg(b, { t:'action', action:{ type:'pass' } });   // B cofa pas w karencji
+  eq(room.game.allDoneAt, null, 'cofnięcie pasu → karencja zdjęta');
+  await sleep(60);
+  eq(room.game.phase, MP.PLAY, 'bez kompletu nie zamyka');
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:'y' } } });
+  await sleep(80);
+  eq(room.game.phase, MP.REVEAL, 'komplet → po karencji REVEAL (bez hosta i bez timera)');
+});
+await group('P1-3: wyjście ostatniego „myślącego" domyka komplet; dojście nowego gracza zdejmuje karencję', async ()=>{
+  const { room } = await makeRoom();
+  room.allDoneGraceMs=40;
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ format:'coop' }) });
+  await readyAll(room, a, b);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'x' } } });
+  await room.drop(b);
+  ok(room.game.allDoneAt>0, 'B wyszedł → komplet obecnych');
+  await room.connect('C','Cela');
+  eq(room.game.allDoneAt, null, 'C dochodzi (niegotowy) → karencja zdjęta');
+  await sleep(70);
+  eq(room.game.phase, MP.PLAY, 'czekamy na C');
+});
+await group('P1-11: ksywy graczy w stanie gry (game.names) — po wyjściu i powrocie bez ksywy', async ()=>{
+  const { room } = await makeRoom();
+  const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
+  await room.msg(a, { t:'start', config:CONFIG({ format:'solo' }) });
+  eq(room.game.names, { A:'Ala', B:'Bo' }, 'names z obecnych przy starcie');
+  await room.drop(b);
+  eq(a.last('state').game.names.B, 'Bo', 'po wyjściu B jego ksywa nadal w stanie');
+  await room.connect('C','');                              // dołącza bez ksywy (onConnect przed track)
+  await room.msg(room.getConnections().find(c=>c.state.id==='C'), { t:'track', name:'Cela' });
+  eq(room.game.names.C, 'Cela', 'ksywa z track → names');
+  eq(room.game.teams.find(t=>t.id==='C').name, 'Cela', 'solo: nazwa drużyny z ksywy');
+});
+await group('P1-7: krótki mecz (5 pytań) — 5 slotów z różnych kategorii, koniec po 5 pytaniach', async ()=>{
+  const { room } = await makeRoom();
+  room.allDoneGraceMs=1e9;
+  const a=await room.connect('A','Ala');
+  await room.msg(a, { t:'start', config:CONFIG({ questions:5, rounds:1, pools:quiz2() }) });
+  eq([room.game.slots.length, room.game.qpc], [5, 1], '5 slotów, qpc 1');
+  eq(new Set(room.game.slots.map(x=>x.cat)).size, 2, 'obie kategorie w meczu');
+  let n=0, guard=0;
+  while(room.game.phase!==MP.DONE && guard++<50){
+    const g=room.game;
+    if(g.phase===MP.ARMING) await readyAll(room, a);
+    else if(g.phase===MP.PLAY){ n++; await room.msg(a, { t:'lock' }); }
+    else if(g.phase===MP.REVEAL) await room.msg(a, { t:'next' });
+    else break;
+  }
+  eq(n, 5, 'zagrano dokładnie 5 pytań');
 });
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

@@ -102,6 +102,11 @@ function mpSetTimer(t){ mpPickTimer=MP_TIMER_OPTIONS.includes(+t)?+t:60; changed
 
 // ustawienia pokoju w „Ustawieniach meczu" (po długości): timer, format (+ przydział drużyn), salon/TV, dźwięk
 function teamsBad(){ return mpPickFormat==='teams' && mpTeamsFromAssign(mpGetPlayers()).length<2; }
+// P0-9: salon — TV tylko prowadzi (mpGetPlayers już bez TV): coop/Solo ≥ 1 gracz na telefonie, Drużyny ≥ 2
+function salonBad(){ return mpPickSalon && mpGetPlayers().length < (mpPickFormat==='teams' ? 2 : 1); }
+/* P0-9: ustawienia POKOJU (salon, format, podział, dźwięk) nie przechodzą do NOWEGO pokoju — wołane przy wejściu do pokoju.
+ * Kategorie/tryby/długość/timer zostają (to preferencje gracza, nie stołu). Rewanż w tym samym pokoju — bez resetu. */
+function mpPickResetRoom(){ mpPickSalon=false; mpPickFormat='coop'; mpPickAudioHost=false; mpPickTeamCount=2; mpPickAssign={}; mpPickTeamNames={}; }
 function mpSettingsHTML(){
   const timerBtns=MP_TIMER_OPTIONS.map(v=>`<button type="button" class="${mpPickTimer===v?'on':''}" aria-pressed="${mpPickTimer===v}" onclick="mpSetTimer(${v})">${v?v+' s':'bez'}</button>`).join('');
   // format meczu: jak punktujemy (jedna drużyna / każdy sam / podział na drużyny).
@@ -154,7 +159,9 @@ const setup=createMatchSetup({
   settingsSummary:()=>settingsSummary({ ctx:'mp', questions:mpPick.questions, format:mpPickFormat, timer:mpPickTimer, salon:mpPickSalon }),
   settingsHTML:mpSettingsHTML,
   twojeHTML:mpTwojeHTML,
-  gate:()=> teamsBad() ? { text:'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju).' } : null,
+  gate:()=> teamsBad() ? { text:'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju'+(mpPickSalon?' poza TV).':').') }
+    : salonBad() ? { text: mpPickFormat==='teams' ? 'Tryb salonowy: TV tylko prowadzi — do Drużyn potrzeba min. 2 graczy na telefonach.'
+      : 'Tryb salonowy: TV tylko prowadzi — potrzeba min. 1 gracza na telefonie.' } : null,
 });
 // delegacja kliknięć komponentu: jeden listener na #mpStage (przeżywa re-render innerHTML; klucze kategorii
 // tylko w data-ms-cat — nigdy w inline JS, F2b)
@@ -164,6 +171,8 @@ function mpToggleMode(m){ setup.toggleMode(m); }
 function mpToggleGrp(g){ setup.setTab(g); }   // dawne „chipy-grupy" → zakładka grupy
 function mpSetQuestions(q){ setup.setQuestions(q); }
 // szkic dla gości: wybór + ustawienia pokoju (sanityzowany po obu stronach: core/matchSetup.sanitizeDraft)
+// P1-17: „Jeszcze raz — te same ustawienia" — czy bieżąca konfiguracja pickera da się wystartować (wybór + bramki)
+function mpPickReady(){ try{ return !!setup.summary().ok; }catch(_e){ return false; } }
 function mpDraft(){ return { ...setup.draft(), timer:mpPickTimer, format:mpPickFormat, salon:mpPickSalon, audioHostOnly:mpPickAudioHostOnly() }; }
 function mpPickerHTML(){
   mpTablePrune();   // gust etap 3: stół wycięty z wyboru, zanim komponent policzy podsumowanie (każda zakładka)
@@ -185,6 +194,7 @@ function mpBuildPools(cats, modes){
     const c=ALL_CATS[k]; if(!c) continue;
     if(c.table){ pools[k]={ label:c.label, kind:'playlist', table:true }; continue; }   // gust etap 3: pulę składa serwer z półek graczy
     const out={ label:c.label, range:c.range, kind:c.kind };
+    if(c.listenSecs) out.listenSecs=c.listenSecs;   // P1-2: własne okno „słuchaj" kategorii (serwer liczy z niego endsAt)
     if(wantLektor && c.lang) out.lang=c.lang;   // język opisów lektora (lyrics.js); serwer sanityzuje do 'pl'|'en'
     if(Array.isArray(c.artists) && c.artists.length) out.artists=c.artists.slice();
     if(Array.isArray(c.songs) && c.songs.length){
@@ -215,4 +225,4 @@ function mpRandomPick(){ const {cats,modes}=randomPools(mpAvailModes()); setup.s
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
 Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetAudioHost, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft };
+export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft, mpPickResetRoom, mpPickReady };
