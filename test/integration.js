@@ -3429,7 +3429,7 @@ await group('P1-16: mecz na TV — dwie kolumny, karta pytania, duży zegar, ros
   ok(/Słuchaj/.test(($(w,'mpAnnounce')||{}).textContent||''), 'aria-live: zmiana fazy ogłoszona — '+(($(w,'mpAnnounce')||{}).textContent||''));
   ok(st.querySelector('.tv-ctl [data-tvact="goComb"]'), 'słuchanie: duży „DALEJ — ODPOWIADAMY"');
   tvKey(w, 'Enter'); await settle(3);
-  ok(st.querySelector('.tv-left .tv-clockrow #mpCountdown') && /🧠/.test($(w,'mpCountdown').textContent), 'Enter → odpowiadanie: zegar 🧠 do końca pytania');
+  ok(st.querySelector('.tv-left .tv-qbar .tv-qclock #mpCountdown') && /🧠/.test($(w,'mpCountdown').textContent), 'Enter → odpowiadanie: zegar 🧠 do końca pytania');
   ok(/Czekamy na/.test(left.textContent) && /Kuba/.test(left.textContent), 'kombinuj: „Czekamy na: Kuba"');
   ok(/ZATWIERDŹ WSZYSTKICH/.test(st.querySelector('.tv-ctl').textContent) && /1\/2 z typem/.test(st.querySelector('.tv-ctl-note').textContent), 'kombinuj: „ZATWIERDŹ WSZYSTKICH" + 1/2 z typem');
   const nL=ws.sent.filter(m=>m.t==='lock').length;
@@ -3656,7 +3656,7 @@ await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu
   box=$(w,'mpStage').querySelector('.tv-coverfig .mp-cover');
   ok(box && box.dataset.art===base+'16x16bb.jpg' && box.querySelector('canvas'), 'TV: duża okładka z obrazem etapu');
   ok(!/mpProp_/.test(aStage()) && !$(w,'mpMore'), 'TV: bez pól odpowiedzi i bez „wyraźniej"');
-  { const st=$(w,'mpStage'); ok(st.querySelector('.tv-cols .tv-col-q .tv-coverfig') && st.querySelector('.tv-cols .tv-col-a #mpCountdown'), 'TV: kolumny — okładka | zegar/odpowiedzi (przegląd v70: wiersze nie mieściły się na TV)'); }
+  { const st=$(w,'mpStage'); ok(st.querySelector('.tv-qbar .tv-qclock #mpCountdown') && st.querySelector('.tv-body .tv-coverfig') && st.querySelectorAll('#mpCountdown').length===1, 'TV: stały szkielet — pasek z zegarem, okładka w scenie (jeden zegar)'); }
   // odsłona: pełna okładka, wykonawca, album, etap i mnożnik
   ws.pushState(revealState(ws, { playNonce:9904, mode:'cover', slots:[{round:1,cat:'d80',mode:'cover'}], answerSlots:[{key:'artist',label:'wykonawca'},{key:'album',label:'album (bonus)'}],
     reveal:{ kind:'cover', track:'Toto IV', artist:'Toto', album:'Toto IV', year:'1982', art:base+'600x600bb.jpg', okBySlot:{artist:true, album:false}, teamOk:true, gained:200,

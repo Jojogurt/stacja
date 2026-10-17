@@ -1583,39 +1583,53 @@ function tvRevealHTML(g, snap){
     body=`<div class="tv-track">${cover}<div class="tv-track-i"><small class="tv-ans-h">${r.kind==='year'?'Utwór':'Poprawna odpowiedź'}</small><b class="tv-track-t">${escapeHtml(displayTitle(r.track))}</b><span class="tv-track-a">${escapeHtml(r.artist||'')}</span>${meta?`<span class="tv-track-m">${escapeHtml(meta)}</span>`:''}${mpFromHTML(r)}${mpCoverArtistHTML(r)}</div></div>${year}`;
   }
   const stg = !comp && rv.stageEval ? `<div class="tv-fun" data-rv-stage>${r.kind==='cover'?'🖼':'⏱'} ${escapeHtml(mpStageEvalText(rv.stageEval))}</div>` : '';   // MP okładka/intro: etap i mnożnik drużyny
-  return tvQHeadHTML(g) + tvCols(`<div class="tv-reveal">${body}</div>`, `${stg}${comp ? '' : mpRevealBanner(rv)}`);
+  return tvFrame(g, { q:`<div class="tv-reveal">${body}</div>`, a:`${stg}${comp ? '' : mpRevealBanner(rv)}` });
+}
+/* TV: STAŁY szkielet lewej kolumny w każdej fazie (przegląd v70 — dawniej bloki zmieniały miejsce i kolejność):
+ *   pasek   — „PYTANIE n/N" + kategoria + zadanie | zegar (zawsze w tym samym miejscu, po prawej)
+ *   scena   — treść pytania (okładka/płyta/tekst/intro) | odpowiedzi (ABCD, tablica typów); bez treści → odpowiedzi na całą
+ *             szerokość, wyśrodkowane w pionie
+ *   stopka  — jedna linia statusu („Czekamy na…", gotowość telefonów) */
+function tvFrame(g, { clock=false, q='', a='', wide='', foot='' }={}){
+  const hasQ=String(q||'').trim(), hasA=String(a||'').trim();
+  const body = hasQ && hasA ? tvCols(q, a) : `<div class="tv-solo">${q||''}${a||''}</div>`;
+  return `<div class="tv-qbar">${tvQHeadHTML(g)}${clock?`<div class="tv-qclock">${tvClockHTML()}</div>`:''}</div>`
+    + `<div class="tv-body">${body}${wide||''}</div>`
+    + (String(foot||'').trim() ? `<div class="tv-foot">${foot}</div>` : '');
 }
 function tvLeftHTML(g, sc){
   switch(sc){
-    case 'loading': return `${tvQHeadHTML(g)}<div class="tv-status">${bbLoader}<span>${escapeHtml(mpLoadingText(g))}</span></div>`;
+    case 'loading': return tvFrame(g, { q:`<div class="tv-status">${bbLoader}<span>${escapeHtml(mpLoadingText(g))}</span></div>` });
     case 'arming': {
       const players=mpPlayers(), ids=Array.isArray(g.readyIds) ? g.readyIds : [];
       const pend=pendingIds(players.map(m=>m.id), ids);
-      return `${tvQHeadHTML(g)}${mpPeopleHTML(players, new Set(ids))}<div class="tv-status"><b>${num(g.readyCount||0)}/${num(g.readyTotal||players.length)}</b> telefonów gotowych</div>${mpWaitNamesHTML(pend)}`;
+      return tvFrame(g, { q:`${mpPeopleHTML(players, new Set(ids))}<div class="tv-status"><b>${num(g.readyCount||0)}/${num(g.readyTotal||players.length)}</b> telefonów gotowych</div>`,
+        foot:mpWaitNamesHTML(pend) });
     }
     case 'count': {
       const d=introDigit(S.introUntil-Date.now(), mpIntroLeadMs()), mc=mcOptions(g);
       const prompt = g.mode==='quiz' && g.prompt ? `<div class="tv-qprompt">${promptBodyHTML(mc ? mc.question : g.prompt, g.promptStyle==='rebus'?'rebus':'')}</div>` : '';
-      return `${tvQHeadHTML(g)}<div class="tv-count" aria-hidden="true"><b data-d="${num(d)}">${d>0?num(d):'▶'}</b></div>${prompt}`;
+      return tvFrame(g, { q:`<div class="tv-count" aria-hidden="true"><b data-d="${num(d)}">${d>0?num(d):'▶'}</b></div>`, a:prompt });
     }
     case 'listen':
-      if(mpStaged(g)) return tvQHeadHTML(g)+tvCols(`${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}`, `<div class="tv-clockrow">${tvClockHTML()}</div>`);   // MP okładka/intro
-      if(g.mode==='quiz') return tvQHeadHTML(g)+tvCols(mpPromptHTML(g), `<div class="tv-clockrow">${tvClockHTML()}</div>${mpMcHTML(g)}`, 'aw');
-      return tvQHeadHTML(g)+tvCols(`<div class="tv-listen${mcOptions(g)?' mc':''}">${mpKnobHTML(g)}<div class="tv-listen-r">${tvClockHTML()}<div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>`,
-        `${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}`)+mpTimelineHTML(g, true);
+      if(mpStaged(g)) return tvFrame(g, { clock:true, q:`${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}` });   // MP okładka/intro
+      if(g.mode==='quiz') return tvFrame(g, { clock:true, q:mpPromptHTML(g), a:mpMcHTML(g) });
+      return tvFrame(g, { clock:true,
+        q:`<div class="tv-listen">${mpKnobHTML(g)}<div class="tv-listen-r"><div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>`,
+        a:`${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}`, wide:mpTimelineHTML(g, true) });
     case 'answer': {
       const comp=(g.format||'coop')!=='coop', mc=!!mcOptions(g);
       const wait = g.allDoneAt ? `<div class="mp-alldone tv-alldone" role="status">✓ Wszyscy gotowi! Sprawdzamy…</div>`
         : (mpWaitNamesHTML(unsettledIds(g, mpPlayers().map(m=>m.id))) || `<div class="mp-waitfor"><span class="mp-wf-tx">odpowiadacie na telefonach</span></div>`);
-      const board = comp || mc ? '' : `<div class="mp-board tv-board" id="mpBoard">${mpSlotsHTML(g)}</div>${tvTeamAnswerHTML(g)}`;
+      // tablica typów dopiero gdy są typy (puste pola „czekamy na typy" ×2 + ramka drużyny = 3× to samo, nie mieściło się)
+      const anyProp=((myBucket()||{}).proposals||[]).length>0;
+      const board = comp || mc ? '' : `${anyProp?`<div class="mp-board tv-board" id="mpBoard">${mpSlotsHTML(g)}</div>`:''}${tvTeamAnswerHTML(g)}`;
       const q=`${tvPromptHTML(g)}${mpLyricFoldHTML(g)}${mpCoverHTML(g, true)}${mpIntroStagesHTML(g, true)}`;
-      const clock=`<div class="tv-clockrow">${tvClockHTML()}${wait}</div>`, ans=`${mc?mpMcHTML(g):''}${board}`;
-      // treść pytania (okładka/tekst/intro) | zegar + odpowiedzi; bez treści: zegar + oczekujący | odpowiedzi (ABCD, tablica)
-      return tvQHeadHTML(g) + (q.trim() ? tvCols(q, clock+ans) : tvCols(clock, ans, 'aw')) + mpTimelineHTML(g, true);
+      return tvFrame(g, { clock:true, q, a:`${mc?mpMcHTML(g):''}${board}`, wide:mpTimelineHTML(g, true), foot:wait });
     }
-    case 'checking': return `${tvQHeadHTML(g)}<div class="tv-checking" role="status"><div class="mp-chk-ic" aria-hidden="true">🥁</div><b>Sprawdzamy…</b>${bbLoader}</div>`;
+    case 'checking': return tvFrame(g, { q:`<div class="tv-checking" role="status"><div class="mp-chk-ic" aria-hidden="true">🥁</div><b>Sprawdzamy…</b>${bbLoader}</div>` });
     case 'reveal': return tvRevealHTML(g, S.revealSnap);
-    case 'waitnext': return `${tvQHeadHTML(g)}<div class="tv-status">✓ zaraz następne pytanie…</div>`;
+    case 'waitnext': return tvFrame(g, { q:`<div class="tv-status">✓ zaraz następne pytanie…</div>` });
     case 'done': { const p=mpDoneParts(g); return `<div class="tv-done">${p.hero}${p.mvp}${p.stawia}</div>`; }
     case 'error': {
       const msg = g.phase===MP.NOLYRIC ? 'Brak materiału do tej rundy w tej kategorii (wyczerpana pula).'

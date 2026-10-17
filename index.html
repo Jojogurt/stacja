@@ -330,7 +330,8 @@
   .mp-cover-legend{margin-top:2px;font-size:var(--fs-xs);color:var(--muted)}
   .tv-coverfig .cover-box{width:min(34rem,38vh);border-radius:1.2rem}
   .tv-coverfig .mp-cover-cap,.tv-coverfig .mp-cover-legend{font-size:1rem}
-  html.tv #mpStage .tv-left .tv-col-q .tv-coverfig .cover-box{width:min(26rem,46vh)}   /* okładka w kolumnie pytania */
+  html.tv #mpStage .tv-left .tv-body .tv-coverfig .cover-box{width:min(17rem,30vh)}   /* okładka mieści się między paskiem a stopką */
+  html.tv #mpStage .tv-left .tv-body .tv-coverfig .mp-cover-legend{display:none}   /* legenda punktów — na telefonach */
   .mp-cover-fig .mp-more{margin:6px auto 0;display:block}
   .mp-more,#mpIntroReplay{white-space:nowrap}   /* przegląd v70: „+ WIĘCEJ (16 S)" łamało się na 375 px */
   @media (max-width:360px){ .mp-stg-btns .mp-btn{font-size:.82rem;padding-left:10px;padding-right:10px} }
@@ -2005,16 +2006,12 @@
   @media (orientation:portrait){ .tv-main{grid-template-columns:minmax(0,1fr)} }   /* przegląd v70: składaj tylko w pionie (dawniej ≤1000 px — łapało TV 960 px) */
   .tv-cols{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:1.4rem;align-items:start}
   .tv-col{display:flex;flex-direction:column;gap:.9rem;min-width:0}
-  .tv-cols.aw{grid-template-columns:minmax(0,.7fr) minmax(0,1.4fr)}   /* po lewej sam zegar/treść → szersze odpowiedzi (ABCD w jednej linii) */
-  .tv-col-a .tv-clockrow{gap:1rem}
   /* w kolumnach: płyta nad zegarem (nie obok), odpowiedzi ABCD jako lista (nie 2×2), mniejszy zegar */
-  html.tv #mpStage .tv-left .tv-col-q .tv-listen{grid-template-columns:minmax(0,1fr);justify-items:center;gap:1rem;text-align:center}
   html.tv #mpStage .tv-left .tv-col-q .tv-listen .mp-vinyl{width:min(14rem,30vh)}
-  html.tv #mpStage .tv-left .tv-col-q .tv-listen #mpCountdown.tv-clock,html.tv #mpStage .tv-left .tv-col-a #mpCountdown.tv-clock{font-size:4.6rem}
   html.tv #mpStage .tv-left .tv-col-a .mc-opts{grid-template-columns:minmax(0,1fr);gap:.6rem}
   html.tv #mpStage .tv-left .tv-col-a .mc-opt{min-height:3.2rem;padding:.55rem 1rem}
-  html.tv #mpStage .tv-left .tv-col-a .mp-slots{grid-template-columns:minmax(0,1fr)}
-  html.tv #mpStage .tv-left .tv-col-q > .tv-clockrow{flex-direction:column;align-items:flex-start}   /* zegar nad listą „Czekamy na" */
+  html.tv #mpStage .tv-left .tv-col-a .mp-slots{grid-template-columns:minmax(0,1fr)!important}   /* nadpisuje inline repeat(N) */
+  html.tv #mpStage .tv-left .mp-cand.empty .cv{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   @media (orientation:portrait){ .tv-cols{grid-template-columns:minmax(0,1fr)} }
   .tv-left,.tv-right{background:var(--panel);border:2px solid var(--line);border-radius:1.3rem;padding:1.3rem 1.6rem;min-width:0;overflow-x:hidden;overflow-y:auto}
   .tv-left{display:flex;flex-direction:column;gap:.9rem}
@@ -2025,6 +2022,26 @@
   @keyframes tvGain{0%{transform:translateY(.6rem) scale(.6);opacity:0}50%{transform:translateY(-.2rem) scale(1.25);opacity:1}100%{transform:none;opacity:1}}
   @keyframes tvPulse{50%{opacity:.55}}
   .tv-qhead{display:flex;flex-direction:column;gap:.55rem}
+  /* przegląd v70: szkielet lewej kolumny TV — pasek (pytanie | zegar), scena (wyśrodkowana), stopka (status) */
+  html.tv #mpStage .tv-left{display:flex;flex-direction:column;gap:0;overflow:hidden}
+  .tv-qbar{display:flex;align-items:center;justify-content:space-between;gap:1.5rem;padding-bottom:.9rem;border-bottom:2px solid var(--line)}
+  .tv-qbar .tv-qhead{flex-direction:row;align-items:center;flex-wrap:wrap;gap:.6rem 1.1rem;min-width:0}
+  .tv-qbar .tv-qn b{font-size:2.8rem}
+  .tv-qclock{flex:0 0 auto;display:flex;align-items:center}
+  html.tv #mpStage .tv-qclock #mpCountdown.tv-clock{font-size:3.6rem}
+  .tv-body{flex:1 1 auto;min-height:0;display:flex;flex-direction:column;gap:1rem;padding:1.1rem 0;overflow-y:auto;scrollbar-width:none}
+  .tv-body::-webkit-scrollbar{display:none}
+  html.tv #mpStage .tv-left .tv-col-a .mp-cand{padding:.5rem .9rem} html.tv #mpStage .tv-left .tv-col-a .mp-slot-h{font-size:.85rem}
+  .tv-body > :first-child{margin-top:auto} .tv-body > :last-child{margin-bottom:auto}   /* środek w pionie bez wypychania nad pasek przy przepełnieniu */
+  .tv-solo{display:flex;flex-direction:column;align-items:center;gap:1rem;width:100%}
+  .tv-solo > .mp-mc,.tv-solo > .mp-board,.tv-solo > .tv-teamans,.tv-solo > .tv-reveal,.tv-solo > .mp-lyric,.tv-solo > .lyric-box{width:100%}
+  .tv-cols{align-items:center}
+  .tv-col-q{align-items:center;text-align:center}
+  .tv-foot{border-top:2px solid var(--line);padding-top:.8rem;display:flex;align-items:center;min-height:3rem}
+  .tv-foot .mp-waitfor{margin:0;justify-content:flex-start;text-align:left}
+  html.tv #mpStage .tv-left .tv-col-q .tv-listen{grid-template-columns:minmax(0,1fr);justify-items:center;gap:1rem}
+  html.tv #mpStage .tv-left .tv-listen-r{width:min(100%,22rem)}
+  .tv-solo .tv-listen{grid-template-columns:auto minmax(0,22rem)}
   .tv-qn{font-family:var(--display);font-weight:900;font-size:1.4rem;letter-spacing:.1em;color:var(--muted);line-height:1}
   .tv-qn b{font-size:3.4rem;color:var(--ink);letter-spacing:0;margin-left:.3rem}
   .tv-qn span{font-size:2.1rem;letter-spacing:0}

@@ -10,7 +10,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v71';   // TV salonu: układ kolumnowy (pytanie | odpowiedzi), skala od rozmiaru ekranu (TV 960×540 / 4K), wąska kolumna drużyny
+const APP_VERSION = 'v72';   // TV salonu: stały szkielet lewej kolumny (pasek pytanie|zegar, scena, stopka „Czekamy na”)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).
