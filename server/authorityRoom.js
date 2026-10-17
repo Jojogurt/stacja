@@ -268,7 +268,8 @@ export class GameAuthority extends Server {
     // karencja: nieobecny host (np. przeładowanie TV) wraca — nikt w tym czasie nie przejmuje roli
     if(id===this.hostId && this.hostAwayUntil){ this.clearHostGrace(); await this.persist(); await this.syncAlarm(); }
     const inGrace = this.hostAwayUntil > Date.now();
-    if(!this.hostId || (!hostHere && this.hostId!==id && !inGrace)){          // pierwszy obecny = host (przenoszalny)
+    const tvHost = !!this.hostId && this.hostId===this.salonTv();               // SALON: nieobecna TV dalej jest hostem
+    if(!this.hostId || (!hostHere && this.hostId!==id && !inGrace && !tvHost)){  // pierwszy obecny = host (przenoszalny)
       this.hostId=id; if(this.game) this.game.hostId=id; await this.persist();
     }
     // STABILNOŚĆ HOSTA: starter meczu wraca po reconnect → odzyskuje hosta (a nie zostaje przy
@@ -293,7 +294,8 @@ export class GameAuthority extends Server {
     const left = conn.state && conn.state.id;
     // F2b #3: promote TYLKO gdy host nie ma już ŻADNEGO innego połączenia (druga karta / nowy socket
     // po reconnect, a stary half-open zamknięty później) — dawniej awansował innego mimo obecnego hosta.
-    if(left && left===this.hostId && !this.idPresent(left, conn)){     // promote: awansuj najstarszego obecnego
+    // SALON: rola hosta należy do TV na stałe — gracz NIGDY nie zostaje hostem (gra dalej sama: serwerowe timery + „dalej" graczy)
+    if(left && left===this.hostId && !this.idPresent(left, conn) && left!==this.salonTv()){     // promote: awansuj najstarszego obecnego
       // TV/host przeładowuje stronę → najpierw KARENCJA (hostGraceMs): wraca w niej → zostaje hostem (i TV), gracz nie
       // przejmuje ekranu. Awans dopiero po karencji (scheduleHostGrace). hostGraceMs 0 → awans od razu (dawniej).
       if(this.hostGraceMs>0){
@@ -324,6 +326,7 @@ export class GameAuthority extends Server {
   // awans najstarszego obecnego (poza `left`); nikogo → hostId ZOSTAJE (pokój czeka na powrót; inny łączący przejmie
   // w onConnect). Dawniej null → klient hosta po powrocie nie dostawał roli, a serwer odrzucał lock/next → zamrożenie.
   async promoteFrom(left, except){
+    if(left && left===this.salonTv()) return false;   // SALON: host = TV, gracz nie przejmuje (także po starym alarmie karencji)
     const others=[...this.getConnections()].filter(c=>c!==except).map(c=>c.state).filter(s=>s&&s.id&&s.id!==left);
     if(!others.length) return false;
     this.hostId = others[0].id;
@@ -346,6 +349,10 @@ export class GameAuthority extends Server {
   }
   clearHostGrace(keepDeadline=false){ if(this._hostGrace){ clearTimeout(this._hostGrace); this._hostGrace=null; } if(!keepDeadline){ this.hostAwayUntil=0; this.hostAwayId=null; } }
   onError(){ this.pushPresence(); }
+  // SALON: id TV (stały host salonu) — w meczu i po nim (rewanż); poza salonem null
+  salonTv(){ return this.game && this.game.salon ? tvIdOf(this.game) : null; }
+  // SALON bez TV (zamknięta/padła): czy gra ma toczyć się bez hosta (gracze „dalej" → serwer przechodzi sam)
+  tvAway(){ const tv=this.salonTv(); return !!tv && !this.idPresent(tv); }
   // czy id ma jeszcze jakieś połączenie poza `except` (wiele kart / reconnect przed zamknięciem starego)
   idPresent(id, except){
     return [...this.getConnections()].some(c=>c!==except && c.state && c.state.id===id);
@@ -446,6 +453,7 @@ export class GameAuthority extends Server {
         let raw; try{ raw=JSON.stringify(p); }catch(_e){ return; }
         if(raw.length>EVENT_PAYLOAD_MAX) return;      // 3.3: cap rozmiaru payloadu (anty-flood)
         this.broadcast(JSON.stringify({ t:'event', event:msg.event, payload:p, from:me }));
+        if(msg.event==='advanced') await this.salonAdvanced(me);
         return;
       }
 
@@ -475,15 +483,15 @@ export class GameAuthority extends Server {
       }
 
       case 'lock':                                    // tylko host (auto-lock robi timer)
-        if(me && me===this.hostId) await this.lock();
+        if(me && (me===this.hostId || this.tvAway())) await this.lock();
         return;
 
       case 'next':                                    // tylko host
-        if(me && me===this.hostId) await this.next();
+        if(me && (me===this.hostId || this.tvAway())) await this.next();
         return;
 
       case 'retry':                                   // tylko host, tylko w NETERR/NOLYRIC (1.3)
-        if(me && me===this.hostId) await this.retry();
+        if(me && (me===this.hostId || this.tvAway())) await this.retry();
         return;
 
       case 'more':                                    // MP okładka/intro: następny etap wcześniej — dowolny gracz (nonce + etap)
@@ -491,10 +499,21 @@ export class GameAuthority extends Server {
         return;
 
       case 'go':                                      // F2b #6: host „pomiń czekających" — tylko w ARMING (go() strzeże fazy)
-        if(me && me===this.hostId) await this.go();
+        if(me && (me===this.hostId || this.tvAway())) await this.go();
         return;
     }
   }
+
+  // SALON bez TV: „dalej" WSZYSTKICH obecnych graczy w REVEAL → serwer sam przechodzi (TV, która to robiła, jest nieobecna)
+  async salonAdvanced(id){
+    const g=this.game;
+    if(!g || g.phase!==MP.REVEAL || !this.tvAway()) return;
+    if(this.advNonce!==g.playNonce){ this.advSet=new Set(); this.advNonce=g.playNonce; }
+    this.advSet.add(id);
+    const ps=this.expectedReady();
+    if(ps.length && ps.every(x=>this.advSet.has(x))){ this.advSet=new Set(); await this.next(); }
+  }
+  advSet = new Set(); advNonce = null;
 
   // 1.3: host ponawia zablokowaną rundę. NETERR (sieć) → ten sam slot od nowa;
   // NOLYRIC (pula wyczerpana) → przeskocz slot (inaczej kręci się w kółko na pustej puli).

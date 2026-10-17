@@ -1091,7 +1091,7 @@ await group('FIX odpowiedzi gościa: Solo — wejście już w PLAY → własna d
 
 /* ==================== Przegląd MP 2026-10 — etap A ==================== */
 const quiz2=()=>({ ...quizPools(), q2:{ label:'Quiz 2', kind:'quiz', questions:Array.from({ length:30 }, (_,i)=>({ prompt:'R'+i, slots:[{key:'a',label:'odp'}], answers:{a:['y'+i]} })) } });
-await group('P0-1: salon — wyjście TV NIE robi z awansowanego gracza TV (pełny stan rywali, poza drużyną)', async ()=>{
+await group('P0-1 + salon: wyjście TV — host ZOSTAJE przy TV (gracz nigdy nie jest hostem), gracze grają dalej', async ()=>{
   const { room } = await makeRoom();
   const tv=await room.connect('TV','Telewizor'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba');
   await room.msg(tv, { t:'start', config:CONFIG({ salon:true, format:'solo' }) });
@@ -1099,11 +1099,13 @@ await group('P0-1: salon — wyjście TV NIE robi z awansowanego gracza TV (peł
   await readyAll(room, p1, p2);
   eq(room.game.phase, MP.PLAY, 'PLAY');
   await room.msg(p2, { t:'action', action:{ type:'propose', values:{ a:'typ-kuby' } } });
-  await room.drop(tv);                                    // TV wychodzi → awans gracza
-  eq(room.hostId, 'P1', 'host przechodzi na gracza P1');
+  await room.drop(tv);                                    // TV wychodzi → host ZOSTAJE (salon: gracz nigdy nie jest hostem)
+  eq(room.hostId, 'TV', 'host zostaje przy nieobecnej TV — P1 NIE przejmuje');
+  const p3=await room.connect('P3','Ewa'); await room.drop(p3);
+  eq(room.hostId, 'TV', 'dołączający gracz też nie przejmuje hosta salonu');
   eq(room.game.tvId, 'TV', 'tvId zostaje przy TV (rola TV nie przechodzi)');
   const v1=room.viewFor('P1');
-  eq(v1.byTeam.P2.proposals.length, 0, 'P1 (nowy host) NIE widzi treści typów rywala (B1: dawniej pełny stan)');
+  eq(v1.byTeam.P2.proposals.length, 0, 'P1 NIE widzi treści typów rywala');
   ok(teamOfId(room.game,'P1')==='P1', 'P1 dalej ma swoją drużynę');
   await room.msg(p1, { t:'action', action:{ type:'propose', values:{ a:'typ-oli' } } });
   ok(room.game.byTeam.P1.proposals.some(p=>p.by==='P1'), 'P1 nadal odpowiada (nie jest TV)');
@@ -1114,13 +1116,13 @@ await group('P0-1: salon — wyjście TV NIE robi z awansowanego gracza TV (peł
   eq(room.viewFor('TV').byTeam.P2.proposals.length, 1, 'TV widzi stan wszystkich (jak dotąd)');
   ok(!teamOfId(room.game,'TV'), 'TV poza drużynami');
 });
-await group('P0-1: salon coop — awansowany gracz NIE nadpisuje większości głosem „sędziego"', async ()=>{
+await group('salon coop bez TV: gracz może zatwierdzić (tvAway), ale NIE jest hostem; większość wygrywa', async ()=>{
   const { room } = await makeRoom();
   const tv=await room.connect('TV','Telewizor'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba'), p3=await room.connect('P3','Ala');
   await room.msg(tv, { t:'start', config:CONFIG({ salon:true }) });
   await readyAll(room, p1, p2, p3);
   await room.drop(tv);
-  eq(room.hostId, 'P1', 'P1 hostem');
+  eq(room.hostId, 'TV', 'host = nieobecna TV (nie P1)');
   await room.msg(p1, { t:'action', action:{ type:'propose', values:{ a:'zle' } } });
   await room.msg(p2, { t:'action', action:{ type:'propose', values:{ a:'dobrze' } } });
   await room.msg(p3, { t:'action', action:{ type:'vote', slot:'a', value:'dobrze' } });
@@ -1570,14 +1572,33 @@ await group('karencja hosta: TV (salon) przeładowuje się i wraca w karencji �
   eq([room.hostId, room.game.hostId, room.game.tvId], ['TV','TV','TV'], 'w karencji: gracz NIE przejmuje hosta ani ekranu');
   const tv3=await room.connect('TV','TV');
   eq([room.hostId, room.game.tvId, tv3.last('state').game.tvId], ['TV','TV','TV'], 'TV po reloadzie w karencji: host + TV');
-  // nie wraca → po karencji awans gracza (pokój nie zamarza), tvId zostaje (P0-1)
+  // nie wraca → host ZOSTAJE przy TV (salon: gracz nigdy nie jest hostem); gra toczy się sama (timery + „dalej" graczy)
   await room.drop(tv3);
   await sleep(130);
-  eq([room.hostId, room.game.tvId], ['P1','TV'], 'TV nie wraca → po karencji awans najstarszego gracza; tvId bez zmian');
+  eq([room.hostId, room.game.tvId], ['TV','TV'], 'TV nie wraca → po karencji host nadal TV (bez awansu gracza)');
   const tv4=await room.connect('TV','TV');
   eq(room.hostId, 'TV', 'starter-TV wraca później → odzyskuje hosta (reclaim)');
   room.clearArmTimer(); room.clearAutoLock(); room.clearHostGrace();
   void p1; void p2; void p3; void tv4;
+});
+await group('salon bez TV: „dalej" wszystkich graczy w REVEAL → serwer sam przechodzi; z TV — nie (robi to TV)', async ()=>{
+  const { room } = await makeRoom();
+  const tv=await room.connect('TV','TV'), p1=await room.connect('P1','Ola'), p2=await room.connect('P2','Kuba');
+  await room.msg(tv, { t:'start', config:CONFIG({ salon:true, questions:15 }) });
+  await readyAll(room, p1, p2);
+  await room.msg(tv, { t:'lock' });
+  eq(room.game.phase, MP.REVEAL, 'REVEAL');
+  const q0=room.game.qi;
+  await room.msg(p1, { t:'event', event:'advanced', payload:{ nonce:room.game.playNonce } });
+  await room.msg(p2, { t:'event', event:'advanced', payload:{ nonce:room.game.playNonce } });
+  eq([room.game.phase, room.game.qi], [MP.REVEAL, q0], 'TV obecna → serwer nie przechodzi sam (robi to TV)');
+  await room.drop(tv);
+  await room.msg(p1, { t:'event', event:'advanced', payload:{} });
+  eq(room.game.phase, MP.REVEAL, 'jeden z dwóch — czekamy');
+  await room.msg(p2, { t:'event', event:'advanced', payload:{} });
+  ok(room.game.phase!==MP.REVEAL, 'wszyscy gracze „dalej" bez TV → następne pytanie');
+  eq(room.hostId, 'TV', 'host dalej TV');
+  room.clearArmTimer(); room.clearAutoLock(); room.clearHostGrace();
 });
 // restart DO: nowa instancja na TYM SAMYM storage (stare in-memory timery giną), połączenia = podane
 async function restartRoom(room, conns, over={}){
@@ -1654,7 +1675,7 @@ await group('karencja hosta: po meczu (DONE) w salonie TV odzyskuje hosta po rel
   await room.msg(tv, { t:'start', config:CONFIG({ salon:true, questions:5 }) });
   room.game.phase=MP.DONE;
   await room.drop(tv);
-  eq(room.hostId, 'P', 'bez karencji: awans gracza');
+  eq(room.hostId, 'TV', 'salon (DONE): bez awansu gracza nawet bez karencji');
   await room.connect('TV','TV');
   eq(room.hostId, 'TV', 'DONE + salon: TV (starter) odzyskuje hosta');
   room.clearArmTimer(); room.clearAutoLock(); void p;
