@@ -1706,5 +1706,150 @@ await group('pokój mieszany: presence.members[].adv tylko dla klientów ogłasz
   await room.msg(a, { t:'track', name:'Nowy2' });
   ok(a.last('presence').members.find(m=>m.id==='A').adv, '`track` (zmiana ksywy) nie gubi flagi adv');
 });
+/* ==================== SĘDZIA AI (env.AI podmienione) + „Uznaj" (głosowanie po odsłonie) ==================== */
+{
+const { _resetJudge } = await import('../lib/judge.js');
+const NEOQ={ prompt:'Jakiego koloru tabletkę połyka Neo, by dowiedzieć się, czym naprawdę jest Matrix?', slots:[{key:'a',label:'kolor'}], answers:{a:['czerwoną','czerwony']} };
+const YEARQ={ prompt:'W którym roku miała premierę pierwsza część Gwiezdnych wojen?', slots:[{key:'a',label:'rok'}], answers:{a:['1977']} };
+// fake Workers AI: werdykt z funkcji (na treści promptu), opcjonalne opóźnienie; licznik wywołań
+function fakeAI(verdict, { delay=0 }={}){
+  const ai={ calls:[], async run(model, input){ ai.calls.push({ model, input }); if(delay) await sleep(delay);
+    const u=input.messages[1].content; return { response: typeof verdict==='function' ? verdict(u) : verdict }; } };
+  return ai;
+}
+const guessOf=(u)=>(u.match(/<<<(.*)>>>/)||[])[1]||'';
+async function quizRoom(q, AI, { format='coop', names=['A','B'] }={}){
+  _resetJudge();
+  const { room } = await makeRoom(AI ? { AI } : {});
+  const cs=names.map(n=>room.join(n, n.toLowerCase()));
+  await room.msg(cs[0], { t:'start', config:CONFIG({ format, pools:onePool(q) }) });
+  await readyAll(room, ...cs);
+  return { room, cs };
+}
+await group('sędzia AI: werdykt TAK zalicza („czerwonego"), oznaczenie aiOk w odsłonie', async ()=>{
+  const AI=fakeAI('TAK');
+  const { room, cs:[a] } = await quizRoom(NEOQ, AI);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  await room.msg(a, { t:'lock' });
+  const rv=a.last('state').game.reveal;
+  eq([rv.teamOk, rv.gained>=100, rv.aiOk], [true, true, { a:true }], 'TAK → trafienie + aiOk');
+  eq(AI.calls.length, 1, 'jedno wywołanie modelu');
+  ok(/qwen3/.test(AI.calls[0].model) && AI.calls[0].input.temperature===0, 'model + temperature 0');
+  eq(guessOf(AI.calls[0].input.messages[1].content), 'czerwonego', 'typ gracza w ogranicznikach');
+  eq(a.last('state').game.accept, null, 'trafione → bez „Uznaj"');
+});
+await group('sędzia AI: werdykt NIE nie zalicza; „Uznaj" dostępne', async ()=>{
+  const AI=fakeAI('NIE');
+  const { room, cs:[a] } = await quizRoom(NEOQ, AI);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'niebieską' } } });
+  await room.msg(a, { t:'lock' });
+  const g=a.last('state').game;
+  eq([g.reveal.teamOk, g.reveal.aiOk], [false, undefined], 'NIE → pudło, bez aiOk');
+  eq([g.accept && g.accept.teams, g.accept && g.accept.need.all], [['all'], 2], '„Uznaj": drużyna, potrzeba 2/2');
+});
+await group('sędzia AI: timeout → ocena bez AI (lock się nie zawiesza)', async ()=>{
+  const AI=fakeAI('TAK', { delay:300 });
+  const { room, cs:[a] } = await quizRoom(NEOQ, AI);
+  room.judgeBudgetMs=40;
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  const t0=Date.now(); await room.msg(a, { t:'lock' });
+  ok(Date.now()-t0 < 250, 'lock w budżecie (nie czeka na model)');
+  eq([room.game.phase, room.game.reveal.teamOk], [MP.REVEAL, false], 'REVEAL, ocena regułami (pudło)');
+});
+await group('sędzia AI: brak env.AI → bez AI, gra działa jak dotąd', async ()=>{
+  const { room, cs:[a] } = await quizRoom(NEOQ, null);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  await room.msg(a, { t:'lock' });
+  eq([room.game.phase, room.game.reveal.teamOk], [MP.REVEAL, false], 'REVEAL, pudło');
+});
+await group('sędzia AI: ten sam typ dwóch drużyn = 1 wywołanie (cache); liczba → bez AI', async ()=>{
+  const AI=fakeAI('TAK');
+  const { room, cs:[a,b] } = await quizRoom(NEOQ, AI, { format:'solo' });
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:'Czerwonego' } } });
+  await room.msg(a, { t:'lock' });
+  eq(AI.calls.length, 1, '2 drużyny, ten sam typ → 1 wywołanie');
+  const rv=room.game.reveal;
+  ok(rv.byTeam.A.teamOk && rv.byTeam.B.teamOk, 'obie drużyny zaliczone');
+  const AI2=fakeAI('TAK');
+  const r2=await quizRoom(YEARQ, AI2);
+  await r2.room.msg(r2.cs[0], { t:'action', action:{ type:'propose', values:{ a:'1980' } } });
+  await r2.room.msg(r2.cs[0], { t:'lock' });
+  eq([AI2.calls.length, r2.room.game.reveal.teamOk], [0, false], 'pytanie z liczbą: model nie wołany, pudło');
+});
+await group('sędzia AI: w trakcie werdyktu akcje ignorowane, drugi lock (timer/host) = no-op', async ()=>{
+  const AI=fakeAI('TAK', { delay:60 });
+  const { room, cs:[a] } = await quizRoom(NEOQ, AI);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  const p=room.msg(a, { t:'lock' });
+  await sleep(5);
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'niebieską' } } });   // spóźniona zmiana
+  await room.msg(a, { t:'lock' });                                                          // drugi lock w trakcie
+  await p;
+  eq([room.game.phase, room.game.results.length, room.game.reveal.teamOk], [MP.REVEAL, 1, true], 'jedna ocena, zamrożona odpowiedź');
+});
+await group('„Uznaj": coop większość drużyny → przeliczenie; dubel głosu bez efektu; next czyści', async ()=>{
+  const { room, cs:[a,b,c] } = await quizRoom({ ...NEOQ, prompt:'P-uznaj' }, null, { names:['A','B','C'] });
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  await room.msg(a, { t:'lock' });
+  const nonce=room.game.playNonce;
+  eq(room.game.accept.need.all, 2, 'potrzeba 2/3');
+  await room.msg(a, { t:'action', action:{ type:'accept', teamId:'all', playNonce:nonce } });
+  await room.msg(a, { t:'action', action:{ type:'accept', teamId:'all', playNonce:nonce } });
+  eq([room.game.accept.votes.all, room.game.scores.all], [['A'], 0], '1 głos (dubel zignorowany), wynik bez zmian');
+  await room.msg(b, { t:'action', action:{ type:'accept', teamId:'all', playNonce:nonce } });
+  const g=b.last('state').game;
+  ok(g.accept.done.all && g.reveal.teamOk && g.scores.all>=100 && g.reveal.accepted, 'większość → uznane, punkty');
+  const sc=g.scores.all;
+  await room.msg(c, { t:'action', action:{ type:'accept', teamId:'all', playNonce:nonce } });
+  eq(room.game.scores.all, sc, 'głos po uznaniu → bez dubli punktów');
+  await room.msg(a, { t:'next' });
+  eq(room.game.accept, null, 'następne pytanie / koniec → głosy wyczyszczone');
+});
+await group('„Uznaj": Solo — samozaliczenie nie wystarcza, głos rywala tak; TV salonu nie głosuje', async ()=>{
+  const { room, cs:[a,b] } = await quizRoom({ ...NEOQ, prompt:'P-solo' }, null, { format:'solo' });
+  await room.msg(a, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  await room.msg(b, { t:'action', action:{ type:'propose', values:{ a:'zielony' } } });
+  await room.msg(a, { t:'lock' });
+  const n=room.game.playNonce;
+  eq(room.game.accept.need.A, 2, 'Solo 2 graczy: potrzeba 2/2 (cały pokój)');
+  await room.msg(a, { t:'action', action:{ type:'accept', teamId:'A', playNonce:n } });
+  eq(room.game.scores.A, 0, 'sam sobie — za mało');
+  await room.msg(b, { t:'action', action:{ type:'accept', teamId:'A', playNonce:n } });
+  ok(room.game.scores.A>=100 && room.game.scores.B===0, 'rywal uznał → A dostaje punkty, B bez zmian');
+  // salon: TV (host) nie gra i nie głosuje
+  _resetJudge();
+  const { room:sr } = await makeRoom();
+  const tv=sr.join('TV','tv'), p1=sr.join('P1','p1'), p2=sr.join('P2','p2');
+  await sr.msg(tv, { t:'start', config:CONFIG({ salon:true, pools:onePool({ ...NEOQ, prompt:'P-salon' }) }) });
+  await readyAll(sr, p1, p2);
+  await sr.msg(p1, { t:'action', action:{ type:'propose', values:{ a:'czerwonego' } } });
+  await sr.msg(p1, { t:'lock' });
+  const sn=sr.game.playNonce;
+  eq(sr.game.accept.need.all, 2, 'salon: uprawnieni = 2 graczy (bez TV)');
+  await sr.msg(tv, { t:'action', action:{ type:'accept', teamId:'all', playNonce:sn } });
+  eq(sr.game.accept.votes.all, undefined, 'głos TV odrzucony');
+});
+await group('/api/judge: walidacja, reguły, werdykt z env.AI, brak AI → null, rate-limit', async ()=>{
+  _resetJudge();
+  const call=async(env, body, raw)=>{ const url=new URL('https://w/api/judge');
+    const res=await handleApi(new Request(url, { method:'POST', headers:{ 'content-type':'application/json' }, body: raw!=null ? raw : JSON.stringify(body) }), env, url);
+    return { status:res.status, body:await res.json() }; };
+  const AI=fakeAI(u=>guessOf(u)==='czerwonego' ? 'TAK' : 'NIE');
+  const env={ TOKEN_SECRET:'x', AI };
+  eq(await call(env, { question:NEOQ.prompt, expected:NEOQ.answers.a, guess:'czerwonego', label:'kolor' }), { status:200, body:{ verdict:true } }, 'TAK → verdict:true (bez tokenu — solo)');
+  eq((await call(env, { question:NEOQ.prompt, expected:NEOQ.answers.a, guess:'niebieską' })).body.verdict, false, 'NIE → false');
+  eq((await call(env, { question:YEARQ.prompt, expected:['1977'], guess:'1980' })).body, { verdict:null, reason:'ineligible' }, 'liczby → bez modelu');
+  eq((await call(env, { question:'Q', expected:['Ankara'], guess:'TAK' })).body.verdict, null, 'polecenie „TAK" → bez modelu');
+  const n=AI.calls.length;
+  eq((await call(env, { question:NEOQ.prompt, expected:NEOQ.answers.a, guess:'czerwonego', label:'kolor' })).body.verdict, true, 'powtórka z cache');
+  eq(AI.calls.length, n, 'cache: bez nowego wywołania');
+  eq((await call(env, { question:'Q', expected:'x', guess:'a' })).status, 400, 'zły kształt → 400');
+  eq((await call(env, null, 'x'.repeat(9000))).status, 413, 'za duże body → 413');
+  eq((await call({ TOKEN_SECRET:'x' }, { question:'Q', expected:['Ankara'], guess:'Ankary' })).body.verdict, null, 'brak env.AI → null');
+  const RL={ limit:async()=>({ success:false }) };
+  eq((await call({ TOKEN_SECRET:'x', AI, JUDGE_RL:RL }, { question:'Q', expected:['Ankara'], guess:'Ankary' })).status, 429, 'JUDGE_RL → 429');
+});
+}
 console.log(`\n${fail?'❌':'✅'} authority: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

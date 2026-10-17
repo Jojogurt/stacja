@@ -507,6 +507,23 @@ function mpSend(act){
   if(S.game && reduceAction(S.game, act)) mpRender();
   if(S.ch){ S.ch.send({type:'broadcast',event:'act',payload:act}); }
 }
+/* „Uznaj" (odsłona, serwer-autorytet): głos za zaliczeniem odpowiedzi drużyny teamId (serwer liczy większość i przelicza).
+ * Optymistycznie dopisz własny głos (licznik „Uznaj 1/3" od razu); prawdziwy stan przychodzi z {t:'state'}. Relay — brak. */
+function mpAccept(teamId){
+  const g=S.game, a=g && g.accept;
+  if(!SERVER_AUTH || !g || g.phase!==MP.REVEAL || !a || a.nonce!==g.playNonce) return;
+  const tid=String(teamId||''); if(!Array.isArray(a.teams) || !a.teams.includes(tid) || (a.done && a.done[tid])) return;
+  a.votes=a.votes||{}; const vs=a.votes[tid]=Array.isArray(a.votes[tid]) ? a.votes[tid] : [];
+  if(vs.includes(mpMe.id)) return;
+  vs.push(mpMe.id);
+  mpSend({ type:'accept', teamId:tid, playNonce:g.playNonce });
+  mpRender();
+}
+if(typeof document!=='undefined') document.addEventListener('click', (e)=>{
+  const b=e.target && e.target.closest ? e.target.closest('#mpStage [data-mp-accept]') : null;
+  if(!b || b.disabled) return;
+  e.preventDefault(); mpAccept(b.dataset.mpAccept);
+});
 function mpAfterSync(){
   // host-lokalny fallback salonu: serwer (jeszcze) nie odsyła game.salon → wstrzyknij, by
   // teamAnswer (nadpisanie) i widok-monitor działały u hosta bez deployu DO.

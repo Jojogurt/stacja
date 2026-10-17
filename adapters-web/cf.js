@@ -57,6 +57,24 @@ export async function setHandle(handle) {
   try { await call('/api/handle', { method: 'POST', body: { handle } }); } catch (_e) { /* nieblokujące */ }
 }
 
+/* ---- sędzia AI (gra solo): POST /api/judge → true (TAK) / false (NIE) / null (brak backendu, offline, timeout, limit) ----
+ * Czas ograniczony (AbortController) — gra nigdy nie czeka dłużej niż timeoutMs; null = ocena regułami jak dotąd. */
+export async function judgeRemote({ question, expected, guess, label, others } = {}, { timeoutMs = 3000 } = {}) {
+  const b = base(); if (!b || typeof fetch !== 'function') return null;
+  const ctl = typeof AbortController === 'function' ? new AbortController() : null;
+  const timer = setTimeout(() => { try { ctl && ctl.abort(); } catch (_e) {} }, timeoutMs);
+  try {
+    const body = { question: String(question || '').slice(0, 2000), expected: (expected || []).filter(v => typeof v === 'string').slice(0, 60).map(v => v.slice(0, 200)),
+      guess: String(guess || '').slice(0, 80), label: String(label || '').slice(0, 40), others: (others || []).filter(v => typeof v === 'string').slice(0, 60).map(v => v.slice(0, 200)) };
+    const race = new Promise(res => setTimeout(() => res(null), timeoutMs + 50));   // fetch bez AbortController (stare WebView)
+    const r = await Promise.race([fetch(b + '/api/judge', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body), signal: ctl ? ctl.signal : undefined }), race]);
+    if (!r || !r.ok) return null;
+    const d = await r.json().catch(() => null);
+    return d && (d.verdict === true || d.verdict === false) ? d.verdict : null;
+  } catch (_e) { return null; }
+  finally { clearTimeout(timer); }
+}
+
 /* ---- mecze / liga / profil ---- */
 export async function recordMatch(payload) {
   try { const d = await call('/api/record-match', { method: 'POST', body: payload }); return (d && d.id) || null; }

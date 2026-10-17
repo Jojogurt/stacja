@@ -3887,5 +3887,103 @@ await group('Gust: ❤️ w odsłonie okładki (utwór reprezentatywny), wycofan
   eq2(w.localStorage.getItem('stacjaTaste'), '{}', 'localStorage gustu pusty');
   eq2(tasteMod.tastePending(), 0, 'kolejka synchronizacji pusta');
 });
+/* ======== SĘDZIA AI + „Uznaj": odsłona MP (aiOk, licznik głosów, klik → akcja) i solo (/api/judge zaślepione) ======== */
+await group('MP sędzia AI: odsłona „✓ uznane (sędzia AI)" + „👍 Uznaj 0/2" → klik wysyła akcję, licznik 1/2, po większości „uznane"', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const teams=[{id:'all',name:'Drużyna',members:[me,'P2']}];
+  const QZ={ kind:'quiz', prompt:'Jakiego koloru tabletkę połyka Neo?', slots:[{key:'a',label:'kolor'}], answers:{a:['czerwoną','czerwony']} };
+  // 1) sędzia AI zaliczył slot
+  ws.pushState(revealState(ws, { playNonce:9701, mode:'quiz', teams, reveal:{ ...QZ, okBySlot:{a:true}, teamOk:true, gained:100, locked:{a:'czerwonego'}, aiOk:{a:true}, display:{a:'czerwoną'},
+    byTeam:{ all:{ okBySlot:{a:true}, teamOk:true, gained:100, locked:{a:'czerwonego'}, aiOk:{a:true}, display:{a:'czerwoną'} } } } })); await settle(8);
+  const st=$(w,'mpStage');
+  ok(st.querySelector('[data-rv-ai="a"]') && /uznane \(sędzia AI\)/.test(st.textContent), 'odsłona: „✓ uznane (sędzia AI)" przy slocie');
+  ok(!st.querySelector('[data-mp-accept]'), 'trafione → bez „Uznaj"');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  // 2) pudło → „Uznaj" (coop: większość drużyny 2/2)
+  const base={ ...QZ, okBySlot:{a:false}, teamOk:false, gained:0, locked:{a:'czerwonego'}, display:{a:'czerwoną'},
+    byTeam:{ all:{ okBySlot:{a:false}, teamOk:false, gained:0, locked:{a:'czerwonego'}, display:{a:'czerwoną'} } } };
+  ws.pushState(revealState(ws, { playNonce:9702, mode:'quiz', teams, reveal:base, accept:{ nonce:9702, teams:['all'], votes:{}, need:{all:2}, done:{} } })); await settle(8);
+  const btn=st.querySelector('[data-mp-accept="all"]');
+  ok(btn && /Uznaj 0\/2/.test(btn.textContent), 'przycisk „👍 Uznaj 0/2"');
+  ok(/Wasza odpowiedź: „czerwonego"/.test(st.textContent), 'coop: odpowiedź drużyny przy „Uznaj"');
+  const n=ws.sent.length;
+  btn.click(); await settle(3);
+  const sent=ws.sent.slice(n).find(m=>m.t==='action' && m.action && m.action.type==='accept');
+  ok(sent && sent.action.teamId==='all' && sent.action.playNonce===9702, 'klik → {t:action, action:{type:accept, teamId, playNonce}}');
+  const b2=st.querySelector('[data-mp-accept="all"]');
+  ok(b2 && b2.disabled && /Uznaj 1\/2/.test(b2.textContent), 'licznik od razu 1/2, przycisk nieaktywny (mój głos)');
+  const n2=ws.sent.length; b2.click(); await settle(2);
+  ok(!ws.sent.slice(n2).some(m=>m.t==='action' && m.action && m.action.type==='accept'), 'drugi klik nic nie wysyła');
+  // serwer: większość → przeliczone (ta sama odsłona — migawka odświeżona bez ponownych efektów)
+  ws.pushState(revealState(ws, { playNonce:9702, mode:'quiz', teams, scores:{all:130},
+    reveal:{ ...base, okBySlot:{a:true}, teamOk:true, gained:130, accepted:true, byTeam:{ all:{ ...base.byTeam.all, okBySlot:{a:true}, teamOk:true, gained:130, accepted:true } } },
+    accept:{ nonce:9702, teams:['all'], votes:{all:[me,'P2']}, need:{all:2}, done:{all:true} } })); await settle(8);
+  ok(st.querySelector('.rv-accept.done') && /uznane/.test(st.querySelector('.rv-accept.done').textContent) && /2\/2/.test(st.textContent), 'po większości: „👍 … uznane (2/2)"');
+  ok(/\+130/.test(st.querySelector('.rv-banner').textContent), 'baner przeliczony (+130)');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  // 3) Solo: „Uznaj" dla każdej kwalifikującej się drużyny (rywale też głosują)
+  const steams=[{id:me,name:'Ja',members:[me]},{id:'G',name:'Gosc',members:['G']}];
+  ws.pushState(revealState(ws, { playNonce:9703, mode:'quiz', format:'solo', teams:steams, scores:{[me]:0,G:0},
+    reveal:{ ...QZ, byTeam:{ [me]:{ okBySlot:{a:false}, teamOk:false, gained:0, locked:{a:'niebieską'} }, G:{ okBySlot:{a:false}, teamOk:false, gained:0, locked:{a:'czerwonego'} } },
+      ranking:[{teamId:me,name:'Ja',score:0,teamOk:false,gained:0},{teamId:'G',name:'Gosc',score:0,teamOk:false,gained:0}] },
+    accept:{ nonce:9703, teams:[me,'G'], votes:{G:['G']}, need:{[me]:2,G:2}, done:{} } })); await settle(8);
+  ok(st.querySelector('[data-mp-accept="G"]') && /Gosc/.test(st.querySelector('[data-rv-accept="G"]').textContent) && /Uznaj 1\/2/.test(st.querySelector('[data-mp-accept="G"]').textContent), 'Solo: „Uznaj" rywala z jego odpowiedzią i licznikiem');
+  ok(st.querySelector('[data-mp-accept="'+me+'"]'), 'Solo: własna odpowiedź też do uznania (przez pokój)');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  // 4) relay / stary serwer — brak game.accept → bez „Uznaj"
+  ws.pushState(revealState(ws, { playNonce:9704, mode:'quiz', teams, reveal:base })); await settle(8);
+  ok(!st.querySelector('[data-mp-accept]'), 'brak game.accept (relay/stary serwer) → bez „Uznaj"');
+  w.mpAdvance && w.mpAdvance(); await settle(3);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+await group('solo sędzia AI: /api/judge (zaślepione) — „sprawdzam…", TAK zalicza z tagiem; NIE → „👍 Uznaj" przelicza; offline → jak dotąd', async ()=>{
+  const w=window, C=w.CATEGORIES||{}; const qKey=Object.keys(C.quiz||{})[0];
+  const cat=C.quiz[qKey]; const orig=cat.questions;
+  const prevFetch=globalThis.fetch, prevBase=w.STACJA_CONFIG.roomsBase;
+  const calls=[]; let verdict=true, hold=null;
+  globalThis.fetch=(u,o)=>{
+    if(/\/api\/judge$/.test(String(u))){ const b=JSON.parse(o.body); calls.push(b);
+      const res={ ok:true, status:200, json:async()=>({ verdict }) };
+      return hold ? hold.then(()=>res) : Promise.resolve(res); }
+    return prevFetch(u,o);
+  };
+  w.STACJA_CONFIG.roomsBase='https://judge.test';
+  cat.questions=[{ prompt:'Jakiego koloru tabletkę połyka Neo?', slots:[{key:'a',label:'kolor'}], answers:{a:['czerwoną','czerwony']} }];
+  try{
+    await f2aStartMatch(qKey, null);
+    let release; hold=new Promise(r=>{ release=r; });
+    $(w,'qf_a').value='czerwonego';
+    click(w,'check'); await settle(3);
+    ok($(w,'judgeWait') && /sprawdzam/.test(txt(w,'judgeWait')), '„sprawdzam… (sędzia AI)" w trakcie');
+    ok($(w,'check').disabled && $(w,'qf_a').disabled, 'w trakcie: „Sprawdź" i pole zablokowane');
+    ok(!$(w,'reveal').classList.contains('show'), 'odsłona dopiero po werdykcie');
+    eq2(calls.length, 1, 'jedno zapytanie /api/judge');
+    eq2(JSON.stringify([calls[0].guess, calls[0].expected[0], calls[0].label]), JSON.stringify(['czerwonego','czerwoną','kolor']), 'body: typ, wzorzec, etykieta');
+    release(); hold=null; await settle(8);
+    ok(!$(w,'judgeWait'), 'po werdykcie: bez „sprawdzam…"');
+    ok($(w,'revealHead').className.includes('win'), 'TAK → trafienie');
+    ok(/uznane \(sędzia AI\)/.test(txt(w,'rmeta')), 'odsłona: „uznane (sędzia AI)"');
+    ok(!$(w,'soloAccept'), 'trafione → bez „Uznaj"');
+    // NIE → pudło + „Uznaj" → przeliczenie
+    verdict=false;
+    click(w,'next'); await settle(10);
+    $(w,'qf_a').value='karmazynową';
+    const before=+((txt(w,'sScore')||'').match(/^(\d+)/)||[])[1];
+    click(w,'check'); await settle(8);
+    ok($(w,'revealHead').className.includes('fail'), 'NIE → pudło');
+    ok($(w,'soloAccept'), 'pudło z wpisaną odpowiedzią → „👍 Uznaj"');
+    click(w,'soloAccept'); await settle(4);
+    ok($(w,'revealHead').className.includes('win'), '„Uznaj" → trafienie');
+    eq2(+((txt(w,'sScore')||'').match(/^(\d+)/)||[])[1], before+1, 'wynik przeliczony (bez dubla pytania)');
+    ok(/zaliczone przez Ciebie/.test(txt(w,'rmeta')) && !$(w,'soloAccept'), 'notka „zaliczone przez Ciebie", przycisk znika (raz na pytanie)');
+    // liczba we wzorcu → bez zapytania; offline → ocena od razu
+    const n=calls.length;
+    cat.questions=[{ prompt:'W którym roku Star Wars?', slots:[{key:'a',label:'rok'}], answers:{a:['1977']} }];
+    click(w,'next'); await settle(10);
+    if($(w,'qf_a')){ $(w,'qf_a').value='1980'; click(w,'check'); await settle(6);
+      eq2(calls.length, n, 'liczba → bez /api/judge'); ok($(w,'reveal').classList.contains('show'), 'ocena od razu'); }
+  } finally { globalThis.fetch=prevFetch; w.STACJA_CONFIG.roomsBase=prevBase; cat.questions=orig; }
+  click(w,'sessEnd'); await settle(2);
+});
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

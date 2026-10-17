@@ -55,5 +55,17 @@ type = "ratelimit"
 namespace_id = "1001"
 simple = { limit = 120, period = 60 }
 
+# Sędzia AI (Cloudflare Workers AI): ocena odpowiedzi tekstowych, których nie zaliczyły reguły (odmiana, synonimy) —
+# lock() pokoju MP pod autorytetem + POST /api/judge (solo). Model: core/judge.js JUDGE_MODEL. Brak bindingu → gra bez AI.
+[ai]
+binding = "AI"
+
+# Limit /api/judge per IP (osobny licznik niż proxy — sędzia jest droższy): 30 werdyktów / 60 s
+[[unsafe.bindings]]
+name = "JUDGE_RL"
+type = "ratelimit"
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
 # Sekret HMAC do podpisywania tokenów tożsamości (device-UUID). Ustaw poza repo:
 #   echo '<losowy-sekret>' | npx wrangler secret put TOKEN_SECRET

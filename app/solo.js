@@ -16,7 +16,9 @@ import { settingsSummary, SHELF_PRESET_KEY } from '../core/matchSetup.js';
 import { createMatchSetup, renderPreserving } from './matchSetup.js';   // wspólny komponent „Nowy mecz" (solo + host MP)
 import { resolveTrack, resolveDistractors, resolveMedley, resolveCover, resolveInstrumental } from '../adapters-web/itunesRepository.js';
 import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // EKSPERYMENT: tryb „okładka"
-import { recordMatch, ensureSession } from '../adapters-web/cf.js';
+import { recordMatch, ensureSession, judgeRemote } from '../adapters-web/cf.js';
+import { judgeRequestsFor } from '../core/mpReducer.js';   // sędzia AI: te same twarde reguły co serwer (core/judge.judgeEligible)
+import { aiAcceptance, matchWithAi, JUDGE_CLIENT_TIMEOUT_MS } from '../core/judge.js';
 import { setIcon, setRing, setState, setLive, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
 import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
 import { tasteHeartHTML, tasteStore, onTaste } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie + gotowiec „Z mojej półki"
@@ -870,8 +872,104 @@ function legendOpen(on){
 })();
 
 /* ============ sprawdzanie ============ */
+/* SĘDZIA AI (solo): pola, których reguły (textMatch) nie zaliczyły, a kwalifikują się (core/mpReducer.judgeRequestsFor —
+ * te same twarde reguły co serwer: bez liczb, ABCD, roku, łamigłówek) → POST /api/judge RÓWNOLEGLE (≤ 3 s; brak backendu /
+ * offline / timeout → null = ocena jak dotąd). W trakcie „sprawdzam…": pola i przyciski zablokowane, okładka zamrożona
+ * (roundDone), czas sędziego nie zjada bonusu za szybkość. Werdykty → soloMatch() (textMatch || TAK) w ocenie poniżej.
+ * „UZNAJ" (solo = zaliczenie przez gracza): po odsłonie z niezaliczonym WPISANYM polem — przycisk „👍 Uznaj" przelicza
+ * pytanie jak trafione (cofnięcie wyniku sprzed oceny + ponowna ocena z wymuszonym dopasowaniem wpisanych pól), raz na pytanie. */
+let judging = false;        // trwa pytanie sędziego (blokada podwójnego „Sprawdź")
+let soloAi = null;          // { accepted, aiSlots:{me:{slot:true}} } — werdykty bieżącego pytania
+let soloForced = null;      // „Uznaj": Set znormalizowanych wpisanych wartości (wymuszone dopasowanie)
+let soloSnap = null;        // stan wyniku sprzed oceny (do „Uznaj")
+let soloAccepted = false;   // „Uznaj" już użyte w tym pytaniu
+function soloMatch(){
+  if(soloForced){ const f=soloForced; return (g,a)=> textMatch(g,a) || f.has(norm(g||'')); }
+  return soloAi ? matchWithAi(soloAi.accepted) : textMatch;
+}
+const soloAiOk = (k)=> !!(soloAi && soloAi.aiSlots && soloAi.aiSlots.me && soloAi.aiSlots.me[k]) && !soloForced;
+const AI_TAG = 'uznane (sędzia AI)';
+// pola tekstowe bieżącego pytania → {slots, values} (te same klucze co MP: title/artist/album, quiz: klucze slotów)
+function soloAnswerSlots(){
+  const qm=qMode();
+  if(mode==='quiz' || (qm==='abcd' && current.mc)){
+    if(current.mc) return null;
+    const slots=current.slots||[]; const values={}; slots.forEach(s=>{ values[s.key]=val('qf_'+s.key); });
+    return { mode:'quiz', slots, values };
+  }
+  if(qm==='year') return null;
+  if(qm==='medley' || qm==='cover'){
+    const slots=[{key:'artist',label:'wykonawca'}].concat(qm==='cover' ? [{key:'album',label:'album'}] : []);
+    return { mode:qm, slots, values:{ artist:val('qf_artist'), album:qm==='cover' ? val('qf_album') : '' } };
+  }
+  if(qm==='timeline' && current.tlCard && session && session.timeline)
+    return { mode:qm, slots:[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}], values:{ title:val('qf_title'), artist:val('qf_artist') } };
+  const slots=[{key:'title',label:'tytuł'},{key:'artist',label:'wykonawca'}].concat(current.album ? [{key:'album',label:'album'}] : []);
+  return { mode:qm, slots, values:{ title:val('fTitle'), artist:val('fArtist'), album:current.album ? val('fAlbum') : '' } };
+}
+function setJudgeWait(on){
+  const b=document.getElementById('check'); if(b){ b.disabled=!!on; b.classList.toggle('judging', !!on); }
+  const sk=document.getElementById('skip'); if(sk && on) sk.disabled=true;
+  document.querySelectorAll('#form input').forEach(x=>{ if(on){ if(!x.disabled){ x.disabled=true; x.dataset.judgeLock='1'; } } else if(x.dataset.judgeLock){ x.disabled=false; delete x.dataset.judgeLock; } });
+  let w=document.getElementById('judgeWait');
+  if(on && !w){ w=document.createElement('div'); w.id='judgeWait'; w.className='judge-wait'; w.setAttribute('role','status'); w.setAttribute('aria-live','polite');
+    w.textContent='sprawdzam… (sędzia AI)'; const f=document.getElementById('form'); if(f) f.appendChild(w); }
+  if(!on && w) w.remove();
+}
 function check(){
-  if(!current || roundDone) return;   // F2a #4/#10: brak pytania / już ocenione / pominięte
+  if(!current || roundDone || judging) return;   // F2a #4/#10: brak pytania / już ocenione / pominięte / sędzia w toku
+  soloAi=null; soloForced=null; soloAccepted=false;
+  const ans=soloAnswerSlots();
+  const reqs=ans ? judgeRequestsFor(ans.mode, current, ans.slots, ans.values).map(r=>({ ...r, teamId:'me' })) : [];
+  if(reqs.length){ judgeThenCheck(reqs); return; }   // sędzia AI (asynchronicznie) — bez próśb ocena od razu, jak dotąd
+  checkScored();
+}
+function checkScored(){
+  soloSnap={ score, total, streak, points, n: session ? session.results.length : 0, at:Date.now() };
+  checkNow();
+}
+async function judgeThenCheck(reqs){
+  const gen=soloGen, cur=current, t0=Date.now();
+  judging=true; roundDone=true;   // zamrożenie: okładka nie przechodzi etapu, drugi „Sprawdź" nic nie robi
+  setJudgeWait(true);
+  let verdicts=[];
+  try{ verdicts=await Promise.all(reqs.map(r=>judgeRemote(r, { timeoutMs:JUDGE_CLIENT_TIMEOUT_MS }))); }catch(_e){ verdicts=[]; }
+  judging=false; setJudgeWait(false);
+  if(gen!==soloGen || current!==cur) return;   // pytanie porzucone („Zakończ", nowe pytanie)
+  if(qStartAt) qStartAt+=Date.now()-t0;        // czas sędziego nie liczy się do szybkości
+  soloAi=aiAcceptance(reqs, verdicts);
+  roundDone=false;
+  try{ checkScored(); }catch(e){ console.error('[stacja] ocena po sędzim AI:', e); }
+}
+// „Uznaj" (solo): cofnij wynik pytania i oceń ponownie, licząc wpisane pola jako trafione
+function soloAccept(){
+  if(!current || !roundDone || soloAccepted || !soloSnap || judging) return;
+  const ans=soloAnswerSlots(); if(!ans) return;
+  const typed=new Set(Object.values(ans.values).map(v=>norm(v||'')).filter(Boolean)); if(!typed.size) return;
+  soloAccepted=true;
+  ({ score, total, streak, points } = soloSnap);
+  if(session){ session.results.length=soloSnap.n; }
+  if(qStartAt) qStartAt+=Date.now()-soloSnap.at;   // ta sama szybkość co przy pierwszej ocenie
+  soloForced=typed; roundDone=false;
+  try{ checkNow(); } finally { soloForced=null; }
+}
+// przycisk „👍 Uznaj" w odsłonie — gdy jakieś WPISANE pole tekstowe nie zostało zaliczone
+function soloAcceptOffer(slotOk){
+  if(soloForced){ const r=document.getElementById('rmeta'); if(r) r.appendChild(noteLine('uznane', '👍 zaliczone przez Ciebie')); return; }
+  if(soloAccepted) return;
+  if(session && session.daily) return;   // Stacja dnia: wynik do udostępnienia/serii — bez samozaliczania (sędzia AI działa)
+  const ans=soloAnswerSlots(); if(!ans) return;
+  if(current.display==='rebus' || current.partial===true) return;   // łamigłówki słowne — bez „Uznaj"
+  const miss=ans.slots.some(s=>String(ans.values[s.key]||'').trim() && !slotOk[s.key]);
+  if(!miss) return;
+  const r=document.getElementById('rmeta'); if(!r) return;
+  const d=document.createElement('div'); d.className='rv-accepts';
+  d.innerHTML='<div class="rv-accept"><span class="tx">Dobra odpowiedź, a nie zaliczyło?</span><button type="button" class="rv-accept-btn" id="soloAccept">👍 Uznaj</button></div>';
+  r.appendChild(d);
+  d.querySelector('#soloAccept').onclick=soloAccept;
+}
+function checkNow(){
+  if(!current || roundDone) return;
   roundDone=true;
   document.getElementById('skip').disabled=true;   // F2a #4: po ocenie „pomiń" nieaktywne (tylko „Następny →")
   syncIntroBtn();
@@ -883,7 +981,8 @@ function check(){
   if(qm==='timeline' && current.tlCard && session && session.timeline){ return checkTimeline(); }   // EKSPERYMENT: oś czasu
   stopAudio(); setIcon('play');
   const g={title:val('fTitle'),artist:val('fArtist'),year:val('fYear'),album:val('fAlbum')};
-  const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current);
+  const M=soloMatch();
+  const { okTitle, okArtist, okYear, okAlbum, roundOk } = evaluateGuess(g, current, M);
   total++; if(roundOk){score++;streak++;} else streak=0;
   // F8a: intro — mnożnik etapu ZAMIAST bonusu za szybkość; brak zajawki → bez mnożnika (jak muzyka)
   const intro = mode==='intro' && !current.introBroken;
@@ -903,20 +1002,21 @@ function check(){
   // F6a (R-U2): odsłona edukacyjna — „Ty: …" przy polu + tag, DLACZEGO zaliczone (literówka / człon duetu / rok ±2)
   const r=document.getElementById('rmeta');
   r.innerHTML='';
-  const fix=(ok, guess, actual, match)=> ok && guess && norm(guess)!==norm(actual) ? (match(guess, actual) ? 'literówka OK' : 'jeden z wykonawców OK') : '';
-  r.appendChild(guessLine(okTitle,'Tytuł',displayTitle(current.track),g.title, fix(okTitle,g.title,current.track,textMatch), sc.parts.title));
-  r.appendChild(guessLine(okArtist,'Wykonawca',current.artist,g.artist, fix(okArtist,g.artist,current.artist,textMatch), sc.parts.artist));
+  const fix=(ok, guess, actual, match, k)=> soloAiOk(k) && ok ? AI_TAG : ok && guess && norm(guess)!==norm(actual) ? (match(guess, actual) ? 'literówka OK' : (k==='artist' && artistMatch(guess, actual) ? 'jeden z wykonawców OK' : 'uznane')) : '';
+  r.appendChild(guessLine(okTitle,'Tytuł',displayTitle(current.track),g.title, fix(okTitle,g.title,current.track,textMatch,'title'), sc.parts.title));
+  r.appendChild(guessLine(okArtist,'Wykonawca',current.artist,g.artist, fix(okArtist,g.artist,current.artist,textMatch,'artist'), sc.parts.artist));
   if(current.year){
     const exact = okYear && Math.abs(+g.year - +current.year)===0;
     r.appendChild(guessLine(okYear,'Rok',String(current.year),g.year, okYear && !exact ? 'rok ±2 OK' : '', sc.parts.year));
   }
-  if(current.album) r.appendChild(guessLine(okAlbum,'Album',current.album,g.album, okAlbum && norm(g.album)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
+  if(current.album) r.appendChild(guessLine(okAlbum,'Album',current.album,g.album, soloAiOk('album') && okAlbum ? AI_TAG : okAlbum && norm(g.album)!==norm(current.album) ? (textMatch(g.album, current.album) ? 'literówka OK' : 'uznane') : '', sc.parts.album));
   if(intro) r.appendChild(noteLine('intro', `${roundOk?'zgadłeś':'odpowiedź'} na etapie ${introStageSecs(iStage)} s · mnożnik ×${String(sc.mult).replace('.',',')}`));
   if((qm==='piano' || qm==='guitar') && current.coverArtist) r.appendChild(noteLine('cover', INSTRUMENT_EMOJI[qm]+' '+current.coverArtist));   // EKSPERYMENT: kto grał cover
   if(rStage!=null) r.appendChild(noteLine('od tyłu', `okno ${revsnipStageSecs(rStage)} s`+(sc.mult<1 ? ` · „dłużej" ×${String(sc.mult).replace('.',',')}` : '')));
   if(tStage!=null) r.appendChild(noteLine('tempo', `zgadywane przy ${fmtRate(tempoRate(qm, tStage))} · mnożnik ×${String(sc.mult).replace('.',',')} · teraz oryginał 1×`));
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   revealTaste(r, [current]);   // „Twój gust": ❤️ na półkę
+  soloAcceptOffer({ title:okTitle, artist:okArtist, album:okAlbum });
   if(mode==='lektor' && current.lyric){
     const d=document.createElement('div'); d.className='rline';
     d.innerHTML='<span class="mk" style="color:var(--muted)">„</span>'+
@@ -963,7 +1063,7 @@ function checkQuiz(){
   } else {
     slots.forEach(s=>{ guesses[s.key]=val('qf_'+s.key); });
   }
-  const ev=evaluateQuiz(current, guesses);
+  const ev=evaluateQuiz(current, guesses, soloMatch());
   const okBySlot=ev.bySlot, roundOk=ev.ok;
   const quizFrac=quizPartialFrac(current, ev);   // Łamigłówki (`partial:true`): częściowe punkty za trafione słowa
   const partHit=!roundOk && quizFrac>0;
@@ -971,7 +1071,7 @@ function checkQuiz(){
   const sc=scoreRound({ quizOk:roundOk, quizFrac, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });   // F6a: 100 pkt + szybkość/seria
   points+=sc.points;
   updateScore();
-  if(mode==='quiz' && current.statKey) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł
+  if(mode==='quiz' && current.statKey && !soloForced) recordQuizStat(current.statKey, roundOk);   // #3: licznik trafień/pudeł („Uznaj" nie liczy drugi raz)
   if(session){ const s=matchSlot(session.match); pushResult({track:abcd?current.track:current.prompt, artist:abcd?current.artist:'', okTitle:roundOk, okArtist:roundOk, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   const r=document.getElementById('rmeta'); r.innerHTML='';
   if(mc){
@@ -992,9 +1092,10 @@ function checkQuiz(){
   } else {
     // F3 #4: tylko forma KANONICZNA (answers[k][0] / pozycja puli), nie lista wariantów; „Ty: …" przy każdym polu
     slots.forEach(s=>{ const guess=guesses[s.key];
-      r.appendChild(line(okBySlot[s.key], s.label||s.key, (ev.display[s.key]||'—') + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)')));
+      r.appendChild(line(okBySlot[s.key], s.label||s.key, (ev.display[s.key]||'—') + (guess?` (Ty: ${guess})`:' (brak odpowiedzi)') + (okBySlot[s.key] && soloAiOk(s.key) ? ' · ✓ '+AI_TAG : '')));
     });
     if(ev.others.length) r.appendChild(noteLine('inne poprawne', ev.others.join(', ')));
+    soloAcceptOffer(okBySlot);
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
   if(current.fun) r.appendChild(noteLine('ciekawostka', '💡 '+current.fun));
@@ -1069,8 +1170,9 @@ function checkTimeline(){
   const gap = sel ? +sel.dataset.gap : null;
   const placeOk = gap!=null && gapOk(before, gap, card.year);
   const gt=val('qf_title'), ga=val('qf_artist');
-  const okTitle = !!gt && textMatch(gt, current.track);
-  const okArtist = !!ga && artistMatch(ga, current.artist);
+  const M=soloMatch();
+  const okTitle = !!gt && M(gt, current.track);
+  const okArtist = !!ga && (artistMatch(ga, current.artist) || (M!==textMatch && M(ga, current.artist)));
   total++; if(placeOk){score++;streak++;} else streak=0;
   const sc=scoreRound({ placeOk, okTitle, okArtist, elapsedMs: qStartAt ? Date.now()-qStartAt : null, limitMs:SPEED_CAP_MS, streak });
   points+=sc.points;
@@ -1111,8 +1213,10 @@ function checkArtistQ(){
   const stage = cover ? (current.coverStage||0) : null;
   if(cover) coverStop(true);   // odsłona: pełna okładka
   const ga=val('qf_artist'), gal=cover ? val('qf_album') : '';
-  const okArtist = !!ga && (artistMatch(ga, current.artist) || (!!current.artistAlt && artistMatch(ga, current.artistAlt)));
-  const okAlbum = cover && !!gal && !!current.album && textMatch(gal, current.album);
+  const M=soloMatch();
+  const okArtist = !!ga && (artistMatch(ga, current.artist) || (!!current.artistAlt && artistMatch(ga, current.artistAlt))
+    || (M!==textMatch && (M(ga, current.artist) || (!!current.artistAlt && M(ga, current.artistAlt)))));
+  const okAlbum = cover && !!gal && !!current.album && M(gal, current.album);
   total++; if(okArtist){score++;streak++;} else streak=0;
   const sc=scoreRound({ okArtist, okAlbum, artistOnly:true, elapsedMs: cover ? null : (qStartAt ? Date.now()-qStartAt : null), limitMs:SPEED_CAP_MS, streak,
     mult: cover ? coverMult(stage) : 1 });
@@ -1121,10 +1225,10 @@ function checkArtistQ(){
   if(session){ const s=matchSlot(session.match); pushResult({track:current.track, artist:current.artist, okTitle:okArtist, okArtist, points:sc.points, round:s?s.round:0, cat:s?s.cat:'', mode:s?s.mode:mode}); updateSessUI(); }
   document.querySelectorAll('#quizForm input').forEach(x=>{ x.disabled=true; });
   const r=document.getElementById('rmeta'); r.innerHTML='';
-  const tagA = okArtist && norm(ga)!==norm(current.artist) ? (textMatch(ga, current.artist) || textMatch(ga, current.artistAlt||'') ? 'literówka OK' : 'jeden z wykonawców OK') : '';
+  const tagA = soloAiOk('artist') && okArtist ? AI_TAG : okArtist && norm(ga)!==norm(current.artist) ? (textMatch(ga, current.artist) || textMatch(ga, current.artistAlt||'') ? 'literówka OK' : (artistMatch(ga, current.artist) || artistMatch(ga, current.artistAlt||'') ? 'jeden z wykonawców OK' : 'uznane')) : '';
   r.appendChild(guessLine(okArtist, 'Wykonawca', current.artist, ga, tagA, sc.parts.artist));
   if(cover){
-    r.appendChild(guessLine(okAlbum, 'Album', current.album, gal, okAlbum && norm(gal)!==norm(current.album) ? 'literówka OK' : '', sc.parts.album));
+    r.appendChild(guessLine(okAlbum, 'Album', current.album, gal, soloAiOk('album') && okAlbum ? AI_TAG : okAlbum && norm(gal)!==norm(current.album) ? (textMatch(gal, current.album) ? 'literówka OK' : 'uznane') : '', sc.parts.album));
     if(current.year) r.appendChild(noteLine('rok', String(current.year)));
     const bl=coverStageBlocks(stage);
     r.appendChild(noteLine('okładka', `odpowiedź przy ${bl}×${bl} pikselach · mnożnik ×${String(sc.mult).replace('.',',')}`));
@@ -1135,6 +1239,7 @@ function checkArtistQ(){
     revealTaste(r, played);   // „Twój gust": ❤️ per zagrany utwór składanki
   }
   if(sc.points && (sc.speed>1 || sc.streakMult>1 || sc.mult!==1)) r.appendChild(noteLine('punkty', ptsBreakdown(sc)));
+  soloAcceptOffer({ artist:okArtist, album:okAlbum });
   const img=document.getElementById('art');
   if(img){ if(current.art){ img.src=current.art; img.style.display=''; } else img.style.display='none'; }
   const rh=document.getElementById('revealHead');

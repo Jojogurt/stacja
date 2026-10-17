@@ -1255,6 +1255,17 @@
   .mp-tvteam-ppl{display:flex;flex-wrap:wrap;gap:6px}
   .rv-credits{font-family:var(--body);font-weight:700;font-size:var(--fs-xs);color:var(--muted);text-align:center;margin:-4px 0 10px}
   .rv-credits b{color:var(--ink)}
+  /* sędzia AI + „Uznaj" (odsłona MP i solo) */
+  .rv-ai{display:block;font-family:var(--body);font-weight:800;font-size:var(--fs-xs);color:var(--green-d);margin-top:2px}
+  .rv-accepts{border:2px dashed var(--line);border-radius:14px;padding:8px 10px;margin:0 0 10px;display:flex;flex-direction:column;gap:6px}
+  .rv-accept-h{font-family:var(--body);font-weight:700;font-size:var(--fs-xs);color:var(--muted);text-align:center}
+  .rv-accept{display:flex;align-items:center;gap:8px;font-family:var(--body);font-weight:700;font-size:13px;color:var(--ink);min-width:0}
+  .rv-accept .tx{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis}
+  .rv-accept.done{justify-content:center;color:var(--green-d)}
+  .rv-accept-btn{flex:0 0 auto;font-family:var(--display);font-weight:800;font-size:13px;min-height:40px;padding:0 12px;border-radius:12px;
+    border:2px solid var(--line);background:var(--panel);color:var(--ink);cursor:pointer}
+  .rv-accept-btn.on,.rv-accept-btn:disabled{border-color:var(--green);color:var(--green-d);cursor:default}
+  .judge-wait{font-family:var(--body);font-weight:700;font-size:var(--fs-xs);color:var(--muted);text-align:center}
   .um-salon .um-audiohost{margin-top:8px}
   .um-salon-toggle:disabled{cursor:default;opacity:.8}
   .dz-acct.err{color:var(--fail-ink);background:var(--fail-bg);border-color:var(--red)}

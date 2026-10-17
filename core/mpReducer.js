@@ -22,7 +22,8 @@
  *   - playAt:  ms epoki startu fazy PLAY (serwer/host)          — F6a: bonus za szybkość = czas od PLAY do zatwierdzenia
  * Reducer routuje akcję do bucketu drużyny AKTORA (teamOf po a.by — anty-spoof). Selektory
  * dostają teamId i czytają tylko swój bucket. coop = jedna drużyna 'all' (ta sama ścieżka). */
-import { textMatch, norm, parseMC, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult, artistMatch, coverMult, introMult } from './scoring.js';
+import { textMatch, norm, parseMC, evaluateQuiz, scoreRound, SPEED_CAP_MS, yearScore, YEAR_OK_PTS, quizPartialFrac, listenList, tempoMult, artistMatch, coverMult, introMult, poolOf } from './scoring.js';
+import { judgeEligible } from './judge.js';   // sędzia AI: twarde reguły przed modelem (judgeRequests)
 import { stageIndexAt, coverStageBlocks, introStageSecs } from './timing.js';
 import { validGap, gapOk, correctGaps, insertCard } from './timeline.js';   // MP oś czasu: szczelina, ocena, wstawienie karty   // MP okładka/intro: etap odsłony z czasu propozycji
 import { MP } from './phases.js';
@@ -309,7 +310,9 @@ const isMedleyQ = (game, hasAnswers)=> !hasAnswers && !!game && game.mode==='med
 const isTimelineQ = (game, hasAnswers)=> !hasAnswers && !!game && game.mode==='timeline'; // MP oś czasu: szczelina + żetony
 function coverEval(vals, current, match){
   const ga=String(vals.artist||''), gal=String(vals.album||'');
-  const okA = !!ga && (artistMatch(ga, current.artist||'') || (!!current.artistAlt && artistMatch(ga, current.artistAlt)));
+  // `match` dokłada się do artistMatch (domyślny textMatch nic nie zmienia — artistMatch go zawiera); sędzia AI / „Uznaj" — tak
+  const okA = !!ga && (artistMatch(ga, current.artist||'') || (!!current.artistAlt && artistMatch(ga, current.artistAlt))
+    || (match!==textMatch && (match(ga, current.artist||'') || (!!current.artistAlt && match(ga, current.artistAlt)))));
   const okAl = !!gal && !!current.album && match(gal, current.album);
   return { ok:okA, bySlot:{ artist:okA, album:okAl } };
 }
@@ -339,7 +342,7 @@ export function introAnswerStage(game, teamId, locked, now){
 
 /* ---- ocena JEDNEJ drużyny (dawne wnętrze mpLock) — czysta ----
  * locked = odpowiedź tej drużyny (górka głosów w jej buckecie). Zwraca per-drużyna wyliczenia. */
-function evaluateTeam(game, teamId, current, match, timing){
+function evaluateTeam(game, teamId, current, match, timing, aiSlots){
   const locked = teamAnswer(game, teamId);
   const bkt = readBucket(game, teamId);
   const slots = slotsOf(game);
@@ -410,9 +413,15 @@ function evaluateTeam(game, teamId, current, match, timing){
   // MP oś czasu: szczelina drużyny, dobre szczeliny, karta i oś PRZED wstawieniem (odsłona); karta wstawiana w applyEvaluation
   const timelineEval = tlQ ? { gap: /^\d{1,3}$/.test(String(locked.gap||'')) ? Number(locked.gap) : null, placeOk:teamOk,
     good:correctGaps(cards, tlYear), card:current.tlCard || null, before:cards.slice() } : undefined;
+  // sędzia AI: sloty zaliczone DZIĘKI werdyktowi modelu (odsłona: „✓ uznane (sędzia AI)") — tylko te, które ostatecznie trafione
+  let aiOk;
+  if(aiSlots && typeof aiSlots==='object'){
+    const ks=slots.map(s=>s.key).filter(k=>aiSlots[k] && okBySlot[k]);
+    if(ks.length){ aiOk={}; ks.forEach(k=>{ aiOk[k]=true; }); }
+  }
   return { okTitle, okArtist, okBySlot, teamOk, locked: lockedAll, firstBy, firstById, display, others, credits, yearEval, stageEval, timelineEval,
     pewniacy, gained, anySure, pewniakWin: teamOk&&anySure, pewniakLose: !teamOk&&anySure,
-    streak, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult, mult:sc.mult } };
+    streak, prevStreak, aiOk, pts:{ base:sc.base, speed:sc.speed, streakMult:sc.streakMult, sureMult:sc.sureMult, mult:sc.mult } };
 }
 /* ---- ocena CAŁEGO pytania: każda drużyna osobno + ranking — czysta ----
  * reveal niesie wspólne fakty utworu + `byTeam` (wynik każdej drużyny) + `ranking`.
@@ -426,13 +435,15 @@ export function answerTiming(game, now){
   return { elapsedMs, limitMs, now: Number.isFinite(now) ? now : null };
 }
 // `now` (ms) — chwila zatwierdzenia (lock); bez niej (albo bez game.playAt) punkty bez bonusu za szybkość
-export function evaluateAnswer(game, current, match=textMatch, now=null){
+// `extra.aiSlots` = {teamId:{slotKey:true}} — sloty z werdyktem TAK sędziego AI (serwer); oznaczane w odsłonie jako aiOk
+export function evaluateAnswer(game, current, match=textMatch, now=null, extra=null){
   const hasAnswers = !!(current && current.answers && typeof current.answers==='object');
   const slots = slotsOf(game);
   const teams = (game.teams && game.teams.length) ? game.teams : [{ id:COOP_TEAM, name:'Drużyna' }];
   const timing = answerTiming(game, now);
   const perTeam = {};
-  teams.forEach(t=>{ perTeam[t.id] = evaluateTeam(game, t.id, current, match, timing); });
+  const aiSlots = (extra && extra.aiSlots) || {};
+  teams.forEach(t=>{ perTeam[t.id] = evaluateTeam(game, t.id, current, match, timing, aiSlots[t.id]); });
   const ranking = teams.map(t=>({ teamId:t.id, name:t.name, color:t.color,
       gained: perTeam[t.id].gained, teamOk: perTeam[t.id].teamOk,
       score: ((game.scores&&game.scores[t.id])||0) + perTeam[t.id].gained }))
@@ -464,7 +475,7 @@ export function evaluateAnswer(game, current, match=textMatch, now=null){
   // wynik do ligi: 1 wpis/pytanie (kształt coop). ok = czy ZWYCIĘSKA drużyna trafiła.
   const anyOk = ranking.length ? !!ranking[0].teamOk : false;
   return {
-    reveal, perTeam, ranking,
+    reveal, perTeam, ranking, timing,
     result: { round:game.round, cat:game.catKey, mode:game.mode,
       track: hasAnswers ? (current.track||current.prompt||'') : coverQ ? (current.album||current.track) : current.track,   // F8a: ABCD muzyki → tytuł utworu; okładka → album
       artist: hasAnswers ? (current.artist||'') : current.artist, ok:anyOk },
@@ -487,4 +498,154 @@ export function applyEvaluation(game, ev, tally){
   }
   (game.results = game.results || []).push(ev.result);
   game.reveal = ev.reveal;
+  // „Uznaj": przeliczenie pytania po głosowaniu potrzebuje tego samego okna czasu (endsAt zerowany po lock)
+  game.lockTiming = ev.timing ? { elapsedMs:ev.timing.elapsedMs, limitMs:ev.timing.limitMs, now:ev.timing.now } : null;
+}
+
+
+/* ======================= SĘDZIA AI (serwer-autorytet) — co zapytać przed oceną =======================
+ * Dla każdej drużyny i każdego slotu TEKSTOWEGO: zatwierdzona wartość (teamAnswer), która NIE pasuje regułami, a slot się
+ * kwalifikuje (core/judge.judgeEligible). Zakres: quiz otwarty (bez ABCD, bez łamigłówek: rebus / `partial`) + tryby
+ * z utworem: tytuł / wykonawca / album (muzyka, lektor, od tyłu, fragment, intro, okładka, składanka, fortepian/gitara,
+ * tempo, żetony osi czasu). Bez: „rok", szczelina osi, ABCD. Pula „wymień N": wzorzec = wszystkie pozycje (items —
+ * werdykt TAK dopasowuje do NAJBLIŻSZEJ pozycji, dedup przez skojarzenie w evaluateQuiz).
+ * Zwraca [{teamId, slotKey, guess, question, expected, label, items}] — wołający (serwer) pyta model i buduje dopasowanie. */
+const MUSIC_JUDGE_SLOTS = ['title','artist','album'];
+/* jedna odpowiedź (MP: drużyna, solo: gracz) → prośby do sędziego. mode = tryb pytania, slots = pola, values = {slot:tekst}.
+ * Wspólne dla serwera (judgeRequests) i klienta solo (app/solo.js → /api/judge). */
+export function judgeRequestsFor(mode, current, slots, values){
+  if(!current || !Array.isArray(slots)) return [];
+  const hasAnswers = !!(current.answers && typeof current.answers==='object');
+  if(hasAnswers){
+    if(current.mc || parseMC(current.prompt)) return [];                 // ABCD — wybór opcji, nie tekst
+    if(current.display==='rebus' || current.partial===true) return [];   // łamigłówki słowne — liczy się dokładne słowo
+  } else if(isYearQ(slots, false) || mode==='year') return [];
+  const pool = hasAnswers ? poolOf(current) : null;
+  const out = [];
+  slots.forEach(s=>{
+    const guess = String((values && values[s.key])||'').trim();
+    if(!guess) return;
+    let expected, others=[], items=null, question, match=textMatch;
+    const label = s.label || s.key;
+    if(hasAnswers){
+      question = String(current.prompt||'');
+      if(pool){ items = pool; expected = [...pool.map(it=>it[0]), ...pool.flatMap(it=>it.slice(1))]; }   // formy kanoniczne najpierw (prompt ma limit wariantów)
+      else {
+        expected = (current.answers[s.key]||[]).filter(v=>typeof v==='string');
+        others = slots.filter(o=>o.key!==s.key).flatMap(o=>current.answers[o.key]||[]);
+      }
+    } else {
+      if(!MUSIC_JUDGE_SLOTS.includes(s.key)) return;
+      const track=String(current.track||''), artist=String(current.artist||''), alt=String(current.artistAlt||''), album=String(current.album||'');
+      if(s.key==='title'){
+        expected=[track]; others=[artist, alt];
+        question=`Podaj tytuł utworu${artist ? ` (wykonawca: ${artist})` : ''}.`;
+      } else if(s.key==='artist'){
+        expected=[artist, alt]; others = mode==='cover' ? [album] : mode==='medley' ? [] : [track];
+        question = mode==='cover' ? `Podaj wykonawcę albumu „${album}”.` : mode==='medley' ? 'Podaj wykonawcę składanki kilku jego utworów.' : `Podaj wykonawcę utworu „${track}”.`;
+        match = (g,a)=>artistMatch(g,a);   // człon duetu / feat już zalicza regułami — nie pytaj
+      } else {
+        expected=[album]; others=[artist, alt];
+        question=`Podaj tytuł albumu${artist ? ` wykonawcy ${artist}` : ''}.`;
+      }
+      expected = expected.filter(Boolean); others = others.filter(Boolean);
+    }
+    if(!judgeEligible({ guess, expected, others, match, mode })) return;
+    out.push({ slotKey:s.key, guess, question, expected, label, items, others });
+  });
+  return out;
+}
+export function judgeRequests(game, current){
+  if(!game || !current) return [];
+  const slots = slotsOf(game);
+  const teams = (game.teams && game.teams.length) ? game.teams : [{ id:COOP_TEAM }];
+  const out = [];
+  teams.forEach(t=>{ judgeRequestsFor(game.mode, current, slots, teamAnswer(game, t.id)).forEach(r=>out.push({ teamId:t.id, ...r })); });
+  return out;
+}
+
+/* ======================= „UZNAJ" — głosowanie po odsłonie (serwer-autorytet) =======================
+ * game.accept = { nonce:playNonce, teams:[teamId…], votes:{teamId:[voterId…]}, need:{teamId:n}, done:{teamId:true} }.
+ * Kwalifikuje się drużyna, która w tym pytaniu wpisała coś w slot tekstowy i ten slot NIE został zaliczony (quiz otwarty /
+ * tytuł–wykonawca–album; bez ABCD, „roku" i osi czasu). Głosują: coop — obecni członkowie TEJ drużyny; Solo / Drużyny —
+ * wszyscy obecni GRACZE pokoju (rywale też — inaczej jednoosobowa drużyna zaliczałaby sobie sama). TV salonu nie gra
+ * i nie głosuje. Większość = ponad połowa uprawnionych obecnych. Po osiągnięciu: applyAccept (raz na drużynę). */
+const ACCEPT_KINDS = ['quiz','music','cover','medley'];
+export function acceptableTeams(game, current){
+  const rv = game && game.reveal;
+  if(!rv || !rv.byTeam || !ACCEPT_KINDS.includes(rv.kind)) return [];
+  if(current && (current.mc || parseMC(current.prompt))) return [];
+  if(rv.kind==='quiz' && /\nA\)/.test(rv.prompt||'')) return [];
+  const slots = (Array.isArray(rv.slots) && rv.slots.length) ? rv.slots : slotsOf(game);
+  const textKeys = slots.map(s=>s.key).filter(k=> rv.kind==='quiz' ? true : MUSIC_JUDGE_SLOTS.includes(k));
+  return Object.keys(rv.byTeam).filter(tid=>{
+    const t = rv.byTeam[tid]; if(!t) return false;
+    const lk = t.locked || {}, ok = t.okBySlot || {};
+    return textKeys.some(k=>String(lk[k]||'').trim() && !ok[k]);
+  });
+}
+// stan „Uznaj" na nową odsłonę (lock): lista drużyn, puste głosy
+export function initAccept(game, current, presentIds){
+  const teams = acceptableTeams(game, current);
+  game.accept = teams.length ? { nonce:game.playNonce, teams, votes:{}, need:{}, done:{} } : null;
+  if(game.accept) refreshAcceptNeed(game, presentIds);
+  return game.accept;
+}
+// uprawnieni do głosu (obecni) dla drużyny
+export function acceptVoters(game, teamId, presentIds){
+  const tv = tvIdOf(game);
+  const players = [...new Set(presentIds||[])].filter(id=>id && id!==tv && (game.teams||[]).some(t=>(t.members||[]).includes(id)));
+  if((game.format||'coop')==='coop') return players.filter(id=>teamOf(game, id)===teamId);
+  return players;
+}
+export const acceptNeed = (n)=> n>0 ? Math.floor(n/2)+1 : 0;
+export function refreshAcceptNeed(game, presentIds){
+  const a = game && game.accept; if(!a) return;
+  a.teams.forEach(tid=>{ a.need[tid] = acceptNeed(acceptVoters(game, tid, presentIds).length); });
+}
+/* głos „Uznaj" — idempotentny (powtórny = bez zmian). Zwraca 'noop' | 'voted' | 'reached' (wołający robi applyAccept). */
+export function acceptVote(game, teamId, voterId, playNonce, presentIds){
+  const a = game && game.accept;
+  if(!a || game.phase!==MP.REVEAL || a.nonce!==game.playNonce || playNonce!==game.playNonce) return 'noop';
+  if(typeof teamId!=='string' || !a.teams.includes(teamId) || a.done[teamId]) return 'noop';
+  const voters = acceptVoters(game, teamId, presentIds);
+  if(!voters.includes(voterId)) return 'noop';
+  const vs = a.votes[teamId] = (a.votes[teamId]||[]).filter(id=>typeof id==='string');
+  if(vs.includes(voterId)) return 'noop';
+  vs.push(voterId);
+  refreshAcceptNeed(game, presentIds);
+  const have = vs.filter(id=>voters.includes(id)).length;
+  return have >= (a.need[teamId]||Infinity) ? 'reached' : 'voted';
+}
+/* PRZELICZENIE pytania dla drużyny „jakby odpowiedź była poprawna" — każdy WPISANY slot liczony jako trafiony
+ * (puste dalej puste). Ta sama ocena co przy lock (evaluateTeam: punkty, szybkość z game.lockTiming, seria od serii SPRZED
+ * pytania, pewniak, etap okładki/intro), wynik nakładany RÓŻNICĄ: scores += nowe − stare, seria, tally (pierwszy trafiający),
+ * zwrot „kolejki" za pewniaka, który teraz wygrał, ranking i wynik do ligi. Raz na drużynę (accept.done). true = zmiana. */
+export function applyAccept(game, current, teamId, tally){
+  const rv = game && game.reveal, old = rv && rv.byTeam && rv.byTeam[teamId];
+  if(!old || !current) return false;
+  if(game.accept){ if(game.accept.done[teamId]) return false; game.accept.done[teamId]=true; }
+  const typed = new Set(Object.values(old.locked||{}).map(v=>norm(v||'')).filter(Boolean));
+  const forced = (g,a)=> textMatch(g,a) || typed.has(norm(g||''));
+  game.streaks = game.streaks || {}; game.scores = game.scores || {}; game.beerTally = game.beerTally || {};
+  const keepStreak = game.streaks[teamId];
+  game.streaks[teamId] = Number(old.prevStreak)||0;   // evaluateTeam liczy serię od stanu SPRZED pytania
+  const lt = game.lockTiming || {};
+  const timing = { elapsedMs: Number.isFinite(lt.elapsedMs) ? lt.elapsedMs : null, limitMs: lt.limitMs || SPEED_CAP_MS, now: Number.isFinite(lt.now) ? lt.now : null };
+  let nu;
+  try{ nu = evaluateTeam(game, teamId, current, forced, timing, null); }
+  catch(_e){ game.streaks[teamId]=keepStreak; return false; }
+  const delta = (Number(nu.gained)||0) - (Number(old.gained)||0);
+  game.scores[teamId] = (game.scores[teamId]||0) + delta;
+  game.streaks[teamId] = nu.streak||0;
+  if(tally && nu.firstById && !old.firstById){ tally[nu.firstById]=tally[nu.firstById]||{ name:nu.firstBy, correct:0 }; tally[nu.firstById].correct++; }
+  if(old.pewniakLose && nu.teamOk){ (old.pewniacy||[]).forEach(n=>{ if(game.beerTally[n]>0){ game.beerTally[n]--; if(!game.beerTally[n]) delete game.beerTally[n]; } }); }
+  const merged = { ...nu, aiOk: old.aiOk, accepted:true };
+  rv.byTeam[teamId] = merged;
+  rv.ranking = (rv.ranking||[]).map(r=> r.teamId===teamId ? { ...r, gained:merged.gained, teamOk:merged.teamOk, score:game.scores[teamId] } : r)
+    .sort((a,b)=> b.score-a.score);
+  if((game.format||'coop')==='coop' && (game.teams||[])[0] && game.teams[0].id===teamId) Object.assign(rv, merged);   // coop: pola spłaszczone
+  const last = (game.results||[])[game.results.length-1];
+  if(last && rv.ranking.length) last.ok = !!rv.ranking[0].teamOk;
+  return true;
 }

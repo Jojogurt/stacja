@@ -185,6 +185,11 @@ function mpOnEnter(g, head, st){
     S.advCount=0; S.advTotal=mpPlayers().length;   // salon: świeży licznik „dalej" graczy na nową odsłonę
     // F2b #6: auto-„dalej" po bezczynności (licznik od pokazania karty). TV w salonie nie — przechodzi po „dalej" telefonów.
     S.revealAutoAt = mpIsSalonHost() ? 0 : S.checkUntil + mpRevealAutoMs();
+  } else if(g && g.phase===MP.REVEAL && g.reveal && S.revealNonce===g.playNonce && S.revealSnap && S.revealSnap.reveal!==g.reveal){
+    // ta sama odsłona, nowy stan z serwera („Uznaj": przeliczone punkty/✓) — odśwież migawkę BEZ ponownych efektów
+    const tid=myTeamId&&myTeamId();
+    S.revealSnap.reveal=g.reveal; S.revealSnap.head=head;
+    S.revealSnap.score = mpIsCompTV() ? null : teamScoreLine(g, tid, g.reveal);
   }
   const scene=mpSceneKey(g);
   if(scene!==S.lastView){
@@ -1068,6 +1073,32 @@ function mpRevealLockedHTML(locked){
   const t=String(locked.title||'').trim(), a=String(locked.artist||'').trim();
   return `<div class="rv-locked">${fc.lockedLabel}: ${t||a ? `„${escapeHtml(t||'—')} · ${escapeHtml(a||'—')}"` : 'bez odpowiedzi'}</div>`;
 }
+/* SĘDZIA AI: slot zaliczony dzięki werdyktowi modelu (serwer: reveal.byTeam[tid].aiOk) — „✓ uznane (sędzia AI)" */
+function mpAiTag(rv, key){
+  return rv && rv.aiOk && typeof rv.aiOk==='object' && rv.aiOk[key] ? `<small class="rv-ai" data-rv-ai="${escapeHtml(key)}">✓ uznane (sędzia AI)</small>` : '';
+}
+/* „UZNAJ" (serwer-autorytet, game.accept): drużyna nie dostała slotu, choć coś wpisała → głos „👍 Uznaj" (większość
+ * decyduje — coop: drużyna, Solo/Drużyny: cały pokój). Stan głosów „Uznaj 2/3"; po uznaniu „✓ uznane". TV nie głosuje.
+ * Relay (?authority=0) i stary serwer — brak game.accept → nic. Przycisk: data-mp-accept + delegacja (app/mp.js). */
+function mpAcceptHTML(r){
+  const g=S.game, a=g && g.accept;
+  if(!a || g.phase!==MP.REVEAL || a.nonce!==S.revealNonce || !Array.isArray(a.teams) || !a.teams.length || mpIsSalonHost()) return '';
+  const coop=(g.format||'coop')==='coop', tid=myTeamId&&myTeamId(), me=mpMe.id;
+  const rows=a.teams.filter(t=>typeof t==='string' && (!coop || t===tid)).map(t=>{
+    const votes=Array.isArray(a.votes && a.votes[t]) ? a.votes[t] : [];
+    const need=Number(a.need && a.need[t])||0, done=!!(a.done && a.done[t]), mine=votes.includes(me);
+    const team=(g.teams||[]).find(x=>x.id===t);
+    const who=coop ? 'Wasza odpowiedź: ' : `<b>${escapeHtml((team && team.name) || 'drużyna')}${t===tid?' (Ty)':''}</b> `;
+    const ans=mpTeamLockedText(r, t);
+    const txt=`${who}${ans ? '„'+escapeHtml(ans)+'"' : ''}`;
+    if(done) return `<div class="rv-accept done" data-rv-accept="${escapeHtml(t)}">👍 ${txt} — <b>uznane</b> (${num(votes.length)}/${num(need)})</div>`;
+    return `<div class="rv-accept" data-rv-accept="${escapeHtml(t)}"><span class="tx">${txt}</span>`+
+      `<button type="button" class="rv-accept-btn${mine?' on':''}" data-mp-accept="${escapeHtml(t)}"${mine?' disabled aria-pressed="true"':' aria-pressed="false"'}>👍 Uznaj ${num(votes.length)}/${num(need)}</button></div>`;
+  });
+  if(!rows.length) return '';
+  const hint=coop ? 'Dobra odpowiedź, a nie zaliczyło? Większość drużyny decyduje.' : 'Dobra odpowiedź, a nie zaliczyło? Większość graczy decyduje.';
+  return `<div class="rv-accepts" role="group" aria-label="Uznaj odpowiedź"><div class="rv-accept-h">${hint}</div>${rows.join('')}</div>`;
+}
 /* P1-1 krok 4: „Sprawdzamy…" (~600 ms) między zamknięciem pytania a flipem karty utworu — rama (nagłówek) zostaje */
 function mpRenderChecking(snap){
   // przed flipem nagłówek pokazuje POPRZEDNI wynik (⭐ nie zdradza, czy trafiliśmy)
@@ -1137,12 +1168,12 @@ function mpRenderRevealCard(snap){
   const artOk = typeof r.art==='string' && /^https?:\/\//.test(r.art);
   const cover = artOk?`<img class="rv-cover" src="${escapeHtml(r.art)}" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">${ic('disc')}</div>`;
   const meta=[r.album,r.year].filter(Boolean).join(' · ');
-  const slot=(ok,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>`;
+  const slot=(ok,lab,val,key)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}${tv?'':mpAiTag(rv, key)}</span>${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>`;
   const locked=rv.locked||{};
   return `${mpStillHead(head)}${mpRosterStrip()}${mpHr()}
     <div class="rv-card${mpRvCls(rv, tv)}">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(displayTitle(r.track))}</span><span class="a">${escapeHtml(r.artist)}</span>${meta?`<span class="m">${escapeHtml(meta)}</span>`:''}</div></div>
-      ${slot(rv.okTitle,'TYTUŁ',displayTitle(r.track))}${slot(rv.okArtist,'WYK.',r.artist)}
+      ${slot(rv.okTitle,'TYTUŁ',displayTitle(r.track),'title')}${slot(rv.okArtist,'WYK.',r.artist,'artist')}
       ${!tv && rv.stageEval ? `<div class="rv-team rv-fun" data-rv-stage>⏱ ${escapeHtml(mpStageEvalText(rv.stageEval))}</div>` : ''}
       ${mpCoverArtistHTML(r)}
       ${mpFromHTML(r)}
@@ -1151,6 +1182,7 @@ function mpRenderRevealCard(snap){
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpRevealLockedHTML(locked)}
     ${tv?'':mpCreditsHTML(snap.credits)}
+    ${tv?'':mpAcceptHTML(r)}
     ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealCtaHTML(last)}`;
@@ -1177,13 +1209,14 @@ function mpRenderMedleyReveal(snap){
   return `${mpStillHead(head)}${mpRosterStrip()}${mpHr()}
     <div class="rv-card${mpRvCls(rv, tv)}">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.artist||'')}</span><span class="a">składanka · ${num(clips.length)} utwory</span></div></div>
-      <div class="rv-slot"><span class="k">WYK.</span><span class="v">${escapeHtml(r.artist||'—')}</span>${tv?'':`<span class="mk ${ok.artist?'ok':'no'}">${ok.artist?'✓':'✗'}</span>`}</div>
+      <div class="rv-slot"><span class="k">WYK.</span><span class="v">${escapeHtml(r.artist||'—')}${tv?'':mpAiTag(rv, 'artist')}</span>${tv?'':`<span class="mk ${ok.artist?'ok':'no'}">${ok.artist?'✓':'✗'}</span>`}</div>
       ${list?`<div class="rv-team rv-fun" data-rv-clips>🎛 zagrały: ${list}</div>`:''}
       ${tv?'':mpTasteHTML(clips)}
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':`<div class="rv-locked">${fc.lockedLabel}: ${lk.artist ? `„${escapeHtml(lk.artist)}"` : 'bez odpowiedzi'}</div>`}
     ${tv?'':mpCreditsHTML(snap.credits)}
+    ${tv?'':mpAcceptHTML(r)}
     ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealCtaHTML(last)}`;
@@ -1224,20 +1257,21 @@ function mpRenderCoverReveal(snap){
   const artOk = typeof r.art==='string' && /^https:\/\//.test(r.art);
   const cover = artOk?`<img class="rv-cover" src="${escapeHtml(r.art)}" alt="okładka albumu" referrerpolicy="no-referrer">`:`<div class="rv-cover ph">${ic('disc')}</div>`;
   const ok=rv.okBySlot||{}, lk=rv.locked||{};
-  const slot=(o,lab,val)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}</span>${tv?'':`<span class="mk ${o?'ok':'no'}">${o?'✓':'✗'}</span>`}</div>`;
+  const slot=(o,lab,val,key)=>`<div class="rv-slot"><span class="k">${lab}</span><span class="v">${escapeHtml(val||'—')}${tv?'':mpAiTag(rv, key)}</span>${tv?'':`<span class="mk ${o?'ok':'no'}">${o?'✓':'✗'}</span>`}</div>`;
   const stageTx = mpStageEvalText(rv.stageEval);
   const fc=formatCopy(S.game && S.game.format);
   const a=String(lk.artist||'').trim(), al=String(lk.album||'').trim();
   return `${mpStillHead(head)}${mpRosterStrip()}${mpHr()}
     <div class="rv-card${mpRvCls(rv, tv)}">
       <div class="rv-track">${cover}<div class="rv-info"><span class="t">${escapeHtml(r.artist||'')}</span><span class="a">${escapeHtml(r.album||'')}</span>${r.year?`<span class="m">${escapeHtml(String(r.year))}</span>`:''}</div></div>
-      ${slot(ok.artist,'WYK.',r.artist)}${slot(ok.album,'ALBUM',r.album)}
+      ${slot(ok.artist,'WYK.',r.artist,'artist')}${slot(ok.album,'ALBUM',r.album,'album')}
       ${stageTx && !tv ? `<div class="rv-team rv-fun" data-rv-cover>🖼 ${escapeHtml(stageTx)}</div>` : ''}
       ${!tv && r.rep ? mpTasteHTML([r.rep]) : ''}
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':`<div class="rv-locked">${fc.lockedLabel}: ${a||al ? `„${escapeHtml(a||'—')} · ${escapeHtml(al||'—')}"` : 'bez odpowiedzi'}</div>`}
     ${tv?'':mpCreditsHTML(snap.credits)}
+    ${tv?'':mpAcceptHTML(r)}
     ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealCtaHTML(last)}`;
@@ -1288,7 +1322,7 @@ function mpRenderQuizReveal(snap){
     const team=(rv.locked&&rv.locked[s.key])||'';
     const kLabel = isMC ? '' : `<span class="k">${escapeHtml((s.label||s.key).toUpperCase())}</span>`;
     return `<div class="rv-slot${isMC?' mc':''}">${kLabel}
-      <span class="v">${correct}${team?`<small class="rv-team">${typLab}: „${escapeHtml(team)}"</small>`:''}</span>
+      <span class="v">${correct}${team?`<small class="rv-team">${typLab}: „${escapeHtml(team)}"</small>`:''}${tv?'':mpAiTag(rv, s.key)}</span>
       ${tv?'':`<span class="mk ${ok?'ok':'no'}">${ok?'✓':'✗'}</span>`}</div>`;
   }).join('');
   const others=Array.isArray(rv.others)&&rv.others.length
@@ -1306,6 +1340,7 @@ function mpRenderQuizReveal(snap){
     </div>
     ${tv?'':mpRevealBanner(rv)}
     ${tv?'':mpCreditsHTML(snap.credits, isMC)}
+    ${tv?'':mpAcceptHTML(r)}
     ${mpRevealStandingsHTML(r.ranking, r)}
     ${mpReactsBarHTML()}
     ${mpRevealCtaHTML(last)}`;

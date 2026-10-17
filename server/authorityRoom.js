@@ -36,7 +36,10 @@
  */
 import { Server } from 'partyserver';
 import { verifyToken } from './lib/auth.js';
-import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf, tvIdOf, allSettled, teamTimeline } from '../core/mpReducer.js';
+import { reduceAction, evaluateAnswer, applyEvaluation, slotsFor, countReady, teamOf, tvIdOf, allSettled, teamTimeline,
+  judgeRequests, initAccept, acceptVote, applyAccept, refreshAcceptNeed } from '../core/mpReducer.js';
+import { aiAcceptance, matchWithAi } from '../core/judge.js';   // sędzia AI: werdykty → dopasowanie (czyste)
+import { judgeMany } from './lib/judge.js';                     // sędzia AI: wołanie Workers AI (env.AI), cache, budżet
 import { buildTeams, emptyByTeam, reconcileTeams, joinTeam } from '../core/teams.js';
 import { MP, assertMp } from '../core/phases.js';
 import { buildMatch, matchAdvance, sanitizeMpConfig, MP_MODES, ALL_MODES } from '../core/match.js';
@@ -480,6 +483,8 @@ export class GameAuthority extends Server {
         a.byName = (conn.state && conn.state.name) || clipText(a.byName, NAME_MAX);
         a.at = Date.now();                            // MP okładka: czas zgłoszenia WYMUSZONY z zegara serwera (etap/mnożnik)
         if(a.type==='ready'){ await this.onReady(me, a.armNonce); return; }
+        if(a.type==='accept'){ await this.onAccept(me, a.teamId, a.playNonce); return; }   // „Uznaj" (REVEAL)
+        if(this._locking) return;                     // sędzia AI w toku — odpowiedź drużyny już zamrożona
         if(reduceAction(this.game, a)){ this.broadcastState(); await this.persist(); await this.checkAllDone(); }
         return;
       }
@@ -648,6 +653,7 @@ export class GameAuthority extends Server {
   async newRound(){
     reconcileTeams(this.game, this.playersOf());   // dołączenia/wyjścia między pytaniami (solo: nowi → nowe drużyny)
     this.game.phase=MP.LOADING; this.game.byTeam=emptyByTeam(this.game.teams);   // czyste buckety; scores kumulują się
+    this.game.accept=null; this.game.lockTiming=null;   // „Uznaj" tylko w odsłonie swojego pytania
     this.game.reveal=null; this.game.endsAt=null; this.game.playAt=null; this.current=null;
     this.game.listenEndsAt=null; this.game.allDoneAt=null; this.clearAllDone();
     this.clearStageTimer(); this.clearStage();
@@ -928,17 +934,48 @@ export class GameAuthority extends Server {
   }
   clearAllDone(){ if(this._allDone){ clearTimeout(this._allDone); this._allDone=null; } }
 
-  /* ---- zatwierdzenie odpowiedzi (host albo serwerowy timer) ---- */
+  /* ---- zatwierdzenie odpowiedzi (host albo serwerowy timer albo „wszyscy gotowi") ----
+   * SĘDZIA AI: przed oceną zbierz niedopasowane sloty tekstowe drużyn (core/mpReducer.judgeRequests: twarde reguły
+   * core/judge.judgeEligible) i zapytaj model RÓWNOLEGLE w łącznym budżecie (judgeMany, ~3 s). Werdykt TAK → dopasowanie
+   * matchWithAi (textMatch || para zaakceptowana). Brak env.AI / timeout / błąd → ocena bez AI (jak dotąd).
+   * W trakcie czekania pytanie jest ZAMROŻONE (_locking): akcje graczy ignorowane, drugi lock (timer/host) = no-op. */
+  _locking = false;
   async lock(){
-    if(!this.game || this.game.phase!==MP.PLAY) return;
+    if(!this.game || this.game.phase!==MP.PLAY || this._locking) return;
     this.clearAutoLock(); this.clearAllDone(); this.clearStageTimer();
+    const now=Date.now(), g0=this.game, nonce=g0.playNonce;
+    let match, extra=null;
+    const reqs=this.env && this.env.AI ? judgeRequests(g0, this.current) : [];
+    if(reqs.length){
+      this._locking=true;
+      let verdicts=[];
+      try{ verdicts=await judgeMany(this.env, reqs, { budgetMs:this.judgeBudgetMs }); }catch(_e){ verdicts=[]; }
+      finally{ this._locking=false; }
+      if(this.game!==g0 || !this.game || this.game.phase!==MP.PLAY || this.game.playNonce!==nonce) return;   // pokój zmienił się w międzyczasie
+      const acc=aiAcceptance(reqs, verdicts);
+      if(acc.accepted.size){ match=matchWithAi(acc.accepted); extra={ aiSlots:acc.aiSlots }; }
+    }
     noteAnswerers(this.game);                       // F2b #8: historia udziału (liga) przed czyszczeniem bucketów
-    const ev=evaluateAnswer(this.game, this.current, undefined, Date.now());   // ocenia KAŻDĄ drużynę (ev.perTeam); F6a: punkty + szybkość
+    const ev=evaluateAnswer(this.game, this.current, match, now, extra);   // ocenia KAŻDĄ drużynę (ev.perTeam); F6a: punkty + szybkość
     applyEvaluation(this.game, ev, (this.game.tally=this.game.tally||{}));   // F6a: punkty/serie/tally/pewniaki/wynik/reveal — wspólne z hostem relay
+    initAccept(this.game, this.current, this.presentIds());   // „Uznaj": drużyny z niezaliczonym wpisanym slotem
     this.game.phase=assertMp(this.game.phase, MP.REVEAL, console.warn); this.game.endsAt=null;
     this.game.listenEndsAt=null; this.game.allDoneAt=null;
     this.game.stageNextAt=null;
     if(this.game.mode==='cover') this.game.coverArt=(this.current && this.current.art) || '';   // odsłona: PEŁNA okładka (też w reveal.art) — dopiero teraz
+    this.broadcastState(); await this.persist();
+  }
+
+  judgeBudgetMs = undefined;   // testy skracają (domyślnie core/judge.JUDGE_LOCK_BUDGET_MS)
+  presentIds(){ return [...new Set([...this.getConnections()].map(c=>c.state && c.state.id).filter(Boolean))]; }
+  /* „Uznaj" (REVEAL): głos gracza (id z tokenu) za zaliczeniem odpowiedzi drużyny teamId; większość → przeliczenie
+   * (core/mpReducer.applyAccept, raz na drużynę). Tylko bieżąca odsłona (playNonce). TV salonu nie głosuje (acceptVoters). */
+  async onAccept(me, teamId, playNonce){
+    const g=this.game;
+    if(!g || g.phase!==MP.REVEAL || !g.accept || !this.current) return;
+    const r=acceptVote(g, typeof teamId==='string' ? teamId : '', me, playNonce, this.presentIds());
+    if(r==='noop') return;
+    if(r==='reached') applyAccept(g, this.current, teamId, (g.tally=g.tally||{}));
     this.broadcastState(); await this.persist();
   }
 

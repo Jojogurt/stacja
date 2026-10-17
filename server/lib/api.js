@@ -7,6 +7,8 @@ import { MAX_QUESTIONS } from '../../core/match.js';
 import { SCORE_MAX_PER_Q } from '../../core/scoring.js';
 import { sanitizeRating, isTrackKey, isTasteVisibility, TASTE_MAX, TASTE_BATCH } from '../../core/taste.js';
 import { publicRating } from '../../core/tasteCompare.js';
+import { cleanJudgeRequest, judgeEligible } from '../../core/judge.js';
+import { judgeAnswer } from './judge.js';
 
 // 3.2: serwerowy cap wyniku wg stałych meczu — ODRZUCAMY (400), nie przycinamy.
 // F1: limit pytań z core/match.js (to samo źródło co picker i clamp `start` w DO).
@@ -49,6 +51,13 @@ async function ensureProfile(env, id){
 async function uniqueGroupCode(env){
   for(let i=0;i<8;i++){ const c=friendCode(); const hit=await env.DB.prepare(`SELECT 1 FROM groups WHERE code=?`).bind(c).first(); if(!hit) return c; }
   return friendCode();
+}
+
+// limit /api/judge per IP — natywny rate-limiter Cloudflare (binding JUDGE_RL); brak bindingu (lokalnie/testy) → nie blokuj
+async function judgeRateLimited(env, req){
+  if(!env.JUDGE_RL) return false;
+  const ip = req.headers.get('CF-Connecting-IP') || 'anon';
+  try{ const { success } = await env.JUDGE_RL.limit({ key:'judge:'+ip }); return !success; }catch(_e){ return false; }
 }
 
 const TOKEN_TTL = 90*24*3600;   // S2: token ważny 90 dni; każde /api/session odświeża
@@ -111,6 +120,21 @@ export async function handleApi(req, env, url){
     const token = await signToken(env.TOKEN_SECRET, { sub:pid, iat:now, exp:now+TOKEN_TTL });
     const me = await env.DB.prepare(`SELECT id, handle, emoji, friend_code FROM profiles WHERE id=?`).bind(pid).first();
     return json({ ...me, token, secured:true, email:v.email });
+  }
+
+  // ---- sędzia AI dla gry SOLO (klient): czy odpowiedź gracza znaczy to samo co wzorzec ----
+  // Bez tożsamości (solo działa i bez sesji); limit per IP (binding JUDGE_RL; brak → limit izolatu w lib/judge.js).
+  // Twarde reguły (core/judge.judgeEligible) TAKŻE tu — klient mógłby pytać o liczby/ABCD; wtedy {verdict:null}.
+  if(path==='/api/judge' && m==='POST'){
+    const raw = await req.text().catch(()=> '');
+    if(raw.length > 8000) return err('too_large', 413);
+    let b=null; try{ b=JSON.parse(raw); }catch(_e){ b=null; }
+    const q = cleanJudgeRequest(b);
+    if(!q) return err('bad_request', 400);
+    if(await judgeRateLimited(env, req)) return err('rate_limited', 429);
+    if(!judgeEligible({ guess:q.guess, expected:q.expected, others:q.others })) return json({ verdict:null, reason:'ineligible' });
+    const verdict = await judgeAnswer(env, q);
+    return json({ verdict });
   }
 
   // ---- wszystko poniżej wymaga tożsamości ----

@@ -40,7 +40,7 @@ core/  ←  server/                                   (serwer reużywa ten sam r
   „co znasz" z byCat, pewność, archetypy, tekst karty), `tasteCompare.js` (etap 3: zgodność ze znajomym 0.6×cos(gatunki/dekady)+0.4×Jaccard
   z wygładzeniem, werdykt, wspólne/rekomendacje/różnice, songs[] „Zagraj z półki", półki i pula MP „Gust stołu"), `lektorVoice.js` (język lektora
   pl|en z `lang` kategorii lyrics.js + wybór głosu systemowego/Pipera), `handles.js` (pule ksyw),
-  `teams.js`, `matchRecord.js` (rekord meczu do ligi), `sources.js` (scalanie iTunes+Deezer, gatunki Deezer), `lyricCheck.js`
+  `teams.js`, `matchRecord.js` (rekord meczu do ligi), `sources.js` (scalanie iTunes+Deezer, gatunki Deezer), `judge.js` (sędzia AI: kwalifikacja, prompt, parser — wołanie w `server/lib/judge.js` przez Workers AI), `lyricCheck.js`
   (tekst do lektora we własnej kategorii: limit, wyciek), `util.js` (+ `APP_NAME`, walidatory safeColor/isSlotKey/num/clipText).
 - **`ports/`** — kontrakty (`AudioPort`, `TrackRepository`): UI zależy od interfejsu, nie konkretu.
 - **`adapters-web/`** — webowe implementacje portów + transport (iTunes, Cloudflare, Realtime).

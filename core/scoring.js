@@ -191,12 +191,13 @@ export function yearMatch(guessYear, actualYear){
   return !!(guessYear && actualYear && Math.abs(+guessYear - +actualYear) <= 2);
 }
 
-// jedna ocena odpowiedzi (wspólna solo + MP) — czysta, zwraca komplet flag
-export function evaluateGuess(guess, track){
-  const okTitle = textMatch(guess.title, track.track);
-  const okArtist = artistMatch(guess.artist, track.artist);   // 4.1: duety/feat rozbijane po stronie oczekiwanej
+// jedna ocena odpowiedzi (wspólna solo + MP) — czysta, zwraca komplet flag.
+// `match` (opcjonalny) — dopasowanie tekstu (sędzia AI / „Uznaj": textMatch || werdykt); domyślnie textMatch = jak dotąd.
+export function evaluateGuess(guess, track, match=textMatch){
+  const okTitle = match(guess.title, track.track);
+  const okArtist = artistMatch(guess.artist, track.artist) || (match!==textMatch && !!guess.artist && match(guess.artist, track.artist));   // 4.1: duety/feat rozbijane po stronie oczekiwanej
   const okYear = yearMatch(guess.year, track.year);
-  const okAlbum = guess.album ? textMatch(guess.album, track.album) : false;
+  const okAlbum = guess.album ? match(guess.album, track.album) : false;
   return { okTitle, okArtist, okYear, okAlbum, roundOk: okTitle && okArtist };
 }
 
