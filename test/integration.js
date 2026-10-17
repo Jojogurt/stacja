@@ -1496,7 +1496,7 @@ await group('F6b (#6): TV salonu w formacie Solo — karty drużyn bez treści t
     byTeam:{ t0:{ proposals:[{id:'p',by:'A',byName:'Ala',values:{title:'TAJNY TYP'}}], votes:{title:{A:'TAJNY TYP'}}, sure:[], passed:[] }, t1:{ proposals:[], votes:{}, sure:[], passed:[] } } })); await settle(8);
   w.mpGoKombinuj(); await settle(4);
   const h=$(w,'mpRoom').innerHTML;
-  ok(/mp-tvteams/.test(h) && (h.match(/class="mp-tvteam"/g)||[]).length===2, 'TV: karta na drużynę');
+  ok(/mp-tvteams/.test(h) && (h.match(/data-tvteam=/g)||[]).length===2, 'TV: wiersz na drużynę (P1-16: ranking z prawej)');
   ok(!/TAJNY TYP/.test(h), 'TV: treść typów niewidoczna (TV widzą wszyscy)');
   ok(/ZATWIERDŹ WSZYSTKICH/.test(h), 'TV: host zatwierdza wszystkich');
   ok(!/mpProp_|mp-reacts/.test(h), 'TV: bez pól i emotek');
@@ -3315,6 +3315,143 @@ await group('B P1-9/P1-12/P1-15: copy Solo; lektor — opis zwijany w kombinuj; 
   ok(/@media \(max-width:375px\)\{[^}]*\.mp-cwrap-typ\{flex-wrap:wrap/.test(css), 'P1-15: ≤ 375 px — tytuł/wykonawca w 2 wierszach');
   ok(/\.mp-play \.mp-comp\{position:sticky/.test(css) && /\.mp-play \.mp-chatfeed\.fixed\{flex:1 1 0/.test(css), 'composer przyklejony na dole (feed flex)');
   w.mpSetSkin('kolumny'); await settle(2);
+  w.mpLeaveConfirmed('room'); await settle(6);
+});
+/* ===== P1-16 (v69): TV jako scena — lobby z QR, układ dwukolumnowy, brak elementów pilota, skróty klawiszowe, telefon „patrz na TV" ===== */
+const { qrDecode: tvQrDecode } = await import('./qrDecode.js');
+// SVG z app/mp-tv.js (jeden <path> z odcinków „M x y h n v1 h -n z", strefa ciszy 4) → macierz modułów
+function tvQrMatrix(svg){
+  const dim=Number(svg.getAttribute('viewBox').split(' ')[2]), n=dim-8;
+  const m=Array.from({length:n},()=>new Array(n).fill(0));
+  const d=svg.querySelector('path').getAttribute('d');
+  for(const [, x, y, len] of d.matchAll(/M(\d+) (\d+)h(\d+)/g)) for(let i=0;i<+len;i++) m[+y-4][+x-4+i]=1;
+  return m;
+}
+const tvKey=(w, key, extra={})=>{ const e=new w.KeyboardEvent('keydown', { key, bubbles:true, cancelable:true, ...extra }); w.document.body.dispatchEvent(e); return e; };
+await group('P1-16: lobby na TV — duży kod + QR (dekodowalny), link, gracze na żywo, ustawienia, START; html.tv', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  const { audio }=catsByKind(w);
+  ws.pushState({ phase:null, hostId:me }); await settle(4);
+  ok(!w.document.documentElement.classList.contains('tv'), 'zwykła poczekalnia hosta — bez sceny TV');
+  w.mpLobbyStart(); await settle(3);
+  w.mpToggleCat(audio); w.mpSetSalon(true); await settle(3);
+  ok(/um-tvlobby/.test(aStage()) && /Pokaż lobby na TV/.test(aStage()), 'picker z salonem: przycisk „📺 Pokaż lobby na TV"');
+  const nDraft0=ws.sent.filter(m=>m.t==='event' && m.event==='draft').length;
+  w.mpLobbyBack(); await settle(3);
+  const st=$(w,'mpStage'), root=w.document.documentElement;
+  ok(root.classList.contains('tv') && st.querySelector('.tv-scene .tv-join'), 'lobby na TV: html.tv + scena .tv-scene');
+  ok(root.classList.contains('dark'), 'motyw TV domyślnie ciemny');
+  const code=st.querySelector('.tv-join-code b').textContent;
+  ok(/^[A-Z0-9]{4}$/.test(code), 'duży kod pokoju — '+code);
+  const svg=st.querySelector('.tv-join-qr svg');
+  ok(svg && svg.querySelector('path') && /Kod QR/.test(svg.getAttribute('aria-label')), 'QR jako SVG (lokalny enkoder, bez CDN)');
+  let dec=null; try{ dec=tvQrDecode(tvQrMatrix(svg)); }catch(e){ ok(false, 'QR nie dekoduje się: '+e.message); }
+  ok(dec && dec.text==='https://stacja.test/?room='+code, 'QR z DOM dekoduje się do linku dołączenia — '+(dec&&dec.text));
+  ok(st.querySelector('.tv-join-link').textContent.includes('stacja.test/?room='+code), 'link „dołącz: <host>/?room=KOD"');
+  ok(/Przy stole/.test(st.textContent) && /czekamy na graczy/.test(st.textContent), 'lista graczy (pusta — TV poza listą)');
+  ok(st.querySelector('.tv-right .mpd') && /Ustawienia meczu/.test(st.textContent) && /tylko na TV/.test(st.textContent), 'podsumowanie ustawień meczu (szkic)');
+  ok(ws.sent.filter(m=>m.t==='event' && m.event==='draft').length>nDraft0, 'lobby na TV rozsyła szkic gościom');
+  ok(/potrzeba min\. 1 gracza/.test(st.querySelector('.tv-ctl-note').textContent) && st.querySelector('[data-tvact="setup"]'), 'bez graczy: bramka salonu + „⚙ ustawienia" zamiast START — '+st.querySelector('.tv-ctl').textContent);
+  ws._emit({ t:'presence', members:[{id:me,name:'TV'},{id:'P1',name:'Ola'},{id:'P2',name:'Kuba'}], hostId:me }); await settle(3);
+  ok(st.querySelectorAll('.tv-lp').length===2 && /Ola/.test(st.textContent) && /Kuba/.test(st.textContent), 'gracze dochodzą na żywo (2, bez TV)');
+  ok(st.querySelector('[data-tvact="start"]') && /START MECZU/.test(st.textContent), 'z graczami: „▶ START MECZU"');
+  ok(/Spacja \/ Enter — dalej/.test(st.querySelector('.tv-keys').textContent), 'dyskretna podpowiedź skrótów');
+  const n0=ws.sent.length;
+  tvKey(w, ' '); await settle(4);
+  ok(ws.sent.slice(n0).some(m=>m.t==='start' && m.config && m.config.salon===true), 'Spacja w lobby TV = START (start meczu z salonem)');
+});
+await group('P1-16: mecz na TV — dwie kolumny, karta pytania, duży zegar, roster ze statusem, QR w rogu; bez pól pilota', async ()=>{
+  const w=window; const ws=wsInstances[wsInstances.length-1]; const me=ws._id;
+  const teams=[{id:'t0',name:'Ola',color:'#58CC02',members:['P1']},{id:'t1',name:'Kuba',color:'#1CB0F6',members:['P2']}];
+  ws.pushState(armState(ws, { armNonce:16001, armMs:12000, salon:true, tvId:me, format:'solo', teams, scores:{t0:0,t1:0}, readyIds:['P1'], readyCount:1, readyTotal:2,
+    slots:[{round:1,cat:'d80',mode:'music'},{round:1,cat:'d80',mode:'music'}] })); await settle(6);
+  const st=$(w,'mpStage');
+  ok(st.querySelector('.tv-left .tv-qn') && /PYTANIE/.test(st.querySelector('.tv-qn').textContent), 'gotowość: karta pytania „PYTANIE n/N" w lewej kolumnie');
+  ok(/Czekamy na/.test(st.querySelector('.tv-left').textContent) && /Kuba/.test(st.querySelector('.tv-left').textContent), 'gotowość: „Czekamy na: Kuba" z awatarami');
+  ok(/✓ gotów/.test(st.querySelector('.tv-right').textContent) && /ładuje/.test(st.querySelector('.tv-right').textContent), 'roster: ✓ gotów / ładuje…');
+  const nGo=ws.sent.filter(m=>m.t==='go').length;
+  tvKey(w, 's'); await settle(3);
+  ok(ws.sent.filter(m=>m.t==='go').length===nGo+1, 'S = „pomiń czekanie" (go do serwera)');
+  ws.pushState(playState(ws, { playNonce:16002, salon:true, tvId:me, format:'solo', teams, scores:{t0:0,t1:0}, timer:30, endsAt:Date.now()+40000,
+    slots:[{round:1,cat:'d80',mode:'music'},{round:1,cat:'d80',mode:'music'}],
+    byTeam:{ t0:{ proposals:[{id:'p',by:'P1',byName:'Ola',values:{title:'TAJNY TYP'}}], votes:{title:{P1:'TAJNY TYP'}}, sure:[], passed:[] }, t1:{ proposals:[], votes:{}, sure:[], passed:[] } } })); await settle(8);
+  const h=st.innerHTML, left=st.querySelector('.tv-left'), right=st.querySelector('.tv-right');
+  ok(st.querySelector('.tv-scene .tv-main') && left && right, 'układ: .tv-main z lewą (pytanie) i prawą (drużyny) kolumną');
+  ok(left.querySelector('#mpKnob') && left.querySelector('#mpCountdown.tv-clock'), 'słuchanie: winyl + DUŻY zegar fazy w lewej kolumnie');
+  ok(/🎧/.test($(w,'mpCountdown').textContent), 'zegar fazy tyka (🎧 m:ss) — '+$(w,'mpCountdown').textContent);
+  ok(!/mpProp_|mpChatIn|mp-reacts|mp-gokomb|mp-hd-back|u hosta|ODPOWIADAMY|odpowiadamy →/.test(h), 'TV bez pól, emotek, „ODPOWIADAMY", „🔈 u hosta", strzałki wyjścia — '+(h.match(/mpProp_|mpChatIn|mp-reacts|mp-gokomb|mp-hd-back|u hosta|ODPOWIADAMY|odpowiadamy →/)||[''])[0]);
+  ok(!/TAJNY TYP/.test(h), 'Solo na TV: treść typów niewidoczna');
+  ok(st.querySelector('.tv-corner .tv-corner-qr svg') && /dołącz/.test(st.querySelector('.tv-corner').textContent), 'QR + kod w rogu przez cały mecz');
+  ok(/RANKING GRACZY/.test(right.textContent) && right.querySelectorAll('[data-tvteam]').length===2, 'prawa kolumna: ranking graczy (2 wiersze)');
+  ok(/✓ typ/.test(right.textContent) && /myśli/.test(right.textContent), 'status w rosterze: ✓ typ / myśli');
+  ok(/Słuchaj/.test(($(w,'mpAnnounce')||{}).textContent||''), 'aria-live: zmiana fazy ogłoszona — '+(($(w,'mpAnnounce')||{}).textContent||''));
+  ok(st.querySelector('.tv-ctl [data-tvact="goComb"]'), 'słuchanie: duży „DALEJ — ODPOWIADAMY"');
+  tvKey(w, 'Enter'); await settle(3);
+  ok(st.querySelector('.tv-left .tv-clockrow #mpCountdown') && /🧠/.test($(w,'mpCountdown').textContent), 'Enter → odpowiadanie: zegar 🧠 do końca pytania');
+  ok(/Czekamy na/.test(left.textContent) && /Kuba/.test(left.textContent), 'kombinuj: „Czekamy na: Kuba"');
+  ok(/ZATWIERDŹ WSZYSTKICH/.test(st.querySelector('.tv-ctl').textContent) && /1\/2 z typem/.test(st.querySelector('.tv-ctl-note').textContent), 'kombinuj: „ZATWIERDŹ WSZYSTKICH" + 1/2 z typem');
+  const nL=ws.sent.filter(m=>m.t==='lock').length;
+  tvKey(w, ' ', { repeat:true }); await settle(2);
+  ok(ws.sent.filter(m=>m.t==='lock').length===nL, 'przytrzymana spacja (repeat) nic nie robi');
+  tvKey(w, ' '); await settle(3);
+  ok(ws.sent.filter(m=>m.t==='lock').length===nL+1, 'Spacja = zatwierdź wszystkich (lock)');
+  tvKey(w, 'Escape'); await settle(2);
+  ok($(w,'mpLeaveDlg') && $(w,'mpLeaveDlg').classList.contains('show'), 'Esc = „Opuścić pokój?" (potwierdzenie)');
+  const nL2=ws.sent.filter(m=>m.t==='lock').length;
+  tvKey(w, ' '); await settle(2);
+  ok(ws.sent.filter(m=>m.t==='lock').length===nL2, 'przy otwartym oknie skróty nie działają');
+  tvKey(w, 'Escape'); await settle(2);
+  ok(!$(w,'mpLeaveDlg').classList.contains('show') && $(w,'mpRoom').style.display==='', 'Esc ponownie = zostań');
+  w.mpTvMenu(); await settle(2);
+  ok($(w,'tvMenu').classList.contains('show') && /Motyw jasny/.test($(w,'tvMenu').textContent) && /Opuść pokój/.test($(w,'tvMenu').textContent), 'menu ⋯: motyw, pełny ekran, wyjście');
+  $(w,'tvMenu').querySelector('[data-tvmenu="theme"]').click(); await settle(1);
+  ok(!w.document.documentElement.classList.contains('dark'), 'menu ⋯ → motyw jasny');
+  $(w,'tvMenu').querySelector('[data-tvmenu="theme"]').click(); $(w,'tvMenu').querySelector('[data-tvmenu="close"]').click(); await settle(1);
+  ok(w.document.documentElement.classList.contains('dark') && !$(w,'tvMenu').classList.contains('show'), 'z powrotem ciemny, menu zamknięte');
+  // odsłona: poprawna odpowiedź + „+N" per gracz + ruch w rankingu
+  ws.pushState(revealState(ws, { playNonce:16002, salon:true, tvId:me, format:'solo', teams, scores:{t0:0,t1:150},
+    slots:[{round:1,cat:'d80',mode:'music'},{round:1,cat:'d80',mode:'music'}],
+    reveal:{ kind:'music', track:'Hey Jude', artist:'Beatles', year:'1968', album:'X', art:'', byTeam:{ t0:{gained:0,teamOk:false}, t1:{gained:150,teamOk:true} },
+      ranking:[{teamId:'t1',name:'Kuba',score:150,gained:150,teamOk:true},{teamId:'t0',name:'Ola',score:0,gained:0,teamOk:false}] } })); await settle(8);
+  const rv=st.querySelector('.tv-left').textContent, rr=st.querySelector('.tv-right');
+  ok(/Hey Jude/.test(rv) && /Beatles/.test(rv) && /Poprawna odpowiedź/.test(rv), 'odsłona: utwór + poprawna odpowiedź w lewej kolumnie');
+  const rows=[...rr.querySelectorAll('[data-tvteam]')].map(x=>x.dataset.tvteam);
+  ok(rows[0]==='t1' && /\+150/.test(rr.textContent) && rr.querySelector('.tv-move.up'), 'ranking: Kuba awansuje na 1. (▲) z „+150" — '+rows);
+  ok(/0\/2 graczy kliknęło/.test(st.querySelector('.tv-ctl-note').textContent), 'odsłona: licznik „dalej" graczy');
+  ws._emit({ t:'event', event:'advanced', from:'P1', payload:{ by:'P1', nonce:16002 } }); await settle(3);
+  ok(/✓ dalej/.test(rr.textContent), 'roster: ✓ dalej po kliknięciu gracza');
+  const nN=ws.sent.filter(m=>m.t==='next').length;
+  tvKey(w, 'Enter'); await settle(3);
+  ok(ws.sent.filter(m=>m.t==='next').length===nN+1, 'Enter na odsłonie = dalej (next)');
+});
+await group('P1-16: TV w coop (Wspólna) — tablica typów drużyny klikalna, odpowiedź drużyny, skład ze statusami', async ()=>{
+  const w=window; const ws=wsInstances[wsInstances.length-1]; const me=ws._id;
+  ws.pushState(playState(ws, { playNonce:16101, salon:true, tvId:me, format:'coop', teams:[{id:'all',name:'Drużyna',members:['P1','P2']}],
+    byTeam:{ all:{ proposals:[{id:'p1',by:'P1',byName:'Ola',values:{title:'Hey Jude',artist:'Beatles'}}], votes:{ title:{P1:'Hey Jude'}, artist:{P1:'Beatles'} }, sure:[], passed:[] } } })); await settle(8);
+  w.mpGoKombinuj(); await settle(3);
+  const st=$(w,'mpStage');
+  ok(st.querySelector('.tv-left #mpBoard') && /onclick="mpVote/.test(st.innerHTML) && /Hey Jude/.test(st.querySelector('.tv-teamans').textContent), 'coop: tablica typów (klik = nadpisanie) + odpowiedź drużyny');
+  ok(st.querySelector('.mp-lockbtn') && /ZATWIERDŹ ODPOWIEDŹ/.test(st.querySelector('.tv-ctl').textContent), 'coop: „✓ ZATWIERDŹ ODPOWIEDŹ"');
+  ok(st.querySelectorAll('.tv-right .tv-p.big').length===2 && /1\/2 z typem/.test(st.querySelector('.tv-right').textContent), 'coop: skład drużyny z dużymi awatarami + 1/2 z typem');
+  const css=aCss();
+  ok(/@media \(prefers-reduced-motion: reduce\)\{\s*\.tv-left\.tv-in,\.tv-lp,\.tv-gain,\.tv-count b,\.tv-cover[^}]*animation:none!important\}\s*\.tv-team\{transition:none!important;transform:none!important\}/.test(css), 'reduced-motion: TV bez animacji wejścia, „+N", odliczania i przesuwania rankingu');
+  ok(/html\.tv\{font-size:clamp\(14px,1\.25vw,52px\)\}/.test(css) && /\.tv-main\{display:grid;grid-template-columns:minmax\(0,1\.55fr\) minmax\(0,1fr\)/.test(css), 'układ TV: rem skalowany szerokością (×2 przy 1920), dwie kolumny');
+  w.mpLeaveConfirmed('room'); await settle(6);
+  ok(!w.document.documentElement.classList.contains('tv') && !w.document.body.classList.contains('salon'), 'wyjście z pokoju: koniec sceny TV (motyw i powłoka przywrócone)');
+});
+await group('P1-16: telefon gracza w salonie — „Patrz na TV" w słuchaniu, status drużyny; bez sceny TV', async ()=>{
+  const w=window; const ws=await aFreshRoom(); const me=ws._id;
+  ws.pushState(playState(ws, { playNonce:16201, salon:true, tvId:'TV', hostId:'TV', audioHostOnly:true, format:'teams',
+    teams:[{id:'t0',name:'Rakiety',color:'#CE82FF',members:[me,'P2']},{id:'t1',name:'Komety',members:['P3']}], scores:{t0:0,t1:0},
+    byTeam:{ t0:{ proposals:[{id:'p',by:'P2',byName:'Ala',values:{title:'X'}}], votes:{}, sure:[], passed:[] }, t1:{ proposals:[], votes:{}, sure:[], passed:[] } } })); await settle(8);
+  const st=$(w,'mpStage');
+  ok(!w.document.documentElement.classList.contains('tv') && !st.querySelector('.tv-scene'), 'telefon: bez sceny TV');
+  ok(st.querySelector('.mp-looktv') && /Patrz na TV/.test($(w,'mpPlayStatus').textContent), 'słuchanie: „📺 Patrz na TV" zamiast odtwarzacza — '+$(w,'mpPlayStatus').textContent+' / '+!!st.querySelector('.mp-looktv'));
+  ok(/📺 na TV/.test(st.querySelector('.mp-hd-chips').textContent) && !/u hosta/.test(st.querySelector('.mp-hd-chips').textContent), 'nagłówek: „📺 na TV" (nie „🔈 u hosta")');
+  const team=st.querySelector('.mp-salonteam');
+  ok(team && /Rakiety/.test(team.textContent) && /1\/2 z typem/.test(team.textContent), 'status mojej drużyny: Rakiety · 1/2 z typem — '+(team&&team.textContent));
+  w.mpGoKombinuj(); await settle(3);
+  ok($(w,'mpProp_title') && st.querySelector('.mp-salonteam'), 'kombinuj: pola odpowiedzi + status drużyny');
   w.mpLeaveConfirmed('room'); await settle(6);
 });
 console.log(`\n${fail?'❌':'✅'} integracja: ${pass} przeszło, ${fail} nie przeszło`);

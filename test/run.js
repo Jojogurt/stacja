@@ -2998,5 +2998,88 @@ group('P1-9: formatCopy — Solo „Twoja odpowiedź"/„Ranking graczy"; bez �
   eq(MS.formatCopy('xyz').answerLabel, 'ODPOWIEDŹ DRUŻYNY', 'nieznany format → coop');
 });
 }
+/* ===== P1-16 (v69): „TV jako scena" — własny enkoder QR (core/qr.js) + logika sceny TV (core/tvStage.js) ===== */
+{
+const QR = await import('../core/qr.js');
+const { qrDecode, matrixFromHex } = await import('./qrDecode.js');
+const TV = await import('../core/tvStage.js');
+// referencje wygenerowane NIEZALEŻNIE przez CoreImage (macOS CIQRCodeGenerator, korekcja M; CoreImage wybrał maskę 2)
+const REF = [
+  { text:'stacja.app', n:21, rows:'fe43f8 822a08 badae8 bac2e8 badae8 828a08 feabf8 00d800 be4be0 88c9f8 539430 3905f8 73b680 00b9b8 fe0970 82dc68 bacf08 ba89a0 bab040 8221e0 fef190' },
+  { text:'https://kked.github.io/stacja/?room=k7qx', n:29, rows:'fe74f3f8 8235ca08 bac39ae8 bab4d2e8 bae21ae8 8297ea08 feaaabf8 00bb8000 be4653e0 91da9e88 1a098280 bdf2bfd0 2b8e5060 70beb788 d371a1e0 d9e09390 0b384060 ed6cbfa8 833f6f20 8ce40810 be83cfb8 0080f8f8 fe49fae0 82d2b890 bab8cfb8 bab62078 bae7abf0 826e8950 fe907420' },
+  { text:'https://kked.github.io/stacja/?room=k7qx&from=tv&lang=pl&theme=dark&note=jedziemy-z-koksem-kanapa-salon-pilot-telefon-quiz-muzyczny-pubquiz', n:49,
+    rows:'fe3e407f04bf8 82433e8c37a08 ba8af2bc81ae8 bad223345d2e8 baa43ffb1c2e8 829c6a2872208 feaaaaaaaabf8 00a33a2eb5800 be340be70abe0 a54cd24610770 ce784330ba178 e10a381cf6898 3fc213a73f868 f0faa4cf1c330 6ac2f134e28b8 807c4467e5c88 3b6829d71cd60 1cb0b246c4680 c37d137067058 f4d5911ce4580 dfa74fc54de38 61f8f10e1c7f0 2fe22fec32fd8 889e4e3cc48c8 8af50ea75baf8 989e5236048f0 cfb713e173f98 b1a9dd5ac2c10 92c7e7851f9f8 04aafcc695f20 d65e0991fe778 245498b0b2c50 53e94a2f1bde0 a50cb1ff15d00 0ec1a78d2eb58 fc98103b84998 32eb8a0519db8 109cb79719f00 46d8f24c7a2f8 71013dbfa6d18 e3017be759ff8 00f48622dc890 fe40f2ad6aa88 82b3be3aa0890 bae117e67efe0 ba9d6376859a8 baec72a073100 823e8171c3a08 feb819115d838' },
+];
+group('P1-16 QR: macierz identyczna z referencją CoreImage (v1, v3, v8 — z informacją o wersji)', ()=>{
+  for(const r of REF){
+    const ref=matrixFromHex(r.n, r.rows.split(' '));
+    const q=QR.qrEncode(r.text, { mask:2 });
+    eq([q.version, q.size, q.mask], [(r.n-17)/4, r.n, 2], 'wersja/rozmiar — '+r.text.slice(0,30));
+    ok(JSON.stringify(q.modules)===JSON.stringify(ref), 'moduł w moduł jak CoreImage — '+r.text.slice(0,30));
+    eq(qrDecode(ref).text, r.text, 'dekoder testowy czyta referencję CoreImage — '+r.text.slice(0,30));
+  }
+});
+group('P1-16 QR: dekodowanie własnym dekoderem (format, zygzak, syndromy RS = 0, segment bajtowy)', ()=>{
+  const texts=['A', 'http://localhost:8180/?rooms=http://127.0.0.1:8787&room=K7QX', 'https://kked.github.io/stacja/?room=ABCD',
+    'Zażółć gęślą jaźń 🎵', 'x'.repeat(14), 'x'.repeat(15), 'y'.repeat(122), 'z'.repeat(213)];
+  for(const t of texts){
+    const q=QR.qrEncode(t);
+    ok(q && q.size===17+4*q.version, 'zakodowano — '+t.slice(0,24));
+    let d=null; try{ d=qrDecode(q.modules); }catch(e){ ok(false, 'dekoder: '+e.message+' — '+t.slice(0,24)); continue; }
+    eq([d.text, d.mask, d.ecl], [t, q.mask, 0], 'dekoduje się z powrotem (M, maska z formatu) — '+t.slice(0,24));
+  }
+  eq([QR.qrEncode('x'.repeat(14)).version, QR.qrEncode('x'.repeat(15)).version, QR.qrEncode('z'.repeat(213)).version], [1, 2, 10], 'granice pojemności M: 14 B → v1, 15 B → v2, 213 B → v10');
+  eq(QR.qrEncode('z'.repeat(214)), null, 'ponad v10 → null (link do pokoju jest krótki)');
+  for(let k=0;k<8;k++) eq(qrDecode(QR.qrEncode('maska '+k, { mask:k }).modules).text, 'maska '+k, 'każda z 8 masek dekodowalna — '+k);
+  const big=QR.qrEncode('v'.repeat(150));
+  eq(qrDecode(big.modules).version, 8, 'v8 (wersja w bloku BCH 18,6) — dekoder rozpoznaje rozmiar');
+});
+group('P1-16 QR: wzorce wyszukiwania, synchronizacja, ciemny moduł, BCH, UTF-8, SVG', ()=>{
+  const q=QR.qrEncode('https://kked.github.io/stacja/?room=ABCD'), m=q.modules, n=q.size;
+  const finderOk=(R,C)=>{ for(let r=0;r<7;r++) for(let c=0;c<7;c++){ const ring=Math.max(Math.abs(r-3),Math.abs(c-3)); if(m[R+r][C+c]!==(ring===2?0:1)) return false; } return true; };
+  ok(finderOk(0,0) && finderOk(0,n-7) && finderOk(n-7,0), '3 wzorce wyszukiwania 7×7 (1:1:3:1:1)');
+  ok([...Array(7).keys()].every(i=>m[7][i]===0 && m[i][7]===0 && m[7][n-1-i]===0 && m[n-8][i]===0), 'separatory jasne');
+  ok([...Array(n-16).keys()].every(i=>m[6][8+i]===((8+i)%2===0?1:0) && m[8+i][6]===((8+i)%2===0?1:0)), 'linie synchronizacji (w tym moduły (6,8)/(8,6))');
+  eq(m[n-8][8], 1, 'ciemny moduł (4V+9, 8)');
+  eq(QR.formatBits(0).toString(2).padStart(15,'0'), '101010000010010', 'format M/maska 0 = 101010000010010 (ISO 18004)');
+  eq(QR.formatBits(5).toString(2).padStart(15,'0'), '100000011001110', 'format M/maska 5');
+  eq(QR.versionBits(7).toString(2).padStart(18,'0'), '000111110010010100', 'wersja 7 = 000111110010010100 (ISO 18004 tab. D.1)');
+  eq(QR.utf8Bytes('ż🎵'), [0xC5,0xBC,0xF0,0x9F,0x8E,0xB5], 'UTF-8 bez TextEncoder');
+  eq(QR.rsEncode([0x40,0xD2,0x75,0x47,0x76,0x17,0x32,0x06,0x27,0x26,0x96,0xC6,0xC6,0x96,0x70,0xEC], 10), [0xBC,0x2A,0x90,0x13,0x6B,0xAF,0xEF,0xFD,0x4B,0xE0], 'Reed-Solomon: wektor „hello world" (v1-M, Thonky)');
+  const p=QR.qrSvgPath(q, 4);
+  eq(p.dim, n+8, 'SVG: strefa ciszy 4 moduły');
+  const dark=m.flat().filter(Boolean).length, area=(p.d.match(/h(\d+)/g)||[]).reduce((s,h)=>s+Number(h.slice(1)),0);
+  eq(area, dark, 'SVG: suma odcinków = liczba ciemnych modułów');
+  ok(QR.qrPenalty(m)>0 && Number.isInteger(QR.qrPenalty(m)), 'kara maski liczona');
+});
+group('P1-16 TV: link „dołącz", ranking z ruchem miejsc, statusy, sterowanie, skróty', ()=>{
+  eq(TV.tvJoinUrl({ origin:'https://kked.github.io', pathname:'/stacja/', search:'' }, 'k7qx'), 'https://kked.github.io/stacja/?room=K7QX', 'produkcja: ?room=KOD');
+  eq(TV.tvJoinUrl({ origin:'http://localhost:8180', pathname:'/', search:'?rooms=http://127.0.0.1:8787&room=OLD&x=1' }, 'AB12'), 'http://localhost:8180/?rooms=http://127.0.0.1:8787&room=AB12', 'dev: zachowuje ?rooms= (lokalny Worker), wycina stary room i śmieci');
+  eq(TV.tvJoinUrl({ origin:'o', pathname:'/', search:'' }, 'a"<b>'), 'o/?room=AB', 'kod sanityzowany (A–Z0–9)');
+  eq(TV.tvJoinLabel('http://localhost:8180/?rooms=http://127.0.0.1:8787&room=AB12'), 'localhost:8180/?room=AB12', 'etykieta bez protokołu i ?rooms');
+  const teams=[{id:'a',name:'Ala'},{id:'b',name:'Bo'},{id:'c',name:'Cy'}];
+  const r1=TV.tvRanking(teams, {a:100,b:0,c:0}, null);
+  eq(r1.map(r=>[r.id,r.place,r.move]), [['a',1,null],['b',2,null],['c',2,null]], 'pierwszy ranking — remis = wspólne miejsce, bez ruchu');
+  const r2=TV.tvRanking(teams, {a:100,b:50,c:180}, r1.map(r=>r.id), {c:180,b:50});
+  eq(r2.map(r=>[r.id,r.place,r.move,r.delta,r.gained]), [['c',1,'up',2,180],['a',2,'down',1,0],['b',3,'down',1,50]], 'awans o 2 / spadki o 1 + „+N"');
+  eq([TV.tvPlayerStatus({phase:'play',roster:'ans'}).label, TV.tvPlayerStatus({phase:'play',roster:'idle'}).label, TV.tvPlayerStatus({phase:'reveal',advanced:true}).label, TV.tvPlayerStatus({phase:'arming',ready:false}).label],
+    ['✓ typ','myśli','✓ dalej','ładuje…'], 'statusy: ✓ typ / myśli / ✓ dalej / ładuje…');
+  eq(TV.tvTeamSummary(['ans','think','pass'],'play').label, '2/3 z typem', 'drużyna: 2/3 z typem (pas = rozstrzygnięty)');
+  eq(TV.tvTeamSummary(['next','next'],'reveal').label, '✓ wszyscy (2)', 'drużyna: wszyscy dalej');
+  eq(TV.tvTeamSummary(['think'],'play').label, 'myśli', 'Solo (1 osoba): „myśli"');
+  eq(TV.tvControls({scene:'lobby',canStart:true}).next.act, 'start', 'lobby gotowe → START');
+  eq(TV.tvControls({scene:'lobby',canStart:false}).next.act, 'setup', 'lobby bez ustawień → ustawienia');
+  eq([TV.tvControls({scene:'arming',armLimit:true}).skip.act, TV.tvControls({scene:'arming'}).skip], ['skipArm', null], 'gotowość: „pomiń" tylko z limitem serwera');
+  eq(TV.tvControls({scene:'answer',comp:true}).next.label, '✓ ZATWIERDŹ WSZYSTKICH', 'kombinuj Solo/Drużyny → zatwierdź wszystkich');
+  eq(TV.tvControls({scene:'answer',allDone:true}).next, null, 'komplet odpowiedzi → bez przycisku (serwer zamyka)');
+  eq(TV.tvControls({scene:'reveal',last:true}).next.label, 'WYNIK KOŃCOWY →', 'ostatnia odsłona');
+  const ctl=TV.tvControls({scene:'reveal'});
+  eq([TV.tvKeyAction(' ', {controls:ctl}), TV.tvKeyAction('Enter', {controls:ctl}), TV.tvKeyAction('s', {controls:ctl}), TV.tvKeyAction('S', {controls:TV.tvControls({scene:'arming',armLimit:true})})],
+    ['advance','advance',null,'skipArm'], 'Spacja/Enter = dalej, S = pomiń (tylko gdy jest co pomijać)');
+  eq([TV.tvKeyAction('Escape', {controls:ctl}), TV.tvKeyAction('Escape', {dialog:true}), TV.tvKeyAction(' ', {dialog:true, controls:ctl})], ['leave','close',null], 'Esc = wyjście (z potwierdzeniem) / zamknij okno; okno blokuje skróty');
+  eq([TV.tvKeyAction(' ', {controls:ctl, typing:true}), TV.tvKeyAction(' ', {controls:ctl, repeat:true}), TV.tvKeyAction('x', {controls:ctl})], [null,null,null], 'pole tekstowe / przytrzymany klawisz / inny klawisz → nic');
+  eq([TV.tvTheme(null), TV.tvTheme('light'), TV.tvTheme('dark')], ['dark','light','dark'], 'motyw TV domyślnie ciemny');
+});
+}
 console.log(`\n${fail?'❌':'✅'} ${pass} przeszło, ${fail} nie przeszło`);
 process.exit(fail?1:0);

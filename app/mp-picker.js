@@ -140,7 +140,8 @@ function mpSettingsHTML(){
         <button type="button" class="um-salon-toggle um-audiohost${mpPickAudioHostOnly()?' on':''}"${mpPickSalon?' disabled aria-disabled="true"':''} onclick="mpSetAudioHost(${mpPickAudioHost?'false':'true'})" role="switch" aria-checked="${mpPickAudioHostOnly()}">
           <span class="um-salon-tx"><b>🔈 Dźwięk tylko u hosta</b><small>${mpPickSalon?'w trybie salonowym muzyka gra zawsze tylko na TV':'jeden głośnik na stół — telefony graczy nie grają zajawki ani lektora'}</small></span>
           <span class="um-salon-sw"><i></i></span>
-        </button></div>`;
+        </button>
+        ${mpPickSalon?`<button type="button" class="um-tvlobby" onclick="mpLobbyBack()">📺 Pokaż lobby na TV <small>duży kod pokoju + QR, gracze na żywo, START</small></button>`:''}</div>`;
 }
 // zakładka „Twoje": import playlisty Spotify (własne kategorie z edytora tworzy się w solo — tu też widoczne)
 function mpTwojeHTML(){
@@ -159,10 +160,20 @@ const setup=createMatchSetup({
   settingsSummary:()=>settingsSummary({ ctx:'mp', questions:mpPick.questions, format:mpPickFormat, timer:mpPickTimer, salon:mpPickSalon }),
   settingsHTML:mpSettingsHTML,
   twojeHTML:mpTwojeHTML,
-  gate:()=> teamsBad() ? { text:'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju'+(mpPickSalon?' poza TV).':').') }
-    : salonBad() ? { text: mpPickFormat==='teams' ? 'Tryb salonowy: TV tylko prowadzi — do Drużyn potrzeba min. 2 graczy na telefonach.'
-      : 'Tryb salonowy: TV tylko prowadzi — potrzeba min. 1 gracza na telefonie.' } : null,
+  gate:()=> mpGate(),
 });
+function mpGate(){
+  return teamsBad() ? { text:'Podziel graczy na min. 2 drużyny (potrzeba ≥2 graczy w pokoju'+(mpPickSalon?' poza TV).':').') }
+    : salonBad() ? { text: mpPickFormat==='teams' ? 'Tryb salonowy: TV tylko prowadzi — do Drużyn potrzeba min. 2 graczy na telefonach.'
+      : 'Tryb salonowy: TV tylko prowadzi — potrzeba min. 1 gracza na telefonie.' } : null;
+}
+/* P1-16: lobby na TV — czy mecz da się wystartować prosto z lobby (wybór kategorii/trybów + bramki salonu/drużyn) */
+function mpPickGate(){
+  const g=mpGate();   // bramki stołu (salon/drużyny) najpierw — podsumowanie komponentu i tak jest „nie ok", gdy bramka stoi
+  if(g) return { ok:false, text:g.text };
+  let ok=false; try{ ok=!!setup.summary().ok; }catch(_e){}
+  return ok ? { ok:true, text:'' } : { ok:false, text:'Najpierw ustaw mecz — kategorie i tryby (⚙ ustawienia).' };
+}
 // delegacja kliknięć komponentu: jeden listener na #mpStage (przeżywa re-render innerHTML; klucze kategorii
 // tylko w data-ms-cat — nigdy w inline JS, F2b)
 (function wireDelegation(){ const st=(typeof document!=='undefined') && document.getElementById('mpStage'); if(st) setup.bind(st); })();
@@ -225,4 +236,4 @@ function mpRandomPick(){ const {cats,modes}=randomPools(mpAvailModes()); setup.s
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
 Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetAudioHost, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft, mpPickResetRoom, mpPickReady };
+export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft, mpPickResetRoom, mpPickReady, mpPickGate };

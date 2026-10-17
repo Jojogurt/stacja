@@ -33,7 +33,8 @@ import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ
 import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft, mpPickResetRoom, mpPickReady } from './mp-picker.js';
 import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla gości (ta sama sanityzacja co serwer)
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
-import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpIntroLeadMs } from './mp-render.js';
+import { tvSetMode } from './mp-tv.js';   // P1-16: scena TV (html.tv + motyw)
+import { initMpRender, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpIntroLeadMs, mpTvLobbyOn } from './mp-render.js';
 import { tableShelfPayload } from '../core/tasteCompare.js';   // gust etap 3: „🎧 Gust stołu"
 import { tasteStore, tasteVisibility } from './taste.js';
 
@@ -218,8 +219,9 @@ async function mpLeave(){
   S.introNonce=null; S.checkUntil=0; S.revealFx=null; S.cardHead=S.cardInner=null; S.hdPh=S.phFrom=null; S.countSaid=null; S.lyricFold=null;
   if(S.connTimer){ clearTimeout(S.connTimer); S.connTimer=null; }
   if(S.allDoneTimer){ clearTimeout(S.allDoneTimer); S.allDoneTimer=null; }
-  S.code=null; S.host=false; S.salon=false; S.roomStage='wait'; S.draft=null; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
+  S.code=null; S.host=false; S.salon=false; S.tvOrder=null; S.tvRankBase=null; S.roomStage='wait'; S.draft=null; S.lastView=null; S.game=null; S.hostCurrent=null; S.tally={}; S.lastNonce=null; S.groupId=null;
   $m('mpRoom').style.display='none'; $m('mpLobby').style.display='';
+  tvSetMode(false); document.body.classList.remove('salon');   // P1-16: koniec sceny TV — przywróć motyw i mobilną powłokę
   mpLeaveCancel(); mpSyncRoomBack();
 }
 
@@ -265,7 +267,7 @@ function mpShare(btn){
   if(btn){ const t=btn.textContent; btn.textContent='✓ skopiowano'; setTimeout(()=>btn.textContent=t,1500); }
 }
 function mpLobbyStart(){ S.roomStage='build'; mpRender(); mpSendDraft(); }   // host: poczekalnia → „Nowy mecz" (+ szkic dla gości)
-function mpLobbyBack(){ S.roomStage='wait'; mpRender(); }     // picker → poczekalnia (wstecz)
+function mpLobbyBack(){ S.roomStage='wait'; mpRender(); mpSendDraft(); }     // picker → poczekalnia (wstecz); P1-16: lobby na TV rozsyła szkic
 function mpRoomBack(){ mpLeave(); }                           // wyjdź z pokoju → ekran wejścia
 function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu'); }   // ☰ → menu
 
@@ -278,7 +280,7 @@ const mpInLobby=()=> !S.game || S.game.phase==null;
 function mpDraftChanged(){ if(!S.host || !S.ch) return; if(draftTimer) clearTimeout(draftTimer); draftTimer=setTimeout(mpSendDraft, 350); }
 function mpSendDraft(){
   if(draftTimer){ clearTimeout(draftTimer); draftTimer=null; }
-  if(!S.host || !S.ch || S.roomStage!=='build' || !mpInLobby()) return;
+  if(!S.host || !S.ch || !(S.roomStage==='build' || mpTvLobbyOn()) || !mpInLobby()) return;   // P1-16: lobby na TV też rozsyła szkic
   const d=sanitizeDraft(mpDraft()); if(d) S.ch.send({type:'broadcast', event:'draft', payload:d});
 }
 function mpOnDraft(payload, from){
@@ -337,7 +339,7 @@ async function mpEnterRoom(code, asHost, groupId){
     // 1.5: zmiana S.host → ZAWSZE re-render (inaczej awansowany host nie zobaczy przycisków hosta;
     //      domyka 1.2 — przycisk „następne" po promocie w REVEAL). Dotąd re-render tylko w lobby.
     if(S.host!==prevHost || !S.game || S.game.phase==null) mpRender();
-    if(S.host && S.roomStage==='build') mpDraftChanged();           // ktoś doszedł → dośli mu szkic meczu
+    if(S.host && (S.roomStage==='build' || mpTvLobbyOn())) mpDraftChanged();   // ktoś doszedł → dośli mu szkic meczu (P1-16: także z lobby na TV)
     if(S.host && !SERVER_AUTH){ mpBroadcast(); mpMaybeGo(); }        // relay: host pcha stan i liczy gotowość (DO robi to sam)
     if(S.host && S.game && S.game.salon && S.game.phase===MP.REVEAL) mpRecountAdvance();   // 1.8: rozłączenie w REVEAL → przelicz „dalej"
     // 1.8: relay nie ma promote — gdy host znika w trakcie meczu, chociaż powiedz to graczom
@@ -660,7 +662,12 @@ function mpKnobTap(){
 }
 function mpPlayLocal(){
   // F6b (tryb #6 „Jeden głośnik"): nie-host nie odtwarza zajawki ani lektora — słucha z głośnika hosta/TV
-  if(S.game && !playsAudioLocally(S.game, mpMe.id)){ mpSetKnob('play'); mpSetPlayStatus('🔈 słuchaj z głośnika hosta'); return; }
+  if(S.game && !playsAudioLocally(S.game, mpMe.id)){
+    mpSetKnob('play');
+    // P1-16: w SALONIE zostaw „Patrz na TV" (render) — „głośnik hosta" tylko w trybie „Dźwięk tylko u hosta" bez TV
+    if(!S.game.salon) mpSetPlayStatus('🔈 słuchaj z głośnika hosta');
+    return;
+  }
   audioSession('playback');   // zajawka przejmuje dźwięk
   lektorStop(); mpStopRev();
   // język opisu z kategorii (host/serwer → S.game.lyricLang; stary serwer/host bez pola → 'pl')
@@ -1008,7 +1015,10 @@ function mpTickTimer(){
   const sub = (S.playRound===S.game.playNonce) ? S.sub : 'sluchaj';
   const c=phaseClock({ sub, listenEnd, endsAt:endsLocal, now });
   if(el){
-    el.textContent = c ? `${c.phase==='sluchaj' && S.game.mode==='quiz' ? '📖' : c.icon} ${fmtClock(c.ms)}` : '';   // etap B: quiz „czytaj” — 📖, nie 🎧
+    const ico = c ? (c.phase==='sluchaj' && S.game.mode==='quiz' ? '📖' : c.icon) : '';   // etap B: quiz „czytaj” — 📖, nie 🎧
+    // P1-16: duży zegar TV — ikona w osobnym <i> (mniejsza od cyfr); tekst ten sam („🎧 0:12")
+    if(el.classList.contains('tv-clock')) el.innerHTML = c ? `<i aria-hidden="true">${ico}</i> ${fmtClock(c.ms)}` : '';
+    else el.textContent = c ? `${ico} ${fmtClock(c.ms)}` : '';
     el.classList.toggle('low', !!(c && c.low && c.ms>0));
     el.dataset.phase = c ? c.phase : '';
     el.setAttribute('aria-label', c ? (c.phase==='sluchaj' ? 'czas słuchania' : 'czas na odpowiedź') : '');

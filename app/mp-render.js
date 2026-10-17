@@ -20,9 +20,11 @@ import { listenStart, listenHTML } from './listen.js';   // Łamigłówki: „�
 import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie „słuchaj"
 import { playClap, playSfx } from './sfx.js';
 import { ic } from './icons.js';
-import { mpPickerHTML } from './mp-picker.js';
+import { mpPickerHTML, mpPickSalon, mpPickGate, mpDraft, mpPickFormat, mpTeamsFromAssign } from './mp-picker.js';   // P1-16: lobby na TV (salon wybrany w pickerze)
 import { renderPreserving } from './matchSetup.js';   // re-render pickera bez gubienia fokusu (wyszukiwarka/klawiatura)
-import { FORMAT_LABEL, timerLabel, draftModesText, formatCopy } from '../core/matchSetup.js';   // P1-9: copy per format
+import { FORMAT_LABEL, timerLabel, draftModesText, formatCopy, sanitizeDraft } from '../core/matchSetup.js';   // P1-9: copy per format
+import { tvJoinUrl, tvJoinLabel, tvRanking, tvPlayerStatus, tvTeamSummary, tvControls } from '../core/tvStage.js';   // P1-16: TV jako scena
+import { tvQrSVG, tvPatch, tvPatchFlip, tvSetMode, tvSetKeys, initTvKeys, tvMenuOpen, tvReducedMotion } from './mp-tv.js';
 
 const $m = id => document.getElementById(id);
 
@@ -163,7 +165,7 @@ function mpOnEnter(g, head, st){
     if(g && g.phase===MP.DONE && scene==='ph:'+MP.DONE && (S.sawMatch || S.host)) playSfx('fanfare');   // F6b (U4): fanfara końca meczu (raz); P0-10: nie dla dołączającego po meczu
     // P1-1: karta wchodzi sama (slide-up przy utworzeniu); karta → „słuchaj" = zwinięcie do paska fazy;
     // „słuchaj" → „kombinuj" BEZ nakładki (kolor paska + pola od dołu); odsłona — własne wejście („Sprawdzamy…" → flip)
-    if(scene.startsWith('card:') || scene.startsWith('reveal:')){ /* własne wejście */ }
+    if(scene.startsWith('card:') || scene.startsWith('reveal:') || mpIsSalonHost()){ /* własne wejście (TV: lewa kolumna) */ }
     else if(prev.startsWith('card:') && scene.startsWith('play:')) mpStageFx(st, 'mp-fromcard', 560);
     else if(scene.startsWith('play:') && prev.startsWith('play:') && prev.split(':')[1]===scene.split(':')[1]) mpStageFx(st, 'mp-tokomb', 420);
     else if(!(g && g.phase===MP.DONE)) animIn(st);
@@ -177,14 +179,16 @@ function mpNotePhase(g){
 function mpRender(){
   const st=$m('mpStage'); if(!st) return;
   const salonHost=mpIsSalonHost();
+  const tvLobby=mpTvLobbyOn();   // P1-16: lobby na TV (host z salonem wybranym w pickerze, przed meczem)
   st.classList.toggle('salon', salonHost);            // duży ekran-monitor TV (CSS w index.html)
-  document.body.classList.toggle('salon', salonHost); // wyłom z mobilnej powłoki 520px (szeroki TV)
+  document.body.classList.toggle('salon', salonHost||tvLobby); // wyłom z mobilnej powłoki 520px (szeroki TV)
+  tvSetMode(salonHost||tvLobby);                      // P1-16: html.tv — scena TV (fluid ≥1280 px, ×2, motyw domyślnie ciemny)
   if(!S.game || S.game.phase==null){
     mpOnEnter(S.game, null, st);   // przejście picker/poczekalnia → animIn
     // przed grą: poczekalnia (06, własny navbar) → host „ZACZNIJ" → picker „ułóż mecz" (własny navbar)
     const building = S.host && S.roomStage==='build';
     document.body.classList.toggle('ms-wide', !!building);   // desktop ≥900 px: picker w dwóch kolumnach (max 1200 px)
-    if(building) renderPreserving(st, mpPickerHTML()); else st.innerHTML = mpLobbyWaitHTML();
+    if(building) renderPreserving(st, mpPickerHTML()); else if(tvLobby) mpRenderTvLobby(st); else st.innerHTML = mpLobbyWaitHTML();
     return;
   }
   document.body.classList.remove('ms-wide');
@@ -192,6 +196,7 @@ function mpRender(){
   mpNotePhase(g);               // P1-14: zmiana fazy → kolor ramy przechodzi z poprzedniego (przed budową nagłówka)
   const head=mpHeaderHTML(g);   // nagłówek z ramą (nr pytania, ⭐ wynik, zegar fazy, pasek fazy) — widoczny cały czas
   mpOnEnter(g, head, st);        // wszystkie efekty wejścia w scenę: migawka odsłony + przejścia
+  if(salonHost){ mpRenderTv(g, st); return; }   // P1-16: TV = osobna scena (dwie kolumny), te same fazy i efekty
   // dopóki TEN klient nie kliknął „dalej" — pokazuj wynik, nawet gdy host już ruszył dalej
   if(mpRevealPending()){
     const rem=(S.checkUntil||0)-Date.now();
@@ -383,7 +388,18 @@ function mpRivalsHTML(g){
 }
 function mpRosterHTML(g){
   if(mpIsCompTV()) return '';   // F6b: TV (Solo/Drużyny) — status graczy jest w kartach drużyn (mpTvTeamsHTML)
-  return mpMyRosterHTML(g) + mpRivalsHTML(g);
+  return mpSalonTeamHTML(g) + mpMyRosterHTML(g) + mpRivalsHTML(g);
+}
+/* P1-16: telefon w SALONIE — czytelny status MOJEJ drużyny (kolor, nazwa, „2/3 z typem", punkty); szczegóły i ranking są na TV */
+function mpSalonTeamHTML(g){
+  if(!g || !g.salon || mpIsSalonHost() || g.phase!==MP.PLAY) return '';
+  const tid=myTeamId(), t=(g.teams||[]).find(x=>x.id===tid); if(!t) return '';
+  const ms=t.members||[];
+  const sum=tvTeamSummary(ms.map(id=>tvPlayerStatus({ phase:'play', roster:rosterState(g, tid, id, S.typingSet) }).key), 'play');
+  const solo=(g.format||'coop')==='solo' || ms.length===1;
+  const col=safeColor(t.color, mpAvatarColor(t.name));
+  const name = solo ? 'Ty' : (t.name||'Twoja drużyna');
+  return `<div class="mp-salonteam${sum.all?' all':''}" style="--tc:${col}" role="status"><i aria-hidden="true"></i><b>${escapeHtml(name)}</b><span>${escapeHtml(solo ? (sum.all?'✓ odpowiedź wysłana':'czekamy na Twój typ') : sum.label)}</span><small>📺 ranking na TV</small></div>`;
 }
 function mpMyRosterHTML(g){
   const tid=myTeamId();   // roster pokazuje TYLKO moją drużynę (izolacja)
@@ -674,7 +690,7 @@ function mpHeaderHTML(g){
       <span>${escapeHtml(g.catLabel||g.catKey||'—')}</span>
       <span>${MODE[g.mode]||escapeHtml(g.mode||'')}</span>
       ${(Number(g.rounds)||1)>1?`<span>Runda ${num(g.round||1)}/${num(g.rounds)}</span>`:''}
-      ${audioHostOnly(g)?`<span title="dźwięk gra tylko u hosta">🔈 u hosta</span>`:''}
+      ${g.salon?`<span title="muzyka i pytania na dużym ekranie">📺 na TV</span>`:audioHostOnly(g)?`<span title="dźwięk gra tylko u hosta">🔈 u hosta</span>`:''}
     </div>`;
   // F6b (F6): strzałka = „opuścić pokój?" (potwierdzenie), nie natychmiastowe wyjście
   return `<div class="mp-hd${from}" data-ph="${ph}">
@@ -699,12 +715,14 @@ function mpSluchajBodyHTML(g){
   }
   // F6b (tryb #6): nie-host przy „Dźwięk tylko u hosta"/salonie = pilot — gałka głośnika, bez odtwarzania
   const here=mpPlaysHere(g);
-  const knob = here ? mpKnobHTML() : mpRemoteKnobHTML();
-  const status = here ? `${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć` : MP_REMOTE_STATUS;
+  // P1-16: telefon-pilot w SALONIE — „patrz na TV" (muzyka/lektor i pytanie grają na dużym ekranie; tu bez audio)
+  const lookTV = !here && !!g.salon;
+  const knob = here ? mpKnobHTML() : lookTV ? `<div class="mp-looktv" id="mpKnob" role="img" aria-label="Patrz na TV"><span aria-hidden="true">📺</span></div>` : mpRemoteKnobHTML();
+  const status = here ? `${g.mode==='lektor'?'lektor czyta':'posłuchaj uważnie'} · stuknij, by powtórzyć` : lookTV ? '<b>Patrz na TV</b> — muzyka gra na dużym ekranie' : MP_REMOTE_STATUS;
   // P1-13: polecenie zadania pod winylem („Zgadnij ROK wydania" / „Tytuł + wykonawca" / „Wybierz A–D")
   return `<div class="mp-deck">${knob}
       <div class="mp-task" id="mpTask">${escapeHtml(mpTaskText(g))}</div>
-      <div class="mp-state" id="mpPlayStatus">${status}</div>
+      <div class="mp-state${lookTV?' mp-looktv-st':''}" id="mpPlayStatus" role="status">${status}</div>
       <div class="mp-listenbar" id="mpListenBar"><i></i></div></div>
     ${mpLyricHTML(g)}${mpPromptHTML(g)}${mpMcHTML(g)}
     <button class="mp-btn ghost mp-gokomb" style="width:100%;margin-top:8px" onclick="mpGoKombinuj()">gotowe, kombinujemy →</button>
@@ -788,6 +806,7 @@ function mpStartListenWindow(g){
   S.listenDur=full; S.listenStart=Date.now()-(full-rem);   // pasek startuje od pozostałej części okna
   S.subTimer=setTimeout(()=>{ if(S.sub==='sluchaj' && S.game && S.game.phase===MP.PLAY) mpGoKombinuj(); }, rem);
   mpAnimListenBar();
+  mpTickTimer();   // P1-16: zegar fazy od razu 🎧 (dawniej do 1 s pokazywał 🧠 — tick przed startem okna słuchania)
   return rem;
 }
 // animuj pasek czasu fazy słuchania (CSS-transition od pozostałego % do 0)
@@ -1072,13 +1091,8 @@ function mpRematchDraftHTML(){
   return mpDraftHTML(S.draft).replace('Mecz, który ustawia host', 'Rewanż — host ustawia');
 }
 // wynik meczu (design): złoty hero + MVP + kto stawia + paski wkładu
-function mpRenderDone(g, head){
-  const tally=(g.tallyList||[]);
-  const max=Math.max(1,...tally.map(t=>t.correct));
-  const rows=tally.map((t,i)=>{
-    const col=mpAvatarColor(t.name), pct=Math.round(t.correct/max*100), av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
-    return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${col}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${num(pct)}%;background:${i===0?'var(--green)':(t.correct?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${num(t.correct)}</span></div>`;
-  }).join('')||'<div class="mp-state">brak trafnych typów</div>';
+/* P1-16: części wyniku meczu wspólne dla telefonu i sceny TV (hero, MVP, „stawia kolejkę") */
+function mpDoneParts(g){
   const mvp = g.mvp?`<div class="dn-mvp"><span class="av" style="background:${mpAvatarColor(g.mvp.name)}">${escapeHtml((g.mvp.name||'?').slice(0,1).toUpperCase())}</span><span class="tx"><span class="l">⭐ MVP STOŁU</span><b>${escapeHtml(g.mvp.name)}</b><small>${num(g.mvp.correct)} trafnych typów</small></span></div>`:'';
   const beer=Object.entries(g.beerTally||{}).sort((a,b)=>b[1]-a[1]);
   const stawia = beer.length?`<div class="dn-stawia"><span class="ic">🍺</span><span class="tx"><span class="l">STAWIA KOLEJKĘ</span><b>${beer.map(([n,c])=>escapeHtml(n)+(c>1?` (${num(c)}×)`:'')).join(', ')}</b><small>przepalone pewniaki 🟡💥</small></span></div>`:'';
@@ -1093,6 +1107,17 @@ function mpRenderDone(g, head){
   const heroT = isComp && st.tie ? 'Remis!' : isComp && st.winner ? escapeHtml(st.winner.name)+' wygrywa!' : 'Mecz zakończony!';
   const fc=formatCopy(g.format);   // P1-9: Solo — „zwycięzca", „Ranking graczy"
   const heroS = isComp && st.tie ? escapeHtml(tied.map(x=>x.name).join(' · '))+' · ex aequo' : fc.winnerSub;   // F6a: wynik w punktach (core/scoring.scoreRound)
+  const hero=`<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc">${num(mpWinnerScore(g))}</div></div>`;
+  return { mvp, stawia, isComp, tr, placeOf, fc, hero };
+}
+function mpRenderDone(g, head){
+  const tally=(g.tallyList||[]);
+  const max=Math.max(1,...tally.map(t=>t.correct));
+  const rows=tally.map((t,i)=>{
+    const col=mpAvatarColor(t.name), pct=Math.round(t.correct/max*100), av=escapeHtml((t.name||'?').slice(0,1).toUpperCase());
+    return `<div class="wk-row"><span class="rk">${i+1}</span><b class="av" style="background:${col}">${av}</b><span class="nm">${escapeHtml(t.name)}</span><span class="bar"><i style="width:${num(pct)}%;background:${i===0?'var(--green)':(t.correct?'var(--blue)':'var(--red)')}"></i></span><span class="pts">${num(t.correct)}</span></div>`;
+  }).join('')||'<div class="mp-state">brak trafnych typów</div>';
+  const { mvp, stawia, isComp, tr, placeOf, fc, hero } = mpDoneParts(g);
   let body;
   if(isComp){
     const tmax=Math.max(1,...tr.map(t=>t.score));
@@ -1103,7 +1128,7 @@ function mpRenderDone(g, head){
   } else {
     body=`<div class="dn-lbl">Wkład drużyny</div><div class="dn-wk">${rows}</div>`;
   }
-  return `<div class="dn-hero"><div class="ic">🏆</div><div class="t">${heroT}</div><div class="s">${heroS}</div><div class="sc">${num(mpWinnerScore(g))}</div></div>
+  return `${hero}
     ${mvp}${stawia}
     ${body}
     ${S.host ? '' : mpRematchDraftHTML()}
@@ -1112,4 +1137,269 @@ function mpRenderDone(g, head){
       : `<div class="dn-wait">${S.draft?'host ustawia rewanż…':'host zaczyna rewanż'}</div>`}</div>`;
 }
 
-export { mpIntroLeadMs, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost };
+/* ===================== P1-16: TV JAKO SCENA (tryb salonowy: host = TV, gracze = telefony-piloty) =====================
+ * Osobny układ (≥1280 px, fluid do 1920×1080 i większych; typografia w rem skalowanym z szerokością — ×2 względem telefonu):
+ *  góra   — marka, format, rail faz 🎧›🧠›👁, kod QR + kod pokoju w rogu (dla spóźnialskich), menu ⋯;
+ *  lewa   — karta pytania: „PYTANIE n/N", kategoria, zadanie; słuchanie: winyl + DUŻY zegar fazy; kombinuj: zegar + „Czekamy na"
+ *           (coop: tablica typów drużyny — TV jest jej sędzią); odsłona: okładka/utwór/poprawna odpowiedź;
+ *  prawa  — drużyny/gracze: awatary, status (myśli / ✓ typ / ✓ dalej / pas), punkty, ranking z animacją zmiany miejsc i „+N";
+ *  dół    — duże „Dalej"/„Pomiń" (Spacja/Enter, S; Esc = wyjście z potwierdzeniem; podpowiedź dyskretna).
+ * Bez elementów pilota: pól odpowiedzi, „ODPOWIADAMY", „🔈 u hosta", strzałki wyjścia, paska emotek (latające emotki graczy — tak).
+ * Logika (ranking, statusy, przyciski, klawisze) w core/tvStage.js; narzędzia DOM (QR, łatanie, FLIP, motyw, menu) w app/mp-tv.js. */
+function mpTvLobbyOn(){ return !!(S.host && S.code && (!S.game || S.game.phase==null) && S.roomStage!=='build' && mpPickSalon); }
+const tvJoin = ()=> tvJoinUrl(typeof location!=='undefined' ? location : {}, S.code||'');
+const tvInitial = (nm)=> escapeHtml(String(nm||'?').slice(0,1).toUpperCase());
+const tvPlural = (n, one, few, many)=> n===1 ? one : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? few : many;
+function tvSkeleton(st){
+  let root=st.firstElementChild;
+  if(!(root && root.classList.contains('tv-scene') && st.children.length===1)){
+    st.innerHTML=`<div class="tv-scene"><header class="tv-top" id="tvTop"></header><main class="tv-main"><section class="tv-left" id="tvLeft" aria-label="pytanie"></section><aside class="tv-right" id="tvRight" aria-label="gracze i ranking"></aside></main><footer class="tv-ctl" id="tvCtl"></footer></div>`;
+    root=st.firstElementChild;
+  }
+  return { root, top:root.querySelector('#tvTop'), left:root.querySelector('#tvLeft'), right:root.querySelector('#tvRight'), ctl:root.querySelector('#tvCtl') };
+}
+function tvCornerHTML(){
+  if(!S.code) return '';
+  return `<div class="tv-corner"><div class="tv-corner-qr">${tvQrSVG(tvJoin())}</div><div class="tv-corner-tx"><small>dołącz</small><b>${escapeHtml(S.code)}</b></div></div>`;
+}
+const tvMenuBtnHTML = ()=> `<button type="button" class="tv-menubtn" onclick="mpTvMenu()" aria-label="Menu TV — motyw, pełny ekran, wyjście (Esc)">⋯</button>`;
+function tvCtlHTML(ctl, noteHtml){
+  const b=(x, cls, key)=> x ? `<button type="button" class="tv-btn ${cls}${x.act==='lock'?' mp-lockbtn':''}" data-tvact="${x.act}" onclick="mpTvAct(this.dataset.tvact)">${escapeHtml(x.label)} <kbd>${key}</kbd></button>` : '';
+  const keys=[ctl.next?'Spacja / Enter — dalej':'', ctl.skip?'S — pomiń':'', 'Esc — wyjście'].filter(Boolean).join(' · ');
+  return `<div class="tv-ctl-note" role="status">${noteHtml||''}</div><div class="tv-ctl-btns">${b(ctl.skip,'tv-skip','S')}${b(ctl.next,'tv-next','Spacja')}</div><div class="tv-keys" aria-hidden="true">${keys}</div>`;
+}
+// akcje przycisków/klawiszy TV → mosty z window (mp.js) — bez statycznego cyklu render↔logika
+function mpTvAct(act){
+  const w=(typeof window!=='undefined') ? window : {};
+  const run={ start:()=>{ if(mpPickGate().ok) w.mpStart(); else w.mpLobbyStart(); }, setup:()=>w.mpLobbyStart(), skipArm:()=>w.mpHostSkipWait(),
+    goComb:()=>w.mpGoKombinuj(), lock:()=>w.mpLock(), advance:()=>w.mpAdvance(), nextQ:()=>w.mpHostNextReveal(),
+    rematch:()=>w.mpRematch(), newGame:()=>w.mpNewGame(), retry:()=>w.mpHostRetry() }[act];
+  if(run) run();
+}
+
+/* ---------- LOBBY NA TV: duży kod + QR + link, gracze na żywo, ustawienia meczu, START ---------- */
+function mpRenderTvLobby(st){
+  const sk=tvSkeleton(st), url=tvJoin(), ps=mpPlayers(), gate=mpPickGate();
+  const ctl=tvControls({ scene:'lobby', canStart:gate.ok });
+  let d=null; try{ d=sanitizeDraft(mpDraft()); }catch(_e){}
+  const draft = d ? mpDraftHTML(d).replace('Mecz, który ustawia host','Ustawienia meczu').replace('<span class="mpd-live">na żywo</span>','') : '';
+  const lp=(m, col)=>`<li class="tv-lp" data-tvrow="${escapeHtml(m.id)}"${col?` style="border-left-color:${col}"`:''}><b class="tv-av" style="background:${mpAvatarColor(m.name)}">${tvInitial(m.name)}</b><span class="tv-lp-nm">${escapeHtml(m.name||'gracz')}</span><i>✓ jest</i></li>`;
+  // Drużyny: gracze pogrupowani wg przydziału z pickera (kolor + nazwa drużyny) — stół widzi skład przed startem
+  let players;
+  if(!ps.length) players=`<li class="tv-lp-empty">czekamy na graczy — zeskanujcie kod telefonem</li>`;
+  else if(mpPickFormat==='teams'){
+    const byId=Object.fromEntries(ps.map(m=>[m.id, m]));
+    players=mpTeamsFromAssign(ps).map(t=>{ const col=safeColor(t.color, '#888');
+      return `<li class="tv-lteam" style="--tc:${col}"><b><i></i>${escapeHtml(t.name||'drużyna')}</b><ul class="tv-lplist">${t.members.map(id=>byId[id] ? lp(byId[id], col) : '').join('')}</ul></li>`; }).join('');
+  } else players=ps.map(m=>lp(m)).join('');
+  sk.top.dataset.ph='card';
+  tvPatch(sk.top, `<div class="tv-brand">STACJA <small>salon · lobby</small></div><div class="tv-top-mid"><span class="tv-pill">📺 Telefony to piloty — muzyka i pytania na tym ekranie</span></div>${tvMenuBtnHTML()}`);
+  tvPatch(sk.left, `<div class="tv-join"><h1 class="tv-h1">Dołączcie telefonem</h1>
+      <div class="tv-join-row"><div class="tv-join-qr">${tvQrSVG(url)}</div>
+        <div class="tv-join-info"><div class="tv-join-code"><small>KOD POKOJU</small><b>${escapeHtml(S.code||'····')}</b></div>
+          <div class="tv-join-link">dołącz: <b>${escapeHtml(tvJoinLabel(url))}</b></div>
+          <p class="tv-join-how">Zeskanuj kod aparatem telefonu albo wpisz kod w STACJA → Multiplayer → Dołącz.</p></div></div></div>`);
+  tvPatchFlip(sk.right, `<h2 class="tv-side-h">Przy stole <span aria-live="polite">${num(ps.length)} ${tvPlural(ps.length,'gracz','graczy','graczy')}</span></h2><ul class="${mpPickFormat==='teams' && ps.length ? 'tv-lteams' : 'tv-lplist'}">${players}</ul>${draft}`);
+  tvPatch(sk.ctl, tvCtlHTML(ctl, gate.ok ? '' : escapeHtml(gate.text)));
+  tvSetKeys({ controls:ctl, leaveKind:'lobby', run:mpTvAct });
+}
+
+/* ---------- MECZ NA TV ---------- */
+function tvSceneOf(g){
+  if(mpRevealPending()) return (S.checkUntil||0)>Date.now() ? 'checking' : 'reveal';
+  if(g.phase===MP.LOADING) return 'loading';
+  if(g.phase===MP.ARMING) return 'arming';
+  if(mpInCount(g)) return 'count';
+  if(g.phase===MP.PLAY) return mpEffSub(g)==='sluchaj' ? 'listen' : 'answer';
+  if(g.phase===MP.REVEAL) return 'waitnext';
+  if(g.phase===MP.DONE) return 'done';
+  if(g.phase===MP.NETERR || g.phase===MP.NOLYRIC) return 'error';
+  return 'loading';
+}
+function tvQHeadHTML(g){
+  const q=mpQNum(g), cat=g.catLabel||g.catKey||'';
+  return `<div class="tv-qhead"><div class="tv-qn">PYTANIE <b>${num(q.n)}</b>${q.total?`<span>/${num(q.total)}</span>`:''}</div>
+    <div class="tv-qchips">${cat?`<span class="tv-cat">${escapeHtml(cat)}</span>`:''}${g.mode?`<span class="tv-task">${escapeHtml(mpModeIcon(g.mode))} ${escapeHtml(mpTaskText(g))}</span>`:''}</div></div>`;
+}
+// treść pytania na TV — tryb „abcd" (muzyka) ma ogólne „Jaki to utwór?" (zadanie jest w chipie) → same kafle, bez pudełka
+const tvPromptHTML = (g)=> g.mode==='abcd' ? '' : mpPromptHTML(g);
+const tvClockHTML = ()=> `<div class="tv-clock" id="mpCountdown" role="timer" aria-label="czas fazy"></div>`;
+function tvTopHTML(g){
+  const ph=mpPhaseNow(g);
+  const rail=MP_PHASES.map(([k,e])=>`<span class="tv-rail-i${k===ph?' on':''}"><i aria-hidden="true">${e}</i>${k===ph?`<b>${escapeHtml(mpPhaseLabel(g,k))}</b>`:''}</span>`).join('<span class="tv-rail-sep" aria-hidden="true">›</span>');
+  const rounds=(Number(g.rounds)||1)>1 ? `<span class="tv-round">Runda ${num(g.round||1)}/${num(g.rounds)}</span>` : '';
+  return `<div class="tv-brand">STACJA <small>salon · ${escapeHtml(FORMAT_LABEL[g.format]||FORMAT_LABEL.coop)}</small></div>
+    <div class="tv-top-mid"><div class="tv-rail" role="img" aria-label="faza: ${escapeHtml(ph?mpPhaseLabel(g,ph):'karta pytania')}">${rail}</div>${rounds}</div>${tvCornerHTML()}${tvMenuBtnHTML()}`;
+}
+// coop: odpowiedź drużyny (TV-sędzia widzi i nadpisuje klikiem w tablicę) — w Solo/Drużynach NIGDY (TV widzą wszyscy)
+function tvTeamAnswerHTML(g){
+  const tid=myTeamId(), ta=teamAnswer(g, tid), slots=renderSlots(g);
+  const any=slots.some(s=>ta[s.key]);
+  const sure=(myBucket().sure||[]).length>0;
+  return `<div class="mp-teamd tv-teamans"><span class="ic">${ic('target')}</span><span class="tx"><span class="l">ODPOWIEDŹ DRUŻYNY</span><span class="v">${any ? slots.map(s=>ta[s.key]?escapeHtml(ta[s.key]):'—').join(' — ') : 'czekamy na typy z telefonów'}</span></span>${sure?'<span class="mp-x2">🟡 ×2</span>':''}</div>`;
+}
+function tvRevealHTML(g, snap){
+  const r=(snap && snap.reveal) || {}, comp=mpIsCompTV();
+  const rv=comp ? {} : mpRevealMine(r);
+  const artOk = typeof r.art==='string' && /^https?:\/\//.test(r.art);
+  const cover = artOk ? `<img class="tv-cover" src="${escapeHtml(r.art)}" alt="" referrerpolicy="no-referrer">` : `<div class="tv-cover ph">${ic('disc')}</div>`;
+  let body;
+  if(r.kind==='quiz'){
+    const isMC=/\nA\)/.test(r.prompt||''), disp=(rv.display&&typeof rv.display==='object') ? rv.display : null;
+    const rows=(r.slots||[]).map(s=>{
+      const variants=(r.answers&&r.answers[s.key])||[];
+      const canon = disp && disp[s.key]!=null ? String(disp[s.key]) : (isMC ? (variants[0]||'')+(variants[1]?') '+variants[1]:'') : String(variants[0]||''));
+      return `<div class="tv-ans">${isMC?'':`<small>${escapeHtml((s.label||s.key).toUpperCase())}</small>`}<b>${escapeHtml(canon)||'—'}</b></div>`;
+    }).join('');
+    const prompt = r.promptStyle==='rebus' ? promptBodyHTML(r.prompt, 'rebus') : escapeHtml(String(r.prompt||'').split('\nA)')[0]);
+    body=`<div class="tv-rv-prompt">${prompt}</div><div class="tv-ans-h">Poprawna odpowiedź</div>${rows}${r.fun?`<div class="tv-fun">💡 ${escapeHtml(r.fun)}</div>`:''}${listenHTML(r.listen, { allowed:true })}`;
+  } else {
+    const meta=(r.kind==='year' ? [r.album] : [r.album, r.year]).filter(Boolean).join(' · ');
+    const year = r.kind==='year' ? `<div class="tv-year"><small>ROK WYDANIA</small><b>${escapeHtml(String(r.year||'—'))}</b></div>${r.yearNote?`<div class="tv-fun">ℹ️ ${escapeHtml(r.yearNote)}</div>`:''}` : '';
+    body=`<div class="tv-track">${cover}<div class="tv-track-i"><small class="tv-ans-h">${r.kind==='year'?'Utwór':'Poprawna odpowiedź'}</small><b class="tv-track-t">${escapeHtml(displayTitle(r.track))}</b><span class="tv-track-a">${escapeHtml(r.artist||'')}</span>${meta?`<span class="tv-track-m">${escapeHtml(meta)}</span>`:''}${mpFromHTML(r)}</div></div>${year}`;
+  }
+  return `${tvQHeadHTML(g)}<div class="tv-reveal">${body}</div>${comp ? '' : mpRevealBanner(rv)}`;
+}
+function tvLeftHTML(g, sc){
+  switch(sc){
+    case 'loading': return `${tvQHeadHTML(g)}<div class="tv-status">${bbLoader}<span>losuję pytanie…</span></div>`;
+    case 'arming': {
+      const players=mpPlayers(), ids=Array.isArray(g.readyIds) ? g.readyIds : [];
+      const pend=pendingIds(players.map(m=>m.id), ids);
+      return `${tvQHeadHTML(g)}${mpPeopleHTML(players, new Set(ids))}<div class="tv-status"><b>${num(g.readyCount||0)}/${num(g.readyTotal||players.length)}</b> telefonów gotowych</div>${mpWaitNamesHTML(pend)}`;
+    }
+    case 'count': {
+      const d=introDigit(S.introUntil-Date.now(), mpIntroLeadMs()), mc=mcOptions(g);
+      const prompt = g.mode==='quiz' && g.prompt ? `<div class="tv-qprompt">${promptBodyHTML(mc ? mc.question : g.prompt, g.promptStyle==='rebus'?'rebus':'')}</div>` : '';
+      return `${tvQHeadHTML(g)}<div class="tv-count" aria-hidden="true"><b data-d="${num(d)}">${d>0?num(d):'▶'}</b></div>${prompt}`;
+    }
+    case 'listen':
+      if(g.mode==='quiz') return `${tvQHeadHTML(g)}<div class="tv-clockrow">${tvClockHTML()}</div>${mpPromptHTML(g)}${mpMcHTML(g)}`;
+      return `${tvQHeadHTML(g)}<div class="tv-listen${mcOptions(g)?' mc':''}">${mpKnobHTML()}<div class="tv-listen-r">${tvClockHTML()}<div class="mp-listenbar tv-listenbar" id="mpListenBar"><i></i></div><div class="mp-state tv-playst" id="mpPlayStatus">${g.mode==='lektor'?'lektor czyta — słuchajcie':'słuchajcie uważnie'}</div></div></div>${mpLyricHTML(g)}${tvPromptHTML(g)}${mpMcHTML(g)}`;
+    case 'answer': {
+      const comp=(g.format||'coop')!=='coop', mc=!!mcOptions(g);
+      const wait = g.allDoneAt ? `<div class="mp-alldone tv-alldone" role="status">✓ Wszyscy gotowi! Sprawdzamy…</div>`
+        : (mpWaitNamesHTML(unsettledIds(g, mpPlayers().map(m=>m.id))) || `<div class="mp-waitfor"><span class="mp-wf-tx">odpowiadacie na telefonach</span></div>`);
+      const board = comp || mc ? '' : `<div class="mp-board tv-board" id="mpBoard">${mpSlotsHTML(g)}</div>${tvTeamAnswerHTML(g)}`;
+      return `${tvQHeadHTML(g)}<div class="tv-clockrow">${tvClockHTML()}${wait}</div>${tvPromptHTML(g)}${mpLyricFoldHTML(g)}${mc?mpMcHTML(g):''}${board}`;
+    }
+    case 'checking': return `${tvQHeadHTML(g)}<div class="tv-checking" role="status"><div class="mp-chk-ic" aria-hidden="true">🥁</div><b>Sprawdzamy…</b>${bbLoader}</div>`;
+    case 'reveal': return tvRevealHTML(g, S.revealSnap);
+    case 'waitnext': return `${tvQHeadHTML(g)}<div class="tv-status">✓ zaraz następne pytanie…</div>`;
+    case 'done': { const p=mpDoneParts(g); return `<div class="tv-done">${p.hero}${p.mvp}${p.stawia}</div>`; }
+    case 'error': {
+      const msg = g.phase===MP.NOLYRIC ? 'Brak materiału do tej rundy w tej kategorii (wyczerpana pula).'
+        : g.netReason==='empty' ? 'Brak zajawek dla tej kategorii — spróbuj ponownie albo zmień kategorię.' : 'Brak połączenia z iTunes (limit zapytań albo blokada sieci). Odczekaj minutę i spróbuj ponownie.';
+      return `<div class="tv-status tv-err" role="alert">${escapeHtml(msg)}</div>`;
+    }
+  }
+  return '';
+}
+// prawa kolumna: drużyny/gracze ze statusem i punktami; Solo/Drużyny — ranking (FLIP przy zmianie miejsc), coop — skład drużyny
+function tvSideHTML(g, sc){
+  const comp=(g.format||'coop')!=='coop';
+  const phase = sc==='arming' ? 'arming' : (sc==='listen'||sc==='answer') ? 'play' : (sc==='reveal'||sc==='checking'||sc==='waitnext') ? 'reveal' : 'other';
+  const teams=(g.teams||[]).filter(t=>(t.members||[]).length);
+  const snap=S.revealSnap, rr=(snap && (sc==='reveal'||sc==='checking')) ? snap.reveal : null;
+  const teamRes=(id)=> rr ? ((rr.byTeam && rr.byTeam[id]) || (Array.isArray(rr.ranking) && rr.ranking.find(x=>x.teamId===id)) || (!comp ? rr : null)) : null;
+  const gained={}, scores={};
+  teams.forEach(t=>{ const x=teamRes(t.id); gained[t.id]=Math.max(0, Number(x && x.gained)||0); scores[t.id]=Number((g.scores||{})[t.id])||0; });
+  if(sc==='checking') teams.forEach(t=>{ scores[t.id]=Math.max(0, scores[t.id]-gained[t.id]); });   // „Sprawdzamy…" nie zdradza wyniku
+  const readySet=new Set(Array.isArray(g.readyIds) ? g.readyIds : []);
+  const advSet=new Set(mpAdvancedIds(g.playNonce)||[]);
+  const stOf=(t, id)=> tvPlayerStatus({ phase, roster: phase==='play' ? rosterState(g, t.id, id, S.typingSet) : null, ready:readySet.has(id), advanced:advSet.has(id) });
+  const person=(t, id, big)=>{ const nm=mpNameOf(id)||'gracz', s=stOf(t, id);
+    return `<li class="tv-p st-${s.key}${big?' big':''}"><b class="tv-av" style="background:${mpAvatarColor(nm)}">${tvInitial(nm)}</b><span class="tv-p-nm">${escapeHtml(nm)}</span><i class="tv-p-st">${escapeHtml(s.label)}</i></li>`; };
+  if(sc==='done' && !comp){
+    const tally=(g.tallyList||[]);
+    return `<h2 class="tv-side-h">Wkład drużyny</h2><ol class="tv-wk">${tally.map(t=>`<li><b class="tv-av" style="background:${mpAvatarColor(t.name)}">${tvInitial(t.name)}</b><span>${escapeHtml(t.name)}</span><em>${num(t.correct)}</em></li>`).join('') || '<li>brak trafnych typów</li>'}</ol>`;
+  }
+  if(!comp){
+    const t=teams[0]; if(!t) return `<h2 class="tv-side-h">Drużyna</h2><div class="tv-status">czekamy na graczy…</div>`;
+    const sum=tvTeamSummary((t.members||[]).map(id=>stOf(t, id).key), phase);
+    const gain=sc==='reveal' && gained[t.id]>0 ? `<small class="tv-gain">+${num(gained[t.id])}</small>` : '';
+    return `<h2 class="tv-side-h">${escapeHtml(t.name||'Drużyna')} <span class="tv-pts">⭐ <b>${num(scores[t.id])}</b>${gain}</span></h2>
+      ${phase==='other'?'':`<div class="tv-sum-line">${escapeHtml(sum.label)}</div>`}<ul class="tv-coop">${(t.members||[]).map(id=>person(t, id, true)).join('')}</ul>`;
+  }
+  const base = sc==='reveal' ? ((S.tvRankBase && S.tvRankBase.nonce===S.revealNonce) ? S.tvRankBase.order : (S.tvRankBase={ nonce:S.revealNonce, order:(S.tvOrder||[]).slice() }).order) : null;
+  const rows=tvRanking(teams, scores, base, sc==='reveal' ? gained : null);
+  if(sc!=='reveal') S.tvOrder=rows.map(x=>x.id);
+  const fc=formatCopy(g.format);
+  const lis=rows.map(row=>{
+    const t=teams.find(x=>x.id===row.id), ms=t.members||[], solo1=ms.length===1 && (g.format||'coop')==='solo';   // Drużyny: nazwa drużyny także przy 1 osobie
+    const col=safeColor(t.color, mpAvatarColor(t.name));
+    const keys=ms.map(id=>stOf(t, id));
+    const sum=tvTeamSummary(keys.map(k=>k.key), phase);
+    const res=sc==='reveal' ? teamRes(t.id) : null;
+    const mk = res ? `<span class="tv-mk ${res.teamOk?'ok':'no'}" aria-label="${res.teamOk?'trafione':'pudło'}">${res.teamOk?'✓':'✗'}</span>` : '';
+    const mv = row.move ? `<span class="tv-move ${row.move}" aria-label="${row.move==='up'?'awans':'spadek'} o ${num(row.delta)}">${row.move==='up'?'▲':'▼'}${num(row.delta)}</span>` : '';
+    const gain = row.gained>0 ? `<small class="tv-gain">+${num(row.gained)}</small>` : '';
+    const nm = solo1 ? (mpNameOf(ms[0])||t.name||'gracz') : (t.name||'drużyna');
+    const st = solo1 ? keys[0] : null;
+    const sumHtml = phase==='other' ? '' : `<small class="tv-sum${st?' st-'+st.key:sum.all?' st-ans':''}">${escapeHtml(st ? st.label : sum.label)}</small>`;
+    // Solo (1 osoba): awatar | imię nad statusem (pełne imię czytelne z kanapy); drużyna: kropka, nazwa, ruch, podsumowanie
+    const head = solo1
+      ? `<div class="tv-tm-h"><b class="tv-av" style="background:${col}">${tvInitial(nm)}</b><span class="tv-tm-col"><b class="tv-tm-nm">${escapeHtml(nm)}</b>${sumHtml}</span>${mv}</div>`
+      : `<div class="tv-tm-h"><i class="tv-dot"></i><b class="tv-tm-nm">${escapeHtml(nm)}</b>${mv}${sumHtml}</div>`;
+    return `<li class="tv-team${solo1?' solo1':''}" data-tvrow="${escapeHtml(t.id)}" data-tvteam="${escapeHtml(t.id)}" style="--tc:${col}"><span class="tv-rk">${num(row.place)}</span>
+      <div class="tv-tm">${head}${solo1||phase==='other'?'':`<ul class="tv-ppl">${ms.map(id=>person(t, id, false)).join('')}</ul>`}</div>${mk}<span class="tv-pts"><b>${num(row.score)}</b>${gain}</span></li>`;
+  }).join('');
+  return `<h2 class="tv-side-h">${escapeHtml(sc==='done' ? fc.doneRanking : fc.rankingTitle)}</h2><ol class="tv-rank mp-tvteams">${lis}</ol>`;
+}
+function tvCtlNote(g, sc){
+  if(sc==='arming' && g.armMs>0) return `<span id="mpArmLeft">${mpArmLeftText(secsLeft(S.armDeadlineLocal, Date.now()))}</span>`;
+  if(sc==='answer' && (g.format||'coop')!=='coop'){
+    const ts=(g.teams||[]).filter(t=>(t.members||[]).length);
+    return `${num(ts.filter(t=>mpTeamAnswered(g, t).length).length)}/${num(ts.length)} z typem`;
+  }
+  if(sc==='reveal'){ const c=S.advCount||0, t=S.advTotal||mpPlayers().length||0; return `✓ ${num(c)}/${num(t)} graczy kliknęło „dalej" — przejdę sam, gdy wszyscy`; }
+  if(sc==='listen') return 'telefony: odpowiedź wpisujecie po wysłuchaniu';
+  return '';
+}
+function tvSpeech(g, sc){
+  switch(sc){
+    case 'arming': return mpCardSpeech(g);
+    case 'count': return 'Start za 3…';
+    case 'listen': return mpPhaseLabel(g, 'sluchaj')+'.';
+    case 'answer': return mpPhaseLabel(g, 'kombinuj')+'. Odpowiadacie na telefonach.';
+    case 'checking': return 'Sprawdzamy…';
+    case 'reveal': { const r=(S.revealSnap && S.revealSnap.reveal) || {}; return 'Odsłona.'+(r.track ? ` ${displayTitle(r.track)} — ${r.artist||''}.` : ''); }
+    case 'done': return 'Koniec meczu.';
+    case 'error': return 'Problem z pytaniem — spróbuj ponownie.';
+  }
+  return '';
+}
+function mpRenderTv(g, st){
+  // nowe pytanie po odliczaniu — te same efekty co mpRenderPlay u telefonu (pod-faza „słuchaj", świeży feed i „pisze…")
+  let fresh=false;
+  if(g.phase===MP.PLAY && !mpInCount(g) && !mpRevealPending() && S.playRound!==g.playNonce){
+    mpClearTyping(); S.composerMode='typ'; S.sub='sluchaj'; mpFeedReset(); S.playRound=g.playNonce; S.playSub=S.sub; fresh=true;
+  }
+  const sc=tvSceneOf(g);
+  if(sc==='checking' && !S.checkTimer) S.checkTimer=setTimeout(()=>{ S.checkTimer=null; mpRender(); }, Math.max(0, (S.checkUntil||0)-Date.now())+10);
+  const sk=tvSkeleton(st);
+  const ctl=tvControls({ scene:sc, armLimit:g.armMs>0, comp:(g.format||'coop')!=='coop', last:!!(S.revealSnap && S.revealSnap.isLast), allDone:!!g.allDoneAt });
+  sk.top.dataset.ph=mpPhaseNow(g)||'card';
+  tvPatch(sk.top, tvTopHTML(g));
+  const key=sc+':'+num(g.playNonce||0)+':'+mpQKey(g), enter=sk.left.dataset.scene!==key;
+  sk.left.dataset.scene=key;
+  const leftNew=tvPatch(sk.left, tvLeftHTML(g, sc));
+  if(enter && !tvReducedMotion()){ sk.left.classList.remove('tv-in'); void sk.left.offsetWidth; sk.left.classList.add('tv-in'); }
+  tvPatchFlip(sk.right, tvSideHTML(g, sc));
+  tvPatch(sk.ctl, tvCtlHTML(ctl, tvCtlNote(g, sc)));
+  tvSetKeys({ controls:ctl, leaveKind:'game', run:mpTvAct });
+  if(sc==='listen' && leftNew && $m('mpKnob')){ if(fresh) mpVinyl.prepare(isTempoMode(g.mode) ? mpTempoRate(g.mode) : 1); else mpVinyl.refresh(); mpAnimListenBar(); }
+  if(sc==='reveal') mpRevealFx();
+  if(sc==='done') mpJuiceScore(g);
+  if(enter){ const say=tvSpeech(g, sc); if(say) mpAnnounce(say); }   // a11y: zmiana fazy dla czytnika (aria-live)
+  if(sc==='count' && !S.countTimer){   // następna cyfra 3 → 2 → 1 (jak karta pytania u telefonu)
+    const rem=S.introUntil-Date.now(), step=Math.max(1, mpIntroLeadMs()/3);
+    const toNext=(rem % step) || step;
+    S.countTimer=setTimeout(()=>{ S.countTimer=null; if(mpInCount(S.game)) mpRender(); }, Math.max(16, Math.min(rem, toNext)+8));
+  }
+  mpTickTimer();
+}
+initTvKeys();
+if(typeof window!=='undefined') Object.assign(window, { mpTvAct, mpTvMenu: tvMenuOpen });
+
+export { mpIntroLeadMs, mpRender, mpRosterHTML, mpChatFeedHTML, mpConfHTML, mpStartListenWindow, mpAvatarColor, REACTIONS, mpRevealAutoMs, mpRevealAutoText, mpArmLeftText, mpIsSalonHost, mpTvLobbyOn };

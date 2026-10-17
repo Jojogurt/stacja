@@ -14,10 +14,10 @@ const SHELL = [
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
   './core/util.js', './core/scoring.js', './core/match.js', './core/phases.js',
   './core/mpReducer.js', './core/matchRecord.js', './core/trackSelect.js',
-  './core/timing.js', './core/timeline.js', './core/picker.js', './core/matchSetup.js', './core/guitarCovers.js', './core/chatFeed.js', './core/teams.js', './core/handles.js', './core/daily.js', './core/lektorVoice.js',
+  './core/timing.js', './core/timeline.js', './core/picker.js', './core/matchSetup.js', './core/guitarCovers.js', './core/chatFeed.js', './core/teams.js', './core/handles.js', './core/daily.js', './core/lektorVoice.js', './core/qr.js', './core/tvStage.js',
   './app/dom.js', './app/lektor.js', './app/audioCtx.js', './app/audio.js',
   './app/catalog.js', './app/solo.js', './app/social.js', './app/catEditor.js',
-  './app/mp-state.js', './app/mp-picker.js', './app/mp-render.js', './app/mp.js', './app/sfx.js', './app/icons.js', './app/daily.js',
+  './app/mp-state.js', './app/mp-picker.js', './app/mp-render.js', './app/mp-tv.js', './app/mp.js', './app/sfx.js', './app/icons.js', './app/daily.js',
   './app/cover.js',   // EKSPERYMENT: tryb „okładka"
   './app/listen.js',  // Łamigłówki: „▶ posłuchaj" w odsłonie
   './app/vinyl.js',   // płyta winylowa = kontrolka odtwarzania (wszystkie tryby z dźwiękiem)
