@@ -3,8 +3,7 @@
 Jedno miejsce z otwartymi sprawami. Szczegóły i historia w plikach obok:
 `audyt-2026-10.md` (+ `audyt-2026-10/WYDANIE.md`), `gust-muzyczny.md`, `przeglad-mp-2026-10.md` (+ zrzuty w `przeglad-mp-2026-10/`, poza gitem).
 
-Produkcja: klient v69 (GitHub Pages), **Worker v70 (wersja `a8ea55c0…`, 2026-10-17)**, migracja D1 `0005_taste.sql` zastosowana.
-**Klient v70 czeka na wydanie** (push `main` → GitHub Pages) — Worker już jest; stary klient v69 z nowym Workerem działa (nowe tryby ukryte).
+Produkcja: **klient v70 (GitHub Pages, 2026-10-17)**, **Worker v70 (wersja `a8ea55c0…`, 2026-10-17)**, migracja D1 `0005_taste.sql` zastosowana.
 Wydawanie: najpierw Worker (`cd server && wrangler deploy` — token z `~/.zshrc` `CLOUDFLARE_API_TOKEN` + `CLOUDFLARE_ACCOUNT_ID=fb55a9a3ef0395e40a5af221b3d40aa1`; instrukcja w `server/README.md`), potem merge na `main` z podbitym `APP_VERSION` (app.js) i `CACHE` (sw.js). Lokalny serwer do testów MP: `wrangler dev --local --port 8787 --var TOKEN_SECRET:dev-secret-local` + klient `?rooms=http://127.0.0.1:8787` (działa tylko na localhost).
 
 ## Zrobione w v70
