@@ -1954,6 +1954,19 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
   });
   ok($(window,'coverBox').hidden && !window.document.body.classList.contains('cover-mode'), 'koniec meczu chowa okładkę i cover-mode');
 });
+await group('zgłoszenie 2026-10-18: mecz z okładką porzucony w trakcie → nowy mecz z wiedzą BEZ starej okładki pod pytaniem', async ()=>{
+  await eksSolo(/okładka/, async (w)=>{
+    const box=$(w,'coverBox'), coverMod=await import('../app/cover.js');
+    ok(box && !box.hidden && coverMod._coverDebug().timer, 'okładka widoczna, auto-odsłona uzbrojona');
+    // wyjście w trakcie (bez sprawdzania) i nowy mecz z kategorią wiedzy
+    $(w,'toMenu').click(); await settle(2); $(w,'goSolo').click(); await settle(2);
+    const { quiz } = catsByKind(w);
+    await f2aStartMatch(quiz);
+    for(let i=0;i<100 && $(w,'check').disabled;i++) await settle(2);
+    ok(w.document.body.classList.contains('quiz-mode') && !w.document.body.classList.contains('cover-mode'), 'nowy mecz: tryb quizu, bez cover-mode');
+    ok(box.hidden && !coverMod._coverDebug().timer, 'okładka poprzedniego meczu schowana, timer odsłony zatrzymany');
+  });
+});
 await group('EKSP. MP: picker — „od tyłu krótko" z nowym serwerem, składanka/okładka nigdy', async ()=>{
   const w=window; const ws=await f6bRoom();
   ws.pushState({ phase:null, hostId:ws._id }); await settle(4);

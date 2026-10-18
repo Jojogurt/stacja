@@ -380,7 +380,7 @@ function disableRoundControls(){
    na `if(busy) return` (a gałka grała utwór z poprzedniego meczu). */
 function abandonRound(){
   soloGen++; busy=false; current=null; roundDone=true;
-  coverStop(false);   // EKSPERYMENT: timer odsłony okładki
+  coverHide();   // okładka: timer odsłony + pudełko (porzucony mecz nie zostawia okładki na nowym — zgłoszenie 2026-10-18)
   disableRoundControls();
 }
 // klasy trybu na body: quiz-mode (bez gałki) i lektor-mode („lepszy głos" tylko dla lektora)
@@ -426,7 +426,7 @@ function lektorPool(){
 
 async function newLektorRound(){
   soloGen++;   // 2.1: nowa runda lektora — unieważnij wcześniejszą syntezę/rozwiązanie
-  busy=true; roundDone=false; current=null; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  busy=true; roundDone=false; current=null; stopAudio(); coverHide(); hideReveal(); hideSummary(); resetForm();   // coverHide: jak w quizie
   if(session) updateSessUI();
   setIcon('wait'); setState('strojenie…');
   disableRoundControls();
@@ -460,7 +460,7 @@ async function newLektorRound(){
 // wiedza ogólna (solo): pytanie z puli kategorii, bez audio — wzorem newLektorRound
 function newQuizRound(){
   soloGen++;   // 2.1: nowa runda quizu — unieważnij wcześniejszy async
-  busy=true; roundDone=false; current=null; stopAudio(); hideReveal(); hideSummary(); resetForm();
+  busy=true; roundDone=false; current=null; stopAudio(); coverHide(); hideReveal(); hideSummary(); resetForm();   // coverHide: okładka poprzedniego pytania (zgłoszenie 2026-10-18 — zostawała pod pytaniem quizu)
   if(session) updateSessUI();
   disableRoundControls();
   const eraKey = selectedEra==='rnd' ? ALL_KEYS[Math.floor(Math.random()*ALL_KEYS.length)] : selectedEra;
@@ -679,7 +679,7 @@ function endMatch(){
   session=null;
   document.getElementById('session').classList.remove('live');
   document.body.classList.remove('playing','quiz-mode','lektor-mode','intro-mode','revsnip-mode','cover-mode','tempo-mode','slowmo-mode','timeline-mode','match-over','daily');
-  hideSummary(); stopAudio(); setIcon('play'); hideOfflineOffer();
+  hideSummary(); stopAudio(); coverHide(); setIcon('play'); hideOfflineOffer();
   soloHead('Nowy mecz');   // 5.7: powrót do tytułu pickera
   renderPicker();          // „Z mojej półki": ❤️ z odsłon meczu → odśwież gotowiec
 }

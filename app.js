@@ -10,7 +10,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v74';   // sędzia AI (Workers AI, Qwen3) dla odpowiedzi tekstowych + „Uznaj” większością graczy
+const APP_VERSION = 'v75';   // solo: okładka porzuconego pytania/meczu nie zostaje pod pytaniem quizu/lektora
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).
