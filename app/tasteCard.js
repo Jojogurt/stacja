@@ -49,21 +49,27 @@ function bars(ctx, title, rows, y, color){
 const rowsOf = (v, label) => topList(v, 3, label).map(s=>{ const m=s.match(/^(.*) (\d+)%$/); return m ? [m[1], +m[2]] : [s, 0]; });
 
 /* rysuje kartę na podanym kontekście 2D (testowalne fałszywym ctx) */
-export function drawTasteCard(ctx, p, { handle='', url='' }={}){
+export function drawTasteCard(ctx, p, { handle='', url='', logo=null }={}){
   const a=p.archetype;
   // tło + akcenty
   ctx.fillStyle=C.bg; ctx.fillRect(0, 0, CARD_W, CARD_H);
   ctx.fillStyle=C.green; ctx.fillRect(0, 0, CARD_W, 14);
   ctx.globalAlpha=0.12; ctx.fillStyle=C.blue; ctx.beginPath(); ctx.arc(980, 120, 220, 0, Math.PI*2); ctx.fill();
   ctx.fillStyle=C.gold; ctx.beginPath(); ctx.arc(60, 1290, 180, 0, Math.PI*2); ctx.fill(); ctx.globalAlpha=1;
-  // marka
-  ctx.textAlign='left'; ctx.font=f(900, 58);
-  const w1=ctx.measureText('Uszy ').width, w2=ctx.measureText('& ').width;
-  ctx.fillStyle=C.green; ctx.fillText('Uszy ', 60, 112);
-  ctx.fillStyle=C.gold; ctx.fillText('& ', 60+w1, 112);
-  ctx.fillStyle=C.green; ctx.fillText('Mózg', 60+w1+w2, 112);
+  // marka: logo graficzne (icons/logo.webp, wczytane przez renderTasteCard); brak obrazu → napis jak dawniej
+  ctx.textAlign='left';
+  if(logo && logo.naturalWidth){
+    const lh=112, lw=Math.round(lh*logo.naturalWidth/logo.naturalHeight);
+    ctx.drawImage(logo, 52, 30, lw, lh);
+  } else {
+    ctx.font=f(900, 58);
+    const w1=ctx.measureText('Uszy ').width, w2=ctx.measureText('& ').width;
+    ctx.fillStyle=C.green; ctx.fillText('Uszy ', 60, 112);
+    ctx.fillStyle=C.gold; ctx.fillText('& ', 60+w1, 112);
+    ctx.fillStyle=C.green; ctx.fillText('Mózg', 60+w1+w2, 112);
+  }
   ctx.fillStyle=C.muted; ctx.font=f(800, 30);
-  ctx.fillText((handle ? 'GUST MUZYCZNY: '+handle : 'MÓJ GUST MUZYCZNY').toUpperCase().slice(0, 48), 60, 164);
+  ctx.fillText((handle ? 'GUST MUZYCZNY: '+handle : 'MÓJ GUST MUZYCZNY').toUpperCase().slice(0, 48), 60, 180);
   // karta archetypu
   ctx.fillStyle=C.bg2; rr(ctx, 60, 200, 960, 360, 36); ctx.fill();
   ctx.strokeStyle=C.line; ctx.lineWidth=4; rr(ctx, 60, 200, 960, 360, 36); ctx.stroke();
@@ -116,7 +122,17 @@ export async function renderCardPng(draw, w = CARD_W, h = CARD_H){
     return await new Promise(res=>{ try{ cv.toBlob(b=>res(b||null), 'image/png'); }catch(_e){ res(null); } });
   }catch(_e){ return null; }
 }
-export async function renderTasteCard(p, opts={}){ return renderCardPng(ctx=>drawTasteCard(ctx, p, opts)); }
+// logo do kart PNG (ten sam origin — canvas nie jest „skażony", toBlob działa); limit 1,5 s, błąd → null (napis)
+export function loadLogo(src='icons/logo.webp', ms=1500){
+  return new Promise(res=>{
+    try{
+      const im=new Image(); let done=false; const end=(v)=>{ if(!done){ done=true; res(v); } };
+      im.onload=()=>end(im.naturalWidth ? im : null); im.onerror=()=>end(null); setTimeout(()=>end(null), ms);
+      im.src=src;
+    }catch(_e){ res(null); }
+  });
+}
+export async function renderTasteCard(p, opts={}){ const logo=await loadLogo(); return renderCardPng(ctx=>drawTasteCard(ctx, p, { ...opts, logo })); }
 
 async function copyText(text){
   const nav=typeof navigator!=='undefined' ? navigator : null;

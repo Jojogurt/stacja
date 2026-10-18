@@ -1497,6 +1497,8 @@ function mpTvLobbyOn(){ return !!(S.host && S.code && (!S.game || S.game.phase==
 const tvJoin = ()=> tvJoinUrl(typeof location!=='undefined' ? location : {}, S.code||'');
 const tvInitial = (nm)=> escapeHtml(String(nm||'?').slice(0,1).toUpperCase());
 const tvPlural = (n, one, few, many)=> n===1 ? one : ([2,3,4].includes(n%10) && ![12,13,14].includes(n%100)) ? few : many;
+// logo graficzne w nagłówku TV (icons/logo.webp; alt = nazwa — czytniki ekranu / brak obrazu)
+const TV_LOGO = '<img class="tv-logo" src="icons/logo.webp" width="960" height="482" alt="Uszy &amp; Mózg" decoding="async">';
 function tvSkeleton(st){
   let root=st.firstElementChild;
   if(!(root && root.classList.contains('tv-scene') && st.children.length===1)){
@@ -1542,7 +1544,7 @@ function mpRenderTvLobby(st){
       return `<li class="tv-lteam" style="--tc:${col}"><b><i></i>${escapeHtml(t.name||'drużyna')}</b><ul class="tv-lplist">${t.members.map(id=>byId[id] ? lp(byId[id], col) : '').join('')}</ul></li>`; }).join('');
   } else players=ps.map(m=>lp(m)).join('');
   sk.top.dataset.ph='card';
-  tvPatch(sk.top, `<div class="tv-brand">Uszy &amp; Mózg <small>salon · lobby</small></div><div class="tv-top-mid"><span class="tv-pill">📺 Telefony to piloty — muzyka i pytania na tym ekranie</span></div>${tvMenuBtnHTML()}`);
+  tvPatch(sk.top, `<div class="tv-brand">${TV_LOGO}<small>salon · lobby</small></div><div class="tv-top-mid"><span class="tv-pill">📺 Telefony to piloty — muzyka i pytania na tym ekranie</span></div>${tvMenuBtnHTML()}`);
   tvPatch(sk.left, `<div class="tv-join"><h1 class="tv-h1">Dołączcie telefonem</h1>
       <div class="tv-join-row"><div class="tv-join-qr">${tvQrSVG(url)}</div>
         <div class="tv-join-info"><div class="tv-join-code"><small>KOD POKOJU</small><b>${escapeHtml(S.code||'····')}</b></div>
@@ -1580,7 +1582,7 @@ function tvTopHTML(g){
   const ph=mpPhaseNow(g);
   const rail=MP_PHASES.map(([k,e])=>`<span class="tv-rail-i${k===ph?' on':''}"><i aria-hidden="true">${e}</i>${k===ph?`<b>${escapeHtml(mpPhaseLabel(g,k))}</b>`:''}</span>`).join('<span class="tv-rail-sep" aria-hidden="true">›</span>');
   const rounds=(Number(g.rounds)||1)>1 ? `<span class="tv-round">Runda ${num(g.round||1)}/${num(g.rounds)}</span>` : '';
-  return `<div class="tv-brand">Uszy &amp; Mózg <small>salon · ${escapeHtml(FORMAT_LABEL[g.format]||FORMAT_LABEL.coop)}</small></div>
+  return `<div class="tv-brand">${TV_LOGO}<small>salon · ${escapeHtml(FORMAT_LABEL[g.format]||FORMAT_LABEL.coop)}</small></div>
     <div class="tv-top-mid"><div class="tv-rail" role="img" aria-label="faza: ${escapeHtml(ph?mpPhaseLabel(g,ph):'karta pytania')}">${rail}</div>${rounds}</div>${tvCornerHTML()}${tvMenuBtnHTML()}`;
 }
 // coop: odpowiedź drużyny (TV-sędzia widzi i nadpisuje klikiem w tablicę) — w Solo/Drużynach NIGDY (TV widzą wszyscy)

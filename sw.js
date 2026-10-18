@@ -8,7 +8,7 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v80';
+const CACHE = 'stacja-v81';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',

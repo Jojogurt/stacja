@@ -2707,6 +2707,11 @@ await group('Twój gust etap 2: Mój profil (pewność/CTA → archetyp, wykresy
     ok(f && f.name==='moj-gust-uszy-mozg.png' && f.type==='image/png', 'plik: moj-gust-uszy-mozg.png (image/png)');
     eq2(cvSize, '1080x1350', 'canvas 1080×1350');
     ok(texts.some(t=>/Dziecko lat 90/.test(t)) && texts.some(t=>/Mózg/.test(t)) && texts.some(t=>/TOP DEKADY/.test(t)), 'karta: archetyp, nazwa aplikacji, top dekady');
+    { const tc=await import('../app/tasteCard.js'); const drawn=[], tx=[];
+      const fake=new Proxy({}, { get:(o,k)=> k==='measureText' ? (()=>({width:10})) : k==='drawImage' ? ((im,x,y,w,h)=>drawn.push([x,y,w,h])) : k==='fillText' ? ((t)=>tx.push(String(t))) : (typeof k==='string' && /^(fill|stroke|beginPath|arc|moveTo|lineTo|quadraticCurveTo|arcTo|closePath|rect|save|restore|clip|fillRect)$/.test(k) ? (()=>{}) : o[k]), set:(o,k,v)=>{ o[k]=v; return true; } });
+      const tp=await import('../core/tasteProfile.js'); const prof=tp.buildTasteProfile([], {});
+      if(prof){ tc.drawTasteCard(fake, prof, { logo:{ naturalWidth:960, naturalHeight:482 } });
+        ok(drawn.length===1 && drawn[0][3]===112 && drawn[0][2]===Math.round(112*960/482) && !tx.some(t=>/^Mózg$/.test(t)), 'karta: logo graficzne zamiast napisu (gdy obraz wczytany) — '+JSON.stringify(drawn)); } }
     ok(/Dziecko lat 90\./.test(shareArg.text) && /Na mojej półce: Backstreet Boys, Spice Girls/.test(shareArg.text) && /https:\/\/stacja\.test\//.test(shareArg.text), 'tekst: archetyp, top 3 z półki, link');
     ok(!/Zbyszek/.test(shareArg.text), 'bez ksywy domyślnie (brak danych osobowych)');
     await until(()=>/Udostępniono/.test(d.querySelector('[data-gu-share-msg]').textContent));
