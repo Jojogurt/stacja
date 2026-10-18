@@ -1687,16 +1687,16 @@ group('EKSP. scoring: „tylko wykonawca" (składanka/okładka), mnożniki etap�
   eq(S8.scoreRound({ okArtist:false, okAlbum:true, artistOnly:true, streak:5 }).streakMult,1,'bez wykonawcy — bez serii');
   const sp=S8.scoreRound({ okArtist:true, artistOnly:true, elapsedMs:0 }); eq(sp.points,150,'szybkość jak quiz (+50%)');
   eq(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, mult:S8.coverMult(0) }).points,240,'okładka etap 0: ×2');
-  eq(S8.COVER_MULTS,[2,1.6,1.3,1.1,1],'mnożniki okładki: ×2.0 → ×1.6 → ×1.3 → ×1.1 → ×1.0 (5 etapów)');
+  eq(S8.COVER_MULTS,[2,1.6,1.3,1.1,0.8],'mnożniki okładki: ×2.0 → ×1.6 → ×1.3 → ×1.1 → ×0.8 (5 etapów; 100 bloków = nazwa czytelna)');
   eq(S8.COVER_MULTS.length,T8.COVER_STAGES.length,'mnożnik na każdy etap odsłony');
   ok(S8.COVER_MULTS.every((m,i,a)=>i===0 || m<a[i-1]),'mnożniki maleją');
-  eq(S8.coverMult(2),1.3,'40×40 ×1.3'); eq(S8.coverMult(3),1.1,'64×64 ×1.1'); eq(S8.coverMult(4),1,'100×100 ×1'); eq(S8.coverMult(99),1,'poza zakresem → ×1'); eq(S8.coverMult('x'),1,'śmieci → ×1');
+  eq(S8.coverMult(2),1.3,'40×40 ×1.3'); eq(S8.coverMult(3),1.1,'64×64 ×1.1'); eq(S8.coverMult(4),0.8,'100×100 ×0,8'); eq(S8.coverMult(99),0.8,'poza zakresem → ostatni etap ×0,8'); eq(S8.coverMult('x'),0.8,'śmieci → ostatni etap ×0,8');
   eq(S8.coverMult(1),1.6,'etap 24×24 ×1.6');
   eq(S8.REVSNIP_MULTS,[1,0.8],'od tyłu krótko: 3 s ×1, 5 s ×0,8');
   eq(S8.scoreRound({ okTitle:true, okArtist:true, mult:S8.revsnipMult(1) }).points,80,'„dłużej" → 100 × 0,8');
   ok(S8.scoreRound({ okArtist:true, okAlbum:true, artistOnly:true, elapsedMs:0, streak:9, mult:2 }).points<=S8.SCORE_MAX_PER_Q,'limit ligi bez zmian');
   eq(S8.scoreLegend('medley'),'wykonawca 100 · szybkość · seria','legenda składanki');
-  ok(/wykonawca 100 · album \+20/.test(S8.scoreLegend('cover')) && /×2,0 → ×1,0/.test(S8.scoreLegend('cover')),'legenda okładki');
+  ok(/wykonawca 100 · album \+20/.test(S8.scoreLegend('cover')) && /×2,0 → ×0,8/.test(S8.scoreLegend('cover')),'legenda okładki');
   ok(/„dłużej" ×0,8/.test(S8.scoreLegend('revsnip')),'legenda od tyłu krótko');
 });
 group('EKSP. match: tryby, etykiety, MP (revsnip tak, składanka/okładka tylko solo), modesFor', ()=>{
@@ -3233,8 +3233,8 @@ group('MP okładka: coverStageUrl / coverFullUrl — anty-podglądanie (iTunes /
   eq(T.coverFullUrl(unk), unk, 'nieznany CDN: odsłona → oryginał');
   eq([T.coverFullUrl('http://is1-ssl.mzstatic.com/a/600x600bb.jpg'), T.coverFullUrl('javascript:x'), T.coverStageUrl(null,0)], ['','',''], 'tylko https');
   eq([T.coverStageable(it), T.coverStageable(dz), T.coverStageable(unk), T.coverStageable('')], [true,true,false,false], 'coverStageable: tylko znane CDN (serwer: inaczej pytanie jak muzyka)');
-  eq([SC.coverMult(0), SC.coverMult(1), SC.coverMult(2), SC.coverMult(9)], [2, 1.6, 1.3, 1], 'mnożniki: ×2.0 → ×1.6 → ×1.3 → … → ×1.0');
-  ok(/×2,0 → ×1,0/.test(SC.scoreLegend('cover')), 'legenda okładki (od ×2.0 do ×1.0)');
+  eq([SC.coverMult(0), SC.coverMult(1), SC.coverMult(2), SC.coverMult(9)], [2, 1.6, 1.3, 0.8], 'mnożniki: ×2.0 → ×1.6 → ×1.3 → … → ×0.8');
+  ok(/×2,0 → ×0,8/.test(SC.scoreLegend('cover')), 'legenda okładki (od ×2.0 do ×0.8)');
 });
 group('MP okładka/intro: dostępność (autorytet tak, relay nie), ekran „Nowy mecz"', ()=>{
   ok(!M.SOLO_ONLY_MODES.includes('cover') && !M.SOLO_ONLY_MODES.includes('intro') && M.MP_MODES.includes('cover') && M.MP_MODES.includes('intro'), 'okładka i intro w MP_MODES');

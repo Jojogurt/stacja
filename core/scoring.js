@@ -303,7 +303,7 @@ export function revsnipMult(stage){
 }
 /* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 24 → 40 → 64 → 100 bloków; pełna tylko
  * w odsłonie): ×2.0 przy 16×16, ×1.6 przy 24×24, ×1.3 przy 40×40, ×1.1 przy 64×64, ×1.0 przy 100×100 (bez bonusu za szybkość — jak intro). */
-export const COVER_MULTS = [2.0, 1.6, 1.3, 1.1, 1.0];
+export const COVER_MULTS = [2.0, 1.6, 1.3, 1.1, 0.8];   // ostatni etap (100 bloków) — nazwa zespołu bywa czytelna → ×0,8 (decyzja 2026-10-18)
 export function coverMult(stage){
   const i = Math.floor(Number(stage));
   return COVER_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(COVER_MULTS.length-1, i)) : COVER_MULTS.length-1];

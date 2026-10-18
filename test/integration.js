@@ -3671,7 +3671,7 @@ await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu
   ws.pushState(cov({ playNonce:9901, stage:4, coverStage:4, coverArt:base+'100x100bb.jpg' })); await settle(6);
   box=$(w,'mpStage').querySelector('.mp-cover');
   ok(box && box.dataset.art===base+'100x100bb.jpg' && box.dataset.blocks==='100', 'nowy etap ze stanu → nowy obraz (bez własnych timerów)');
-  ok($(w,'mpMore').disabled && /×1,0/.test(aStage()), 'ostatni etap (100×100, ×1,0): „wyraźniej" nieaktywne — pełna tylko w odsłonie');
+  ok($(w,'mpMore').disabled && /×0,8/.test(aStage()), 'ostatni etap (100×100, ×0,8): „wyraźniej" nieaktywne — pełna tylko w odsłonie');
   eq2(($(w,'mpProp_artist') || $(w,'mpTyp_artist')).value, 'Toto', 'wpisany typ nie ginie przy zmianie etapu');
   ws.pushState(cov({ playNonce:9902, coverArt:'javascript:alert(1)//"><b>x' })); await settle(8);
   box=$(w,'mpStage').querySelector('.mp-cover');
