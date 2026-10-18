@@ -19,7 +19,7 @@ import { coverShow, coverStage, coverStop, coverHide } from './cover.js';   // E
 import { recordMatch, ensureSession, judgeRemote } from '../adapters-web/cf.js';
 import { judgeRequestsFor } from '../core/mpReducer.js';   // sędzia AI: te same twarde reguły co serwer (core/judge.judgeEligible)
 import { aiAcceptance, matchWithAi, JUDGE_CLIENT_TIMEOUT_MS } from '../core/judge.js';
-import { setIcon, setRing, setState, setLive, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML } from './dom.js';
+import { setIcon, setRing, setState, setLive, flash, animIn, confetti, val, resetForm, hideReveal, showLyric, hideLyric, lsGet, lsSet, promptBodyHTML, copyQBtnHTML } from './dom.js';
 import { listenStart, listenHTML, unlockListen } from './listen.js';   // Łamigłówki: „▶ posłuchaj" w odsłonie
 import { tasteHeartHTML, tasteStore, onTaste } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie + gotowiec „Z mojej półki"
 import { shelfCategory, shelfSongs, SHELF_PLAY_MIN, SHELF_QUESTIONS } from '../core/tasteCompare.js';   // etap 3: „Zagraj z półki" (+ gotowiec „Z mojej półki")
@@ -313,7 +313,7 @@ function syncIntroBtn(){
   const qm=qMode(), live=!!current && !roundDone;
   let nx=null, label='+ więcej';
   if(qm==='revsnip'){ nx=current ? revsnipNextStage(current.revStage||0) : null; label = nx!=null ? '+ dłużej ('+revsnipStageSecs(nx)+' s)' : 'dłużej ✓'; }
-  else if(qm==='cover'){ nx=current ? coverNextStage(current.coverStage||0) : null; label='wyraźniej'; }   // pełna okładka dopiero w odsłonie (po ostatnim 64×64 przycisk nieaktywny)
+  else if(qm==='cover'){ nx=current ? coverNextStage(current.coverStage||0) : null; label='wyraźniej'; }   // pełna okładka dopiero w odsłonie (po ostatnim 100×100 przycisk nieaktywny)
   else if(qm==='slowmo'){ nx=current ? tempoNextStage('slowmo', current.tempoStage||0) : null;   // EKSPERYMENT: 0.6× → 0.75×
     label = nx!=null ? 'szybciej ('+fmtRate(tempoRate('slowmo', nx))+')' : 'tempo '+fmtRate(tempoRate('slowmo', current ? current.tempoStage||0 : 0))+' ✓'; }
   else { nx = current && mode==='intro' ? introNextStage(current.introStage) : null; label = nx!=null ? '+ więcej ('+introStageSecs(nx)+' s)' : '+ więcej'; }
@@ -553,7 +553,7 @@ function renderYearForm(qf){
   }; });
 }
 function showPrompt(text, style){ const b=document.getElementById('lyricBox'); if(!b) return;
-  b.innerHTML='<span class="lyric-cap">pytanie</span>'+promptBodyHTML(text, style); b.classList.add('quiz'); b.classList.toggle('rebus', style==='rebus'); b.hidden=false; }
+  b.innerHTML='<span class="lyric-cap">pytanie'+copyQBtnHTML()+'</span>'+promptBodyHTML(text, style); b.dataset.copy=String(text||''); b.classList.add('quiz'); b.classList.toggle('rebus', style==='rebus'); b.hidden=false; }
 document.getElementById('skip').onclick=()=>{
   if(roundDone) return;   // F2a #4: pytanie już ocenione („Sprawdź") — drugi wpis tego samego pytania zablokowany
   roundDone=true; document.getElementById('check').disabled=true; document.getElementById('skip').disabled=true; syncIntroBtn(); coverStop(false);

@@ -1258,7 +1258,7 @@ function stubCover(room, cover=COVER){
   room.coverStepMs=150; room.stageLeadMs=30;   // krótki harmonogram w teście (prod: 6 s, LEAD = MP_INTRO_MS)
 }
 const until=async(fn, ms=1500)=>{ const t0=Date.now(); while(!fn() && Date.now()-t0<ms) await sleep(5); return fn(); };
-await group('MP okładka: runda cover → ARMING bez audio → PLAY etap 0 (16×16) → podbicia etapów (do 64×64) → mnożnik → REVEAL z pełną okładką', async ()=>{
+await group('MP okładka: runda cover → ARMING bez audio → PLAY etap 0 (16×16) → podbicia etapów (do 100×100) → mnożnik → REVEAL z pełną okładką', async ()=>{
   const { room } = await makeRoom();
   const a=await room.connect('A','Ala'), b=await room.connect('B','Bo');
   stubCover(room);
@@ -1276,18 +1276,18 @@ await group('MP okładka: runda cover → ARMING bez audio → PLAY etap 0 (16×
   eq([g.stage, g.coverStage], [0, 0], 'etap 0');
   ok(/\/16x16bb\.jpg$/.test(g.coverArt), 'etap 0: obraz 16×16 — '+g.coverArt);
   ok(!JSON.stringify(g).includes('600x600'), 'PLAY etap 0: pełny URL nie trafia do stanu');
-  eq(g.stageStarts.map(t=>t-g.playAt), [30,180,330], 'rzeczywiste starty etapów w stanie (LEAD 30 + krok 150 ms w teście)');
+  eq(g.stageStarts.map(t=>t-g.playAt), [30,180,330,480,630], 'rzeczywiste starty etapów w stanie (LEAD 30 + krok 150 ms w teście)');
   eq([g.stageAt, g.stageNextAt], [g.playAt+30, g.playAt+180], 'stageAt / stageNextAt');
-  eq(g.listenEndsAt-g.playAt, 900+300, 'okno „patrz" do ostatniego etapu → czas na odpowiedź po nim');
+  eq(g.listenEndsAt-g.playAt, 900+600, 'okno „patrz" do ostatniego etapu → czas na odpowiedź po nim');
   await room.msg(a, { t:'action', action:{ type:'propose', values:{ artist:'toto', album:'Toto IV' }, at:1 } });
   const p=room.game.byTeam.all.proposals[0];
   ok(p.at>=g.playAt && p.at<=Date.now(), 'czas propozycji z zegara serwera (klientowe at:1 zignorowane)');
   ok(await until(()=>room.game.stage>=1), 'timer DO podbił etap');
   const g1=b.last('state').game;
-  ok(g1.stage>=1 && /\/(24x24|40x40)bb\.jpg$/.test(g1.coverArt), 'broadcast etapu z nowym URL — '+g1.coverArt);
-  ok(await until(()=>room.game.stage===2), 'etap 2 (64×64)');
+  ok(g1.stage>=1 && /\/(24x24|40x40|64x64|100x100)bb\.jpg$/.test(g1.coverArt), 'broadcast etapu z nowym URL — '+g1.coverArt);
+  ok(await until(()=>room.game.stage===4), 'etap 4 (100×100)');
   const g2=b.last('state').game;
-  ok(/\/40x40bb\.jpg$/.test(g2.coverArt) && !JSON.stringify(g2).includes('600x600'), 'ostatni etap 40×40 — pełny URL dalej ukryty');
+  ok(/\/100x100bb\.jpg$/.test(g2.coverArt) && !JSON.stringify(g2).includes('600x600'), 'ostatni etap 100×100 — pełny URL dalej ukryty');
   eq(room.game.stageNextAt, null, 'po ostatnim etapie brak kolejnego terminu');
   await sleep(30);
   ok(!room._stageTimer, 'timer etapów zatrzymany po ostatnim');
@@ -1325,9 +1325,15 @@ await group('MP okładka: „wyraźniej" (dowolny gracz) — następny etap od r
   await room.msg(a, { t:'more', playNonce:g0.playNonce, stage:0 });   // spóźniony duplikat (A kliknął na etapie 0)
   eq(room.game.stage, 1, 'duplikat „wyraźniej" dla etapu 0 → nie przeskakuje dwóch etapów');
   await room.msg(a, { t:'more', playNonce:g0.playNonce, stage:1 });
-  eq(room.game.stage, 2, 'etap 2 (64×64)');
+  eq(room.game.stage, 2, 'etap 2 (40×40)');
   await room.msg(b, { t:'more', playNonce:g0.playNonce, stage:2 });
-  eq(room.game.stage, 2, 'ostatni etap — dalej nie ma (pełna tylko w odsłonie)');
+  eq(room.game.stage, 3, 'etap 3 (64×64)');
+  ok(/\/64x64bb\.jpg$/.test(b.last('state').game.coverArt), 'obraz 64×64');
+  const e4=await room.connect('E','Ewa');   // świeże połączenie — bucket „more" (burst 2) per połączenie
+  await room.msg(e4, { t:'more', playNonce:g0.playNonce, stage:3 });
+  eq(room.game.stage, 4, 'etap 4 (100×100)');
+  await room.msg(e4, { t:'more', playNonce:g0.playNonce, stage:4 });
+  eq(room.game.stage, 4, 'ostatni etap — dalej nie ma (pełna tylko w odsłonie)');
   ok(!b.last('state').game.coverArt.includes('600x600'), 'nadal bez pełnej okładki');
   // rate-limit (bucket 'more': burst 2) — flood nie przesuwa harmonogramu w nieskończoność
   const d=await room.connect('D','Dee'); let sent=0;
@@ -1734,7 +1740,7 @@ await group('sędzia AI: werdykt TAK zalicza („czerwonego"), oznaczenie aiOk w
   const rv=a.last('state').game.reveal;
   eq([rv.teamOk, rv.gained>=100, rv.aiOk], [true, true, { a:true }], 'TAK → trafienie + aiOk');
   eq(AI.calls.length, 1, 'jedno wywołanie modelu');
-  ok(/qwen3/.test(AI.calls[0].model) && AI.calls[0].input.temperature===0, 'model + temperature 0');
+  ok(/llama-3\.3/.test(AI.calls[0].model) && AI.calls[0].input.temperature===0, 'model + temperature 0');
   eq(guessOf(AI.calls[0].input.messages[1].content), 'czerwonego', 'typ gracza w ogranicznikach');
   eq(a.last('state').game.accept, null, 'trafione → bez „Uznaj"');
 });

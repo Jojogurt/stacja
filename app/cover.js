@@ -1,11 +1,11 @@
 /* app/cover.js — EKSPERYMENT: tryb „okładka" (solo). Okładka albumu odsłaniana ETAPAMI rozdzielczości
- * (core/timing.COVER_STAGES: 16 → 24 → 40 bloków na bok), auto co COVER_STEP_MS (6 s) albo przyciskiem
+ * (core/timing.COVER_STAGES: 16 → 24 → 40 → 64 → 100 bloków na bok), auto co COVER_STEP_MS (6 s) albo przyciskiem
  * „wyraźniej" (app/solo.js). PEŁNA okładka (często z nazwą zespołu) dopiero w odsłonie — coverStop(true).
  *
  * CORS: obraz z iTunes CDN (mzstatic) ładujemy BEZ crossOrigin i NIGDY nie czytamy pikseli (getImageData/toDataURL).
  * Rysowanie obcego obrazu na canvasie jest dozwolone — „tainted" blokuje tylko odczyt, nie wyświetlanie. Dzięki temu
  * działa niezależnie od nagłówków CDN (dziś mzstatic i tak wysyła ACAO: *). Pikselizacja: zmniejszanie połówkami
- * (64 → 32 → 16, z wygładzaniem = uśrednianie bloków), potem powiększenie na canvasie widoku z
+ * (100 → 50 → 25…, z wygładzaniem = uśrednianie bloków), potem powiększenie na canvasie widoku z
  * imageSmoothingEnabled=false (+ CSS image-rendering: pixelated jako zapas). Pełny etap = zwykły <img>.
  * Rozpikselowanie na starcie ukrywa też nazwę zespołu na okładce (bez OCR). */
 import { coverStageBlocks, coverNextStage, COVER_STEP_MS } from '../core/timing.js';
@@ -30,12 +30,12 @@ function draw(){
   coverDrawPixels(view, img, blocks);
 }
 /* WSPÓLNE (solo + MP): narysuj obraz `src` pikselowo — `blocks` bloków na bok, powiększone do `px` bez wygładzania.
- * Zmniejszanie połówkami: min(64, rozmiar źródła) → … → blocks (każdy krok uśrednia 2×2 — bez migotania przy dużej
+ * Zmniejszanie połówkami: min(rozmiar źródła, max(blocks, 64)) → … → blocks (każdy krok uśrednia 2×2 — bez migotania przy dużej
  * redukcji). MP: serwer przysyła obraz JUŻ w rozdzielczości etapu (np. 16×16) → rysowany 1:1 i powiększany. */
 export function coverDrawPixels(view, src, blocks, px=VIEW){
   const b=Math.floor(Number(blocks));
   if(!view || !src || !src.naturalWidth || !(b>0)) return false;
-  let size=Math.max(b, Math.min(64, src.naturalWidth));
+  let size=Math.min(src.naturalWidth, Math.max(b, 64));
   let small=canvas(size), c=ctx2d(small); if(!c) return false;
   c.imageSmoothingEnabled=true; c.drawImage(src, 0, 0, size, size);
   while(size>b){

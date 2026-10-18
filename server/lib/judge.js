@@ -2,7 +2,7 @@
  * Prompt, parser i twarde reguły są czyste i wspólne z klientem (core/judge.js) — tu tylko wołanie modelu,
  * timeout, cache werdyktów w izolacie i limit wywołań. Każda awaria = null („brak werdyktu") → gra ocenia
  * regułami jak dotąd (sędzia nigdy nie blokuje ani nie psuje oceny). */
-import { JUDGE_MODEL, JUDGE_TIMEOUT_MS, JUDGE_LOCK_BUDGET_MS, judgeMessages, parseVerdict, judgeKey } from '../../core/judge.js';
+import { JUDGE_MODEL, JUDGE_TIMEOUT_MS, JUDGE_LOCK_BUDGET_MS, judgeMessages, parseVerdict, judgeKey, judgeVeto } from '../../core/judge.js';
 
 const CACHE_MAX = 1000;
 const cache = new Map();          // klucz (model+pytanie+wzorzec+typ) → true/false albo Promise (wywołanie w locie)
@@ -49,7 +49,8 @@ export async function judgeAnswer(env, req, { timeoutMs = JUDGE_TIMEOUT_MS, mode
   const call = (async ()=>{
     try{
       const r = await env.AI.run(model, { messages, temperature: 0, max_tokens: /qwen3/.test(model) ? 16 : 4 });
-      return parseVerdict(textOf(r));
+      const v = parseVerdict(textOf(r));
+      return v === true && judgeVeto(req.guess, req.expected) ? false : v;   // twardy weto: zniekształcona forma wzorca
     }catch(_e){ return null; }
   })();
   remember(key, call);

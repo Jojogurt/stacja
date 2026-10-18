@@ -3,6 +3,23 @@
  * (poza flash→setIcon). Dzięki temu można je importować bez ryzyka cykli. */
 import { escapeHtml } from '../core/util.js';
 import { listenStop } from './listen.js';   // Łamigłówki: zamknięcie odsłony ucisza „▶ posłuchaj" (listen.js to też liść)
+import { ic } from './icons.js';           // liść (same ścieżki SVG)
+
+/* Kopiowanie treści pytania do schowka (zgłoszenie 2026-10-18) — sama ikonka w nagłówku pudełka pytania (solo + telefony MP;
+ * TV — CSS chowa). Tekst z `data-copy` pudełka .lyric-box; delegacja kliknięć (bez inline onclick z danymi). */
+export const copyQBtnHTML = ()=> `<button type="button" class="q-copy" data-copy-q aria-label="Kopiuj pytanie do schowka" title="Kopiuj pytanie">${ic('copy')}</button>`;
+export async function copyText(t){
+  const s=String(t==null?'':t); if(!s) return false;
+  try{ if(navigator.clipboard && navigator.clipboard.writeText){ await navigator.clipboard.writeText(s); return true; } }catch(_e){ /* zapas niżej */ }
+  try{ const ta=document.createElement('textarea'); ta.value=s; ta.setAttribute('readonly',''); ta.style.position='fixed'; ta.style.opacity='0';
+    document.body.appendChild(ta); ta.select(); const ok=document.execCommand && document.execCommand('copy'); ta.remove(); return !!ok; }catch(_e){ return false; }
+}
+if(typeof document!=='undefined') document.addEventListener('click', (e)=>{
+  const b=e.target && e.target.closest ? e.target.closest('[data-copy-q]') : null; if(!b) return;
+  const box=b.closest('.lyric-box'); const t=box ? (box.dataset.copy || '') : '';
+  copyText(t).then(ok=>{ b.classList.toggle('done', ok); b.setAttribute('aria-label', ok ? 'Skopiowano' : 'Nie udało się skopiować');
+    setTimeout(()=>{ b.classList.remove('done'); b.setAttribute('aria-label','Kopiuj pytanie do schowka'); }, 1500); });
+});
 
 /* F2a #11: bezpieczny dostęp do localStorage. Safari/Firefox z zablokowanymi danymi witryn (i iframe
    sandbox) RZUCA SecurityError już przy odczycie `localStorage` — moduł, który dotknie go przy imporcie

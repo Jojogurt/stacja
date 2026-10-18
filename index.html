@@ -476,10 +476,11 @@
   .sum-big{font-family:var(--display);font-weight:900;font-size:48px;letter-spacing:0;color:var(--green);line-height:1}
   .sum-sub{font-family:var(--display);font-weight:800;font-size:12px;letter-spacing:.03em;color:var(--muted);text-transform:uppercase;margin-top:8px}
   .sum-list{padding:6px 16px 14px;display:grid;gap:6px}
+  .sum-list{grid-template-columns:minmax(0,1fr)}   /* zgłoszenie 2026-10-18: kolumna siatki rosła do najdłuższego pytania (568 px na 393) — ucięty tekst */
   .sum-row{display:flex;align-items:center;gap:10px;font-size:14px;font-weight:700;padding:8px 0;border-top:2px solid var(--line)}
   .sum-row .n{font-family:var(--display);font-weight:800;font-size:12px;color:var(--muted);flex:0 0 22px}
   .sum-row .badge{font-size:14px;flex:0 0 auto;font-weight:900}
-  .sum-row .song{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sum-row .song{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2;line-height:1.3}   /* długie pytania quizu: 2 linie + „…" */
   .sum-row .song b{font-weight:800;color:var(--ink)}
   .sum-row .song span{color:var(--muted)}
   .sum-again{width:100%;font-family:var(--display);font-weight:800;letter-spacing:.03em;font-size:16px;
@@ -1072,9 +1073,20 @@
   /* ===== DESIGN v2 — Fala 6: gra solo (ciemna karta + equalizer) ===== */
   body.solo.playing .deck{background:#2B2440;border:none;border-radius:24px;box-shadow:none;padding:26px 20px 22px}
   body.solo.playing .deck .deck-state{color:rgba(255,255,255,.92)}
+  /* zgłoszenie 2026-10-18: pytanie quizu na ekranie → bez zbędnego „odpowiedz na pytanie" i mniejsza przerwa od góry
+     (komunikaty ładowania/błędu bez pudełka pytania zostają) */
+  body.solo.playing.quiz-mode .deck:has(#lyricBox:not([hidden])) .deck-state{display:none}
+  body.solo.playing.quiz-mode .deck:has(#lyricBox:not([hidden])){padding-top:14px}
+  /* po „Sprawdź": pola odpowiedzi i przycisk znikają (odpowiedź gracza jest w odsłonie: „Ty: …"); nowe pytanie zdejmuje .show */
+  body.solo.playing #form:has(~ #reveal.show){display:none}
   body.solo.playing .deck .deck-state.err{color:#FFB4B4}
   body.solo.playing .deck .lyric-box{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.16);color:#fff}
   body.solo.playing .deck .lyric-box .lyric-cap{color:#8fd0ff}
+  /* kopiowanie pytania: ikonka w nagłówku pudełka (po prawej) */
+  .lyric-box .q-copy{float:right;margin:-6px -6px 0 8px;width:34px;height:34px;display:inline-grid;place-items:center;border-radius:10px;border:0;background:transparent;color:var(--muted);font-size:18px;cursor:pointer}
+  .lyric-box .q-copy:hover,.lyric-box .q-copy:focus-visible{color:var(--ink);background:rgba(255,255,255,.08)}
+  .lyric-box .q-copy.done{color:var(--green)}
+  html.tv .lyric-box .q-copy{display:none}
   body.solo.playing .deck .lyric-box .rebus-hint{color:#cfe9ff}   /* Łamigłówki: podpowiedź pod rebusem na ciemnym decku */
   body.solo.playing .deck .mini button{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.2);color:rgba(255,255,255,.85)}
   body.solo.playing .deck .mini button:disabled{opacity:.35}

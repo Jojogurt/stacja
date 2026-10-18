@@ -11,7 +11,9 @@
  *
  * Pary: prawdziwe pytania z data/quiz-*.json (+ kilka muzycznych tytuł/wykonawca). `ok` = oczekiwany werdykt.
  * Najważniejsza metryka: FAŁSZYWE ZALICZENIA (ok:false, model TAK) — muszą być 0. */
-import { judgeMessages, parseVerdict } from '../core/judge.js';
+const _jm = process.argv.indexOf('--judge-module');   // porównanie promptów: --judge-module /ścieżka/do/starego/core/judge.js
+const { judgeMessages, parseVerdict, judgeVeto } = await import(_jm>=0 ? 'file://'+process.argv[_jm+1] : '../core/judge.js');
+const noVeto = process.argv.includes('--no-veto');   // bez twardego weta (czysty model)
 
 const Q = {
   neo: 'Jakiego koloru tabletkę połyka Neo, by dowiedzieć się, czym naprawdę jest Matrix?',
@@ -37,6 +39,12 @@ const Q = {
   vader: 'Czyj głos słyszymy w oryginalnej wersji, gdy mówi Darth Vader, choć w kostiumie występował David Prowse?',
   wisla: 'Najdłuższa rzeka w Polsce ma ok. 1047 km. Która to rzeka?',
   tytul: 'Podaj tytuł utworu (zajawka muzyczna).',
+  barbie: 'Jakim zlepkiem nazw określano zbieg premier „Barbie” i filmu o twórcy bomby atomowej w lipcu 2023 roku?',
+  bohemian: 'Jak brzmi tytuł słynnej sześciominutowej piosenki Queen z albumu „A Night at the Opera”, z operową częścią środkową?',
+  gwiezdne: 'Jak brzmi polski tytuł sagi George’a Lucasa „Star Wars”?',
+  wladca: 'Jak brzmi tytuł trylogii Petera Jacksona na podstawie powieści Tolkiena, której pierwsza część to „Drużyna Pierścienia”?',
+  ojciec: 'Jak brzmi tytuł filmu Francisa Forda Coppoli o rodzinie Corleone z 1972 roku?',
+  mickiewicz: 'Kto napisał epopeję narodową „Pan Tadeusz”?',
   wyk: 'Podaj wykonawcę utworu (zajawka muzyczna).',
 };
 const P = [
@@ -64,6 +72,13 @@ const P = [
   { q:Q.wisla, e:['Wisła'], g:'Wisłą', l:'rzeka', ok:true, why:'odmiana krótkiego słowa' },
   { q:Q.turcja, e:['Ankara'], g:'w Ankarze', l:'miasto', ok:true, why:'odmiana (miejscownik)' },
   { q:Q.wyk, e:['The Beatles'], g:'Beatlesów', l:'wykonawca', ok:true, why:'odmiana spolszczenia' },
+  { q:Q.barbie, e:['Barbenheimer'], g:'barbenhaimer', l:'zlepek', ok:true, why:'1 litera w tym samym słowie' },
+  { q:Q.barbie, e:['Barbenheimer'], g:'Barbenhaimer', l:'zlepek', ok:true, why:'1 litera w tym samym słowie' },
+  { q:Q.bohemian, e:['Bohemian Rhapsody'], g:'Bohemian Rapsody', l:'tytuł', ok:true, why:'literówka (1 znak)' },
+  { q:Q.gwiezdne, e:['Gwiezdne wojny'], g:'gwiezdnych wojen', l:'tytuł', ok:true, why:'odmiana tytułu' },
+  { q:Q.wladca, e:['Władca Pierścieni'], g:'Władcy Pierścieni', l:'tytuł', ok:true, why:'odmiana tytułu' },
+  { q:Q.ojciec, e:['Ojciec chrzestny'], g:'Ojciec chrzestmy', l:'tytuł', ok:true, why:'literówka (1 znak)' },
+  { q:Q.mickiewicz, e:['Adam Mickiewicz','Mickiewicz'], g:'Mickiewiczem', l:'poeta', ok:true, why:'odmiana nazwiska' },
   // ——— NIE POWINNY BYĆ ZALICZONE ———
   { q:Q.neo, e:['czerwoną','czerwony'], g:'niebieską', l:'kolor', ok:false, why:'inny kolor' },
   { q:Q.neo, e:['czerwoną','czerwony'], g:'zielonego', l:'kolor', ok:false, why:'inny kolor (odmiana)' },
@@ -89,6 +104,17 @@ const P = [
   { q:Q.wisla, e:['Wisła'], g:'Wisłoka', l:'rzeka', ok:false, why:'inna rzeka (podobny zapis)' },
   { q:Q.oscar11, e:['Titanic'], g:'Atlantyk', l:'film', ok:false, why:'skojarzenie, nie odpowiedź' },
   { q:Q.kolumb, e:['Krzysztof Kolumb','Kolumb','Cristoforo Colombo'], g:'Ferdynand Magellan', l:'osoba', ok:false, why:'inny żeglarz' },
+  { q:Q.barbie, e:['Barbenheimer'], g:'barbiemer', l:'zlepek', ok:false, why:'brakujący fragment zlepka (zgłoszenie)' },
+  { q:Q.barbie, e:['Barbenheimer'], g:'Barbenheim', l:'zlepek', ok:false, why:'ucięty zlepek' },
+  { q:Q.barbie, e:['Barbenheimer'], g:'Oppenbarbie', l:'zlepek', ok:false, why:'inny zlepek' },
+  { q:Q.bohemian, e:['Bohemian Rhapsody'], g:'Bohemian', l:'tytuł', ok:false, why:'skrócony tytuł' },
+  { q:Q.bohemian, e:['Bohemian Rhapsody'], g:'Rhapsody', l:'tytuł', ok:false, why:'połowa tytułu' },
+  { q:Q.gwiezdne, e:['Gwiezdne wojny'], g:'Gwiezdne', l:'tytuł', ok:false, why:'skrócony tytuł' },
+  { q:Q.gwiezdne, e:['Gwiezdne wojny'], g:'Gwiezdne wojenki', l:'tytuł', ok:false, why:'zmieniony fragment tytułu' },
+  { q:Q.wladca, e:['Władca Pierścieni'], g:'Władca Pierścienia', l:'tytuł', ok:false, why:'zmieniona nazwa własna' },
+  { q:Q.wladca, e:['Władca Pierścieni'], g:'Władca', l:'tytuł', ok:false, why:'skrócony tytuł' },
+  { q:Q.ojciec, e:['Ojciec chrzestny'], g:'Chrzestny', l:'tytuł', ok:false, why:'skrócony tytuł' },
+  { q:Q.ojciec, e:['Ojciec chrzestny'], g:'Ojciec chrzestniak', l:'tytuł', ok:false, why:'zniekształcony tytuł' },
 ];
 
 const args = process.argv.slice(2);
@@ -139,7 +165,8 @@ for(const model of MODELS){
       try{
         const { text, ms } = await run(model, messages);
         times.push(ms);
-        const v = parseVerdict(text);
+        let v = parseVerdict(text);
+        if(v===true && !noVeto && judgeVeto && judgeVeto(p.g, p.e)) v = false;   // jak na serwerze (server/lib/judge.js)
         if(v===null){ nulls++; bad.push(`  ? ${p.g} → ${JSON.stringify(text).slice(0,60)}`); continue; }
         if(v===p.ok) good++;
         else if(v){ falseAcc++; bad.push(`  ✗ FAŁSZYWE ZALICZENIE: „${p.g}" (wzór: ${p.e[0]}; ${p.why})`); }

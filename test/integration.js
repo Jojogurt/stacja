@@ -149,6 +149,12 @@ await group('quiz ABCD (solo): przyciski opcji + wybór + ocena + odsłona', asy
     ok(opts.length===4, 'ABCD: 4 przyciski opcji (jest: '+opts.length+')');
     ok(!$(window,'qf_a'), 'ABCD: brak pola tekstowego (klikasz zamiast pisać)');
     ok(!$(window,'lyricBox').textContent.includes('Alfa'), 'ABCD: opcje poza treścią pytania (w przyciskach)');
+    { const lb=$(window,'lyricBox'), cb=lb.querySelector('[data-copy-q]'); const copied=[]; const nav=window.navigator;
+      const prevCb=Object.getOwnPropertyDescriptor(nav,'clipboard'); Object.defineProperty(nav,'clipboard',{ value:{ writeText:async(t)=>{ copied.push(t); } }, configurable:true });
+      ok(cb && /Kopiuj pytanie/.test(cb.getAttribute('aria-label')) && !/[A-Za-z]/.test(cb.textContent.trim()), 'kopiowanie pytania: sama ikonka w nagłówku pudełka');
+      cb.click(); await settle(2);
+      ok(copied.length===1 && copied[0]===lb.dataset.copy && copied[0].length>5, 'klik → treść pytania w schowku — '+JSON.stringify(copied[0]||'').slice(0,60));
+      if(prevCb) Object.defineProperty(nav,'clipboard',prevCb); else delete nav.clipboard; }
     const bBtn=optByText('Beta');   // F3: opcje tasowane w runtime — szukamy po TEKŚCIE, nie po literze z danych
     ok(bBtn, 'ABCD: jest opcja „Beta"'); bBtn.click();
     ok(bBtn.classList.contains('sel'), 'ABCD: klik zaznacza opcję (.sel)');
@@ -1937,15 +1943,15 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
     ok(coverMod._coverDebug().timer, 'auto-odsłona uzbrojona (etap co 6 s)');
     more.click(); await settle(1);
     eq2(box.dataset.blocks, '24', '„wyraźniej" → 24×24');
-    ok(!more.disabled && /wyraźniej/.test(more.textContent), 'dalej „wyraźniej" (64×64 przed nami)');
+    ok(!more.disabled && /wyraźniej/.test(more.textContent), 'dalej „wyraźniej" (40×40, 64, 100 przed nami)');
     const src=decodeURIComponent($(w,'coverImg').getAttribute('src')||'');
     const who=(src.match(/Płyta (.+?)\//)||[])[1]||'';
     $(w,'qf_artist').value=who; $(w,'qf_album').value='Plyta '+who;
     click(w,'check'); await settle(2);
     const rm=txt(w,'rmeta').replace(/\s+/g,' ');
     ok(/Wykonawca/.test(rm) && /Album/.test(rm) && /1984/.test(rm), 'odsłona: wykonawca + album + rok — '+rm.slice(0,220));
-    ok(/24×24/.test(rm) && /mnożnik ×1,5/.test(rm), 'mnożnik etapu 24×24 = ×1,5');
-    eq2(+txt(w,'sPoints'), Math.round(120*1.5), 'punkty: (100 + album 20) × 1,5, bez bonusu za szybkość');
+    ok(/24×24/.test(rm) && /mnożnik ×1,6/.test(rm), 'mnożnik etapu 24×24 = ×1,6');
+    eq2(+txt(w,'sPoints'), Math.round(120*1.6), 'punkty: (100 + album 20) × 1,6, bez bonusu za szybkość');
     eq2(box.dataset.blocks, '0', 'po Sprawdź — pełna okładka');
     ok(/Dobrze!/.test(txt(w,'revealHead')), 'nagłówek: trafienie');
     ok(/wykonawca 100 · album \+20/.test(txt(w,'footLegend')), 'legenda okładki');
@@ -3640,7 +3646,7 @@ await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu
   const base='https://is1-ssl.mzstatic.com/image/thumb/Music/v4/aa/x.jpg/';
   const now=Date.now();
   const cov=(over={})=>playState(ws, { mode:'cover', preview:'', answerSlots:[{key:'artist',label:'wykonawca'},{key:'album',label:'album (bonus)'}],
-    stage:0, coverStage:0, coverArt:base+'16x16bb.jpg', stageStarts:[now, now+6000, now+12000], stageAt:now, stageNextAt:now+6000, ...over });
+    stage:0, coverStage:0, coverArt:base+'16x16bb.jpg', stageStarts:[now, now+6000, now+12000, now+18000, now+24000], stageAt:now, stageNextAt:now+6000, ...over });
   ws.pushState(cov({ playNonce:9901 })); await settle(8);
   let box=$(w,'mpStage').querySelector('.mp-cover');
   ok(box && box.dataset.art===base+'16x16bb.jpg' && box.dataset.blocks==='16' && box.querySelector('canvas') && !box.querySelector('img'), 'gracz: pudełko okładki z obrazem 16×16 od serwera (sam canvas — pełnej w trakcie nie ma)');
@@ -3655,10 +3661,10 @@ await group('MP okładka: gracz i TV rysują to, co przysłał serwer (URL etapu
   ok(req && req.playNonce===9901 && req.stage===0, '„wyraźniej" → {t:more, playNonce, stage} do serwera — '+JSON.stringify(req));
   ok($(w,'mpMore').disabled, 'po prośbie przycisk wyszarzony (do nowego etapu)');
   const inp=$(w,'mpProp_artist') || $(w,'mpTyp_artist'); inp.value='Toto';
-  ws.pushState(cov({ playNonce:9901, stage:2, coverStage:2, coverArt:base+'40x40bb.jpg' })); await settle(6);
+  ws.pushState(cov({ playNonce:9901, stage:4, coverStage:4, coverArt:base+'100x100bb.jpg' })); await settle(6);
   box=$(w,'mpStage').querySelector('.mp-cover');
-  ok(box && box.dataset.art===base+'40x40bb.jpg' && box.dataset.blocks==='40', 'nowy etap ze stanu → nowy obraz (bez własnych timerów)');
-  ok($(w,'mpMore').disabled && /×1,0/.test(aStage()), 'ostatni etap (64×64, ×1,0): „wyraźniej" nieaktywne — pełna tylko w odsłonie');
+  ok(box && box.dataset.art===base+'100x100bb.jpg' && box.dataset.blocks==='100', 'nowy etap ze stanu → nowy obraz (bez własnych timerów)');
+  ok($(w,'mpMore').disabled && /×1,0/.test(aStage()), 'ostatni etap (100×100, ×1,0): „wyraźniej" nieaktywne — pełna tylko w odsłonie');
   eq2(($(w,'mpProp_artist') || $(w,'mpTyp_artist')).value, 'Toto', 'wpisany typ nie ginie przy zmianie etapu');
   ws.pushState(cov({ playNonce:9902, coverArt:'javascript:alert(1)//"><b>x' })); await settle(8);
   box=$(w,'mpStage').querySelector('.mp-cover');

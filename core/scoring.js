@@ -125,7 +125,52 @@ const sameList = (a,b)=> a.length===b.length && a.every((x,i)=>x===b[i]);
 // F8a: jednoliterowe tokeny (litery) po normalizacji — „Grupa A", „witamina C", „Malcolm X"
 const letterTokens = s => s ? s.split(' ').filter(t=>/^[a-z]$/.test(t)).sort() : [];
 // czy odpowiedź „pasuje" do prawdy (tolerancja literówek, diakrytyków i leetspeaku)
+// Liczebniki słowne → cyfry (tylko porównawczo, druga próba textMatch): „Apollo trzynascie" ≈ „Apollo 13",
+// „Ocean's Eleven" ≈ „Ocean's 11", „twenty-one" = 21. Polskie (z i bez ogonków) i angielskie, 0–999.
+// Formy porządkowe („trzynasty", „third") świadomie POMINIĘTE: kolidują z odmianą/rzeczownikami i tytułami.
+const NW = (()=>{ const m=new Map(), add=(v,c,...ws)=>ws.forEach(w=>m.set(w,[v,c]));   // c: 1 jedn., 2 -naście, 3 dziesiątki, 4 setki
+  ['zero','jeden|one','dwa|dwie|two','trzy|three','cztery|four','piec|five','szesc|six','siedem|seven','osiem|eight','dziewiec|nine']
+    .forEach((x,i)=>add(i,1,...x.split('|')));
+  ['dziesiec|ten','jedenascie|eleven','dwanascie|twelve','trzynascie|thirteen','czternascie|fourteen','pietnascie|fifteen',
+   'szesnascie|sixteen','siedemnascie|seventeen','osiemnascie|eighteen','dziewietnascie|nineteen']
+    .forEach((x,i)=>add(10+i,2,...x.split('|')));
+  ['dwadziescia|twenty','trzydziesci|thirty','czterdziesci|forty','piecdziesiat|fifty','szescdziesiat|sixty',
+   'siedemdziesiat|seventy','osiemdziesiat|eighty','dziewiecdziesiat|ninety']
+    .forEach((x,i)=>add(20+i*10,3,...x.split('|')));
+  ['sto','dwiescie','trzysta','czterysta','piecset','szescset','siedemset','osiemset','dziewiecset']
+    .forEach((w,i)=>add((i+1)*100,4,w));
+  return m; })();
+const foldWord = w=>deLatin(w.toLowerCase()).normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+export function numWordsToDigits(str){
+  const s=String(str==null?'':str), ms=[...s.matchAll(/\p{L}+/gu)];
+  if(!ms.length) return s;
+  const info=ms.map(m=>{ const k=foldWord(m[0]); return k==='hundred' ? [0,'h'] : (NW.get(k)||null); });
+  if(!info.some(Boolean)) return s;
+  let out='', pos=0, i=0;
+  while(i<ms.length){
+    if(!info[i]){ i++; continue; }
+    // run: kolejne słowa-liczebniki rozdzielone tylko spacją/myślnikiem, z poprawną gramatyką złożenia
+    let total=0, last=null, j=i, end=i;
+    for(; j<ms.length && info[j]; j++){
+      if(j>i && !/^[\s-]+$/.test(s.slice(ms[j-1].index+ms[j-1][0].length, ms[j].index))) break;
+      const [v,c]=info[j];
+      if(c==='h'){ if(last!==1) break; total*=100; last=4; end=j; continue; }   // „one hundred" (mnożnik)
+      const ok = last===null || (last===4 && c<4) || (last===3 && c===1 && v>0);
+      if(!ok) break;
+      total+=v; last=c; end=j;
+    }
+    if(last===null){ i++; continue; }
+    out+=s.slice(pos, ms[i].index)+String(total);
+    pos=ms[end].index+ms[end][0].length; i=end+1;
+  }
+  return out+s.slice(pos);
+}
 export function textMatch(guess,actual){
+  if(textMatchCore(guess,actual)) return true;
+  const g2=numWordsToDigits(guess), a2=numWordsToDigits(actual);
+  return (g2!==guess || a2!==actual) && textMatchCore(g2,a2);
+}
+function textMatchCore(guess,actual){
   const g=norm(guess),a=norm(actual);
   // F8a: obie strony z jednoliterowym członem → człony muszą być IDENTYCZNE (jak liczby): „Grupa A" ≠ „Grupa B"
   // (inaczej literówka ≤1 przy ≥6 znakach zaliczała). Gdy tylko jedna strona ma taki człon — bez zmian.
@@ -256,9 +301,9 @@ export function revsnipMult(stage){
   const i=Math.floor(Number(stage));
   return REVSNIP_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(REVSNIP_MULTS.length-1, i)) : 0];
 }
-/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 24 → 40 bloków; pełna tylko
- * w odsłonie): ×2.0 przy 16×16, ×1.5 przy 32×32, ×1.0 przy 64×64 (bez bonusu za szybkość — jak intro). */
-export const COVER_MULTS = [2.0, 1.5, 1.0];
+/* EKSPERYMENT: „okładka" — mnożnik wg etapu odsłony okładki (core/timing.COVER_STAGES: 16 → 24 → 40 → 64 → 100 bloków; pełna tylko
+ * w odsłonie): ×2.0 przy 16×16, ×1.6 przy 24×24, ×1.3 przy 40×40, ×1.1 przy 64×64, ×1.0 przy 100×100 (bez bonusu za szybkość — jak intro). */
+export const COVER_MULTS = [2.0, 1.6, 1.3, 1.1, 1.0];
 export function coverMult(stage){
   const i = Math.floor(Number(stage));
   return COVER_MULTS[Number.isFinite(i) ? Math.max(0, Math.min(COVER_MULTS.length-1, i)) : COVER_MULTS.length-1];

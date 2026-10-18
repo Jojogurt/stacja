@@ -116,9 +116,9 @@ export function medleyLabel(t, n){
 /* EKSPERYMENT: „okładka" (cover) — okładka albumu odsłaniana etapami rozdzielczości (bloki na bok).
  * Auto-odsłona co COVER_STEP_MS albo przycisk „wyraźniej". Mnożnik punktów: core/scoring.coverMult (COVER_MULTS).
  * Poprawki po testach: etap 8×8 usunięty (praktycznie nie do zgadnięcia) — start od 16×16; etap trwa 6 s (było 3 s).
- * Dług z TODO: pełna okładka często pokazuje nazwę zespołu → w trakcie zgadywania TYLKO 16 → 24 → 40 bloków; PEŁNA
+ * Dług z TODO: pełna okładka często pokazuje nazwę zespołu → w trakcie zgadywania TYLKO 16 → 24 → 40 → 64 → 100 bloków; PEŁNA
  * okładka wyłącznie w odsłonie (solo po „Sprawdź"/pominięciu, MP w REVEAL — coverFullUrl). */
-export const COVER_STAGES = [16, 24, 40];   // przegląd v70: przy 64 duży napis (np. „Modern Talking") był czytelny
+export const COVER_STAGES = [16, 24, 40, 64, 100];   // v76: 40 to często za mało, by zgadnąć → dodane 64 i 100 (CDN iTunes/Deezer obsługują; pełna 600 nadal tylko w odsłonie)
 export const COVER_STEP_MS = 6000;
 // bloki etapu — przycinane do [0..ostatni] (NIGDY pełna: ta tylko w odsłonie); śmieci → etap 0
 export function coverStageBlocks(stage){
@@ -193,7 +193,7 @@ export function introRevealMs(gapMs = INTRO_GAP_MS, unitMs = 1000){
 }
 /* anty-podglądanie: URL obrazu w rozdzielczości ETAPU (klient nie dostaje pełnej okładki w trakcie zgadywania).
  * iTunes (mzstatic): „…/600x600bb.jpg" → „…/16x16bb.jpg"; Deezer (dzcdn): „/images/cover/<hash>/250x250-000000-80-0-0.jpg"
- * → „…/16x16-000000-80-0-0.jpg". Etap przycinany do 16/32/64 — NIGDY pełny. Nieznany format → '' (serwer gra wtedy
+ * → „…/16x16-000000-80-0-0.jpg". Etap przycinany do COVER_STAGES (16…100) — NIGDY pełny. Nieznany format → '' (serwer gra wtedy
  * pytanie jak „muzyka"). Pełna okładka (odsłona) → coverFullUrl: COVER_FULL_PX dla znanych CDN, inaczej oryginał. Tylko https. */
 export const COVER_FULL_PX = 600;
 const COVER_ITUNES = /^(https:\/\/[a-z0-9.-]*mzstatic\.com\/.+\/)\d+x\d+(\w*)(\.[a-z]+)$/i;

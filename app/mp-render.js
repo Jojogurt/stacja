@@ -17,7 +17,7 @@ import { slotsFor, candidatesForSlot, teamAnswer, myVoteForSlot, rosterState, an
 import { standings, rankingTop } from '../core/teams.js';   // P0-5: ranking z remisami; P1-6: top-3
 import { REACTIONS } from '../core/chatFeed.js';   // F6b: whitelist emotek wspólna z serwerem (🖕 → 🍺)
 import { ALL_CATS } from './catalog.js';
-import { confetti, animIn, promptBodyHTML } from './dom.js';
+import { confetti, animIn, promptBodyHTML, copyQBtnHTML } from './dom.js';
 import { tasteHeartHTML, tasteHeartButtons } from './taste.js';   // „Twój gust": ❤️ „na półkę" w odsłonie (lokalnie u gracza, bez protokołu)
 import { listenStart, listenHTML, listenStop, snippetPlay } from './listen.js';   // + P2-11: ▶ zajawka z listy na wyniku meczu   // Łamigłówki: „▶ posłuchaj" utworu-rozwiązania w odsłonie
 import { mpVinylHTML, mpVinyl } from './vinyl.js';   // płyta winylowa w fazie „słuchaj"
@@ -692,7 +692,7 @@ function mpPromptHTML(g){
   const mc=mcOptions(g);
   const cap = mc ? (g.mode==='abcd' ? 'który utwór? — stuknij kafel' : 'pytanie — stuknij kafel A–D') : 'pytanie';
   const body = mc ? (mc.question || (g.mode==='abcd' ? 'Jaki to utwór?' : '')) : g.prompt;
-  return `<div class="lyric-box quiz${g.promptStyle==='rebus'?' rebus':''}"><span class="lyric-cap">${cap}</span>${promptBodyHTML(body, g.mode==='quiz'?g.promptStyle:'')}</div>`;
+  return `<div class="lyric-box quiz${g.promptStyle==='rebus'?' rebus':''}" data-copy="${escapeHtml(g.prompt)}"><span class="lyric-cap">${cap}${mpIsSalonHost()?'':copyQBtnHTML()}</span>${promptBodyHTML(body, g.mode==='quiz'?g.promptStyle:'')}</div>`;
 }
 /* P1-8 (przegląd MP 2026-10): ABCD w MP = KAFLE .mc-opt (jak solo) zamiast „wpisz literę". Tap = propozycja + głos
  * (`propose` {slot: litera} — jedna odpowiedź na gracza, auto-głos) → odpowiedź drużyny = najczęstsza litera.
