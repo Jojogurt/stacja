@@ -2432,8 +2432,13 @@ await group('Nowy mecz: pasek startu przyklejony (sticky), desktop ≥900 px w d
   ok(tg().getAttribute('aria-expanded')==='true' && $(w, tg().getAttribute('aria-controls')) && !$(w,'ms-solo-body').hidden, '„Dostosuj mecz": aria-expanded + aria-controls');
   tg().click();
   ok(tg().getAttribute('aria-expanded')==='false' && $(w,'ms-solo-body').hidden && /kategorie, tryby, długość/.test(tg().textContent), 'zwinięte: treść ukryta, podpowiedź co jest w środku');
-  ok(JSON.parse(w.localStorage.getItem('stacjaSetupUi_solo')||'{}').open===false, 'stan zwinięcia zapamiętany');
+  ok(!('open' in JSON.parse(w.localStorage.getItem('stacjaSetupUi_solo')||'{}')), 'zwinięcie NIE jest zapamiętywane (każde wejście = domyślnie zwinięte)');
   tg().click();
+  ok(tg().getAttribute('aria-expanded')==='true', 'rozwinięte ręcznie');
+  { const sum=w.document.querySelector('#msSolo [data-ms-act="start"]'); const okPick=sum && !sum.disabled;
+    w.dispatchEvent(new w.CustomEvent('stacja:screen', { detail:'solo' })); await settle(2);
+    ok(tg().getAttribute('aria-expanded')===(okPick?'false':'true'), 'ponowne wejście na „Nowy mecz": zwinięte (rozwinięte tylko bez poprawnego wyboru) — wybór '+(okPick?'OK':'pusty')); }
+  if(tg().getAttribute('aria-expanded')==='false') tg().click();
   const st=()=>r().querySelector('[data-ms-toggle="settings"]');
   const was=st().getAttribute('aria-expanded'); st().click();
   ok(st().getAttribute('aria-expanded')!==was && $(w,'ms-solo-set').hidden===(st().getAttribute('aria-expanded')==='false'), '„Ustawienia meczu": aria-expanded steruje treścią');

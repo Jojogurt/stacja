@@ -75,10 +75,11 @@ export function createMatchSetup(cfg){
   const ctx=cfg.ctx, pick=cfg.pick;
   const UI_KEY='stacjaSetupUi_'+ctx;
   let saved={}; try{ saved=JSON.parse(lsGet(UI_KEY,'{}'))||{}; }catch(_e){ saved={}; }
-  const ui={ tab:null, q:'', open:(typeof saved.open==='boolean' ? saved.open : null), settingsOpen:saved.settings===true, error:'' };
+  // „Dostosuj mecz" ZWINIĘTE przy każdym wejściu na ekran (zgłoszenie 2026-10-18) — open:null = domyślnie; bez zapamiętywania między wejściami
+  const ui={ tab:null, q:'', open:null, settingsOpen:saved.settings===true, error:'' };
   const id=(s)=>`ms-${ctx}-${s}`;
   const avail=()=>{ try{ return cfg.available ? cfg.available() : ALL_MODES; }catch(_e){ return ALL_MODES; } };
-  const saveUi=()=>lsSet(UI_KEY, JSON.stringify({ open:ui.open, settings:ui.settingsOpen }));
+  const saveUi=()=>lsSet(UI_KEY, JSON.stringify({ settings:ui.settingsOpen }));
 
   // env gotowców: kontekst (gotowce z `ctx`) + dane kontekstu (solo: liczba utworów na półce — „Z mojej półki")
   const presetEnv=()=>{ let e={}; try{ e=(cfg.presetEnv && cfg.presetEnv()) || {}; }catch(_e){ e={}; } return { ...e, ctx }; };
@@ -131,7 +132,9 @@ export function createMatchSetup(cfg){
     },
     setTab(t){ ui.tab=t; ui.q=''; cfg.render(); },
     setSearch(q){ ui.q=String(q||'').slice(0,60); cfg.render(); },
-    setOpen(v){ ui.open=!!v; saveUi(); cfg.render(); },
+    setOpen(v){ ui.open=!!v; cfg.render(); },
+    // nowe wejście na ekran „Nowy mecz" → sekcja wraca do domyślnej (zwinięta; rozwinięta tylko bez poprawnego wyboru)
+    resetOpen(){ ui.open=null; },
     flashError(msg){ ui.error=String(msg||''); cfg.render(); },
     presetName(){ const r=curPreset(); return r ? r.name : ''; },
     // szkic dla gości MP (kategorie z etykietami — goście mogą nie mieć tych samych własnych kategorii)
@@ -265,8 +268,8 @@ export function createMatchSetup(cfg){
   }
   function html(){
     const { ms, sum }=state();
-    if(ui.open==null) ui.open=!pick.preset;   // pierwszy raz / bez gotowca → rozwinięte; potem zapamiętany wybór
-    const open=ui.open!==false;
+    // domyślnie zwinięte; rozwinięte tylko gdy nie da się zacząć (np. brak kategorii) — inaczej gracz nie widzi, co poprawić
+    const open = ui.open==null ? !sum.ok : ui.open!==false;
     return `<div class="ms" data-ms-ctx="${ctx}">
       ${presetsHTML()}
       <button type="button" class="ms-custom-toggle" data-ms-toggle="custom" aria-expanded="${open}" aria-controls="${id('body')}">

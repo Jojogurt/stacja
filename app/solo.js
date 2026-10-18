@@ -659,7 +659,7 @@ function syncContinue(){
     else if(scr==='solo'){
       if(session) soloHead(playHead());
       else if(document.body.classList.contains('match-over')) soloHead('Wynik meczu');
-      else renderPicker();   // „Z mojej półki": oceny mogły się zmienić (ekran gustu / odsłona)
+      else { soloSetup.resetOpen(); renderPicker(); }   // „Dostosuj mecz" zwinięte przy wejściu; „Z mojej półki": oceny mogły się zmienić
     }
   });
 })();

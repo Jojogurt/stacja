@@ -256,4 +256,6 @@ function mpRandomPick(){ const {cats,modes}=randomPools(mpAvailModes()); setup.s
 
 // most do HTML (onclick="" w generowanym pickerze) + eksport stanu/HTML dla mp.js (mpStart, mpRender)
 Object.assign(window, { mpToggleCat, mpToggleMode, mpToggleGrp, mpRandomPick, mpPlToggle, mpPlImport, mpSetQuestions, mpSetTimer, mpSetSalon, mpSetAudioHost, mpSetFormat, mpSetTeamCount, mpCycleAssign, mpSetTeamName, mpBalance });
-export { mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft, mpPickResetRoom, mpPickReady, mpPickGate };
+// host wchodzi na „Nowy mecz" (z lobby / po meczu) → „Dostosuj mecz" zwinięte
+const mpPickResetUi = ()=> setup.resetOpen();
+export { mpPickResetUi, mpPickerHTML, mpBuildPools, mpAvailModes, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpDraft, mpPickResetRoom, mpPickReady, mpPickGate };

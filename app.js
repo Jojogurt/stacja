@@ -10,7 +10,7 @@ import { initMp, mpBootDeepLink } from './app/mp.js';
 
 // wersja apki — pokazywana pod logo. Bumpuj RAZEM z CACHE w sw.js (np. v12 → v13),
 // inaczej PWA serwuje stary kod.
-const APP_VERSION = 'v76';   // okładka 5 etapów, liczby słownie, ostrzejszy sędzia AI, kopiowanie pytania, czystszy ekran pytania i podsumowanie
+const APP_VERSION = 'v77';   // „Nowy mecz”: „Dostosuj mecz” domyślnie zwinięte przy każdym wejściu (solo + host MP)
 try{ window.STACJA_VERSION = APP_VERSION; const _v=document.getElementById('appVer'); if(_v) _v.textContent = APP_VERSION; }catch(_e){}
 
 /* ---- motyw: segment w ustawieniach menu (#themeSeg) — Jasny / Ciemny / Systemowy (F6a, R-U7).

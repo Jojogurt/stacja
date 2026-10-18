@@ -31,7 +31,7 @@ import { playSfx, registerMusicProbe, sfxDuck } from './sfx.js';
 import { mpVinyl } from './vinyl.js';   // płyta winylowa = kontrolka odtwarzania w fazie „słuchaj"
 import { ALL_CATS, ALL_KEYS, ERA_KEYS, STYLE_KEYS, READY_KEYS, LYRICS_KEYS, QUIZ_KEYS,
   catLabel, buildMatch, randomPools, plLoad, plFetch, quizFreshPool, quizTake } from './catalog.js';
-import { initMpPicker, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft, mpPickResetRoom, mpPickReady } from './mp-picker.js';
+import { initMpPicker, mpPickResetUi, mpPickerHTML, mpBuildPools, mpPickCats, mpPickModes, mpPickQuestions, mpPickTimer, mpPickSalon, mpPickFormat, mpTeamsFromAssign, mpPickAudioHostOnly, mpAvailModes, mpDraft, mpPickResetRoom, mpPickReady } from './mp-picker.js';
 import { sanitizeDraft } from '../core/matchSetup.js';   // szkic configu MP dla gości (ta sama sanityzacja co serwer)
 import { S, mpMe } from './mp-state.js';   // współdzielony stan MP (obiekt S) + tożsamość gracza mpMe
 import { tvSetMode } from './mp-tv.js';   // P1-16: scena TV (html.tv + motyw)
@@ -296,7 +296,7 @@ function mpShare(btn){
   navigator.clipboard?.writeText(url);
   if(btn){ const t=btn.textContent; btn.textContent='✓ skopiowano'; setTimeout(()=>btn.textContent=t,1500); }
 }
-function mpLobbyStart(){ S.roomStage='build'; mpRender(); mpSendDraft(); }   // host: poczekalnia → „Nowy mecz" (+ szkic dla gości)
+function mpLobbyStart(){ S.roomStage='build'; mpPickResetUi(); mpRender(); mpSendDraft(); }   // host: poczekalnia → „Nowy mecz" (+ szkic dla gości)
 function mpLobbyBack(){ S.roomStage='wait'; mpRender(); mpSendDraft(); }     // picker → poczekalnia (wstecz); P1-16: lobby na TV rozsyła szkic
 function mpRoomBack(){ mpLeave(); }                           // wyjdź z pokoju → ekran wejścia
 function mpExitMenu(){ mpLeave(); stopAudio(); stopSpeech(); showScreen('menu'); }   // ☰ → menu
@@ -1126,7 +1126,7 @@ function mpRematch(){
 }
 function mpNewGame(){
   S.ack=S.revealNonce=S.revealSnap=null;
-  if(SERVER_AUTH){ S.game=null; S.roomStage='build'; mpRender(); mpSendDraft(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
+  if(SERVER_AUTH){ S.game=null; S.roomStage='build'; mpPickResetUi(); mpRender(); mpSendDraft(); return; }   // host → picker; DO start (DONE→nowy) przy „Start meczu"
   S.game={hostId:mpMe.id, phase:null}; mpBroadcast(); mpRender();
 }
 
