@@ -80,9 +80,26 @@ export function coverPaintBoxes(root=document){
     else { im.addEventListener('load', draw, { once:true }); im.addEventListener('error', ()=>{ if(box.dataset.art===url) box.classList.add('broken'); }, { once:true }); }
   });
 }
+/* pierścień postępu w ramce okładki (jak na winylu): obiega ramkę przez COVER_STEP_MS do następnego wyostrzenia;
+ * ostatni etap / stop → schowany. Zastępuje napis „okładka odsłania się co kilka sekund" (zgłoszenie 2026-10-18). */
+function ring(){
+  const box=$('coverBox'); if(!box) return null;
+  let r=box.querySelector('.cover-ring');
+  if(!r){ box.insertAdjacentHTML('beforeend', '<svg class="cover-ring" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><rect x="1.5" y="1.5" width="97" height="97" rx="5" pathLength="100"/></svg>'); r=box.querySelector('.cover-ring'); }
+  return r;
+}
+function ringRun(ms){
+  const r=ring(); if(!r) return; const rect=r.querySelector('rect'); if(!rect) return;
+  r.classList.toggle('on', ms>0);
+  rect.style.transition='none'; rect.style.strokeDashoffset='100';
+  if(!(ms>0)) return;
+  try{ rect.getBoundingClientRect(); }catch(_e){}   // wymuś reflow — animacja od zera przy każdym etapie
+  rect.style.transition=`stroke-dashoffset ${ms}ms linear`; rect.style.strokeDashoffset='0';
+}
 function arm(){
   clearTimeout(timer); timer=null;
-  if(coverNextStage(stage)==null) return;
+  if(coverNextStage(stage)==null){ ringRun(0); return; }
+  ringRun(COVER_STEP_MS);
   const t=token;
   timer=setTimeout(()=>{
     if(t!==token) return;
@@ -118,7 +135,7 @@ export function coverStage(n){
 }
 // zatrzymaj auto-odsłonę; full → pokaż pełną okładkę (odsłona po „Sprawdź"/pominięciu)
 export function coverStop(full){
-  token++; clearTimeout(timer); timer=null; onStageCb=null;
+  token++; clearTimeout(timer); timer=null; onStageCb=null; ringRun(0);
   if(full){ fullShown=true; draw(); }
 }
 // schowaj pudełko okładki (nowe pytanie / koniec meczu)

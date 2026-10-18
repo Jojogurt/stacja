@@ -1941,6 +1941,7 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
     if(img){ Object.defineProperty(img,'complete',{value:true,configurable:true}); Object.defineProperty(img,'naturalWidth',{value:600,configurable:true}); img.onload && img.onload(); }
     ok(draws.some(d=>d.to===16 && d.smooth) && !draws.some(d=>d.to===8) && draws.some(d=>d.to===320 && d.smooth===false), 'pikselizacja: 16×16 → widok 320 bez wygładzania — '+JSON.stringify(draws.slice(-3)));
     ok(coverMod._coverDebug().timer, 'auto-odsłona uzbrojona (etap co 6 s)');
+    { const rg=box.querySelector('.cover-ring'); ok(rg && rg.classList.contains('on') && /stroke-dashoffset 6000ms linear/.test(rg.querySelector('rect').style.transition), 'pierścień postępu w ramce: obiega ramkę przez 6 s do następnego etapu'); }
     more.click(); await settle(1);
     eq2(box.dataset.blocks, '24', '„wyraźniej" → 24×24');
     ok(!more.disabled && /wyraźniej/.test(more.textContent), 'dalej „wyraźniej" (40×40, 64, 100 przed nami)');
@@ -1954,6 +1955,7 @@ await group('EKSP. solo: „okładka" — bez audio, pikselizacja 16→32 („wy
     eq2(+txt(w,'sPoints'), Math.round(120*1.6), 'punkty: (100 + album 20) × 1,6, bez bonusu za szybkość');
     eq2(box.dataset.blocks, '0', 'po Sprawdź — pełna okładka');
     ok(/Dobrze!/.test(txt(w,'revealHead')), 'nagłówek: trafienie');
+    ok(!box.querySelector('.cover-ring').classList.contains('on'), 'po Sprawdź pierścień schowany');
     ok(/wykonawca 100 · album \+20/.test(txt(w,'footLegend')), 'legenda okładki');
     const th=$(w,'rmeta').querySelector('[data-taste-heart]');
     ok(th && new RegExp('Pięć '+who).test(th.getAttribute('aria-label')||''), 'Gust: ❤️ na utwór reprezentatywny albumu (okładka ocenia utwór z płyty) — '+(th && th.getAttribute('aria-label')));

@@ -297,7 +297,7 @@ async function startArtistQuestion(r, eraKey, gen){
   qStartAt=Date.now();
   if(mode==='cover'){
     document.getElementById('check').disabled=false; document.getElementById('skip').disabled=false;
-    setIcon('play'); setState('kto to? okładka odsłania się co kilka sekund');
+    setIcon('play'); setState('kto to? okładka wyostrza się co kilka sekund');   // ekran: pierścień postępu w ramce (CSS chowa ten tekst)
     coverShow(cur, { onStage:(st)=>{ if(current!==cur || roundDone) return false; cur.coverStage=st; syncIntroBtn(); return true; } });
     const f=document.getElementById('qf_artist'); if(f) f.focus({preventScroll:true});
     return;
