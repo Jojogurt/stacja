@@ -956,6 +956,9 @@
   @keyframes mpeq{0%,100%{height:7px}50%{height:20px}}
   .mh-logo{font-family:var(--display);font-weight:900;font-size:clamp(44px,14.6vw,56px);letter-spacing:.01em;color:var(--green);line-height:1.04;white-space:nowrap}
   .mh-logo b{color:#FF8A00}   /* pomarańczowy akcent na „&" */
+  /* logo graficzne (2026-10-18): przezroczyste tło, ciemny kontur — czytelne w obu motywach */
+  h1.mh-logo{margin:0;font-size:inherit;line-height:0;display:flex;justify-content:center}
+  .mh-logo-img{display:block;width:min(86vw,360px);height:auto}
   .mh-sub{font-family:var(--body);font-weight:700;font-size:16px;color:var(--muted);margin-top:8px}
   .mh-card{display:flex;align-items:center;gap:15px;width:100%;border:none;border-radius:20px;padding:18px;cursor:pointer;text-align:left;margin-bottom:15px}
   .mh-card.solo{background:var(--green);box-shadow:0 5px 0 var(--green-d)}
@@ -2368,7 +2371,7 @@
 
   <section id="menu">
     <div class="mh-hero">
-      <div class="mh-logo">Uszy <b>&amp;</b> Mózg</div>
+      <h1 class="mh-logo"><img class="mh-logo-img" src="icons/logo.webp" width="960" height="482" alt="Uszy &amp; Mózg" decoding="async" fetchpriority="high"></h1>
       <div class="mh-sub">Sprawdź czy masz uszy i mózg</div>
       <div class="mh-ver" id="appVer"></div>
     </div>

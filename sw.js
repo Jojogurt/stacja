@@ -8,7 +8,7 @@
    Cross-origin (Worker, iTunes, fonty, CDN) NIE jest przechwytywany — leci wprost do sieci.
    SHELL musi zawierać KAŻDY moduł osiągalny importami z quiz-loader.js + data/quiz-index.json
    (pilnuje tego test w test/run.js). Bumpnij CACHE przy zmianie listy shell-a. */
-const CACHE = 'stacja-v79';
+const CACHE = 'stacja-v80';
 const SHELL = [
   './', './index.html',
   './quiz-loader.js', './app.js', './categories.js', './playlists.js', './lyrics.js', './questions.js', './config.js',
@@ -30,7 +30,7 @@ const SHELL = [
   './adapters-web/webAudio.js', './adapters-web/itunesRepository.js', './adapters-web/translator.js',
   './adapters-web/cf.js', './adapters-web/cfChannel.js', './adapters-web/roomTransport.js',
   './manifest.webmanifest',
-  './icons/icon.svg', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
+  './icons/icon.svg', './icons/logo.webp', './icons/icon-192.png', './icons/icon-512.png', './icons/apple-touch-icon.png',
   // kategorie quizu (ładowane przez quiz-loader.js) — precache do gry offline
   './data/quiz-index.json',
   './data/quiz-biologia.json', './data/quiz-disney.json', './data/quiz-film.json',
